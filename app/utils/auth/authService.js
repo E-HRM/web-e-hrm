@@ -7,7 +7,7 @@ export const useAuth = () => {
 
   return {
     isLoggedIn: !!session?.user,
-    userId: session?.user?.user_id || null,
-    username: session?.user?.username || null,
+    userId: session?.user?.id_user || null,
+    email: session?.user?.email || null,
   };
 };
