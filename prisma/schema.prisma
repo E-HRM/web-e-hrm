@@ -11,7 +11,9 @@ datasource db {
 /// ===== Enums =====
 
 enum Role {
+
   KARYAWAN
+  
   HR
   OPERASIONAL
   DIREKTUR
@@ -75,6 +77,7 @@ model Location {
   longitude   Decimal @db.Decimal(10, 6)
   radius      Int?
 
+
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
@@ -100,6 +103,7 @@ model Broadcast {
 }
 
 model BroadcastRecipient {
+
   id_broadcast_recipients String    @id @default(uuid()) @db.Char(36)
   id_broadcast            String    @db.Char(36)
   id_user                 String    @db.Char(36)
@@ -154,6 +158,7 @@ model CutiApproval {
   deleted_at DateTime? @db.DateTime(0)
 
   cuti     Cuti  @relation(fields: [id_cuti], references: [id_cuti], onDelete: Cascade, onUpdate: Cascade)
+
   approver User? @relation("CutiApproval_approver_user_idToUser", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_cuti, level])
@@ -168,7 +173,9 @@ model PolaKerja {
   jam_selesai     DateTime @db.DateTime(0)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
+
   updated_at DateTime  @updatedAt @db.DateTime(0)
+
   deleted_at DateTime? @db.DateTime(0)
 
   shifts ShiftKerja[]
@@ -177,13 +184,16 @@ model PolaKerja {
 }
 
 model ShiftKerja {
+
   id_shift_kerja  String      @id @default(uuid()) @db.Char(36)
   id_user         String      @db.Char(36)
   tanggal_mulai   DateTime?   @db.Date
   tanggal_selesai DateTime?   @db.Date
+
   /// MySQL SET('senin','selasa','rabu','kamis','jumat','sabtu','minggu')
   hari_kerja      String
   status          ShiftStatus
+
 
   id_pola_kerja String? @db.Char(36)
 
@@ -192,6 +202,7 @@ model ShiftKerja {
   deleted_at DateTime? @db.DateTime(0)
 
   user      User       @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
   polaKerja PolaKerja? @relation(fields: [id_pola_kerja], references: [id_pola_kerja], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_user, tanggal_mulai])
@@ -207,9 +218,11 @@ model AgendaKerja {
   count_time      DateTime?  @db.DateTime(0)
   status          WorkStatus
 
+
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
+
 
   user User @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
@@ -254,6 +267,7 @@ model User {
   cuti_approvals     CutiApproval[]       @relation("CutiApproval_approver_user_idToUser")
   lembur_approvals   LemburApproval[]     @relation("LemburApproval_approver_user_idToUser")
 
+
   @@index([id_departement])
   @@index([id_location])
   @@map("user")
@@ -265,6 +279,7 @@ model Departement {
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
+
   deleted_at DateTime? @db.DateTime(0)
 
   users          User[]
@@ -274,6 +289,7 @@ model Departement {
 }
 
 model Face {
+
   id_face    String @id @default(uuid()) @db.Char(36)
   id_user    String @db.Char(36)
   image_face String @db.LongText
@@ -301,6 +317,7 @@ model StoryPlanner {
   deleted_at DateTime? @db.DateTime(0)
 
   user        User        @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
   departement Departement @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_user])
@@ -398,6 +415,7 @@ model LemburApproval {
   decided_at         DateTime?     @db.DateTime(0)
   note               String?       @db.LongText
 
+
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
@@ -470,6 +488,7 @@ model ShiftStoryPlanner {
 
   jadwal JadwalStoryPlanner @relation(fields: [id_jadwal_story_planner], references: [id_jadwal_story_planner], onDelete: Cascade, onUpdate: Cascade)
   user   User               @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
 
   @@index([id_jadwal_story_planner])
   @@index([id_user])
