@@ -11,7 +11,9 @@ datasource db {
 /// ===== Enums =====
 
 enum Role {
-  KARYAWAN  
+
+  KARYAWAN
+  
   HR
   OPERASIONAL
   DIREKTUR
@@ -75,23 +77,24 @@ model Location {
   longitude   Decimal @db.Decimal(10, 6)
   radius      Int?
 
-  created_at  DateTime  @default(now()) @db.DateTime(0)
-  updated_at  DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at  DateTime? @db.DateTime(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
 
   Absensi_datang Absensi[] @relation("absen_datang")
   Absensi_pulang Absensi[] @relation("absen_pulang")
+  User           User[]
 
   @@map("location")
-  User User[]
 }
 
 model Broadcast {
-  id_broadcasts String   @id @default(uuid()) @db.Char(36)
-  title         String   @db.LongText
-  message       String   @db.LongText
-  created_at    DateTime @default(now()) @db.DateTime(0)
-  updated_at    DateTime @updatedAt      @db.DateTime(0)
+  id_broadcasts String    @id @default(uuid()) @db.Char(36)
+  title         String    @db.LongText
+  message       String    @db.LongText
+  created_at    DateTime  @default(now()) @db.DateTime(0)
+  updated_at    DateTime  @updatedAt @db.DateTime(0)
   deleted_at    DateTime? @db.DateTime(0)
 
   recipients BroadcastRecipient[]
@@ -100,16 +103,17 @@ model Broadcast {
 }
 
 model BroadcastRecipient {
-  id_broadcast_recipients String   @id @default(uuid()) @db.Char(36)
-  id_broadcast            String   @db.Char(36)
-  id_user                 String   @db.Char(36)
-  nama_karyawan_snapshot  String   @db.VarChar(255)
-  created_at              DateTime @default(now()) @db.DateTime(0)
-  updated_at              DateTime @updatedAt      @db.DateTime(0)
+
+  id_broadcast_recipients String    @id @default(uuid()) @db.Char(36)
+  id_broadcast            String    @db.Char(36)
+  id_user                 String    @db.Char(36)
+  nama_karyawan_snapshot  String    @db.VarChar(255)
+  created_at              DateTime  @default(now()) @db.DateTime(0)
+  updated_at              DateTime  @updatedAt @db.DateTime(0)
   deleted_at              DateTime? @db.DateTime(0)
 
-  broadcast Broadcast @relation(fields: [id_broadcast], references: [id_broadcasts], onDelete: Cascade,  onUpdate: Cascade)
-  user      User      @relation(fields: [id_user],      references: [id_user],       onDelete: Restrict, onUpdate: Cascade)
+  broadcast Broadcast @relation(fields: [id_broadcast], references: [id_broadcasts], onDelete: Cascade, onUpdate: Cascade)
+  user      User      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_broadcast])
   @@index([id_user])
@@ -117,43 +121,44 @@ model BroadcastRecipient {
 }
 
 model Cuti {
-  id_cuti            String        @id @default(uuid()) @db.Char(36)
-  id_user            String        @db.Char(36)
-  tanggal_pengajuan  DateTime?     @db.Date
-  tanggal_mulai      DateTime?     @db.Date
-  tanggal_selesai    DateTime?     @db.Date
-  bukti_url          String?       @db.LongText
-  keterangan         CutiType
-  alasan             String?       @db.LongText
-  status             ApproveStatus
-  current_level      Int?
+  id_cuti           String        @id @default(uuid()) @db.Char(36)
+  id_user           String        @db.Char(36)
+  tanggal_pengajuan DateTime?     @db.Date
+  tanggal_mulai     DateTime?     @db.Date
+  tanggal_selesai   DateTime?     @db.Date
+  bukti_url         String?       @db.LongText
+  keterangan        CutiType
+  alasan            String?       @db.LongText
+  status            ApproveStatus
+  current_level     Int?
 
-  created_at         DateTime  @default(now()) @db.DateTime(0)
-  updated_at         DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at         DateTime? @db.DateTime(0)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
 
-  user       User           @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  approvals  CutiApproval[]
+  user      User           @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  approvals CutiApproval[]
 
   @@index([id_user])
   @@map("Cuti")
 }
 
 model CutiApproval {
-  id_cuti_approval  String        @id @default(uuid()) @db.Char(36)
-  id_cuti           String        @db.Char(36)
-  level             Int
-  approver_user_id  String?       @db.Char(36)
-  approver_role     Role?
-  decision          ApproveStatus @default(pending)
-  decided_at        DateTime?     @db.DateTime(0)
-  note              String?       @db.LongText
+  id_cuti_approval String        @id @default(uuid()) @db.Char(36)
+  id_cuti          String        @db.Char(36)
+  level            Int
+  approver_user_id String?       @db.Char(36)
+  approver_role    Role?
+  decision         ApproveStatus @default(pending)
+  decided_at       DateTime?     @db.DateTime(0)
+  note             String?       @db.LongText
 
-  created_at        DateTime  @default(now()) @db.DateTime(0)
-  updated_at        DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at        DateTime? @db.DateTime(0)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
 
-  cuti     Cuti  @relation(fields: [id_cuti],          references: [id_cuti], onDelete: Cascade,  onUpdate: Cascade)
+  cuti     Cuti  @relation(fields: [id_cuti], references: [id_cuti], onDelete: Cascade, onUpdate: Cascade)
+
   approver User? @relation("CutiApproval_approver_user_idToUser", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_cuti, level])
@@ -168,7 +173,9 @@ model PolaKerja {
   jam_selesai     DateTime @db.DateTime(0)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+
   deleted_at DateTime? @db.DateTime(0)
 
   shifts ShiftKerja[]
@@ -177,21 +184,25 @@ model PolaKerja {
 }
 
 model ShiftKerja {
-  id_shift_kerja  String     @id @default(uuid()) @db.Char(36)
-  id_user         String     @db.Char(36)
-  tanggal_mulai   DateTime?  @db.Date
-  tanggal_selesai DateTime?  @db.Date
+
+  id_shift_kerja  String      @id @default(uuid()) @db.Char(36)
+  id_user         String      @db.Char(36)
+  tanggal_mulai   DateTime?   @db.Date
+  tanggal_selesai DateTime?   @db.Date
+
   /// MySQL SET('senin','selasa','rabu','kamis','jumat','sabtu','minggu')
   hari_kerja      String
   status          ShiftStatus
 
-  id_pola_kerja   String?    @db.Char(36)
 
-  created_at      DateTime  @default(now()) @db.DateTime(0)
-  updated_at      DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at      DateTime? @db.DateTime(0)
+  id_pola_kerja String? @db.Char(36)
 
-  user      User       @relation(fields: [id_user],       references: [id_user],       onDelete: Restrict, onUpdate: Cascade)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user      User       @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
   polaKerja PolaKerja? @relation(fields: [id_pola_kerja], references: [id_pola_kerja], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_user, tanggal_mulai])
@@ -207,9 +218,11 @@ model AgendaKerja {
   count_time      DateTime?  @db.DateTime(0)
   status          WorkStatus
 
-  created_at      DateTime  @default(now()) @db.DateTime(0)
-  updated_at      DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at      DateTime? @db.DateTime(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
 
   user User @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
@@ -218,26 +231,27 @@ model AgendaKerja {
 }
 
 model User {
-  id_user        String       @id @default(uuid()) @db.Char(36)
-  nama_pengguna  String       @db.VarChar(255)
-  email          String       @unique @db.VarChar(255)
-  password_hash  String       @db.VarChar(255)
-  kontak         String?      @db.VarChar(32)
-  password_updated_at DateTime? @db.DateTime(0)
-  foto_profil_user String?   @db.LongText
-  tanggal_lahir  DateTime?    @db.Date
-  role           Role
-  id_departement String       @db.Char(36)
-  id_location    String       @db.Char(36)
+  id_user                   String    @id @default(uuid()) @db.Char(36)
+  nama_pengguna             String    @db.VarChar(255)
+  email                     String    @unique @db.VarChar(255)
+  password_hash             String    @db.VarChar(255)
+  kontak                    String?   @db.VarChar(32)
+  password_updated_at       DateTime? @db.DateTime(0)
+  agama                     String?   @db.VarChar(32)
+  foto_profil_user          String?   @db.LongText
+  tanggal_lahir             DateTime? @db.Date
+  role                      Role
+  id_departement            String?   @db.Char(36)
+  id_location               String?   @db.Char(36)
   reset_password_token      String?   @db.VarChar(255)
   reset_password_expires_at DateTime? @db.DateTime(0)
 
-  created_at     DateTime  @default(now()) @db.DateTime(0)
-  updated_at     DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at     DateTime? @db.DateTime(0)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
 
-  departement Departement @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
-  kantor      Location    @relation(fields: [id_location],    references: [id_location],    onDelete: Restrict, onUpdate: Cascade)
+  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
+  kantor      Location?    @relation(fields: [id_location], references: [id_location], onDelete: Restrict, onUpdate: Cascade)
 
   faces              Face[]
   agendas            AgendaKerja[]
@@ -250,8 +264,9 @@ model User {
   shift_storyPlanner ShiftStoryPlanner[]
   broadcast_rcv      BroadcastRecipient[]
   devices            Device[]
-  cuti_approvals     CutiApproval[]   @relation("CutiApproval_approver_user_idToUser")
-  lembur_approvals   LemburApproval[] @relation("LemburApproval_approver_user_idToUser")
+  cuti_approvals     CutiApproval[]       @relation("CutiApproval_approver_user_idToUser")
+  lembur_approvals   LemburApproval[]     @relation("LemburApproval_approver_user_idToUser")
+
 
   @@index([id_departement])
   @@index([id_location])
@@ -259,11 +274,12 @@ model User {
 }
 
 model Departement {
-  id_departement   String  @id @default(uuid()) @db.Char(36)
-  nama_departement String  @db.VarChar(256)
+  id_departement   String @id @default(uuid()) @db.Char(36)
+  nama_departement String @db.VarChar(256)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+
   deleted_at DateTime? @db.DateTime(0)
 
   users          User[]
@@ -273,12 +289,13 @@ model Departement {
 }
 
 model Face {
-  id_face    String  @id @default(uuid()) @db.Char(36)
-  id_user    String  @db.Char(36)
-  image_face String  @db.LongText
+
+  id_face    String @id @default(uuid()) @db.Char(36)
+  id_user    String @db.Char(36)
+  image_face String @db.LongText
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
   user User @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
@@ -295,11 +312,12 @@ model StoryPlanner {
   count_time      DateTime?  @db.DateTime(0)
   status          WorkStatus
 
-  created_at      DateTime  @default(now()) @db.DateTime(0)
-  updated_at      DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at      DateTime? @db.DateTime(0)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
 
-  user        User        @relation(fields: [id_user],        references: [id_user],        onDelete: Restrict, onUpdate: Cascade)
+  user        User        @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
   departement Departement @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_user])
@@ -308,39 +326,39 @@ model StoryPlanner {
 }
 
 model Device {
-  id_device          String    @id @default(uuid()) @db.Char(36)
-  id_user            String    @db.Char(36)
-  device_label       String?   @db.VarChar(255)
-  platform           String?   @db.VarChar(50)
-  os_version         String?   @db.VarChar(50)
-  app_version        String?   @db.VarChar(50)
-  device_identifier  String?   @db.VarChar(191)
-  last_seen          DateTime? @db.DateTime(0)
+  id_device         String    @id @default(uuid()) @db.Char(36)
+  id_user           String    @db.Char(36)
+  device_label      String?   @db.VarChar(255)
+  platform          String?   @db.VarChar(50)
+  os_version        String?   @db.VarChar(50)
+  app_version       String?   @db.VarChar(50)
+  device_identifier String?   @db.VarChar(191)
+  last_seen         DateTime? @db.DateTime(0)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  user     User     @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
-  absensi  Absensi[]
+  user    User      @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
+  absensi Absensi[]
 
   @@index([id_user])
   @@map("device")
 }
 
 model Absensi {
-  id_absensi           String      @id @default(uuid()) @db.Char(36)
-  id_user              String      @db.Char(36)
+  id_absensi           String        @id @default(uuid()) @db.Char(36)
+  id_user              String        @db.Char(36)
   face_verified_masuk  Boolean
   face_verified_pulang Boolean
-  tanggal              DateTime?   @db.Date
-  id_lokasi_pulang     String?     @db.Char(36)
-  id_lokasi_datang     String?     @db.Char(36)
-  jam_masuk            DateTime?   @db.DateTime(0)
-  jam_pulang           DateTime?   @db.DateTime(0)
+  tanggal              DateTime?     @db.Date
+  id_lokasi_pulang     String?       @db.Char(36)
+  id_lokasi_datang     String?       @db.Char(36)
+  jam_masuk            DateTime?     @db.DateTime(0)
+  jam_pulang           DateTime?     @db.DateTime(0)
   status               AbsensiStatus
 
-  id_device            String?     @db.Char(36)
+  id_device String? @db.Char(36)
 
   in_latitude   Decimal? @db.Decimal(10, 6)
   in_longitude  Decimal? @db.Decimal(10, 6)
@@ -349,13 +367,13 @@ model Absensi {
   device_info   String?  @db.VarChar(255)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  user      User      @relation(fields: [id_user],           references: [id_user],        onDelete: Restrict, onUpdate: Cascade)
-  device    Device?   @relation(fields: [id_device],         references: [id_device],      onDelete: SetNull,  onUpdate: Cascade)
-  lokasiIn  Location? @relation("absen_datang", fields: [id_lokasi_datang], references: [id_location], onDelete: SetNull,  onUpdate: Cascade)
-  lokasiOut Location? @relation("absen_pulang", fields: [id_lokasi_pulang], references: [id_location], onDelete: SetNull,  onUpdate: Cascade)
+  user      User      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  device    Device?   @relation(fields: [id_device], references: [id_device], onDelete: SetNull, onUpdate: Cascade)
+  lokasiIn  Location? @relation("absen_datang", fields: [id_lokasi_datang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
+  lokasiOut Location? @relation("absen_pulang", fields: [id_lokasi_pulang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
 
   @@unique([id_user, tanggal])
   @@index([id_user, tanggal])
@@ -376,11 +394,11 @@ model Lembur {
   current_level Int?
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  user       User             @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  approvals  LemburApproval[]
+  user      User             @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  approvals LemburApproval[]
 
   @@index([id_user, tanggal])
   @@index([status])
@@ -397,11 +415,12 @@ model LemburApproval {
   decided_at         DateTime?     @db.DateTime(0)
   note               String?       @db.LongText
 
-  created_at         DateTime  @default(now()) @db.DateTime(0)
-  updated_at         DateTime  @updatedAt      @db.DateTime(0)
-  deleted_at         DateTime? @db.DateTime(0)
 
-  lembur   Lembur @relation(fields: [id_lembur],        references: [id_lembur], onDelete: Cascade,  onUpdate: Cascade)
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  lembur   Lembur @relation(fields: [id_lembur], references: [id_lembur], onDelete: Cascade, onUpdate: Cascade)
   approver User?  @relation("LemburApproval_approver_user_idToUser", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_lembur, level])
@@ -412,11 +431,11 @@ model LemburApproval {
 model JadwalPiket {
   id_jadwal_piket String    @id @default(uuid()) @db.Char(36)
   Tahun           DateTime? @db.Date
-  Bulan           Bulan     
+  Bulan           Bulan
   keterangan      String?   @db.LongText
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
   shifts ShiftPiket[]
@@ -426,12 +445,12 @@ model JadwalPiket {
 
 model JadwalStoryPlanner {
   id_jadwal_story_planner String    @id @default(uuid()) @db.Char(36)
-  Tahun                    DateTime? @db.Date
-  Bulan                    Bulan
-  keterangan               String?   @db.LongText
+  Tahun                   DateTime? @db.Date
+  Bulan                   Bulan
+  keterangan              String?   @db.LongText
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
   shifts ShiftStoryPlanner[]
@@ -440,17 +459,17 @@ model JadwalStoryPlanner {
 }
 
 model ShiftPiket {
-  id_shift_piket  String   @id @default(uuid()) @db.Char(36)
-  id_jadwal_piket String   @db.Char(36)
-  id_user         String   @db.Char(36)
-  hari_piket      String   
+  id_shift_piket  String @id @default(uuid()) @db.Char(36)
+  id_jadwal_piket String @db.Char(36)
+  id_user         String @db.Char(36)
+  hari_piket      String
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
   jadwal JadwalPiket @relation(fields: [id_jadwal_piket], references: [id_jadwal_piket], onDelete: Cascade, onUpdate: Cascade)
-  user   User        @relation(fields: [id_user],         references: [id_user],         onDelete: Restrict, onUpdate: Cascade)
+  user   User        @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
   @@index([id_jadwal_piket])
   @@index([id_user])
@@ -458,17 +477,18 @@ model ShiftPiket {
 }
 
 model ShiftStoryPlanner {
-  id_shift_story_planner  String   @id @default(uuid()) @db.Char(36)
-  id_jadwal_story_planner String   @db.Char(36)
-  id_user                 String   @db.Char(36)
-  hari_story_planner      String  
+  id_shift_story_planner  String @id @default(uuid()) @db.Char(36)
+  id_jadwal_story_planner String @db.Char(36)
+  id_user                 String @db.Char(36)
+  hari_story_planner      String
 
   created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt      @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
   jadwal JadwalStoryPlanner @relation(fields: [id_jadwal_story_planner], references: [id_jadwal_story_planner], onDelete: Cascade, onUpdate: Cascade)
-  user   User               @relation(fields: [id_user],                  references: [id_user],                  onDelete: Restrict, onUpdate: Cascade)
+  user   User               @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
 
   @@index([id_jadwal_story_planner])
   @@index([id_user])
