@@ -1,13 +1,13 @@
-// "use client";
+'use client';
 
-// import { useSession } from "next-auth/react";
+import { useSession } from 'next-auth/react';
 
-// export const useAuth = () => {
-//   const { data } = useSession();
+export const useAuth = () => {
+  const { data } = useSession();
 
-//   return {
-//     isLoggedIn: !!session?.user,
-//     userId: session?.user?.user_id || null,
-//     username: session?.user?.username || null,
-//   };
-// };
+  return {
+    isLoggedIn: !!session?.user,
+    userId: session?.user?.id_user || null,
+    email: session?.user?.email || null,
+  };
+};
