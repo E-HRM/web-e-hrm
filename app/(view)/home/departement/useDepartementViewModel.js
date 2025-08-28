@@ -1,0 +1,90 @@
+"use client";
+
+import { App as AntdApp } from "antd";
+import useSWR from "swr";
+import { crudService } from "../../../utils/services/crudService";
+import { fetcher } from "../../../utils/fetcher";
+import { ApiEndpoints } from "../../../../constrainst/endpoints";
+
+export const useDepartementViewModel = () => {
+  const { notification } = AntdApp.useApp();
+
+  const {
+    data: departementData,
+    isLoading: departementLoading,
+    mutate: departementMutate,
+  } = useSWR(`${ApiEndpoints.GetDepartement}?page=1&pageSize=100`, fetcher);
+
+  const divisions = (departementData?.data || []).map((r, i) => ({
+    id: r.id_departement,
+    name: r.nama_departement,
+    count: 0, 
+    align: i % 2 === 0 ? "left" : "right",
+  }));
+
+  // Create
+  const onAdd = async (name) => {
+    try {
+      await crudService.post(ApiEndpoints.CreateDepartement, {
+        nama_departement: name,
+      });
+      notification.success({
+        message: "Berhasil",
+        description: "Divisi berhasil dibuat",
+      });
+      departementMutate();
+    } catch (err) {
+      notification.error({
+        message: "Gagal menambah",
+        description: err?.message || "Tidak dapat menambah divisi",
+      });
+      throw err;
+    }
+  };
+
+  // Update
+  const onUpdate = async (id, name) => {
+    try {
+      await crudService.put(ApiEndpoints.UpdateDepartement(id), {
+        nama_departement: name,
+      });
+      notification.success({
+        message: "Berhasil",
+        description: "Divisi berhasil diperbarui",
+      });
+      departementMutate();
+    } catch (err) {
+      notification.error({
+        message: "Gagal mengubah",
+        description: err?.message || "Tidak dapat mengubah divisi",
+      });
+      throw err;
+    }
+  };
+
+  // Delete
+  const onDelete = async (id) => {
+    try {
+      await crudService.delete(ApiEndpoints.DeleteDepartement(id));
+      notification.success({
+        message: "Berhasil",
+        description: "Divisi berhasil dihapus",
+      });
+      departementMutate();
+    } catch (err) {
+      notification.error({
+        message: "Gagal menghapus",
+        description: err?.message || "Tidak dapat menghapus divisi",
+      });
+      throw err;
+    }
+  };
+
+  return {
+    divisions,
+    departementLoading,
+    onAdd,
+    onUpdate,
+    onDelete,
+  };
+};

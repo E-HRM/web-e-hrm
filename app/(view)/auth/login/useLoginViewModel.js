@@ -1,36 +1,81 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { App as AntdApp } from "antd";
+import { useEffect, useState } from "react";
+import { App as AntdApp } from "antd";          
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 export default function useLoginViewModel() {
   const router = useRouter();
-  const { message } = AntdApp.useApp();
+  const { notification: apiNotification } = AntdApp.useApp(); 
   const [loading, setLoading] = useState(false);
+
+  const redirectByRole = (role) => {
+    switch (role) {
+      case "HR":
+        router.push("/home/dashboard");
+        break;
+      case "DIREKTUR":
+        router.push("/direktur/dashboard/home");
+        break;
+      case "OPERASIONAL":
+        router.push("/operasional/dashboard/home");
+        break;
+      default:
+        router.push("/home/dashboard");
+        break;
+    }
+  };
 
   const onFinish = async (values) => {
     try {
       setLoading(true);
-  
-      await new Promise((r) => setTimeout(r, 500));
-      localStorage.setItem("eh-token", "dummy-token");
-      localStorage.setItem("eh-user", values?.email || "User");
-      message.success("Login success");
 
-      router.push("/home/dashboard");
+      const res = await signIn("credentials", {
+        redirect: false,
+        email: values.email,
+        password: values.password,
+      });
+
+      if (!res || res.error) {
+        throw new Error(res?.error || "Email atau password salah.");
+      }
+
+      const sRes = await fetch("/api/auth/session", { cache: "no-store" });
+      const session = await sRes.json();
+
+      redirectByRole(session?.user?.role);
+
+      apiNotification.success({
+        message: "Login Berhasil",
+        description: "Anda berhasil masuk ke sistem.",
+        placement: "topRight",
+      });
     } catch (err) {
-      message.error(err?.message || "Login failed");
+      apiNotification.error({
+        message: "Login Gagal",
+        description: err?.message || "Terjadi kesalahan saat login.",
+        placement: "topRight",
+      });
     } finally {
       setLoading(false);
     }
   };
 
- 
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem("eh-token")) {
-      router.replace("/home/dashboard");
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/session", { cache: "no-store" });
+        const session = await res.json();
+        if (!cancelled && session?.user?.role) {
+          redirectByRole(session.user.role);
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return { onFinish, loading };

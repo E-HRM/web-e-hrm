@@ -27,7 +27,7 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx"
-  ],
+, "app/(view)/sidebar/layout.jsx"  ],
   "exclude": [
     "node_modules"
   ]

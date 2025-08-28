@@ -133,6 +133,7 @@ CREATE TABLE `user` (
     `password_hash` VARCHAR(255) NOT NULL,
     `kontak` VARCHAR(32) NULL,
     `password_updated_at` DATETIME(0) NULL,
+    `agama` VARCHAR(32) NULL,
     `foto_profil_user` LONGTEXT NULL,
     `tanggal_lahir` DATE NULL,
     `role` ENUM('KARYAWAN', 'HR', 'OPERASIONAL', 'DIREKTUR') NOT NULL,

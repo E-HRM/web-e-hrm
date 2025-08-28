@@ -1,7 +1,8 @@
-import "./globals.css";
 import "antd/dist/reset.css";
+import "./globals.css";
 import { Poppins } from "next/font/google";
 import LayoutClient from "./layout-client";
+import { App } from "antd"; 
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -18,8 +19,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className>
-        <LayoutClient>{children}</LayoutClient>
+      <body className={poppins.variable}>
+        <App>
+          <LayoutClient>{children}</LayoutClient>
+        </App>
       </body>
     </html>
   );

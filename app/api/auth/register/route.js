@@ -1,7 +1,6 @@
-// app/api/register/route.js
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import db from '@/lib/prisma';
+import db from '../../../../lib/prisma';
 
 const ROLES = ['KARYAWAN', 'HR', 'OPERASIONAL', 'DIREKTUR'];
 
