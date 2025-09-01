@@ -17,12 +17,14 @@ export const ApiEndpoints = {
   GetDepartement: API_DEPARTEMENT,
   CreateDepartement: API_DEPARTEMENT,
   GetDepartementById: (id) => `${API_DEPARTEMENT}/${id}`,
+  GetDepartementByUser: (id) => `${API_DEPARTEMENT}/${id}/users`,
   UpdateDepartement: (id) => `${API_DEPARTEMENT}/${id}`,
   DeleteDepartement: (id) => `${API_DEPARTEMENT}/${id}`,
 
   // Reset Password
   ResetPasswordRequest: API_RESET_PASSWORD_REQUEST,
   ResetPasswordConfirm: API_RESET_PASSWORD_CONFIRM,
+
 
   GetUsers: API_USERS,
   CreateUser: API_USERS,

@@ -13,8 +13,7 @@ datasource db {
 enum Role {
 
   KARYAWAN
-  
-  HR
+    HR
   OPERASIONAL
   DIREKTUR
 }
