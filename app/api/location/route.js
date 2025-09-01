@@ -62,7 +62,7 @@ export async function GET(req) {
       pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     });
   } catch (err) {
-    console.error('GET /locations error:', err);
+    console.error('GET /location error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
@@ -99,7 +99,7 @@ export async function POST(req) {
 
     return NextResponse.json({ message: 'Lokasi dibuat.', data: created }, { status: 201 });
   } catch (err) {
-    console.error('POST /locations error:', err);
+    console.error('POST /location error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }

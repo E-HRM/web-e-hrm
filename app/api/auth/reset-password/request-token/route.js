@@ -15,7 +15,7 @@ export async function POST(req) {
 
     // Respons generik (hindari user enumeration)
     const genericOk = NextResponse.json({
-      message: 'Jika email terdaftar, kode reset telah dikirim.',
+      message: 'kode reset telah dikirim.',
     });
 
     if (!user) return genericOk;
@@ -69,7 +69,7 @@ export async function POST(req) {
   } catch (err) {
     console.error('reset-password/request error:', err);
     // Tetap respons generik agar aman, tapi log di server
-    return NextResponse.json({ message: 'Jika email terdaftar, kode reset telah dikirim.' }, { status: 200 });
+    return NextResponse.json({ message: 'kode reset telah dikirim.' }, { status: 200 });
     // return NextResponse.json({ message: 'Terjadi kesalahan pada server.' }, { status: 500 });
   }
 }

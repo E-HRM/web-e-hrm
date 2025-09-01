@@ -5,14 +5,19 @@ import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { createClient } from '@supabase/supabase-js';
 
-//helpers auth Bearer dan NextAuth session
+//AUTH HELPERS (Bearer / Session)
+
 async function getActor(req) {
   // 1) coba Bearer JWT
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
     try {
       const payload = verifyAuthToken(auth.slice(7));
-      return { id: payload?.sub || payload?.id_user || payload?.userId, role: payload?.role, source: 'bearer' };
+      return {
+        id: payload?.sub || payload?.id_user || payload?.userId,
+        role: payload?.role,
+        source: 'bearer',
+      };
     } catch (e) {
       // fallback ke session
     }
@@ -23,7 +28,8 @@ async function getActor(req) {
   return { id: sessionOrRes.user.id, role: sessionOrRes.user.role, source: 'session' };
 }
 
-//helpers supabase upload
+// SUPABASE HELPERS
+
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -31,7 +37,7 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-// --- helper untuk ekstrak bucket & path dari public URL
+// Ekstrak bucket & path dari public URL Supabase
 function extractBucketPath(publicUrl) {
   try {
     const u = new URL(publicUrl);
@@ -43,7 +49,7 @@ function extractBucketPath(publicUrl) {
   return null;
 }
 
-// --- hapus foto lama (tidak fatal bila gagal)
+// Hapus foto lama (best-effort)
 async function deleteOldFotoFromSupabase(publicUrl) {
   if (!publicUrl) return;
   const info = extractBucketPath(publicUrl);
@@ -53,7 +59,7 @@ async function deleteOldFotoFromSupabase(publicUrl) {
   if (error) console.warn('Gagal hapus foto lama:', error.message);
 }
 
-// --- upload foto baru -> path pakai nama_pengguna
+// Upload foto baru ke path: foto_profile/{nama_pengguna}/{timestamp.ext}
 async function uploadFotoToSupabase(nama_pengguna, file) {
   if (!file) return null;
   const supabase = getSupabase();
@@ -68,26 +74,16 @@ async function uploadFotoToSupabase(nama_pengguna, file) {
     upsert: true,
     contentType: file.type || 'application/octet-stream',
   });
-
   if (upErr) throw new Error(`Gagal upload foto: ${upErr.message}`);
 
   const { data: pub } = supabase.storage.from('e-hrm').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
 
-//field guards by role
-const KARYAWAN_ALLOW = new Set(['nama_pengguna', 'email', 'kontak', 'agama', 'foto_profil_user', 'tanggal_lahir', 'id_departement', 'id_location']);
+// CHANGED: karyawan TIDAK boleh update id_departement & id_location
+const KARYAWAN_ALLOW = new Set(['nama_pengguna', 'email', 'kontak', 'agama', 'foto_profil_user', 'tanggal_lahir']);
 
-const HR_DENY = new Set([
-  // hanya field yang dilarang untuk HR:
-  'password_hash',
-  'reset_password_token',
-  'reset_password_expires_at',
-  'deleted_at',
-  'created_at',
-  'updated_at',
-  'id_user',
-]);
+const HR_DENY = new Set(['password_hash', 'reset_password_token', 'reset_password_expires_at', 'deleted_at', 'created_at', 'updated_at', 'id_user']);
 
 function filterPayloadByRole(role, raw) {
   const data = {};
@@ -103,7 +99,7 @@ function filterPayloadByRole(role, raw) {
   return data;
 }
 
-//Parserbody (JSON atau multipart)
+// BODY PARSER (JSON / multipart)
 async function parseBody(req) {
   const ct = req.headers.get('content-type') || '';
   if (ct.includes('multipart/form-data')) {
@@ -123,7 +119,7 @@ async function parseBody(req) {
   }
 }
 
-//GetdetailUser
+//GET DETAIL USER
 export async function GET(_req, { params }) {
   try {
     const { id } = params;
@@ -134,7 +130,7 @@ export async function GET(_req, { params }) {
         nama_pengguna: true,
         email: true,
         kontak: true,
-        agama: true,        
+        agama: true,
         foto_profil_user: true,
         tanggal_lahir: true,
         role: true,
@@ -154,7 +150,7 @@ export async function GET(_req, { params }) {
   }
 }
 
-//EditUser
+//EDIT USER
 export async function PUT(req, { params }) {
   const actor = await getActor(req);
   if (actor instanceof NextResponse) return actor;
@@ -163,21 +159,28 @@ export async function PUT(req, { params }) {
   try {
     const { id } = params;
 
+    // hanya HR yang boleh edit user lain
     if (actorRole !== 'HR' && actorId !== id) {
       return NextResponse.json({ message: 'Tidak boleh mengubah profil pengguna lain.' }, { status: 403 });
     }
 
-    // Ambil data saat ini untuk kebutuhan foto
+    // Ambil data saat ini (untuk keperluan foto)
     const current = await db.user.findUnique({
       where: { id_user: id },
       select: { nama_pengguna: true, foto_profil_user: true },
     });
     if (!current) return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
 
+    // Parse body
     const { type, body } = await parseBody(req);
+
+    // CHANGED: Tolak non-HR jika coba kirim id_departement atau id_location
+    if (actorRole !== 'HR' && ('id_departement' in body || 'id_location' in body)) {
+      return NextResponse.json({ message: 'Hanya HR yang boleh mengubah departement atau location.' }, { status: 403 });
+    }
+
     const wantsRemove = body.remove_foto === true || body.remove_foto === 'true';
 
-    // Upload foto baru (kalau ada file) -> hapus lama dulu
     let uploadedUrl = null;
     if (type === 'form') {
       const file = body.file || body.foto || body.foto_profil_user;
@@ -187,7 +190,6 @@ export async function PUT(req, { params }) {
       }
     }
 
-    // Jika hanya ingin hapus foto tanpa upload baru
     if (!uploadedUrl && wantsRemove && current.foto_profil_user) {
       await deleteOldFotoFromSupabase(current.foto_profil_user); // hapus lama
     }
@@ -195,9 +197,15 @@ export async function PUT(req, { params }) {
     const payloadRaw = {
       ...(body.nama_pengguna !== undefined && { nama_pengguna: String(body.nama_pengguna).trim() }),
       ...(body.email !== undefined && { email: String(body.email).trim().toLowerCase() }),
-      ...(body.kontak !== undefined && { kontak: body.kontak === null ? null : String(body.kontak).trim() }),
-      ...(body.agama !== undefined && { agama: body.agama === null ? null : String(body.agama).trim() }),
-      ...(body.tanggal_lahir !== undefined && { tanggal_lahir: body.tanggal_lahir ? new Date(body.tanggal_lahir) : null }),
+      ...(body.kontak !== undefined && {
+        kontak: body.kontak === null ? null : String(body.kontak).trim(),
+      }),
+      ...(body.agama !== undefined && {
+        agama: body.agama === null ? null : String(body.agama).trim(),
+      }),
+      ...(body.tanggal_lahir !== undefined && {
+        tanggal_lahir: body.tanggal_lahir ? new Date(body.tanggal_lahir) : null,
+      }),
       ...(body.id_departement !== undefined && { id_departement: body.id_departement || null }),
       ...(body.id_location !== undefined && { id_location: body.id_location || null }),
       ...(body.role !== undefined && { role: String(body.role) }),
@@ -205,12 +213,13 @@ export async function PUT(req, { params }) {
       ...(!uploadedUrl && wantsRemove ? { foto_profil_user: null } : {}),
     };
 
+    // Filter sesuai role (karyawan tidak punya id_departement/id_location di allowlist)
     const data = filterPayloadByRole(actorRole, payloadRaw);
     if (Object.keys(data).length === 0) {
       return NextResponse.json({ message: 'Tidak ada field yang diubah.' }, { status: 400 });
     }
 
-    // Validasi unik email
+    // Validasi unik email (jika diubah)
     if (data.email) {
       const exists = await db.user.findUnique({ where: { email: data.email } });
       if (exists && exists.id_user !== id) {
@@ -218,7 +227,7 @@ export async function PUT(req, { params }) {
       }
     }
 
-    // Validasi FK opsional
+    // Validasi FK opsional (hanya terpanggil untuk HR)
     if (data.id_departement) {
       const dept = await db.departement.findUnique({ where: { id_departement: data.id_departement } });
       if (!dept) return NextResponse.json({ message: 'Departement tidak ditemukan.' }, { status: 400 });
@@ -228,6 +237,7 @@ export async function PUT(req, { params }) {
       if (!loc) return NextResponse.json({ message: 'Location/kantor tidak ditemukan.' }, { status: 400 });
     }
 
+    // Update
     const updated = await db.user.update({
       where: { id_user: id },
       data,

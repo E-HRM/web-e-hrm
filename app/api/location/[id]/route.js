@@ -77,7 +77,7 @@ export async function PUT(req, { params }) {
     if (err?.code === 'P2025') {
       return NextResponse.json({ message: 'Lokasi tidak ditemukan' }, { status: 404 });
     }
-    console.error('PUT /locations/[id] error:', err);
+    console.error('PUT /location/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
@@ -94,7 +94,7 @@ export async function DELETE(req, { params }) {
     if (err?.code === 'P2025') {
       return NextResponse.json({ message: 'Lokasi tidak ditemukan' }, { status: 404 });
     }
-    console.error('DELETE /locations/[id] error:', err);
+    console.error('DELETE /location/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
