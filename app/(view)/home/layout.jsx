@@ -36,15 +36,14 @@ export default function ViewLayout({ children }) {
           backgroundColor: "#0A3848",
         }}
       >
-        {/* Brand (logo + tulisan) */}
         <div
           style={{
-            height: 96, // lebih tinggi agar muat padding
+            height: 96, 
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "flex-start",
-            paddingTop: 12, // padding atas biar lebih turun
+            paddingTop: 12, 
             gap: 6,
             borderBottom: "1px solid rgba(255,255,255,.15)",
           }}
@@ -81,8 +80,8 @@ export default function ViewLayout({ children }) {
             alignItems: "center",
             gap: 12,
             paddingInline: 16,
-            background: "#ffffff", // ✅ putih
-            borderBottom: "1px solid #ECEEF1", // garis tipis bawah
+            background: "#ffffff", 
+            borderBottom: "1px solid #ECEEF1", 
         }}
         >
         <Button
@@ -136,8 +135,8 @@ export default function ViewLayout({ children }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#ffffff", // ✅ putih
-            borderTop: "1px solid #ECEEF1", // garis tipis atas
+            background: "#ffffff", 
+            borderTop: "1px solid #ECEEF1",
         }}
         >
         <span className="text-xs text-gray-500">

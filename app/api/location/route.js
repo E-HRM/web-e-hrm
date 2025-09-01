@@ -34,7 +34,7 @@ export async function GET(req) {
 
     const where = {
       ...(includeDeleted ? {} : { deleted_at: null }),
-      ...(search ? { nama_kantor: { contains: search, mode: 'insensitive' } } : {}),
+      ...(search ? { nama_kantor: { contains: search } } : {}),
     };
 
     const [total, data] = await Promise.all([

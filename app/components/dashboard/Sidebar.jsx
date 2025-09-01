@@ -29,7 +29,7 @@ const MENU = [
     hasCaret: true,
     children: [
       { href: "/home/departement", label: "Data Karyawan", icon: FileTextOutlined },
-      { href: "/karyawan/shift", label: "Penjadwalan Shift", icon: CalendarOutlined },
+      { href: "/home/shift", label: "Penjadwalan Shift", icon: CalendarOutlined },
       { href: "/karyawan/piket", label: "Jadwal Piket & Story", icon: CalendarOutlined },
       { href: "/karyawan/libur", label: "Pengajuan Hari Libur", icon: CalendarOutlined },
     ],

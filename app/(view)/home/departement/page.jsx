@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import DivisionCard from "../../../components/card/DivisionCard";
 import AddDivisionCard from "../../../components/card/AddDivisionCard";
 import EditDivisionModal from "../../../components/card/EditDivisionModal";
@@ -8,6 +9,7 @@ import { confirmDelete } from "../../../components/common/confirm";
 import { useDepartementViewModel } from "./useDepartementViewModel";
 
 export default function DepartementPage() {
+  const router = useRouter();
   const { divisions, onAdd, onUpdate, onDelete } = useDepartementViewModel();
 
   const [editOpen, setEditOpen] = useState(false);
@@ -19,6 +21,13 @@ export default function DepartementPage() {
     setEditId(id);
     setEditName(name);
     setEditOpen(true);
+  };
+
+  const goToEmployees = (d) => {
+    // Halaman: /home/departement/karyawan?id=<departementId>&name=<nama>
+    router.push(
+      `/home/departement/karyawan?id=${encodeURIComponent(d.id)}&name=${encodeURIComponent(d.name)}`
+    );
   };
 
   return (
@@ -34,12 +43,9 @@ export default function DepartementPage() {
             align={d.align}
             onEdit={() => openEdit(d.id, d.name)}
             onDelete={() =>
-              confirmDelete({
-                onOk: async () => {
-                  await onDelete(d.id);
-                },
-              })
+              confirmDelete({ onOk: async () => { await onDelete(d.id); } })
             }
+            onPress={() => goToEmployees(d)}   // <<< klik card ke halaman karyawan
           />
         ))}
         <AddDivisionCard onAdd={onAdd} />

@@ -1,5 +1,9 @@
 const API_DEPARTEMENT = "/api/departements";
 const API_LOCATION = "/api/location";
+const API_USERS = "/api/users";
+
+const API_RESET_PASSWORD_REQUEST = "/api/auth/reset-password/request-token";
+const API_RESET_PASSWORD_CONFIRM = "/api/auth/reset-password";
 
 export const ApiEndpoints = {
   // Location
@@ -15,4 +19,14 @@ export const ApiEndpoints = {
   GetDepartementById: (id) => `${API_DEPARTEMENT}/${id}`,
   UpdateDepartement: (id) => `${API_DEPARTEMENT}/${id}`,
   DeleteDepartement: (id) => `${API_DEPARTEMENT}/${id}`,
+
+  // Reset Password
+  ResetPasswordRequest: API_RESET_PASSWORD_REQUEST,
+  ResetPasswordConfirm: API_RESET_PASSWORD_CONFIRM,
+
+  GetUsers: API_USERS,
+  CreateUser: API_USERS,
+  GetUserById: (id) => `${API_USERS}/${id}`,
+  UpdateUser: (id) => `${API_USERS}/${id}`,
+  DeleteUser: (id) => `${API_USERS}/${id}`,
 };
