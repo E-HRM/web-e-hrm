@@ -34,6 +34,7 @@ export async function GET(req) {
       ...(search ? { nama_departement: { contains: search, mode: 'insensitive' } } : {}),
     };
 
+    // Ambil total departement & page data dulu
     const [total, data] = await Promise.all([
       db.departement.count({ where }),
       db.departement.findMany({
@@ -51,8 +52,44 @@ export async function GET(req) {
       }),
     ]);
 
+    // Kumpulkan id departement pada halaman ini
+    const ids = data.map((d) => d.id_departement);
+    let activeCountsMap = {};
+    let totalCountsMap = {};
+
+    if (ids.length > 0) {
+      // Hitung user aktif (deleted_at = null)
+      const activeCounts = await db.user.groupBy({
+        by: ['id_departement'],
+        where: {
+          id_departement: { in: ids },
+          deleted_at: null,
+        },
+        _count: { _all: true },
+      });
+
+      // Hitung total user (termasuk yang deleted)
+      const totalCounts = await db.user.groupBy({
+        by: ['id_departement'],
+        where: {
+          id_departement: { in: ids },
+        },
+        _count: { _all: true },
+      });
+
+      activeCountsMap = Object.fromEntries(activeCounts.map((r) => [r.id_departement, r._count._all]));
+      totalCountsMap = Object.fromEntries(totalCounts.map((r) => [r.id_departement, r._count._all]));
+    }
+
+    // Tambahkan field count ke setiap item
+    const enriched = data.map((d) => ({
+      ...d,
+      users_active_count: activeCountsMap[d.id_departement] ?? 0,
+      users_total_count: totalCountsMap[d.id_departement] ?? 0,
+    }));
+
     return NextResponse.json({
-      data,
+      data: enriched,
       pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     });
   } catch (err) {
@@ -61,6 +98,7 @@ export async function GET(req) {
   }
 }
 
+// POST tetap sama seperti punyamu
 export async function POST(req) {
   const ok = await ensureAuth(req);
   if (ok instanceof NextResponse) return ok;
