@@ -60,12 +60,6 @@ export async function POST(req) {
         accessToken, // pakai di header Authorization
         refreshToken: plainRefresh, // simpan aman di secure storage (mobile)
         sessionId, // identitas sesi untuk refresh/logout
-        // user: {
-        //   id_user: user.id_user,
-        //   email: user.email,
-        //   role: user.role,
-        //   nama_pengguna: user.nama_pengguna ?? null,
-        // },
       },
       { status: 200 }
     );
