@@ -16,10 +16,10 @@ export default function useLoginViewModel() {
         router.push("/home/dashboard");
         break;
       case "DIREKTUR":
-        router.push("/direktur/dashboard/home");
+        router.push("/home/dashboard");
         break;
       case "OPERASIONAL":
-        router.push("/operasional/dashboard/home");
+        router.push("/home/dashboard");
         break;
       default:
         router.push("/home/dashboard");

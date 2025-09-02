@@ -33,6 +33,7 @@ export const ApiEndpoints = {
   GetUsers: API_USERS,
   // IMPORTANT: Create user pakai REGISTER (bukan /api/users)
   CreateUser: API_REGISTER,
+  GetLocation: "/api/location",
   GetUserById: (id) => `${API_USERS}/${id}`,
   UpdateUser: (id) => `${API_USERS}/${id}`,
   DeleteUser: (id) => `${API_USERS}/${id}`,

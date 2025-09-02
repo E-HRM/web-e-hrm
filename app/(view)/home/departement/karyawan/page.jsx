@@ -44,8 +44,8 @@ const prettyAgama = (v) => {
 
 export default function KaryawanPage() {
   const sp = useSearchParams();
-  const departementId = sp.get("id") || ""; // ?id=...
-  const departementName = sp.get("name") || ""; // ?name=...
+  const departementId = sp.get("id") || "";   // ?id=... (konteks departemen)
+  const departementName = sp.get("name") || "";
 
   const {
     rows,
@@ -58,6 +58,9 @@ export default function KaryawanPage() {
     addKaryawan,
     updateKaryawan,
     deleteKaryawan,
+    // lokasi
+    locationOptions,
+    locationLoading,
   } = useKaryawanViewModel({ departementId, departementName });
 
   const [openForm, setOpenForm] = useState(false);
@@ -83,7 +86,7 @@ export default function KaryawanPage() {
       agama: prettyAgama(rec.agama),
       role: rec.role || "KARYAWAN",
       tanggal_lahir: rec.tanggal_lahir ? dayjs(rec.tanggal_lahir) : null,
-      // password TIDAK diisi saat edit
+      id_location: rec.id_location || null, // prefill lokasi
     });
     setOpenForm(true);
   };
@@ -122,17 +125,15 @@ export default function KaryawanPage() {
       ),
     },
     { title: "Email", dataIndex: "email", key: "email", width: 240 },
+
+    // === GANTI: Divisi -> Lokasi ===
     {
-      title: "Divisi",
-      dataIndex: ["departement", "nama_departement"],
-      key: "departement",
-      width: 160,
-      render: (v, r) =>
-        r?.departement?.nama_departement ||
-        r?.nama_departement ||
-        departementName ||
-        "-",
+      title: "Lokasi",
+      key: "lokasi",
+      width: 180,
+      render: (_, r) => r?.kantor?.nama_kantor || r?.nama_kantor || "-",
     },
+
     {
       title: "Agama",
       dataIndex: "agama",
@@ -269,7 +270,8 @@ export default function KaryawanPage() {
               delete payload.password;
               await updateKaryawan(editing.id_user, payload);
             } else {
-              // CREATE → /api/auth/register (WAJIB password & id_departement)
+              // CREATE → /api/auth/register (via ApiEndpoints.CreateUser)
+              // id_departement diambil dari context halaman
               await addKaryawan({
                 ...payload,
                 id_departement: departementId,
@@ -278,7 +280,9 @@ export default function KaryawanPage() {
             }
             setOpenForm(false);
           }}
-          initialValues={{ role: "KARYAWAN" }}
+          initialValues={{
+            role: "KARYAWAN",
+          }}
         >
           <Form.Item
             label="Nama Karyawan"
@@ -317,6 +321,7 @@ export default function KaryawanPage() {
             <Form.Item label="Kontak" name="kontak">
               <AntInput placeholder="08xxxx" />
             </Form.Item>
+
             <Form.Item label="Agama" name="agama">
               <Select
                 allowClear
@@ -337,6 +342,7 @@ export default function KaryawanPage() {
             <Form.Item label="Tanggal Lahir" name="tanggal_lahir">
               <DatePicker className="w-full" />
             </Form.Item>
+
             <Form.Item label="Role" name="role" initialValue="KARYAWAN">
               <Select
                 options={[
@@ -345,9 +351,27 @@ export default function KaryawanPage() {
                   { value: "OPERASIONAL", label: "OPERASIONAL" },
                   { value: "DIREKTUR", label: "DIREKTUR" },
                 ]}
-              />
+              /> 
             </Form.Item>
           </div>
+
+          {/* === Lokasi (baru) === */}
+          <Form.Item label="Lokasi" name="id_location">
+            <Select
+              showSearch
+              allowClear
+              placeholder="Pilih lokasi / kantor"
+              loading={locationLoading}
+              options={locationOptions}
+              optionFilterProp="label"
+            />
+          </Form.Item>
+
+          {/*
+            OPSIONAL: kalau mau IZINKAN ganti departemen saat EDIT
+            - Tambahkan Select departemen di sini (khusus HR).
+            - Lihat snippet di catatan setelah file kedua.
+          */}
         </Form>
       </Modal>
     </ConfigProvider>

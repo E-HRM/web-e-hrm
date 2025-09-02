@@ -31,7 +31,7 @@ export default function useKaryawanViewModel({ departementId, departementName })
   const swrKey = listBaseUrl ? `${listBaseUrl}?${qs}` : null;
   const { data, isLoading, mutate } = useSWR(swrKey, fetcher);
 
-  // rows + fallback nama_departement
+  // rows + fallback nama_departement (kalau API belum join)
   const rows = (data?.data || []).map((r) => ({
     ...r,
     departement:
@@ -52,11 +52,32 @@ export default function useKaryawanViewModel({ departementId, departementName })
     fetchList();
   }, [departementId, fetchList]);
 
-  // CREATE → /api/auth/register
+  /* =========================
+     LOKASI (untuk Select)
+     ========================= */
+  const { data: locData, isLoading: locationLoading } = useSWR(
+    `${ApiEndpoints.GetLocation}?page=1&pageSize=100`,
+    fetcher
+  );
+
+  const locationOptions = useMemo(() => {
+    const arr = locData?.data || [];
+    return arr.map((it) => ({
+      value: it.id_location,
+      label: it.nama_kantor,
+    }));
+  }, [locData]);
+
+  /* =========================
+     CRUD
+     ========================= */
+
+  // CREATE → (pakai endpoint register sesuai mapping CreateUser)
+  // pastikan di ApiEndpoints: CreateUser = "/api/auth/register"
   const addKaryawan = useCallback(
     async (payload) => {
       try {
-        await crudService.post(ApiEndpoints.CreateUser, payload); // register
+        await crudService.post(ApiEndpoints.CreateUser, payload);
         notification.success({ message: "Berhasil", description: "Karyawan dibuat." });
         await fetchList();
       } catch (err) {
@@ -74,8 +95,7 @@ export default function useKaryawanViewModel({ departementId, departementName })
   const updateKaryawan = useCallback(
     async (id, payload) => {
       try {
-        console.log(id)
-        await crudService.put(ApiEndpoints.UpdateUser(id), payload, );
+        await crudService.put(ApiEndpoints.UpdateUser(id), payload);
         notification.success({ message: "Berhasil", description: "Karyawan diperbarui." });
         await fetchList();
       } catch (err) {
@@ -89,7 +109,7 @@ export default function useKaryawanViewModel({ departementId, departementName })
     [fetchList, notification]
   );
 
-  // (Optional) DELETE masih ada kalau nanti dipakai
+  // DELETE (opsional)
   const deleteKaryawan = useCallback(
     async (id) => {
       try {
@@ -118,5 +138,9 @@ export default function useKaryawanViewModel({ departementId, departementName })
     addKaryawan,
     updateKaryawan,
     deleteKaryawan,
+
+    // lokasi
+    locationOptions,
+    locationLoading,
   };
 }
