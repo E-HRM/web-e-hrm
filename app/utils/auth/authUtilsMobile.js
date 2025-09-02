@@ -22,7 +22,7 @@ if (!JWT_SECRET) {
  * @param {{ sub:string, role?:string, [key:string]:any }} claims - Minimal berisi sub (id_user).
  * @param {{ expiresIn?:string|number, issuer?:string, audience?:string }} [opts]
  * @returns {string} JWT string
- */
+ */ 
 export function signAccessToken(claims, opts = {}) {
   const payload = {
     // standard claims:

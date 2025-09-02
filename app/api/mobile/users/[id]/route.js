@@ -130,7 +130,7 @@ export async function PUT(req, { params }) {
     if ('id_departement' in body || 'id_location' in body || 'role' in body) {
       return NextResponse.json({ message: 'Field departement/location/role hanya bisa diubah oleh HR.' }, { status: 403 });
     }
-
+      
     const wantsRemove = body.remove_foto === true || body.remove_foto === 'true';
 
     let uploadedUrl = null;
