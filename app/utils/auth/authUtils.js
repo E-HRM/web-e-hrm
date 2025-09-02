@@ -9,5 +9,5 @@ export async function authenticateRequest() {
     return NextResponse.json({ status: 401, message: 'Unauthorized: You must be logged in' }, { status: 401 });
   }
 
-  return session.user;
+  return session;
 }

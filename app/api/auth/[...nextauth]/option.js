@@ -1,3 +1,5 @@
+//app/api/admin/auth/[...nextauth]/option.js
+
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import db from '../../../../lib/prisma';
