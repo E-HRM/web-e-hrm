@@ -1,21 +1,19 @@
+// app/api/mobile/auth/getdataprivate/route.js
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';      
+import { requireAccessFromRequest } from '@/app/utils/auth/authUtilsMobile';
 
 export async function GET(req) {
   try {
-    const authHeader = req.headers.get('authorization') || '';
-    if (!authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ message: 'Token tidak ditemukan' }, { status: 401 });
-    }
-
-    const token = authHeader.slice(7);
+    // Ambil & verifikasi access token (akan throw jika tidak ada/invalid/expired)
     let decoded;
-
     try {
-      decoded = verifyAuthToken(token); // <- akan throw jika invalid/expired
+      decoded = requireAccessFromRequest(req);
     } catch (err) {
+      if (err?.code === 'NO_BEARER') {
+        return NextResponse.json({ message: 'Token tidak ditemukan' }, { status: 401 });
+      }
       if (err instanceof jwt.TokenExpiredError) {
         return NextResponse.json({ message: 'Token sudah kedaluwarsa' }, { status: 401 });
       }
@@ -25,7 +23,6 @@ export async function GET(req) {
       return NextResponse.json({ message: 'Gagal memverifikasi token', error: err?.message || String(err) }, { status: 500 });
     }
 
-    // token dari /api/login berisi { sub: id_user, role, email }
     const userId = decoded?.sub || decoded?.id_user || decoded?.userId;
     if (!userId) {
       return NextResponse.json({ message: 'Payload token tidak sesuai' }, { status: 401 });
@@ -46,7 +43,6 @@ export async function GET(req) {
         password_updated_at: true,
         created_at: true,
         updated_at: true,
-        // relasi opsional
         departement: { select: { id_departement: true, nama_departement: true } },
         kantor: { select: { id_location: true, nama_kantor: true, latitude: true, longitude: true, radius: true } },
       },
