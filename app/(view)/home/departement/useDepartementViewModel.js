@@ -15,10 +15,12 @@ export const useDepartementViewModel = () => {
     mutate: departementMutate,
   } = useSWR(`${ApiEndpoints.GetDepartement}?page=1&pageSize=100`, fetcher);
 
+  // map data API -> props DivisionCard
   const divisions = (departementData?.data || []).map((r, i) => ({
     id: r.id_departement,
     name: r.nama_departement,
-    count: 0, 
+    count: r.users_active_count ?? 0,     // <<< jumlah karyawan aktif
+    total: r.users_total_count ?? 0,      // <<< opsional: total termasuk deleted
     align: i % 2 === 0 ? "left" : "right",
   }));
 
@@ -28,16 +30,10 @@ export const useDepartementViewModel = () => {
       await crudService.post(ApiEndpoints.CreateDepartement, {
         nama_departement: name,
       });
-      notification.success({
-        message: "Berhasil",
-        description: "Divisi berhasil dibuat",
-      });
+      notification.success({ message: "Berhasil", description: "Divisi berhasil dibuat" });
       departementMutate();
     } catch (err) {
-      notification.error({
-        message: "Gagal menambah",
-        description: err?.message || "Tidak dapat menambah divisi",
-      });
+      notification.error({ message: "Gagal menambah", description: err?.message || "Tidak dapat menambah divisi" });
       throw err;
     }
   };
@@ -45,19 +41,11 @@ export const useDepartementViewModel = () => {
   // Update
   const onUpdate = async (id, name) => {
     try {
-      await crudService.put(ApiEndpoints.UpdateDepartement(id), {
-        nama_departement: name,
-      });
-      notification.success({
-        message: "Berhasil",
-        description: "Divisi berhasil diperbarui",
-      });
+      await crudService.put(ApiEndpoints.UpdateDepartement(id), { nama_departement: name });
+      notification.success({ message: "Berhasil", description: "Divisi berhasil diperbarui" });
       departementMutate();
     } catch (err) {
-      notification.error({
-        message: "Gagal mengubah",
-        description: err?.message || "Tidak dapat mengubah divisi",
-      });
+      notification.error({ message: "Gagal mengubah", description: err?.message || "Tidak dapat mengubah divisi" });
       throw err;
     }
   };
@@ -66,25 +54,13 @@ export const useDepartementViewModel = () => {
   const onDelete = async (id) => {
     try {
       await crudService.delete(ApiEndpoints.DeleteDepartement(id));
-      notification.success({
-        message: "Berhasil",
-        description: "Divisi berhasil dihapus",
-      });
+      notification.success({ message: "Berhasil", description: "Divisi berhasil dihapus" });
       departementMutate();
     } catch (err) {
-      notification.error({
-        message: "Gagal menghapus",
-        description: err?.message || "Tidak dapat menghapus divisi",
-      });
+      notification.error({ message: "Gagal menghapus", description: err?.message || "Tidak dapat menghapus divisi" });
       throw err;
     }
   };
 
-  return {
-    divisions,
-    departementLoading,
-    onAdd,
-    onUpdate,
-    onDelete,
-  };
+  return { divisions, departementLoading, onAdd, onUpdate, onDelete };
 };

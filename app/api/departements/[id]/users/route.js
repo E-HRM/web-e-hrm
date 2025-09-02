@@ -5,7 +5,7 @@ import db from '../../../../../lib/prisma';
 import { verifyAuthToken } from '../../../../../lib/jwt';
 import { authenticateRequest } from '../../../../../app/utils/auth/authUtils';
 
-// Izinkan akses jika pakai Bearer JWT valid atau user login via NextAuth
+// Auth: terima Bearer JWT atau NextAuth session
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
@@ -17,34 +17,37 @@ async function ensureAuth(req) {
     }
   }
   const sessionOrRes = await authenticateRequest();
-  if (sessionOrRes instanceof NextResponse) return sessionOrRes; // unauthorized
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes; // unauthorized dari util
   return true;
 }
 
 export async function GET(req, { params }) {
-  // Auth check
   const ok = await ensureAuth(req);
   if (ok instanceof NextResponse) return ok;
 
   try {
     const { searchParams } = new URL(req.url);
 
-    const id_departement = (params?.id_departement || '').trim();
-    if (!id_departement) {
-      return NextResponse.json({ message: 'Parameter id_departement wajib diisi.' }, { status: 400 });
+    // pakai [id] dari folder sebagai id_departement
+    const id = (params?.id || '').trim();
+    if (!id) {
+      return NextResponse.json({ message: 'Parameter id wajib diisi.' }, { status: 400 });
     }
 
-    // Opsional: pencarian & pagination
+    // pagination & filter
     const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
     const search = (searchParams.get('search') || '').trim();
     const includeDeleted = (searchParams.get('includeDeleted') || '').toLowerCase() === 'true';
-    const orderBy = (searchParams.get('orderBy') || 'created_at').trim();
+
+    // harden orderBy
+    const allowedOrder = new Set(['created_at', 'updated_at', 'nama_pengguna', 'email', 'role']);
+    const orderByParam = (searchParams.get('orderBy') || 'created_at').trim();
+    const orderBy = allowedOrder.has(orderByParam) ? orderByParam : 'created_at';
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-    // WHERE clause
     const where = {
-      id_departement,
+      id_departement: id,
       ...(includeDeleted ? {} : { deleted_at: null }),
       ...(search
         ? {
@@ -53,7 +56,7 @@ export async function GET(req, { params }) {
         : {}),
     };
 
-    // Kolom aman (hindari password_hash & token reset)
+    // pilih kolom aman (hindari hash/password/token)
     const select = {
       id_user: true,
       nama_pengguna: true,
@@ -90,7 +93,7 @@ export async function GET(req, { params }) {
       totalPages: Math.ceil(total / pageSize),
     });
   } catch (err) {
-    console.error('GET /api/departements/[id_departement]/users error:', err);
+    console.error('GET /api/departements/[id]/users error:', err);
     return NextResponse.json({ message: 'Terjadi kesalahan pada server.' }, { status: 500 });
   }
 }

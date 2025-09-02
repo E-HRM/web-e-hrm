@@ -21,7 +21,7 @@ const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_pengguna', '
 
 export async function GET(req) {
   const actor = await getActor(req);
-  if (actor instanceof NextResponse) return actor; // unauthorized
+  if (actor instanceof NextResponse) return actor; 
   if (!['HR', 'DIREKTUR'].includes(actor.role)) {
     return NextResponse.json({ message: 'Forbidden: tidak memiliki akses.' }, { status: 403 });
   }
@@ -42,7 +42,6 @@ export async function GET(req) {
     const orderBy = ALLOWED_ORDER_BY.has(orderByParam) ? orderByParam : 'created_at';
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-    // Build filter
     const where = {
       ...(includeDeleted ? {} : { deleted_at: null }),
       ...(role ? { role } : {}),
@@ -67,7 +66,7 @@ export async function GET(req) {
           nama_pengguna: true,
           email: true,
           kontak: true,
-          agama: true, // hapus jika kolom belum ada
+          agama: true, 
           foto_profil_user: true,
           tanggal_lahir: true,
           role: true,

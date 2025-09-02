@@ -159,6 +159,8 @@ export async function PUT(req, { params }) {
   try {
     const { id } = params;
 
+    console.log(id)
+
     // hanya HR yang boleh edit user lain
     if (actorRole !== 'HR' && actorId !== id) {
       return NextResponse.json({ message: 'Tidak boleh mengubah profil pengguna lain.' }, { status: 403 });

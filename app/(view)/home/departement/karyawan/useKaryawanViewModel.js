@@ -7,16 +7,14 @@ import { fetcher } from "../../../../utils/fetcher";
 import { crudService } from "../../../../utils/services/crudService";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 
-export default function useKaryawanViewModel({ departementId }) {
+export default function useKaryawanViewModel({ departementId, departementName }) {
   const { notification } = AntdApp.useApp();
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Tentukan base URL list sesuai constraint:
-  // - Jika ada departementId → /api/departements/:id/users
-  // - (opsional) jika ingin fetch seluruh users tanpa departement, pakai ApiEndpoints.GetUsers
+  // list users by departement
   const listBaseUrl = useMemo(() => {
     if (!departementId) return null;
     return ApiEndpoints.GetDepartementByUser(departementId);
@@ -24,22 +22,22 @@ export default function useKaryawanViewModel({ departementId }) {
 
   const qs = useMemo(() => {
     const p = new URLSearchParams();
-    // Hanya kirimkan query umum (page, pageSize, search).
-    // departementId tidak perlu dikirim karena sudah ada di path.
     p.set("page", String(page));
     p.set("pageSize", String(pageSize));
     if (search.trim()) p.set("search", search.trim());
     return p.toString();
   }, [page, pageSize, search]);
 
-  const swrKey = useMemo(() => {
-    if (!listBaseUrl) return null;
-    return `${listBaseUrl}?${qs}`;
-  }, [listBaseUrl, qs]);
-
+  const swrKey = listBaseUrl ? `${listBaseUrl}?${qs}` : null;
   const { data, isLoading, mutate } = useSWR(swrKey, fetcher);
 
-  const rows = data?.data || [];
+  // rows + fallback nama_departement
+  const rows = (data?.data || []).map((r) => ({
+    ...r,
+    departement:
+      r.departement || (departementName ? { nama_departement: departementName } : undefined),
+  }));
+
   const pagination = data?.pagination || { page, pageSize, total: rows.length };
 
   const fetchList = useCallback(() => mutate(), [mutate]);
@@ -54,15 +52,12 @@ export default function useKaryawanViewModel({ departementId }) {
     fetchList();
   }, [departementId, fetchList]);
 
-  // CRUD (patuh constraint ApiEndpoints.*)
+  // CREATE → /api/auth/register
   const addKaryawan = useCallback(
     async (payload) => {
       try {
-        await crudService.post(ApiEndpoints.CreateUser, payload);
-        notification.success({
-          message: "Berhasil",
-          description: "Karyawan dibuat.",
-        });
+        await crudService.post(ApiEndpoints.CreateUser, payload); // register
+        notification.success({ message: "Berhasil", description: "Karyawan dibuat." });
         await fetchList();
       } catch (err) {
         notification.error({
@@ -75,14 +70,13 @@ export default function useKaryawanViewModel({ departementId }) {
     [fetchList, notification]
   );
 
+  // UPDATE → /api/users/[id] (PUT)
   const updateKaryawan = useCallback(
     async (id, payload) => {
       try {
-        await crudService.put(ApiEndpoints.UpdateUser(id), payload);
-        notification.success({
-          message: "Berhasil",
-          description: "Karyawan diperbarui.",
-        });
+        console.log(id)
+        await crudService.put(ApiEndpoints.UpdateUser(id), payload, );
+        notification.success({ message: "Berhasil", description: "Karyawan diperbarui." });
         await fetchList();
       } catch (err) {
         notification.error({
@@ -95,14 +89,12 @@ export default function useKaryawanViewModel({ departementId }) {
     [fetchList, notification]
   );
 
+  // (Optional) DELETE masih ada kalau nanti dipakai
   const deleteKaryawan = useCallback(
     async (id) => {
       try {
         await crudService.delete(ApiEndpoints.DeleteUser(id));
-        notification.success({
-          message: "Berhasil",
-          description: "Karyawan dihapus.",
-        });
+        notification.success({ message: "Berhasil", description: "Karyawan dihapus." });
         await fetchList();
       } catch (err) {
         notification.error({

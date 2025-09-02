@@ -2,8 +2,12 @@ const API_DEPARTEMENT = "/api/departements";
 const API_LOCATION = "/api/location";
 const API_USERS = "/api/users";
 
+// Auth (reset password)
 const API_RESET_PASSWORD_REQUEST = "/api/auth/reset-password/request-token";
 const API_RESET_PASSWORD_CONFIRM = "/api/auth/reset-password";
+
+// Register (CREATE user lewat endpoint ini!)
+const API_REGISTER = "/api/auth/register";
 
 export const ApiEndpoints = {
   // Location
@@ -25,9 +29,10 @@ export const ApiEndpoints = {
   ResetPasswordRequest: API_RESET_PASSWORD_REQUEST,
   ResetPasswordConfirm: API_RESET_PASSWORD_CONFIRM,
 
-
+  // Users
   GetUsers: API_USERS,
-  CreateUser: API_USERS,
+  // IMPORTANT: Create user pakai REGISTER (bukan /api/users)
+  CreateUser: API_REGISTER,
   GetUserById: (id) => `${API_USERS}/${id}`,
   UpdateUser: (id) => `${API_USERS}/${id}`,
   DeleteUser: (id) => `${API_USERS}/${id}`,

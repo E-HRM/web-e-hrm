@@ -6,27 +6,29 @@ import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 export default function DivisionCard({
   name,
   count = 0,
+  total,               // <<< NEW: total karyawan (opsional)
   align = "left",
   onEdit,
   onDelete,
-  onPress,               // klik card pakai handler
-  href,                  // atau pakai link Next.js
-  readonly = false,      // sembunyikan tombol edit/delete jika true
+  onPress,
+  href,
+  readonly = false,
 }) {
-  const alignCls =
-    align === "right" ? "text-right items-end" : "text-left items-start";
-
+  const alignCls = align === "right" ? "text-right items-end" : "text-left items-start";
   const showActions = !readonly && (onEdit || onDelete);
+  const clickable = Boolean(onPress || href);
 
-  const CardInner = (
+  const content = (
     <div
       onClick={onPress}
-      role={onPress || href ? "button" : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : -1}
       className={[
         "relative w-full h-56 md:h-60 lg:h-64",
         "rounded-xl bg-[#0E2A2E] ring-1 ring-black/10 shadow-md",
-        "px-6 md:px-7 py-5 md:py-6 flex",
-        (onPress || href) ? "cursor-pointer hover:brightness-110 transition" : "",
+        "px-6 md:px-7 py-5 md:py-6 flex outline-none",
+        clickable ? "cursor-pointer hover:brightness-[1.07] transition" : "",
+        clickable ? "focus:ring-2 focus:ring-[#E7B97A]/50 focus:ring-offset-2 focus:ring-offset-[#0E2A2E]" : "",
       ].join(" ")}
     >
       {showActions && (
@@ -57,12 +59,12 @@ export default function DivisionCard({
           {name?.toUpperCase()}
         </h3>
         <p className="text-xs md:text-sm text-[#E7B97A]/90 mt-2 tracking-wide">
-          {count} KARYAWAN
+          {typeof total === "number" ? `${count} / ${total} KARYAWAN` : `${count} KARYAWAN`}
         </p>
       </div>
     </div>
   );
 
-  // Jika href ada, bungkus dengan Link supaya navigasi otomatis
-  return href ? <Link href={href}>{CardInner}</Link> : CardInner;
+  // Jika href ada, bungkus dengan Link agar navigasi di-handle Next.js
+  return href ? <Link href={href}>{content}</Link> : content;
 }

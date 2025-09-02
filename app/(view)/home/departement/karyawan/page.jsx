@@ -3,43 +3,87 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  ConfigProvider, Table, Input, Button, Space, Tooltip,
-  Modal, Form, Input as AntInput, DatePicker, Select,
+  ConfigProvider,
+  Table,
+  Input,
+  Button,
+  Space,
+  Tooltip,
+  Modal,
+  Form,
+  Input as AntInput,
+  DatePicker,
+  Select,
 } from "antd";
 import {
-  SearchOutlined, ReloadOutlined, PlusOutlined,
-  EditOutlined, DeleteOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
+import dayjs from "dayjs";
 import useKaryawanViewModel from "./useKaryawanViewModel";
 
 const BRAND = { primary: "#0A3848", accent: "#D9A96F" };
 
+// normalisasi label agama
+const prettyAgama = (v) => {
+  if (!v) return "-";
+  const s = String(v).toLowerCase();
+  if (s.includes("katolik")) return "Katolik";
+  if (s.includes("protestan") || s.includes("kristen protestan"))
+    return "Kristen Protestan";
+  if (s === "kristen") return "Kristen Protestan"; // fallback
+  if (s.includes("islam")) return "Islam";
+  if (s.includes("hindu")) return "Hindu";
+  if (s.includes("buddha")) return "Buddha";
+  if (s.includes("konghucu")) return "Konghucu";
+  return v;
+};
+
 export default function KaryawanPage() {
   const sp = useSearchParams();
-  const departementId = sp.get("id") || "";   
-  const departementName = sp.get("name") || "";
+  const departementId = sp.get("id") || ""; // ?id=...
+  const departementName = sp.get("name") || ""; // ?name=...
 
   const {
-    rows, loading, pagination,
-    search, setSearch,
-    onTableChange, fetchList,
-    addKaryawan, updateKaryawan, deleteKaryawan,
-  } = useKaryawanViewModel({ departementId });
+    rows,
+    loading,
+    pagination,
+    search,
+    setSearch,
+    onTableChange,
+    fetchList,
+    addKaryawan,
+    updateKaryawan,
+    deleteKaryawan,
+  } = useKaryawanViewModel({ departementId, departementName });
 
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form] = Form.useForm();
-  const title = useMemo(() => (editing ? "Edit Karyawan" : "Tambah Karyawan"), [editing]);
+  const title = useMemo(
+    () => (editing ? "Edit Karyawan" : "Tambah Karyawan"),
+    [editing]
+  );
 
-  const openAdd = () => { setEditing(null); form.resetFields(); setOpenForm(true); };
+  const openAdd = () => {
+    setEditing(null);
+    form.resetFields();
+    setOpenForm(true);
+  };
+
   const openEdit = (rec) => {
     setEditing(rec);
     form.setFieldsValue({
       nama_pengguna: rec.nama_pengguna,
       email: rec.email,
       kontak: rec.kontak,
-      agama: rec.agama || undefined,
+      agama: prettyAgama(rec.agama),
       role: rec.role || "KARYAWAN",
+      tanggal_lahir: rec.tanggal_lahir ? dayjs(rec.tanggal_lahir) : null,
+      // password TIDAK diisi saat edit
     });
     setOpenForm(true);
   };
@@ -47,11 +91,17 @@ export default function KaryawanPage() {
   const handleDelete = (rec) => {
     Modal.confirm({
       title: "Hapus Karyawan?",
-      content: <>Data karyawan <b>{rec.nama_pengguna}</b> akan dihapus.</>,
+      content: (
+        <>
+          Data karyawan <b>{rec.nama_pengguna}</b> akan dihapus.
+        </>
+      ),
       okText: "Hapus",
       okButtonProps: { danger: true },
       cancelText: "Batal",
-      onOk: async () => { await deleteKaryawan(rec.id_user); },
+      onOk: async () => {
+        await deleteKaryawan(rec.id_user);
+      },
     });
   };
 
@@ -72,8 +122,40 @@ export default function KaryawanPage() {
       ),
     },
     { title: "Email", dataIndex: "email", key: "email", width: 240 },
-    { title: "Agama", dataIndex: "agama", key: "agama", width: 120, align: "center", render: v => v || "-" },
-    { title: "Kontak", dataIndex: "kontak", key: "kontak", width: 160, render: v => v || "-" },
+    {
+      title: "Divisi",
+      dataIndex: ["departement", "nama_departement"],
+      key: "departement",
+      width: 160,
+      render: (v, r) =>
+        r?.departement?.nama_departement ||
+        r?.nama_departement ||
+        departementName ||
+        "-",
+    },
+    {
+      title: "Agama",
+      dataIndex: "agama",
+      key: "agama",
+      width: 160,
+      render: (v) => prettyAgama(v),
+    },
+    {
+      title: "Kontak",
+      dataIndex: "kontak",
+      key: "kontak",
+      width: 160,
+      render: (v) => v || "-",
+    },
+    {
+      title: "Tanggal Lahir",
+      dataIndex: "tanggal_lahir",
+      key: "tanggal_lahir",
+      width: 160,
+      render: (v) => (v ? new Date(v).toLocaleDateString() : "-"),
+      responsive: ["md"],
+    },
+    { title: "Role", dataIndex: "role", key: "role", width: 130, align: "center" },
     {
       title: "Opsi",
       key: "aksi",
@@ -82,10 +164,19 @@ export default function KaryawanPage() {
       render: (_, row) => (
         <Space>
           <Tooltip title="Edit">
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEdit(row)}
+            />
           </Tooltip>
           <Tooltip title="Hapus">
-            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(row)} />
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(row)}
+            />
           </Tooltip>
         </Space>
       ),
@@ -97,7 +188,12 @@ export default function KaryawanPage() {
       theme={{
         token: { borderRadius: 10 },
         components: {
-          Table: { headerBg: "#F7F9FB", headerColor: "#334155", rowHoverBg: "#FAFBFC", headerSplitColor: "#ECEEF1" },
+          Table: {
+            headerBg: "#F7F9FB",
+            headerColor: "#334155",
+            rowHoverBg: "#FAFBFC",
+            headerSplitColor: "#ECEEF1",
+          },
         },
       }}
     >
@@ -115,7 +211,9 @@ export default function KaryawanPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="w-[220px]"
             />
-            <Button icon={<ReloadOutlined />} onClick={fetchList}>Refresh</Button>
+            <Button icon={<ReloadOutlined />} onClick={fetchList}>
+              Refresh
+            </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -145,7 +243,7 @@ export default function KaryawanPage() {
         </div>
       </div>
 
-      {/* Modal Add/Edit (inline) */}
+      {/* Modal Add/Edit */}
       <Modal
         open={openForm}
         title={<div className="text-lg font-semibold">{title}</div>}
@@ -158,10 +256,25 @@ export default function KaryawanPage() {
           form={form}
           layout="vertical"
           onFinish={async (vals) => {
+            const payload = {
+              ...vals,
+              tanggal_lahir: vals.tanggal_lahir
+                ? vals.tanggal_lahir.toISOString()
+                : null,
+              agama: prettyAgama(vals.agama),
+            };
+
             if (editing) {
-              await updateKaryawan(editing.id_user, vals);
+              // EDIT → /api/users/[id] (tanpa password)
+              delete payload.password;
+              await updateKaryawan(editing.id_user, payload);
             } else {
-              await addKaryawan({ ...vals, id_departement: departementId, role: vals.role || "KARYAWAN" });
+              // CREATE → /api/auth/register (WAJIB password & id_departement)
+              await addKaryawan({
+                ...payload,
+                id_departement: departementId,
+                role: vals.role || "KARYAWAN",
+              });
             }
             setOpenForm(false);
           }}
@@ -186,6 +299,20 @@ export default function KaryawanPage() {
             <AntInput placeholder="nama@domain.com" />
           </Form.Item>
 
+          {/* Password hanya saat TAMBAH */}
+          {!editing && (
+            <Form.Item
+              label="Password"
+              name="password"
+              rules={[
+                { required: true, message: "Password wajib diisi" },
+                { min: 6, message: "Minimal 6 karakter" },
+              ]}
+            >
+              <AntInput.Password placeholder="Password" />
+            </Form.Item>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Form.Item label="Kontak" name="kontak">
               <AntInput placeholder="08xxxx" />
@@ -196,7 +323,7 @@ export default function KaryawanPage() {
                 placeholder="Pilih agama"
                 options={[
                   { value: "Islam", label: "Islam" },
-                  { value: "Kristen", label: "Kristen" },
+                  { value: "Kristen Protestan", label: "Kristen Protestan" },
                   { value: "Katolik", label: "Katolik" },
                   { value: "Hindu", label: "Hindu" },
                   { value: "Buddha", label: "Buddha" },
@@ -206,14 +333,21 @@ export default function KaryawanPage() {
             </Form.Item>
           </div>
 
-          <Form.Item label="Role" name="role" initialValue="KARYAWAN">
-            <Select
-              options={[
-                { value: "KARYAWAN", label: "KARYAWAN" },
-                { value: "HR", label: "HR" },
-              ]}
-            />
-          </Form.Item>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Form.Item label="Tanggal Lahir" name="tanggal_lahir">
+              <DatePicker className="w-full" />
+            </Form.Item>
+            <Form.Item label="Role" name="role" initialValue="KARYAWAN">
+              <Select
+                options={[
+                  { value: "KARYAWAN", label: "KARYAWAN" },
+                  { value: "HR", label: "HR" },
+                  { value: "OPERASIONAL", label: "OPERASIONAL" },
+                  { value: "DIREKTUR", label: "DIREKTUR" },
+                ]}
+              />
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
     </ConfigProvider>
