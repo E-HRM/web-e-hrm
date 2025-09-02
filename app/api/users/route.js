@@ -70,7 +70,7 @@ export async function GET(req) {
           nama_pengguna: true,
           email: true,
           kontak: true,
-          agama: true, // hapus jika kolom belum ada
+          agama: true,
           foto_profil_user: true,
           tanggal_lahir: true,
           role: true,
