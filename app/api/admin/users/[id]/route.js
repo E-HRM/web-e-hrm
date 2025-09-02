@@ -1,9 +1,9 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import db from '../../../../lib/prisma';
-import { verifyAuthToken } from '../../../../lib/jwt';
-import { authenticateRequest } from '../../../../app/utils/auth/authUtils';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../../lib/jwt';
+import { authenticateRequest } from '../../../../../app/utils/auth/authUtils';
 import { createClient } from '@supabase/supabase-js';
 
 // ===== Helpers: Auth (Admin) =====
@@ -134,17 +134,6 @@ export async function PUT(req, { params }) {
   try {
     const { id } = params;
 
-<<<<<<< HEAD:app/api/users/[id]/route.js
-    console.log(id)
-
-    // hanya HR yang boleh edit user lain
-    if (actorRole !== 'HR' && actorId !== id) {
-      return NextResponse.json({ message: 'Tidak boleh mengubah profil pengguna lain.' }, { status: 403 });
-    }
-
-    // Ambil data saat ini (untuk keperluan foto)
-=======
->>>>>>> 9a751ff91d33b41b7b8d41ab4cced1aab1853451:app/api/admin/users/[id]/route.js
     const current = await db.user.findUnique({
       where: { id_user: id },
       select: { nama_pengguna: true, foto_profil_user: true },

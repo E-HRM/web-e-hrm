@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import db from '../../../../lib/prisma';
-import { verifyAuthToken } from '../../../../lib/jwt';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../../lib/jwt';
 import { authenticateRequest } from '../../../utils/auth/authUtils';
 
 async function ensureAuth(req) {

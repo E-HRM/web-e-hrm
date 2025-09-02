@@ -24,9 +24,8 @@ export const authOptions = {
         const ok = await bcrypt.compare(password, user.password_hash);
         if (!ok) return null;
 
-        // Return objek user minimal
         return {
-          id: user.id_user, // NextAuth expects 'id'
+          id: user.id_user, 
           name: user.nama_pengguna,
           email: user.email,
           role: user.role,

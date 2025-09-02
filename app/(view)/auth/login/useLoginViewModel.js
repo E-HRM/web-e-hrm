@@ -62,21 +62,5 @@ export default function useLoginViewModel() {
     }
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/session", { cache: "no-store" });
-        const session = await res.json();
-        if (!cancelled && session?.user?.role) {
-          redirectByRole(session.user.role);
-        }
-      } catch {}
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
-
   return { onFinish, loading };
 }
