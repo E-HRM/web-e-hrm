@@ -66,7 +66,7 @@ export async function GET(req) {
           nama_pengguna: true,
           email: true,
           kontak: true,
-          agama: true, 
+          agama: true,
           foto_profil_user: true,
           tanggal_lahir: true,
           role: true,

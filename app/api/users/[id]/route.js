@@ -267,3 +267,24 @@ export async function PUT(req, { params }) {
     return NextResponse.json({ message: err?.message || 'Server error' }, { status: 500 });
   }
 }
+
+//DELETE USER (soft delete)
+export async function DELETE(req, { params }) {
+  const actor = await getActor(req);
+  if (actor instanceof NextResponse) return actor;
+  if (!['HR', 'DIREKTUR'].includes(actor.role)) {
+    return NextResponse.json({ message: 'Forbidden: tidak memiliki akses.' }, { status: 403 });
+  }
+
+  try {
+    const { id } = params;
+    await db.user.update({ where: { id_user: id }, data: { deleted_at: new Date() } });
+    return NextResponse.json({ message: 'User dihapus (soft delete).' });
+  } catch (err) {
+    if (err?.code === 'P2025') {
+      return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
+    }
+    console.error('DELETE /users/[id] error:', err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+  }
+}
