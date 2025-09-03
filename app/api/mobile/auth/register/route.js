@@ -9,46 +9,52 @@ export async function POST(req) {
   try {
     const body = await req.json();
 
-    const required = ['nama_pengguna', 'email', 'password'];
+    // Wajib: nama_pengguna, email, password, id_departement, id_location
+    const required = ['nama_pengguna', 'email', 'password', 'id_departement', 'id_location'];
     for (const key of required) {
-      if (!body[key] || String(body[key]).trim() === '') {
+      const val = body[key];
+      if (val == null || String(val).trim() === '') {
         return NextResponse.json({ message: `Field '${key}' wajib diisi.` }, { status: 400 });
       }
     }
 
     const email = String(body.email).trim().toLowerCase();
 
-    // Cek unik email
+    // Cek email unik
     const existing = await db.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json({ message: 'Email sudah terdaftar.' }, { status: 409 });
     }
 
-    // Validasi opsional: departement & location hanya jika dikirim
-    let deptId = body.id_departement ?? null;
-    let locId = body.id_location ?? null;
+    // Validasi: departement & location HARUS ada dan valid
+    const deptId = String(body.id_departement).trim();
+    const locId = String(body.id_location).trim();
 
-    if (deptId) {
-      const dept = await db.departement.findUnique({ where: { id_departement: deptId } });
-      if (!dept) {
-        return NextResponse.json({ message: 'Departement tidak ditemukan.' }, { status: 400 });
-      }
-    } else {
-      deptId = null;
+    const [dept, loc] = await Promise.all([db.departement.findUnique({ where: { id_departement: deptId } }), db.location.findUnique({ where: { id_location: locId } })]);
+
+    if (!dept) {
+      return NextResponse.json({ message: 'Departement tidak ditemukan.' }, { status: 400 });
+    }
+    if (!loc) {
+      return NextResponse.json({ message: 'Location/kantor tidak ditemukan.' }, { status: 400 });
     }
 
-    if (locId) {
-      const loc = await db.location.findUnique({ where: { id_location: locId } });
-      if (!loc) {
-        return NextResponse.json({ message: 'Location/kantor tidak ditemukan.' }, { status: 400 });
-      }
-    } else {
-      locId = null;
-    }
-
+    // Hash password
     const password_hash = await bcrypt.hash(String(body.password), 12);
+
+    // Role default KARYAWAN jika tidak valid
     const role = body.role && ROLES.includes(body.role) ? body.role : 'KARYAWAN';
-    const tanggal_lahir = body.tanggal_lahir ? new Date(body.tanggal_lahir) : null;
+
+    // Tanggal lahir (opsional) dengan validasi format
+    let tanggal_lahir = null;
+    if (body.tanggal_lahir) {
+      const t = new Date(body.tanggal_lahir);
+      if (Number.isNaN(t.getTime())) {
+        return NextResponse.json({ message: 'Format tanggal_lahir tidak valid (gunakan YYYY-MM-DD atau ISO 8601).' }, { status: 400 });
+      }
+      tanggal_lahir = t;
+    }
+
     const agama = body.agama ?? null;
 
     const created = await db.user.create({
@@ -79,7 +85,7 @@ export async function POST(req) {
     return NextResponse.json({ message: 'Registrasi berhasil.', user: created }, { status: 201 });
   } catch (err) {
     console.error('Register error:', err);
-    const msg = err?.message?.includes('Unique constraint') ? 'Email sudah digunakan.' : err?.message || 'Terjadi kesalahan pada server.';
+    const msg = err?.message?.includes('Unique constraint') || err?.code === 'P2002' ? 'Email sudah digunakan.' : err?.message || 'Terjadi kesalahan pada server.';
     return NextResponse.json({ message: msg }, { status: 500 });
   }
 }

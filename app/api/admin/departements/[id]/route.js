@@ -73,13 +73,27 @@ export async function DELETE(req, { params }) {
 
   try {
     const { id } = params;
-    await db.departement.update({
+
+    // Pastikan data ada (agar balasan 404 lebih jelas)
+    const exists = await db.departement.findUnique({
       where: { id_departement: id },
-      data: { deleted_at: new Date() },
+      select: { id_departement: true },
+    });
+    if (!exists) {
+      return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
+    }
+
+    // Hard delete
+    await db.departement.delete({
+      where: { id_departement: id },
     });
 
-    return NextResponse.json({ message: 'Departement dihapus (soft delete).' });
+    return NextResponse.json({ message: 'Departement dihapus.' });
   } catch (err) {
+    // Jika masih ada relasi yang RESTRICT (belum SetNull/Cascade), MySQL akan lempar FK error (Prisma P2003)
+    if (err?.code === 'P2003') {
+      return NextResponse.json({ message: 'Gagal menghapus: masih direferensikan oleh entitas lain. Pastikan relasi memakai onDelete: SetNull atau lakukan re-assign.' }, { status: 409 });
+    }
     if (err?.code === 'P2025') {
       return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
     }
