@@ -236,7 +236,7 @@ model User {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
+  departement Departement? @relation( fields: [id_departement],references: [id_departement], onDelete: SetNull,onUpdate: Cascade)
   kantor      Location?    @relation(fields: [id_location], references: [id_location], onDelete: Restrict, onUpdate: Cascade)
 
   faces              Face[]
@@ -293,7 +293,7 @@ model Face {
 model StoryPlanner {
   id_story        String     @id @default(uuid()) @db.Char(36)
   id_user         String     @db.Char(36)
-  id_departement  String     @db.Char(36)
+  id_departement  String?     @db.Char(36)
   deskripsi_kerja String     @db.LongText
   count_time      DateTime?  @db.DateTime(0)
   status          WorkStatus
@@ -303,7 +303,7 @@ model StoryPlanner {
   deleted_at DateTime? @db.DateTime(0)
 
   user        User        @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  departement Departement @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
+  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([id_user])
   @@index([id_departement])
