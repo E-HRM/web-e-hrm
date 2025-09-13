@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ConfigProvider,
   Input,
   InputNumber,
   Select,
@@ -11,6 +10,10 @@ import {
   Tooltip,
   Modal,
   Form,
+  Typography,
+  Tag,
+  Card,
+  Empty,
 } from "antd";
 import {
   SearchOutlined,
@@ -18,10 +21,13 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  EnvironmentOutlined,
+  AimOutlined,
 } from "@ant-design/icons";
 import { useMemo, useState } from "react";
 import useLokasiViewModel from "./useLokasiViewModel";
 
+const { Text, Title } = Typography;
 const BRAND = { accent: "#D9A96F" };
 
 export default function LokasiContent() {
@@ -31,11 +37,16 @@ export default function LokasiContent() {
     pagination,
     onTableChange,
     // filters
-    search, setSearch,
-    radiusMin, setRadiusMin,
-    radiusMax, setRadiusMax,
-    orderBy, setOrderBy,
-    sort, setSort,
+    search,
+    setSearch,
+    radiusMin,
+    setRadiusMin,
+    radiusMax,
+    setRadiusMax,
+    orderBy,
+    setOrderBy,
+    sort,
+    setSort,
     // actions
     fetchList,
     addLocation,
@@ -58,171 +69,259 @@ export default function LokasiContent() {
   const [openDelete, setOpenDelete] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const columns = useMemo(() => [
-    { title: "Nama Lokasi", dataIndex: "nama_kantor", key: "nama_kantor" },
-    {
-      title: "Koordinat",
-      key: "koordinat",
-      width: 220,
-      render: (_, r) => (
-        <div className="text-xs">
-          <div>Lat: <span className="font-medium">{r.latitude ?? "-"}</span></div>
-          <div>Lng: <span className="font-medium">{r.longitude ?? "-"}</span></div>
-        </div>
-      ),
-    },
-    {
-      title: "Radius (m)",
-      dataIndex: "radius",
-      key: "radius",
-      width: 120,
-      align: "center",
-      render: (v) => v ?? "-",
-    },
-    {
-      title: "Jumlah Karyawan",
-      dataIndex: "employeeCount",
-      key: "employeeCount",
-      width: 160,
-      align: "center",
-      render: (v) => <span className="font-semibold">{v ?? 0}</span>,
-    },
-    {
-      title: "Dibuat",
-      dataIndex: "created_at",
-      key: "created_at",
-      width: 190,
-      render: (v) => (v ? new Date(v).toLocaleString() : "-"),
-      responsive: ["lg"],
-    },
-    {
-      title: "Diubah",
-      dataIndex: "updated_at",
-      key: "updated_at",
-      width: 190,
-      render: (v) => (v ? new Date(v).toLocaleString() : "-"),
-      responsive: ["lg"],
-    },
-    {
-      title: "Aksi",
-      key: "aksi",
-      width: 160,
-      align: "center",
-      render: (_, row) => (
-        <Space>
-          <Tooltip title="Edit">
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => {
-                setCurrentRow(row);
-                editForm.setFieldsValue({
-                  nama_kantor: row.nama_kantor,
-                  latitude: row.latitude,
-                  longitude: row.longitude,
-                  radius: row.radius ?? null,
-                });
-                setOpenEdit(true);
-              }}
-            />
-          </Tooltip>
-          <Tooltip title="Hapus">
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => {
-                setCurrentRow(row);
-                setOpenDelete(true);
-              }}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
-  ], [editForm]);
+  // quick stats
+  const totalLokasi = rows?.length || 0;
+  const totalKaryawan = useMemo(
+    () => (rows || []).reduce((sum, r) => sum + (Number(r.employeeCount) || 0), 0),
+    [rows]
+  );
+
+  // badge radius (warna by kategori)
+  const radiusBadge = (v) => {
+    if (v == null) return <Tag>—</Tag>;
+    const val = Number(v);
+    if (val < 50) return <Tag color="green">{val}</Tag>;
+    if (val <= 100) return <Tag color="geekblue">{val}</Tag>;
+    return <Tag color="orange">{val}</Tag>;
+  };
+
+  const columns = useMemo(
+    () => [
+      {
+        title: "Nama Lokasi",
+        dataIndex: "nama_kantor",
+        key: "nama_kantor",
+        width: 280,
+        render: (t) => (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex w-7 h-7 rounded-full bg-slate-100 text-[var(--brand-teal-700)] items-center justify-center ring-1 ring-slate-200">
+              <EnvironmentOutlined />
+            </span>
+            <span className="font-medium">{t}</span>
+          </div>
+        ),
+      },
+      {
+        title: "Koordinat",
+        key: "koordinat",
+        width: 260,
+        render: (_, r) => {
+          const lat = r.latitude ?? "-";
+          const lng = r.longitude ?? "-";
+          const has = r.latitude != null && r.longitude != null;
+          const mapHref = has ? `https://maps.google.com/?q=${lat},${lng}` : "#";
+          return (
+            <div className="text-xs">
+              <div>
+                Lat:{" "}
+                <Text copyable className="font-medium">
+                  {lat}
+                </Text>
+              </div>
+              <div>
+                Lng:{" "}
+                <Text copyable className="font-medium">
+                  {lng}
+                </Text>
+              </div>
+              {has && (
+                <a
+                  href={mapHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 mt-1 text-[12px]"
+                  style={{ color: BRAND.accent }}
+                >
+                  <AimOutlined /> Lihat di Maps
+                </a>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        title: "Radius (m)",
+        dataIndex: "radius",
+        key: "radius",
+        width: 130,
+        align: "center",
+        render: radiusBadge,
+      },
+      {
+        title: "Jumlah Karyawan",
+        dataIndex: "employeeCount",
+        key: "employeeCount",
+        width: 160,
+        align: "center",
+        render: (v) => <Tag color="processing">{v ?? 0}</Tag>,
+      },
+      {
+        title: "Dibuat",
+        dataIndex: "created_at",
+        key: "created_at",
+        width: 180,
+        render: (v) => (v ? new Date(v).toLocaleString() : "-"),
+        responsive: ["lg"],
+      },
+      {
+        title: "Diubah",
+        dataIndex: "updated_at",
+        key: "updated_at",
+        width: 180,
+        render: (v) => (v ? new Date(v).toLocaleString() : "-"),
+        responsive: ["lg"],
+      },
+      {
+        title: "Aksi",
+        key: "aksi",
+        width: 140,
+        fixed: "right",
+        align: "center",
+        render: (_, row) => (
+          <Space>
+            <Tooltip title="Edit">
+              <Button
+                size="small"
+                className="btn-ghost-circle"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setCurrentRow(row);
+                  editForm.setFieldsValue({
+                    nama_kantor: row.nama_kantor,
+                    latitude: row.latitude,
+                    longitude: row.longitude,
+                    radius: row.radius ?? null,
+                  });
+                  setOpenEdit(true);
+                }}
+              />
+            </Tooltip>
+            <Tooltip title="Hapus">
+              <Button
+                size="small"
+                danger
+                className="btn-ghost-circle"
+                icon={<DeleteOutlined />}
+                onClick={() => {
+                  setCurrentRow(row);
+                  setOpenDelete(true);
+                }}
+              />
+            </Tooltip>
+          </Space>
+        ),
+      },
+    ],
+    [editForm]
+  );
 
   return (
-    <ConfigProvider
-      theme={{
-        token: { borderRadius: 10 },
-        components: {
-          Table: {
-            headerBg: "#F7F9FB",
-            headerColor: "#334155",
-            rowHoverBg: "#FAFBFC",
-            headerSplitColor: "#ECEEF1",
-          },
-        },
-      }}
-    >
+    <div className="px-4 md:px-6 lg:px-8 py-5 space-y-4">
+      {/* ======= PAGE HEADER ======= */}
+      <div className="page-header flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+        <div>
+          <Title level={3} className="!m-0">
+            Lokasi Kantor
+          </Title>
+          <p className="page-header__desc mt-1">
+            Kelola titik absen & radius geofence untuk setiap kantor.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Tag color="geekblue">Total Lokasi: {totalLokasi}</Tag>
+          <Tag color="success">Karyawan Tertaut: {totalKaryawan}</Tag>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setOpenAdd(true)}
+            style={{ background: BRAND.accent, borderColor: BRAND.accent }}
+          >
+            Tambah Lokasi
+          </Button>
+        </div>
+      </div>
+
       {/* ======= FILTER BAR ======= */}
-      <div className="px-4 md:px-6 lg:px-8 py-5">
-        <div className="w-full rounded-xl bg-white ring-1 ring-gray-200 p-3 md:p-4 mb-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto_auto] items-center">
-            <Input
-              allowClear
-              prefix={<SearchOutlined />}
-              placeholder="Cari lokasi…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      <Card className="surface-card p-3 md:p-4">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto_auto] items-center">
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="Cari lokasi…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
 
-            <InputNumber
-              className="w-full md:w-[140px]"
-              placeholder="Radius min"
-              value={radiusMin === "" ? null : Number(radiusMin)}
-              onChange={(v) => setRadiusMin(v ?? "")}
-            />
-            <InputNumber
-              className="w-full md:w-[140px]"
-              placeholder="Radius max"
-              value={radiusMax === "" ? null : Number(radiusMax)}
-              onChange={(v) => setRadiusMax(v ?? "")}
-            />
+          <InputNumber
+            className="w-full md:w-[140px]"
+            placeholder="Radius min"
+            value={radiusMin === "" ? null : Number(radiusMin)}
+            onChange={(v) => setRadiusMin(v ?? "")}
+            min={0}
+          />
+          <InputNumber
+            className="w-full md:w-[140px]"
+            placeholder="Radius max"
+            value={radiusMax === "" ? null : Number(radiusMax)}
+            onChange={(v) => setRadiusMax(v ?? "")}
+            min={0}
+          />
 
-            <Select
-              value={orderBy}
-              onChange={setOrderBy}
-              className="w-full md:w-[160px]"
-              options={[
-                { value: "created_at", label: "Urutkan: Dibuat" },
-                { value: "updated_at", label: "Urutkan: Diubah" },
-                { value: "nama_kantor", label: "Urutkan: Nama" },
-              ]}
-            />
-            <Select
-              value={sort}
-              onChange={setSort}
-              className="w-full md:w-[120px]"
-              options={[
-                { value: "desc", label: "Desc" },
-                { value: "asc", label: "Asc" },
-              ]}
-            />
+          <Select
+            value={orderBy}
+            onChange={setOrderBy}
+            className="w-full md:w-[170px]"
+            options={[
+              { value: "created_at", label: "Urutkan: Dibuat" },
+              { value: "updated_at", label: "Urutkan: Diubah" },
+              { value: "nama_kantor", label: "Urutkan: Nama" },
+              { value: "radius", label: "Urutkan: Radius" },
+            ]}
+          />
+          <Select
+            value={sort}
+            onChange={setSort}
+            className="w-full md:w-[120px]"
+            options={[
+              { value: "desc", label: "Desc" },
+              { value: "asc", label: "Asc" },
+            ]}
+          />
 
+          <Space.Compact>
             <Button icon={<ReloadOutlined />} onClick={fetchList}>
               Refresh
             </Button>
-
             <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setOpenAdd(true)}
-              style={{ background: BRAND.accent, borderColor: BRAND.accent }}
+              onClick={() => {
+                setSearch("");
+                setRadiusMin("");
+                setRadiusMax("");
+              }}
             >
-              Tambah Lokasi
+              Reset
             </Button>
-          </div>
+          </Space.Compact>
         </div>
+      </Card>
 
-        {/* ======= TABLE ======= */}
-        <div className="rounded-xl bg-white ring-1 ring-gray-200 p-2 md:p-3">
+      {/* ======= TABLE ======= */}
+      <Card className="surface-card p-2 md:p-3">
+        {(!rows || rows.length === 0) && !loading ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="Belum ada lokasi. Tambahkan lokasi pertama Anda."
+          />
+        ) : (
           <Table
             rowKey="id_location"
             columns={columns}
             dataSource={rows}
             loading={loading}
+            size="small"
+            tableLayout="auto"
+            scroll={{ x: "max-content" }}
+            sticky
             pagination={{
               current: pagination.page,
               pageSize: pagination.pageSize,
@@ -230,12 +329,21 @@ export default function LokasiContent() {
               showSizeChanger: true,
             }}
             onChange={onTableChange}
-            size="middle"
+            className="
+              [&_.ant-table-container]:!rounded-2xl
+              [&_.ant-table]:!border [&_.ant-table]:!border-slate-200
+              [&_.ant-table-thead_th]:!bg-slate-50
+              [&_.ant-table-thead_th]:!font-semibold
+              [&_.ant-table-thead_th]:!text-slate-600
+              [&_.ant-table-thead_th]:!py-2
+              [&_.ant-table-tbody_td]:!py-2
+              [&_.ant-table-tbody_tr:hover_td]:!bg-slate-50
+            "
           />
-        </div>
-      </div>
+        )}
+      </Card>
 
-      {/* ======= MODALS (Tambah / Edit / Hapus) ======= */}
+      {/* ======= MODALS ======= */}
       {/* Tambah */}
       <Modal
         open={openAdd}
@@ -292,7 +400,7 @@ export default function LokasiContent() {
           </div>
 
           <Form.Item label="Radius (meter)" name="radius">
-            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" />
+            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />
           </Form.Item>
 
           <Button
@@ -366,7 +474,7 @@ export default function LokasiContent() {
           </div>
 
           <Form.Item label="Radius (meter)" name="radius">
-            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" />
+            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />
           </Form.Item>
 
           <Button
@@ -430,6 +538,6 @@ export default function LokasiContent() {
           </Button>
         </div>
       </Modal>
-    </ConfigProvider>
+    </div>
   );
 }

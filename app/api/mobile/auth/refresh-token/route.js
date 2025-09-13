@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import db from '@/lib/prisma';
-import { signAccessToken } from '@/lib/jwt_utils_mobile'; // pastikan pathnya benar
+import { signAccessToken } from '@/lib/jwt_utils_mobile'; 
 
 export async function POST(req) {
   try {

@@ -24,7 +24,7 @@ export const useDepartementViewModel = () => {
     align: i % 2 === 0 ? "left" : "right",
   }));
 
-  // Create
+  // Create Make Design 40 / 80
   const onAdd = async (name) => {
     try {
       await crudService.post(ApiEndpoints.CreateDepartement, {
@@ -38,7 +38,7 @@ export const useDepartementViewModel = () => {
     }
   };
 
-  // Update
+  // Update 45/ps = 78 9
   const onUpdate = async (id, name) => {
     try {
       await crudService.put(ApiEndpoints.UpdateDepartement(id), { nama_departement: name });
@@ -50,7 +50,7 @@ export const useDepartementViewModel = () => {
     }
   };
 
-  // Delete
+  // Delete 45 = px 46 89 i uk
   const onDelete = async (id) => {
     try {
       await crudService.delete(ApiEndpoints.DeleteDepartement(id));
