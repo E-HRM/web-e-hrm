@@ -2,18 +2,21 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import db from '@/lib/prisma';
-import { requireAccessFromRequest } from '@/app/utils/auth/authUtilsMobile';
+import { verifyAuthToken } from '@/lib/jwt'; // util kamu: signAuthToken/verifyAuthToken
 
 export async function GET(req) {
   try {
-    // Ambil & verifikasi access token (akan throw jika tidak ada/invalid/expired)
+    const auth = req.headers.get('authorization') || '';
+    if (!auth.startsWith('Bearer ')) {
+      return NextResponse.json({ message: 'Token tidak ditemukan' }, { status: 401 });
+    }
+
+    // Verifikasi token
     let decoded;
+    const token = auth.slice(7).trim();
     try {
-      decoded = requireAccessFromRequest(req);
+      decoded = verifyAuthToken(token); // akan throw kalau invalid/expired
     } catch (err) {
-      if (err?.code === 'NO_BEARER') {
-        return NextResponse.json({ message: 'Token tidak ditemukan' }, { status: 401 });
-      }
       if (err instanceof jwt.TokenExpiredError) {
         return NextResponse.json({ message: 'Token sudah kedaluwarsa' }, { status: 401 });
       }
