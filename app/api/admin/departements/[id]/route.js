@@ -46,7 +46,7 @@ export async function PUT(req, { params }) {
     const body = await req.json();
 
     if (body.nama_departement !== undefined && String(body.nama_departement).trim() === '') {
-      return NextResponse.json({ message: "Field 'nama_departement' tidak boleh kosong." }, { status: 400 });
+      return NextResponse.json({ message: 'departement tidak boleh kosong.' }, { status: 400 });
     }
 
     const updated = await db.departement.update({

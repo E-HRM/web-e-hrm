@@ -1,9 +1,11 @@
+// app/api/mobile/users/[id]/route.js
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { createClient } from '@supabase/supabase-js';
-import { requireAccessFromRequest } from '@/app/utils/auth/authUtilsMobile';
+import jwt from 'jsonwebtoken';
+import { verifyAuthToken } from '@/lib/jwt';
 
 // KARYAWAN hanya boleh ubah field ini
 const KARYAWAN_ALLOW = new Set(['nama_pengguna', 'email', 'kontak', 'agama', 'foto_profil_user', 'tanggal_lahir']);
@@ -71,10 +73,38 @@ async function parseBody(req) {
   return { type: 'json', body: await req.json() };
 }
 
+// ===== Helpers: Ambil & verifikasi token dari header =====
+function getClaimsFromRequest(req) {
+  const auth = req.headers.get('authorization') || '';
+  if (!auth.startsWith('Bearer ')) {
+    const e = new Error('Token tidak ditemukan');
+    e.status = 401;
+    throw e;
+  }
+  const token = auth.slice(7).trim();
+  try {
+    return verifyAuthToken(token);
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      const e = new Error('Token sudah kedaluwarsa');
+      e.status = 401;
+      throw e;
+    }
+    if (err instanceof jwt.JsonWebTokenError) {
+      const e = new Error('Token tidak valid');
+      e.status = 401;
+      throw e;
+    }
+    const e = new Error('Gagal memverifikasi token');
+    e.status = 500;
+    throw e;
+  }
+}
+
 // ===== GET (self only) =====
 export async function GET(req, { params }) {
   try {
-    const claims = requireAccessFromRequest(req); // akan throw jika invalid
+    const claims = getClaimsFromRequest(req);
     const { id } = params;
     if ((claims.sub || claims.id_user) !== id) {
       return NextResponse.json({ message: 'Tidak boleh mengakses profil pengguna lain.' }, { status: 403 });
@@ -102,8 +132,8 @@ export async function GET(req, { params }) {
     if (!user) return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
     return NextResponse.json({ data: user });
   } catch (err) {
+    const status = err?.status || 500;
     const msg = err?.message || 'Server error';
-    const status = err?.code === 'NO_BEARER' ? 401 : 500;
     return NextResponse.json({ message: msg }, { status });
   }
 }
@@ -111,7 +141,7 @@ export async function GET(req, { params }) {
 // ===== PUT (self only, allowlist) =====
 export async function PUT(req, { params }) {
   try {
-    const claims = requireAccessFromRequest(req);
+    const claims = getClaimsFromRequest(req);
     const { id } = params;
     const actorId = claims.sub || claims.id_user;
     if (actorId !== id) {
@@ -130,7 +160,7 @@ export async function PUT(req, { params }) {
     if ('id_departement' in body || 'id_location' in body || 'role' in body) {
       return NextResponse.json({ message: 'Field departement/location/role hanya bisa diubah oleh HR.' }, { status: 403 });
     }
-      
+
     const wantsRemove = body.remove_foto === true || body.remove_foto === 'true';
 
     let uploadedUrl = null;
@@ -188,11 +218,8 @@ export async function PUT(req, { params }) {
 
     return NextResponse.json({ message: 'Profil berhasil diperbarui.', data: updated });
   } catch (err) {
-    if (err?.code === 'P2025') {
-      return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
-    }
-    const msg = err?.message || 'Server error';
-    const status = err?.code === 'NO_BEARER' ? 401 : 500;
+    const status = err?.status || (err?.code === 'P2025' ? 404 : 500);
+    const msg = err?.status === 401 ? err.message : err?.code === 'P2025' ? 'User tidak ditemukan' : err?.message || 'Server error';
     console.error('MOBILE PUT /users/[id] error:', err);
     return NextResponse.json({ message: msg }, { status });
   }

@@ -1,9 +1,8 @@
 // app/api/mobile/auth/login/route.js
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import db from '@/lib/prisma';
-import { signAccessToken } from '../../../../utils/auth/authUtilsMobile';
+import { signAuthToken } from '@/lib/jwt';
 
 export async function POST(req) {
   try {
@@ -13,11 +12,10 @@ export async function POST(req) {
       return NextResponse.json({ message: 'Email dan password wajib diisi.' }, { status: 400 });
     }
 
-    const user = await db.user.findUnique({
-      where: { email: String(email).trim().toLowerCase() },
-    });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await db.user.findUnique({ where: { email: normalizedEmail } });
 
-    // Samakan pesan untuk cegah user-enumeration
+    // Pesan disamakan untuk cegah user-enumeration
     if (!user) {
       return NextResponse.json({ message: 'Email atau password salah.' }, { status: 401 });
     }
@@ -27,42 +25,17 @@ export async function POST(req) {
       return NextResponse.json({ message: 'Email atau password salah.' }, { status: 401 });
     }
 
-    // 1) Buat session_id (tanpa ketergantungan tabel device)
-    const sessionId = crypto.randomUUID();
-
-    // 2) Access token pendek (audience mobile, TTL dari MOBILE_ACCESS_TTL)
-    const accessToken = signAccessToken({
-      sub: user.id_user,
-      role: user.role,
-      email: user.email,
-    });
-
-    // 3) Refresh token panjang (opaque) + simpan HASH di DB
-    const plainRefresh = crypto.randomBytes(48).toString('base64url');
-    const tokenHash = crypto.createHash('sha256').update(plainRefresh).digest('hex');
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 180); // ~180 hari
-
-    await db.refreshToken.create({
-      data: {
-        id_user: user.id_user,
-        session_id: sessionId,
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-        // opsional audit:
-        user_agent: typeof req.headers.get === 'function' ? req.headers.get('user-agent') ?? null : null,
-        ip_address: typeof req.headers.get === 'function' ? (req.headers.get('x-forwarded-for') ?? '').split(',')[0] || null : null,
-      },
-    });
-
-    return NextResponse.json(
+    // Hanya ACCESS TOKEN (JWT) 1 hari
+    const accessToken = signAuthToken(
       {
-        message: 'Login berhasil.',
-        accessToken, // pakai di header Authorization
-        refreshToken: plainRefresh, // simpan aman di secure storage (mobile)
-        sessionId, // identitas sesi untuk refresh/logout
+        sub: user.id_user,
+        role: user.role,
+        email: user.email,
       },
-      { status: 200 }
+      { expiresIn: '1d' } // override TTL jika perlu
     );
+
+    return NextResponse.json({ message: 'Login berhasil.', accessToken }, { status: 200 });
   } catch (err) {
     console.error('Login error:', err);
     return NextResponse.json({ message: 'Terjadi kesalahan pada server.' }, { status: 500 });

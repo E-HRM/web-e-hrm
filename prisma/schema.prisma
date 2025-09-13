@@ -17,6 +17,13 @@ enum Role {
   DIREKTUR
 }
 
+// Role atasan saja (selain KARYAWAN) untuk persetujuan
+enum AtasanRole {
+  HR
+  OPERASIONAL
+  DIREKTUR
+}
+
 enum CutiType {
   cuti
   sakit
@@ -64,6 +71,20 @@ enum Bulan {
   OKTOBER
   NOVEMBER
   DESEMBER
+}
+
+// Hanya status ini yg valid untuk persetujuan laporan absensi
+enum ReportStatus {
+  terkirim
+  disetujui
+  ditolak
+}
+
+// ====== Status baru khusus Agenda Kerja ======
+enum AgendaStatus {
+  diproses
+  ditunda
+  selesai
 }
 
 /// ===== Models =====
@@ -181,7 +202,6 @@ model ShiftKerja {
   id_user         String    @db.Char(36)
   tanggal_mulai   DateTime? @db.Date
   tanggal_selesai DateTime? @db.Date
-  /// MySQL SET('senin','selasa','rabu','kamis','jumat','sabtu','minggu')
   hari_kerja      String
   status          ShiftStatus
   id_pola_kerja   String?   @db.Char(36)
@@ -198,21 +218,49 @@ model ShiftKerja {
   @@map("shift_kerja")
 }
 
-model AgendaKerja {
-  id_agenda       String     @id @default(uuid()) @db.Char(36)
-  id_user         String     @db.Char(36)
-  deskripsi_kerja String     @db.LongText
-  tanggal         DateTime?  @db.Date
-  count_time      DateTime?  @db.DateTime(0)
-  status          WorkStatus
+/* ====== REVISI: Pecah menjadi AGENDA (master) & AGENDA_KERJA (detail) ====== */
+
+// Master daftar agenda
+model Agenda {
+  id_agenda   String   @id @default(uuid()) @db.Char(36)
+  nama_agenda String   @db.LongText
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  user User @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  items AgendaKerja[]
 
-  @@index([id_user])
+  @@map("agenda")
+}
+
+// Detail agenda yang dikerjakan user & (opsional) terikat ke absensi
+model AgendaKerja {
+  id_agenda_kerja  String        @id @default(uuid()) @db.Char(36)
+  id_absensi       String?       @db.Char(36) // opsional
+  id_agenda        String        @db.Char(36)
+  id_user          String        @db.Char(36)
+
+  deskripsi_kerja  String        @db.LongText
+  start_date       DateTime?     @db.DateTime(0)
+  end_date         DateTime?     @db.DateTime(0)
+
+  duration_seconds Int?        
+
+  status           AgendaStatus
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  // Relations
+  user    User    @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  absensi Absensi? @relation(fields: [id_absensi], references: [id_absensi], onDelete: SetNull, onUpdate: Cascade)
+  agenda  Agenda  @relation(fields: [id_agenda], references: [id_agenda], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([id_user, start_date])
+  @@index([id_absensi])
+  @@index([id_agenda])
   @@map("agenda_kerja")
 }
 
@@ -236,11 +284,11 @@ model User {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  departement Departement? @relation( fields: [id_departement],references: [id_departement], onDelete: SetNull,onUpdate: Cascade)
+  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
   kantor      Location?    @relation(fields: [id_location], references: [id_location], onDelete: Restrict, onUpdate: Cascade)
 
   faces              Face[]
-  agendas            AgendaKerja[]
+  agendas            AgendaKerja[]      // tetap pakai nama field lama untuk kompatibilitas
   cuti               Cuti[]
   shifts             ShiftKerja[]
   story_planners     StoryPlanner[]
@@ -250,11 +298,10 @@ model User {
   shift_storyPlanner ShiftStoryPlanner[]
   broadcast_rcv      BroadcastRecipient[]
   devices            Device[]
-  cuti_approvals     CutiApproval[]   @relation("CutiApproval_approver_user_idToUser")
-  lembur_approvals   LemburApproval[] @relation("LemburApproval_approver_user_idToUser")
+  cuti_approvals     CutiApproval[]     @relation("CutiApproval_approver_user_idToUser")
+  lembur_approvals   LemburApproval[]   @relation("LemburApproval_approver_user_idToUser")
 
-  // NEW: relasi ke refresh token (tanpa device binding)
-  refresh_tokens RefreshToken[]
+  absensi_reports_received   AbsensiReportRecipient[]
 
   @@index([id_departement])
   @@index([id_location])
@@ -293,7 +340,7 @@ model Face {
 model StoryPlanner {
   id_story        String     @id @default(uuid()) @db.Char(36)
   id_user         String     @db.Char(36)
-  id_departement  String?     @db.Char(36)
+  id_departement  String?    @db.Char(36)
   deskripsi_kerja String     @db.LongText
   count_time      DateTime?  @db.DateTime(0)
   status          WorkStatus
@@ -302,7 +349,7 @@ model StoryPlanner {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  user        User        @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  user        User         @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
   departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([id_user])
@@ -324,8 +371,7 @@ model Device {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  user    User      @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
-  absensi Absensi[]
+  user User @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
 
   @@index([id_user])
   @@map("device")
@@ -343,28 +389,25 @@ model Absensi {
   jam_pulang           DateTime?     @db.DateTime(0)
   status               AbsensiStatus
 
-  id_device String? @db.Char(36)
-
   in_latitude   Decimal? @db.Decimal(10, 6)
   in_longitude  Decimal? @db.Decimal(10, 6)
   out_latitude  Decimal? @db.Decimal(10, 6)
   out_longitude Decimal? @db.Decimal(10, 6)
-  device_info   String?  @db.VarChar(255)
-
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt @db.DateTime(0)
-  deleted_at DateTime? @db.DateTime(0)
+  created_at    DateTime  @default(now()) @db.DateTime(0)
+  updated_at    DateTime  @updatedAt @db.DateTime(0)
+  deleted_at    DateTime? @db.DateTime(0)
 
   user      User      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  device    Device?   @relation(fields: [id_device], references: [id_device], onDelete: SetNull, onUpdate: Cascade)
   lokasiIn  Location? @relation("absen_datang", fields: [id_lokasi_datang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
   lokasiOut Location? @relation("absen_pulang", fields: [id_lokasi_pulang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
+
+  agendas           AgendaKerja[] // relasi ke agenda_kerja (detail agenda pada hari tsb)
+  report_recipients AbsensiReportRecipient[]
 
   @@unique([id_user, tanggal])
   @@index([id_user, tanggal])
   @@index([id_lokasi_datang])
   @@index([id_lokasi_pulang])
-  @@index([id_device])
   @@map("Absensi")
 }
 
@@ -478,24 +521,28 @@ model ShiftStoryPlanner {
   @@map("shift_story_planer")
 }
 
+/// ====== Penerima Laporan Absensi (Persetujuan Atasan) ======
+model AbsensiReportRecipient {
+  id_absensi_report_recipient String       @id @default(uuid()) @db.Char(36)
+  id_absensi                  String       @db.Char(36)
+  id_user                     String       @db.Char(36)
 
-model RefreshToken {
-  id_refresh_token String   @id @default(uuid()) @db.Char(36)
-  id_user          String   @db.Char(36)
-  session_id       String   @db.Char(36)        
-  token_hash       String   @unique @db.VarChar(255) 
-  expires_at       DateTime @db.DateTime(0)
-  revoked_at       DateTime? @db.DateTime(0)
-  created_at       DateTime  @default(now()) @db.DateTime(0)
-  updated_at       DateTime  @updatedAt @db.DateTime(0)
+  recipient_role_snapshot     AtasanRole?
+  catatan                     String?      @db.LongText
+  status                      ReportStatus @default(terkirim)
+  notified_at                 DateTime?    @db.DateTime(0)
+  read_at                     DateTime?    @db.DateTime(0)
+  acted_at                    DateTime?    @db.DateTime(0)
 
-  // opsional audit
-  user_agent       String?  @db.VarChar(255)
-  ip_address       String?  @db.VarChar(64)
+  created_at                  DateTime  @default(now()) @db.DateTime(0)
+  updated_at                  DateTime  @updatedAt @db.DateTime(0)
+  deleted_at                  DateTime? @db.DateTime(0)
 
-  user User @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
+  absensi   Absensi @relation(fields: [id_absensi], references: [id_absensi], onDelete: Cascade, onUpdate: Cascade)
+  recipient User    @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([id_user, session_id])
-  @@index([expires_at])
-  @@map("refresh_token")
+  @@index([id_absensi])
+  @@index([id_user])
+  @@unique([id_absensi, id_user])
+  @@map("absensi_report_recipients")
 }
