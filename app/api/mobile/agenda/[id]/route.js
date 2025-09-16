@@ -56,8 +56,8 @@ export async function GET(_req, { params }) {
   }
 }
 
-// PATCH /api/agenda/[id]
-export async function PATCH(request, { params }) {
+// PUT /api/agenda/[id]
+export async function PUT(request, { params }) {
   const okAuth = await ensureAuth(request);
   if (okAuth instanceof NextResponse) return okAuth;
 
