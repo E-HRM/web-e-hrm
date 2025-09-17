@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, List, Button, Skeleton, Empty, Typography } from "antd";
-import useAgendaViewModel from "./AgendaViewModel";
+import useAgendaViewModel from "../agenda_kerja/AgendaViewModel";
 
 const BRAND = { accent: "#D9A96F", dark: "#0A3848" };
 

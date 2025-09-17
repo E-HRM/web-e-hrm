@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { ConfigProvider, App as AntdApp } from "antd";
 import ResetPasswordPanel from "../../../components/common/ResetPasswordPanel";
-import useResetPasswordViewModel from "./useResetPasswordViewModel";
+import { useRouter } from "next/navigation";
 
 const BRAND = {
   primary: "#0A3848",
@@ -15,7 +15,10 @@ const BRAND = {
 };
 
 export default function ResetPasswordContent() {
-  const { onBackToLogin } = useResetPasswordViewModel();
+  const router = useRouter();
+
+  // Arahkan langsung ke halaman login (ganti path bila berbeda)
+  const onBackToLogin = () => router.replace("/auth/login"); // atau router.push("/auth/login")
 
   return (
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-2 bg-white">
@@ -49,9 +52,6 @@ export default function ResetPasswordContent() {
       <section className="relative bg-gradient-to-b from-[#0E2A2E] to-[#0B1F22] text-white">
         <div className="absolute inset-0 pointer-events-none ring-1 ring-white/10" />
         <div className="relative min-h-svh flex flex-col items-center justify-center px-8 md:px-10 text-center pt-16 md:pt-20">
-          <h2 className="whitespace-nowrap text-3xl font-extrabold leading-none tracking-wide">
-            E-HR MANAGEMENT
-          </h2>
           <Image
             src="/logo-oss.png"
             alt="OSS Mark"

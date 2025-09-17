@@ -13,7 +13,7 @@ const { useBreakpoint } = Grid;
 
 const LS_COLLAPSED_KEY = "oss.sider.collapsed";
 
-// ======= THEME GLOBAL: semua biru -> kuning =======
+// ======= THEME GLOBAL =======
 const THEME = {
   token: {
     colorPrimary: "#D9A96F",
@@ -31,22 +31,15 @@ const THEME = {
       primaryShadow: "0 0 0 2px rgba(217,169,111,0.18)",
       linkHoverBg: "rgba(217,169,111,0.08)",
     },
-    Input: {
-      hoverBorderColor: "#D9A96F",
-      activeBorderColor: "#D9A96F",
-    },
+    Input: { hoverBorderColor: "#D9A96F", activeBorderColor: "#D9A96F" },
     Select: {
       hoverBorderColor: "#D9A96F",
       activeBorderColor: "#D9A96F",
       optionSelectedBg: "rgba(217,169,111,0.10)",
       optionSelectedColor: "#3a2c17",
     },
-    Pagination: {
-      itemActiveBg: "#D9A96F",
-    },
-    Modal: {
-      contentBg: "#ffffff",
-    },
+    Pagination: { itemActiveBg: "#D9A96F" },
+    Modal: { contentBg: "#ffffff" },
   },
 };
 
@@ -67,13 +60,13 @@ export default function ViewLayout({ children }) {
 
   return (
     <ConfigProvider theme={THEME}>
-      <Layout style={{ height: "100vh", overflow: "hidden" }}>
-        {/* SIDER: pinned + scroll hanya isi */}
+      <Layout style={{ minHeight: "100vh" }}>
+        {/* SIDER */}
         <Sider
           collapsible
           collapsed={collapsed}
           onCollapse={setCollapsed}
-          collapsedWidth={0} // hide total saat collapse
+          collapsedWidth={0}
           breakpoint="lg"
           width={256}
           theme="dark"
@@ -89,40 +82,45 @@ export default function ViewLayout({ children }) {
             zIndex: 100,
           }}
         >
-          {/* header mini di dalam sider */}
+          {/* HEADER SIDER — logo kiri sejajar menu */}
           <div
             style={{
-              height: 96,
+              height: 64,
               display: "flex",
-              flexDirection: "column",
               alignItems: "center",
-              justifyContent: "flex-start",
-              paddingTop: 12,
-              gap: 6,
+              justifyContent: "flex-start",      // ⬅️ kiri, bukan center
+              paddingInline: 16,
+              paddingLeft: 28,                    // ⬅️ sejajar dengan margin+padding item menu
               borderBottom: "1px solid rgba(255,255,255,.15)",
               flexShrink: 0,
             }}
           >
-            <Link href="/home/dashboard" className="grid place-items-center">
-              <div className="relative h-12 w-12 rounded-full ring-2 ring-white/20 overflow-hidden">
-                <Image src="/logo-oss.png" alt="OSS" fill className="object-contain bg-white/5" priority />
+            <Link href="/home/dashboard" className="block">
+              <div className="relative h-8 w-[160px] shrink-0">
+                <Image
+                  src="/loogo.png"                 // ganti ke /logoo.png kalau itu nama filenya
+                  alt="E-HRM"
+                  fill
+                  className="object-contain object-left"  // ⬅️ anchor ke kiri
+                  priority
+                />
               </div>
             </Link>
-            {!collapsed && (
-              <p className="text-[11px] tracking-wide text-white">ONE STEP SOLUTION</p>
-            )}
           </div>
 
-          {/* hanya bagian ini yang scroll + scrollbar custom */}
-          <div className="h-[calc(100vh-96px)] overflow-y-auto sider-scroll pr-1">
+          {/* area menu yang scroll; 64 = tinggi header di atas */}
+          <div className="h-[calc(100vh-64px)] overflow-y-auto sider-scroll pr-1">
             <Sidebar />
           </div>
         </Sider>
 
-        {/* MAIN column */}
-        <Layout style={{ height: "100vh", display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* MAIN */}
+        <Layout style={{ minHeight: "100vh", display: "flex", flexDirection: "column", minWidth: 0 }}>
           <Header
             style={{
+              position: "sticky",
+              top: 0,
+              zIndex: 1000,
               height: 64,
               display: "flex",
               alignItems: "center",
@@ -159,14 +157,11 @@ export default function ViewLayout({ children }) {
             </div>
           </Header>
 
-          {/* CONTENT: scroll di sini + scrollbar custom */}
           <Content
-            className="content-scroll"
             style={{
               background: "#F6F7F9",
               padding: screens.md ? 24 : 16,
-              height: "calc(100vh - 64px - 56px)",
-              overflow: "auto",
+              flex: 1,
               minHeight: 0,
             }}
           >
@@ -181,7 +176,7 @@ export default function ViewLayout({ children }) {
               justifyContent: "center",
               background: "#ffffff",
               borderTop: "1px solid #ECEEF1",
-              flexShrink: 0,
+              marginTop: "auto",
             }}
           >
             <span className="text-xs text-gray-500">OSS © {new Date().getFullYear()}</span>

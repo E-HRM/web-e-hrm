@@ -1,14 +1,17 @@
-const API_DEPARTEMENT = "/api/admin/departements";
+// Location
 const API_LOCATION = "/api/admin/location";
+// Departement
+const API_DEPARTEMENT = "/api/admin/departements";
+// Users & Auth
 const API_USERS = "/api/admin/users";
-
-// Auth (reset password)
 const API_RESET_PASSWORD_REQUEST = "/api/mobile/auth/reset-password/request-token";
 const API_RESET_PASSWORD_CONFIRM = "/api/mobile/auth/reset-password";
-
-// Register (CREATE user lewat endpoint ini!)
 const API_REGISTER = "/api/mobile/auth/register";
 
+// NEW: Agenda (master aktivitas) & Agenda Kerja (jadwal kerja yang refer ke agenda)
+const API_AGENDA = "/api/mobile/agenda";
+const API_AGENDA_KERJA = "/api/mobile/agenda-kerja";
+0
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -31,10 +34,22 @@ export const ApiEndpoints = {
 
   // Users
   GetUsers: API_USERS,
-  // IMPORTANT: Create user pakai REGISTER (bukan /api/users)
-  CreateUser: API_REGISTER,
-  GetLocation: "/api/admin/location",
+  CreateUser: API_REGISTER, // penting: create pakai REGISTER
   GetUserById: (id) => `${API_USERS}/${id}`,
   UpdateUser: (id) => `${API_USERS}/${id}`,
   DeleteUser: (id) => `${API_USERS}/${id}`,
+
+  // === NEW: Agenda (master aktivitas)
+  GetAgenda: API_AGENDA,                 // GET list (q,page,perPage)
+  CreateAgenda: API_AGENDA,              // POST { nama_agenda }
+  GetAgendaById: (id) => `${API_AGENDA}/${id}`,     // GET detail
+  UpdateAgenda: (id) => `${API_AGENDA}/${id}`,      // PATCH { nama_agenda }
+  DeleteAgenda: (id) => `${API_AGENDA}/${id}`,      // DELETE ?hard=0|1
+
+  // === NEW: Agenda Kerja (jadwal kerja)
+  GetAgendaKerja: API_AGENDA_KERJA,                 // GET list (filter user_id,id_agenda,status,date|from|to,page,perPage)
+  CreateAgendaKerja: API_AGENDA_KERJA,              // POST {...}
+  GetAgendaKerjaById: (id) => `${API_AGENDA_KERJA}/${id}`, // GET detail
+  UpdateAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,  // PATCH {...}
+  DeleteAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,  // DELETE ?hard=0|1
 };

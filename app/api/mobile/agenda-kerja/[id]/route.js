@@ -1,8 +1,8 @@
 // app/api/agenda-kerja/[id]/route.js
 import { NextResponse } from 'next/server';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
-import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../../lib/jwt';
+import { authenticateRequest } from '../../../../utils/auth/authUtils';
 
 // Autentikasi (JWT/NextAuth)
 async function ensureAuth(req) {

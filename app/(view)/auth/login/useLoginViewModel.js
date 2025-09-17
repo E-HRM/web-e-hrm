@@ -1,26 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { App as AntdApp } from "antd";          
+import { useState } from "react";
+import { App as AntdApp } from "antd";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
 export default function useLoginViewModel() {
   const router = useRouter();
-  const { notification: apiNotification } = AntdApp.useApp(); 
+  const { notification: apiNotification } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
 
   const redirectByRole = (role) => {
     switch (role) {
       case "HR":
-        router.push("/home/dashboard");
-        break;
       case "DIREKTUR":
-        router.push("/home/dashboard");
-        break;
       case "OPERASIONAL":
-        router.push("/home/dashboard");
-        break;
       default:
         router.push("/home/dashboard");
         break;

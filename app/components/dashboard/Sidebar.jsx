@@ -37,13 +37,14 @@ const MENU = [
     key: "agenda",
     href: "/home/agenda-kerja",
     match: ["/home/agenda-kerja", "/agenda-kerja"],
-    label: "Agenda Kerja",
+    label: "Time Sheet",
     icon: FileTextOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/agenda-kerja/aktivitas", match: ["/home/agenda-kerja/aktivitas", "/agenda-kerja/aktivitas"], label: "Aktivitas" },
-      { href: "/home/agenda-kerja/proyek", match: ["/home/agenda-kerja/proyek", "/agenda-kerja/proyek"], label: "Proyek" },
-      { href: "/home/agenda-kerja/proyek", match: ["/home/agenda-kerja/proyek", "/agenda-kerja/proyek"], label: "Agenda Kerja" },
+      { href: "/home/agenda/aktivitas", match: ["/home/agenda/aktivitas"], label: "Aktivitas" },
+      { href: "/home/agenda/proyek", match: ["/home/agenda/proyek"], label: "Proyek" },
+      { href: "/home/agenda/agenda_kerja", match: ["/home/agenda/agenda_kerja"], label: "Agenda Kerja" },
+      { href: "/home/agenda/perma"}
     ],
   },
 ];
@@ -90,18 +91,27 @@ export default function Sidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
+  // ===== tokens (ubah warna hover/active ke #D9A96F) =====
   const baseItem =
-    "group flex items-center justify-between gap-3 mx-3 my-2 px-4 py-3 rounded-2xl text-white/80 transition w-[calc(100%-24px)] hover:!bg-[#155163] hover:!text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
-  const activeItem = "!bg-[#155163] !text-white";
+    "group flex items-center justify-between gap-3 mx-3 my-2 px-4 py-3 rounded-2xl text-white/80 transition w-[calc(100%-24px)] hover:!bg-[#155163] hover:!text-[#D9A96F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
+  const activeItem = "!bg-[#155163] !text-[#D9A96F]";
   const subItem =
-    "group flex items-center gap-3 mx-3 mt-1 ml-7 px-3.5 py-2.5 rounded-xl text-white/85 transition hover:!bg-[#155163] hover:!text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
-  const subActive = "!bg-[#155163] !text-white";
+    "group flex items-center gap-3 mx-3 mt-1 ml-7 px-3.5 py-2.5 rounded-xl text-white/85 transition hover:!bg-[#155163] hover:!text-[#D9A96F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
+  const subActive = "!bg-[#155163] !text-[#D9A96F]";
   const iconCls = "text-[18px] leading-none";
-  const iconBox = "w-6 shrink-0 flex items-center justify-center"; // << fixed width untuk semua ikon/strip
-  const rightSlot = "w-3 flex items-center justify-center";        // << lebar kanan konsisten
+  const iconBox = "w-6 shrink-0 flex items-center justify-center";
+  const rightSlot = "w-3 flex items-center justify-center";
 
-  const StripBullet = () => (
-    <span aria-hidden="true" className="block w-3 h-[2px] rounded-full bg-white/70 group-hover:!bg-white" />
+  // Bullet sub menu — ikut emas saat hover/active
+  const StripBullet = ({ active = false }) => (
+    <span
+      aria-hidden="true"
+      className={[
+        "block w-3 h-[2px] rounded-full transition",
+        active ? "bg-[#D9A96F]" : "bg-white/70",
+        "group-hover:!bg-[#D9A96F]",
+      ].join(" ")}
+    />
   );
 
   return (
@@ -128,15 +138,16 @@ export default function Sidebar() {
                   >
                     <span className="flex items-center gap-3">
                       <span className={iconBox}>
-                        <Icon className={iconCls + " group-hover:!text-white"} />
+                        <Icon className={[iconCls, "group-hover:!text-[#D9A96F]"].join(" ")} />
                       </span>
-                      <span className="leading-none group-hover:!text-white">{m.label}</span>
+                      <span className="leading-none group-hover:!text-[#D9A96F]">{m.label}</span>
                     </span>
                     <span className={rightSlot}>
                       <DownOutlined
                         className={[
-                          "text-xs opacity-80 transition-transform",
+                          "text-xs opacity-80 transition-transform group-hover:!text-[#D9A96F]",
                           opened ? "rotate-180 opacity-100" : "rotate-0",
+                          highlightParent ? "!text-[#D9A96F]" : "",
                         ].join(" ")}
                       />
                     </span>
@@ -159,9 +170,9 @@ export default function Sidebar() {
                               aria-current={active ? "page" : undefined}
                             >
                               <span className={iconBox}>
-                                <StripBullet />
+                                <StripBullet active={active} />
                               </span>
-                              <span className="leading-none group-hover:!text-white">{c.label}</span>
+                              <span className="leading-none group-hover:!text-[#D9A96F]">{c.label}</span>
                             </Link>
                           </li>
                         );
@@ -182,9 +193,9 @@ export default function Sidebar() {
                 >
                   <span className="flex items-center gap-3">
                     <span className={iconBox}>
-                      <Icon className={iconCls + " group-hover:!text-white"} />
+                      <Icon className={[iconCls, "group-hover:!text-[#D9A96F]"].join(" ")} />
                     </span>
-                    <span className="leading-none group-hover:!text-white">{m.label}</span>
+                    <span className="leading-none group-hover:!text-[#D9A96F]">{m.label}</span>
                   </span>
                   <span className={rightSlot} aria-hidden="true" />
                 </Link>

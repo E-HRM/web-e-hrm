@@ -15,65 +15,73 @@ const BRAND = {
 };
 
 export default function LoginContent() {
-  const { onFinish } = useLoginViewModel();
+  const { onFinish, loading } = useLoginViewModel();
 
   return (
-    <div className="grid min-h-dvh grid-cols-1 md:grid-cols-2 bg-white">
-      <section className="flex items-center bg-white">
-        <div className="w-full max-w-md mx-auto md:ml-24 p-8 md:p-12">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-8">Login</h1>
+    <div className="relative min-h-dvh bg-white">
+      {/* === BG FULL: gambar + overlay putih (bukan opacity di gambarnya) === */}
+      <div className="absolute inset-0 z-10">
+        <Image
+          src="/bglogin.png"
+          alt=""
+          fill
+          className="object-cover"   // jangan pakai opacity di sini
+          priority
+        />
+        {/* overlay putih 50% → efek bening/terang */}
+        <div className="absolute inset-0 bg-white/30 pointer-events-none" />
+        {/*
+          Ingin lebih/kurang bening?
+          - bg-white/30  => lebih tembus
+          - bg-white/60  => lebih terang
+        */}
+      </div>
 
-          <ConfigProvider
-            theme={{
-              token: {
-                colorPrimary: BRAND.primary,
-                colorPrimaryHover: BRAND.primaryHover,
-                colorPrimaryActive: BRAND.primaryActive,
-                colorLink: BRAND.accent,
-                colorLinkHover: BRAND.accentHover,
-                colorLinkActive: BRAND.accentActive,
-                borderRadius: 8,
-                fontSize: 14,
-              },
-              components: {
-                Button: { controlHeight: 44 },
-                Input: { controlHeight: 44 },
-                Checkbox: {
-                  colorPrimary: BRAND.accent,
-                  colorPrimaryHover: BRAND.accentHover,
+      {/* Card center */}
+      <div className="relative z-10 flex min-h-dvh items-center justify-center p-4 md:p-6">
+        <div className="w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 grid grid-cols-1 md:grid-cols-2">
+          {/* KIRI: gambar statis */}
+          <div className="relative hidden md:block">
+            <Image
+              src="/kirilogo.png"
+              alt="Login Illustration"
+              fill
+              className="object-cover"
+              priority
+            />
+          </div>
+
+          {/* KANAN: form */}
+          <div className="p-6 md:p-8 lg:p-10">
+            <h1 className="mb-6 text-2xl font-semibold text-gray-900">Login</h1>
+
+            <ConfigProvider
+              theme={{
+                token: {
+                  colorPrimary: BRAND.primary,
+                  colorPrimaryHover: BRAND.primaryHover,
+                  colorPrimaryActive: BRAND.primaryActive,
+                  colorLink: BRAND.accent,
+                  colorLinkHover: BRAND.accentHover,
+                  colorLinkActive: BRAND.accentActive,
+                  borderRadius: 10,
+                  fontSize: 13,
                 },
-              },
-            }}
-          >
-            <AntdApp>
-              <LoginForm onFinish={onFinish} />
-            </AntdApp>
-          </ConfigProvider>
-        </div>
-      </section>
-
-      <section className="relative bg-gradient-to-b from-[#0E2A2E] to-[#0B1F22] text-white">
-        <div className="absolute inset-0 pointer-events-none ring-1 ring-white/10" />
-        <div className="relative min-h-svh flex flex-col items-center justify-center px-8 md:px-10 text-center pt-16 md:pt-20">
-          <h2 className="whitespace-nowrap text-3xl font-extrabold leading-none tracking-wide">
-            E-HR MANAGEMENT
-          </h2>
-          <Image
-            src="/logo-oss.png"
-            alt="OSS Mark"
-            width={260}
-            height={260}
-            className="mt-6 w-56 h-56 md:w-64 md:h-64 lg:w-[18rem] lg:h-[18rem] object-contain"
-            priority
-          />
-          <div className="mt-4">
-            <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-[#E7B97A]">
-              ONE STEP SOLUTION
-            </p>
-            <p className="mt-0 text-lg md:text-xl text-white/90">Make You Priority</p>
+                components: {
+                  Button: { controlHeight: 40 },
+                  Input: { controlHeight: 40 },
+                },
+              }}
+            >
+              <AntdApp>
+                <div className="mx-auto w-full max-w-sm">
+                  <LoginForm onFinish={onFinish} loading={loading} />
+                </div>
+              </AntdApp>
+            </ConfigProvider>
           </div>
         </div>
-      </section>
+      </div>
     </div>
   );
 }
