@@ -11,6 +11,11 @@ const API_REGISTER = "/api/mobile/auth/register";
 // NEW: Agenda (master aktivitas) & Agenda Kerja (jadwal kerja yang refer ke agenda)
 const API_AGENDA = "/api/mobile/agenda";
 const API_AGENDA_KERJA = "/api/mobile/agenda-kerja";
+
+const API_POLA_KERJA = "/api/admin/pola-kerja";
+
+const API_SHIFT_KERJA = "/api/admin/shift-kerja";
+
 0
 export const ApiEndpoints = {
   // Location
@@ -52,4 +57,19 @@ export const ApiEndpoints = {
   GetAgendaKerjaById: (id) => `${API_AGENDA_KERJA}/${id}`, // GET detail
   UpdateAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,  // PATCH {...}
   DeleteAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,  // DELETE ?hard=0|1
+
+  // POLA KERJA
+  GetPolaKerja: API_POLA_KERJA,                          // GET ?page=&pageSize=&search=
+  CreatePolaKerja: API_POLA_KERJA,                       // POST
+  GetPolaKerjaById: (id) => `${API_POLA_KERJA}/${id}`,   // GET detail
+  UpdatePolaKerja: (id) => `${API_POLA_KERJA}/${id}`,    // PUT/PATCH
+  DeletePolaKerja: (id) => `${API_POLA_KERJA}/${id}`,    // DELETE
+
+
+  GetShiftKerja: API_SHIFT_KERJA,
+  CreateShiftKerja: API_SHIFT_KERJA,
+  GetShiftKerjaById: (id) => `${API_SHIFT_KERJA}/${id}`,
+  UpdateShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
+  DeleteShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
 };
+

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
-import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import db from '../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../lib/jwt';
+import { authenticateRequest } from '../../../../app/utils/auth/authUtils';
 
 const SHIFT_STATUS = ['KERJA', 'LIBUR'];
 

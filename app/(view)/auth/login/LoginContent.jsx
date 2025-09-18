@@ -25,7 +25,7 @@ export default function LoginContent() {
           src="/bglogin.png"
           alt=""
           fill
-          className="object-cover"   // jangan pakai opacity di sini
+          className="object-cover"   
           priority
         />
         {/* overlay putih 50% → efek bening/terang */}

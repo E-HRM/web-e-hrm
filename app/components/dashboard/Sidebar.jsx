@@ -11,6 +11,7 @@ import {
   UserOutlined,
   DownOutlined,
   EnvironmentOutlined,
+  FieldTimeOutlined,
 } from "@ant-design/icons";
 
 const MENU = [
@@ -19,6 +20,18 @@ const MENU = [
   { href: "/home/kunjungan", match: ["/kunjungan", "/home/kunjungan"], label: "Kunjungan", icon: UserOutlined },
   { href: "/pengajuan-cuti", match: ["/pengajuan-cuti", "/home/pengajuan-cuti"], label: "Pengajuan Cuti", icon: FileTextOutlined },
   { href: "/home/lokasi", match: ["/home/lokasi"], label: "Lokasi", icon: EnvironmentOutlined },
+    {
+    key: "Pola Kerja",
+    href: "/pola",
+    match: ["/pola"],
+    label: "Pola Kerja",
+    icon: FieldTimeOutlined,
+    hasCaret: true,
+    children: [
+      { href: "/home/pola/shift", match: ["/home/pola/shift"], label: "Shift" },
+      { href: "/home/pola/hari", match: ["/home/pola/hari"], label: "Hari Kerja" },
+    ],
+  },
   {
     key: "karyawan",
     href: "/karyawan",
@@ -28,7 +41,7 @@ const MENU = [
     hasCaret: true,
     children: [
       { href: "/home/departement", match: ["/home/departement"], label: "Data Karyawan" },
-      { href: "/home/shift", match: ["/home/shift"], label: "Penjadwalan Shift" },
+      { href: "/home/shift_schedule", match: ["/home/shift_schedule"], label: "Penjadwalan Shift" },
       { href: "/karyawan/piket", match: ["/karyawan/piket"], label: "Jadwal Piket & Story" },
       { href: "/karyawan/libur", match: ["/karyawan/libur"], label: "Pengajuan Hari Libur" },
     ],
