@@ -24,11 +24,17 @@ import {
   EnvironmentOutlined,
   AimOutlined,
 } from "@ant-design/icons";
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import useLokasiViewModel from "./useLokasiViewModel";
 
 const { Text, Title } = Typography;
 const BRAND = { accent: "#D9A96F" };
+
+// react-leaflet butuh DOM → matikan SSR
+const LocationPicker = dynamic(() => import("../../../components/map/LocationPicker"), {
+  ssr: false,
+});
 
 export default function LokasiContent() {
   const {
@@ -101,41 +107,30 @@ export default function LokasiContent() {
           </div>
         ),
       },
+      // HAPUS tampilan angka Lat/Lng. Ganti kolom 'Lokasi' yang hanya menyediakan link peta.
       {
-        title: "Koordinat",
-        key: "koordinat",
-        width: 260,
+        title: "Lokasi",
+        key: "lokasi",
+        width: 220,
         render: (_, r) => {
-          const lat = r.latitude ?? "-";
-          const lng = r.longitude ?? "-";
           const has = r.latitude != null && r.longitude != null;
-          const mapHref = has ? `https://maps.google.com/?q=${lat},${lng}` : "#";
+          if (!has) return <span className="text-xs text-slate-500">Belum ditentukan</span>;
+
+          const lat = Number(r.latitude);
+          const lng = Number(r.longitude);
+          const zoom = 17;
+          const mapHref = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=${zoom}/${lat}/${lng}`;
+
           return (
-            <div className="text-xs">
-              <div>
-                Lat:{" "}
-                <Text copyable className="font-medium">
-                  {lat}
-                </Text>
-              </div>
-              <div>
-                Lng:{" "}
-                <Text copyable className="font-medium">
-                  {lng}
-                </Text>
-              </div>
-              {has && (
-                <a
-                  href={mapHref}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 mt-1 text-[12px]"
-                  style={{ color: BRAND.accent }}
-                >
-                  <AimOutlined /> Lihat di Maps
-                </a>
-              )}
-            </div>
+            <a
+              href={mapHref}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs"
+              style={{ color: BRAND.accent }}
+            >
+              <AimOutlined /> Lihat di OpenStreetMap
+            </a>
           );
         },
       },
@@ -188,6 +183,7 @@ export default function LokasiContent() {
                   setCurrentRow(row);
                   editForm.setFieldsValue({
                     nama_kantor: row.nama_kantor,
+                    // lat/lng TETAP DI BALIK LAYAR
                     latitude: row.latitude,
                     longitude: row.longitude,
                     radius: row.radius ?? null,
@@ -358,6 +354,8 @@ export default function LokasiContent() {
         <Form
           form={addForm}
           layout="vertical"
+          // default lat/lng disiapkan DI BALIK LAYAR
+          initialValues={{ latitude: -8.65, longitude: 115.21, radius: 50 }}
           onFinish={async (values) => {
             setAddLoading(true);
             try {
@@ -382,22 +380,41 @@ export default function LokasiContent() {
             <Input placeholder="Contoh: OSS Bali Denpasar" />
           </Form.Item>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Form.Item
-              label="Latitude"
-              name="latitude"
-              rules={[{ required: true, message: "Latitude wajib diisi" }]}
-            >
-              <Input placeholder="-8.65" />
-            </Form.Item>
-            <Form.Item
-              label="Longitude"
-              name="longitude"
-              rules={[{ required: true, message: "Longitude wajib diisi" }]}
-            >
-              <Input placeholder="115.21" />
-            </Form.Item>
-          </div>
+          {/* HIDDEN fields untuk lat/lng */}
+          <Form.Item name="latitude" hidden>
+            <Input type="hidden" />
+          </Form.Item>
+          <Form.Item name="longitude" hidden>
+            <Input type="hidden" />
+          </Form.Item>
+
+          {/* Peta OSM (Tambah) */}
+          <Form.Item noStyle shouldUpdate>
+            {() => {
+              const latRaw = addForm.getFieldValue("latitude");
+              const lngRaw = addForm.getFieldValue("longitude");
+              const rRaw = addForm.getFieldValue("radius");
+
+              const lat = Number(latRaw ?? -8.65);
+              const lng = Number(lngRaw ?? 115.21);
+              const radius = typeof rRaw === "number" ? rRaw : Number(rRaw ?? 50);
+
+              return (
+                <div className="mb-3">
+                  <LocationPicker
+                    value={{ lat, lng, radius }}
+                    onChange={({ lat, lng, radius }) => {
+                      addForm.setFieldsValue({
+                        latitude: Number(lat.toFixed(6)),
+                        longitude: Number(lng.toFixed(6)),
+                        ...(typeof radius === "number" ? { radius } : {}),
+                      });
+                    }}
+                  />
+                </div>
+              );
+            }}
+          </Form.Item>
 
           <Form.Item label="Radius (meter)" name="radius">
             <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />
@@ -456,22 +473,41 @@ export default function LokasiContent() {
             <Input placeholder="Contoh: OSS Bali Denpasar" />
           </Form.Item>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Form.Item
-              label="Latitude"
-              name="latitude"
-              rules={[{ required: true, message: "Latitude wajib diisi" }]}
-            >
-              <Input placeholder="-8.65" />
-            </Form.Item>
-            <Form.Item
-              label="Longitude"
-              name="longitude"
-              rules={[{ required: true, message: "Longitude wajib diisi" }]}
-            >
-              <Input placeholder="115.21" />
-            </Form.Item>
-          </div>
+          {/* HIDDEN fields untuk lat/lng */}
+          <Form.Item name="latitude" hidden>
+            <Input type="hidden" />
+          </Form.Item>
+          <Form.Item name="longitude" hidden>
+            <Input type="hidden" />
+          </Form.Item>
+
+          {/* Peta OSM (Edit) */}
+          <Form.Item noStyle shouldUpdate>
+            {() => {
+              const latRaw = editForm.getFieldValue("latitude");
+              const lngRaw = editForm.getFieldValue("longitude");
+              const rRaw = editForm.getFieldValue("radius");
+
+              const lat = Number(latRaw ?? -8.65);
+              const lng = Number(lngRaw ?? 115.21);
+              const radius = typeof rRaw === "number" ? rRaw : Number(rRaw ?? 50);
+
+              return (
+                <div className="mb-3">
+                  <LocationPicker
+                    value={{ lat, lng, radius }}
+                    onChange={({ lat, lng, radius }) => {
+                      editForm.setFieldsValue({
+                        latitude: Number(lat.toFixed(6)),
+                        longitude: Number(lng.toFixed(6)),
+                        ...(typeof radius === "number" ? { radius } : {}),
+                      });
+                    }}
+                  />
+                </div>
+              );
+            }}
+          </Form.Item>
 
           <Form.Item label="Radius (meter)" name="radius">
             <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />

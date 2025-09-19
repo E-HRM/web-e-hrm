@@ -8,13 +8,13 @@ import { fetcher } from "../../../../utils/fetcher";
 import { crudService } from "../../../../utils/services/crudService";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 
-// util: format HH:mm dari ISO
+// util: HH:mm dari tipe apa pun yang bisa diparse dayjs
 const hhmm = (v) => (v ? dayjs(v).format("HH:mm") : "");
 
-// util: konversi time (dayjs dari TimePicker) ke ISO; tanggal bebas, yang penting valid
+// util: TimePicker (dayjs) -> ISO; tanggal bebas yang penting jam:menitnya benar
 const toIso = (t) => (t ? dayjs(t).format("YYYY-MM-DDTHH:mm:ss") : null);
 
-// fallback warna jika API belum ada field color
+// fallback warna bila backend belum sediakan
 function colorFromString(s = "") {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
@@ -42,19 +42,33 @@ export default function UseShiftViewModel() {
   const swrKey = `${listUrl}?${qs}`;
   const { data, isLoading, mutate } = useSWR(swrKey, fetcher);
 
-  // map ke row UI (jam kerja & istirahat untuk sekarang hanya dari jam_mulai/jam_selesai)
+  // map ke row UI — sekarang termasuk jam istirahat dari API
   const rows = useMemo(() => {
     const arr = data?.data || [];
     return arr.map((it) => {
       const name = it.nama_pola_kerja || it.name;
+
       const jamMulai = it.jam_mulai || it.jamMulai;
       const jamSelesai = it.jam_selesai || it.jamSelesai;
+
+      const istMulai = it.jam_istirahat_mulai || it.jamIstirahatMulai;
+      const istSelesai = it.jam_istirahat_selesai || it.jamIstirahatSelesai;
+      const maksIst = it.maks_jam_istirahat ?? it.maksJamIstirahat;
+
+      const istirahatStr =
+        istMulai && istSelesai
+          ? `${hhmm(istMulai)} - ${hhmm(istSelesai)}${maksIst != null ? ` (${maksIst} mnt)` : ""}`
+          : "";
+
       return {
         _raw: it,
         id: it.id_pola_kerja || it.id,
         name,
         jamKerja: `${hhmm(jamMulai)} - ${hhmm(jamSelesai)}`,
-        istirahat: it.istirahat || "", // jika backend tambah field, otomatis tampil
+        istirahat: istirahatStr,               // <<< tampil di tabel
+        istMulai,                              // simpan mentahan untuk edit
+        istSelesai,
+        maksIst,
         toleransi: it.toleransi || "",
         note: it.note || "",
         color: it.color || colorFromString(name),
@@ -76,19 +90,35 @@ export default function UseShiftViewModel() {
   }, [fetchList, page, pageSize, search]);
 
   // ======== ADD ========
-  const onAddOpen = useCallback(() => {
-    // handled di ShiftContent (modal state disana), VM fokus ke CRUD
-  }, []);
-  const onAddClose = useCallback(() => {}, []);
-
   const onAddSubmit = useCallback(
     async (values) => {
+      const hasIstMulai = !!values.mulaiIstirahat;
+      const hasIstSelesai = !!values.selesaiIstirahat;
+
+      // validasi ringan di sisi client: harus berpasangan
+      if (hasIstMulai !== hasIstSelesai) {
+        notification.error({
+          message: "Jam istirahat tidak lengkap",
+          description: "Isi keduanya: Mulai Istirahat dan Selesai Istirahat.",
+        });
+        throw new Error("invalid-break-range");
+      }
+
       const payload = {
         nama_pola_kerja: values.nama,
         jam_mulai: toIso(values.jamMasuk),
         jam_selesai: toIso(values.jamKeluar),
-        // jangan kirim field ekstra yang belum ada di schema
+        // opsional: hanya kirim kalau keduanya ada
+        ...(hasIstMulai && hasIstSelesai
+          ? {
+              jam_istirahat_mulai: toIso(values.mulaiIstirahat),
+              jam_istirahat_selesai: toIso(values.selesaiIstirahat),
+            }
+          : {}),
+        // boleh kirim maks walau jam istirahat kosong (API handle)
+        ...(values.maxIstirahat != null ? { maks_jam_istirahat: Number(values.maxIstirahat) } : {}),
       };
+
       try {
         await crudService.post(ApiEndpoints.CreatePolaKerja, payload);
         notification.success({ message: "Berhasil", description: "Pola kerja dibuat." });
@@ -107,17 +137,27 @@ export default function UseShiftViewModel() {
 
   const getEditInitial = useCallback(() => {
     if (!selected) return {};
-    // pecah "HH:mm - HH:mm"
-    const [m = "", s = ""] = (selected.jamKerja || "").split("-").map((x) => x.trim());
+    const raw = selected._raw || {};
+
+    // ambil dari raw agar presisi
+    const jamMasuk = raw.jam_mulai ? dayjs(raw.jam_mulai) : null;
+    const jamKeluar = raw.jam_selesai ? dayjs(raw.jam_selesai) : null;
+
+    const mulaiIst = raw.jam_istirahat_mulai ? dayjs(raw.jam_istirahat_mulai) : null;
+    const selesaiIst = raw.jam_istirahat_selesai ? dayjs(raw.jam_istirahat_selesai) : null;
+
     return {
       nama: selected.name,
-      toleransi: selected.toleransi ? parseInt(String(selected.toleransi).replace(/\D/g, ""), 10) : undefined,
+      toleransi: selected.toleransi
+        ? parseInt(String(selected.toleransi).replace(/\D/g, ""), 10)
+        : undefined,
       catatan: selected.note || "",
       warna: selected.color,
-      jamMasuk: m ? dayjs(m, "HH:mm") : null,
-      jamKeluar: s ? dayjs(s, "HH:mm") : null,
-      // istirahat opsional; abaikan untuk API sekarang
-      maxIstirahat: 60,
+      jamMasuk,
+      jamKeluar,
+      mulaiIstirahat: mulaiIst,
+      selesaiIstirahat: selesaiIst,
+      maxIstirahat: selected.maksIst ?? undefined,
     };
   }, [selected]);
 
@@ -128,11 +168,33 @@ export default function UseShiftViewModel() {
     async (values) => {
       const id = selected?.id;
       if (!id) return;
+
+      const hasIstMulai = !!values.mulaiIstirahat;
+      const hasIstSelesai = !!values.selesaiIstirahat;
+
+      if (hasIstMulai !== hasIstSelesai) {
+        // PUT di server akan menolak kalau cuma satu yang dikirim; kita validasi dulu
+        notification.error({
+          message: "Jam istirahat tidak lengkap",
+          description: "Isi keduanya: Mulai Istirahat dan Selesai Istirahat.",
+        });
+        throw new Error("invalid-break-range");
+      }
+
+      // HATI2: endpoint PUT menolak null/'' (pakai "undefined" untuk 'tidak diubah')
       const payload = {
-        nama_pola_kerja: values.nama,
-        jam_mulai: toIso(values.jamMasuk),
-        jam_selesai: toIso(values.jamKeluar),
+        ...(values.nama != null ? { nama_pola_kerja: values.nama } : {}),
+        ...(values.jamMasuk ? { jam_mulai: toIso(values.jamMasuk) } : {}),
+        ...(values.jamKeluar ? { jam_selesai: toIso(values.jamKeluar) } : {}),
+        ...(hasIstMulai && hasIstSelesai
+          ? {
+              jam_istirahat_mulai: toIso(values.mulaiIstirahat),
+              jam_istirahat_selesai: toIso(values.selesaiIstirahat),
+            }
+          : {}),
+        ...(values.maxIstirahat != null ? { maks_jam_istirahat: Number(values.maxIstirahat) } : {}),
       };
+
       try {
         await crudService.put(ApiEndpoints.UpdatePolaKerja(id), payload);
         notification.success({ message: "Berhasil", description: "Pola kerja diperbarui." });
@@ -166,9 +228,10 @@ export default function UseShiftViewModel() {
   }, [deleting, mutate, notification]);
 
   // dummy reset
-  const onReset = useCallback((row) => {
-    notification.info({ message: "Riwayat/Reset", description: row?.name || "" });
-  }, [notification]);
+  const onReset = useCallback(
+    (row) => notification.info({ message: "Riwayat/Reset", description: row?.name || "" }),
+    [notification]
+  );
 
   return {
     // list

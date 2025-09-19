@@ -4,211 +4,272 @@ import { useCallback, useMemo, useState } from "react";
 import { App as AntdApp } from "antd";
 import useSWR from "swr";
 import dayjs from "dayjs";
+import "dayjs/locale/id";
 import { fetcher } from "../../../utils/fetcher";
 import { crudService } from "../../../utils/services/crudService";
 import { ApiEndpoints } from "../../../../constrainst/endpoints";
 
-const toIsoDate = (d) => (d ? dayjs(d).format("YYYY-MM-DD") : null);
-const fmt = (d) => (d ? dayjs(d).format("DD MMM YYYY") : "—");
+dayjs.locale("id");
+const toISO = (d) => dayjs(d).format("YYYY-MM-DD");
+
+function startOfWeek(d) {
+  // Senin sebagai awal minggu
+  const wd = dayjs(d).day(); // 0=Min .. 6=Sab
+  const shift = wd === 0 ? -6 : 1 - wd; // geser ke Senin
+  return dayjs(d).add(shift, "day").startOf("day").toDate();
+}
 
 export default function UseShiftScheduleViewModel() {
   const { notification } = AntdApp.useApp();
 
-  /* ===================== Filters & Paging ===================== */
-  const [userId, setUserId] = useState(null);
-  const [status, setStatus] = useState(null); // "KERJA" | "LIBUR" | null
-  const [polaId, setPolaId] = useState(null); // id | 'null' | null
-  const [mulaiRange, setMulaiRange] = useState([null, null]);
-  const [selesaiRange, setSelesaiRange] = useState([null, null]);
+  /* ======= state mingguan ======= */
+  const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
+  const weekEnd = useMemo(
+    () => dayjs(weekStart).add(6, "day").endOf("day").toDate(),
+    [weekStart]
+  );
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const days = useMemo(() => {
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = dayjs(weekStart).add(i, "day");
+      return {
+        key: d.format("YYYYMMDD"),
+        dateStr: d.format("YYYY-MM-DD"),
+        labelDay: d.format("dddd"),
+        labelDate: d.format("DD MMM YYYY"),
+        short: d.format("ddd"),
+      };
+    });
+  }, [weekStart]);
 
-  const qs = useMemo(() => {
-    const p = new URLSearchParams();
-    p.set("page", String(page));
-    p.set("pageSize", String(pageSize));
-    if (userId) p.set("id_user", userId);
-    if (status) p.set("status", status);
-    if (polaId) p.set("id_pola_kerja", polaId); // bisa 'null'
-    if (mulaiRange[0]) p.set("tanggalMulaiFrom", toIsoDate(mulaiRange[0]));
-    if (mulaiRange[1]) p.set("tanggalMulaiTo", toIsoDate(mulaiRange[1]));
-    if (selesaiRange[0]) p.set("tanggalSelesaiFrom", toIsoDate(selesaiRange[0]));
-    if (selesaiRange[1]) p.set("tanggalSelesaiTo", toIsoDate(selesaiRange[1]));
-    return p.toString();
-  }, [page, pageSize, userId, status, polaId, mulaiRange, selesaiRange]);
-
-  const listKey = `${ApiEndpoints.GetShiftKerja}?${qs}`;
-  const { data, isLoading, mutate } = useSWR(listKey, fetcher);
-
-  const rows = useMemo(() => {
-    const arr = data?.data || [];
-    return arr.map((it) => ({
-      _raw: it,
-      id: it.id_shift_kerja,
-      userName: it.user?.nama_pengguna || "—",
-      userEmail: it.user?.email || "",
-      periode:
-        (it.tanggal_mulai ? fmt(it.tanggal_mulai) : "—") +
-        " - " +
-        (it.tanggal_selesai ? fmt(it.tanggal_selesai) : "—"),
-      mulai: it.tanggal_mulai,
-      selesai: it.tanggal_selesai,
-      hariKerja: it.hari_kerja || "—",
-      status: it.status,
-      polaName: it.polaKerja?.nama_pola_kerja || (it.id_pola_kerja ? it.id_pola_kerja : "Tanpa Pola"),
-      polaId: it.id_pola_kerja ?? null,
-    }));
-  }, [data]);
-
-  const pagination = data?.pagination || { total: 0, page, pageSize };
-  const onTableChange = useCallback((pg) => {
-    setPage(pg.current);
-    setPageSize(pg.pageSize);
-  }, []);
-
-  /* ===================== Select Options (Users & Pola) ===================== */
-  const { data: usersRes } = useSWR(`${ApiEndpoints.GetUsers}?page=1&pageSize=100`, fetcher);
-  const userOptions = useMemo(
+  /* ======= filter Divisi (opsional) ======= */
+  const [deptId, setDeptId] = useState(null);
+  const { data: deptRes } = useSWR(
+    `${ApiEndpoints.GetDepartement}?page=1&pageSize=200`,
+    fetcher
+  );
+  const deptOptions = useMemo(
     () =>
-      (usersRes?.data || []).map((u) => ({
-        value: u.id_user,
-        label: u.nama_pengguna || u.email,
+      (deptRes?.data || []).map((d) => ({
+        value: d.id_departement,
+        label: d.nama_departement,
+      })),
+    [deptRes]
+  );
+
+  /* ======= users ======= */
+  const { data: usersRes, mutate: mutUsers } = useSWR(
+    `${ApiEndpoints.GetUsers}?page=1&pageSize=1000`,
+    fetcher
+  );
+  const users = useMemo(() => {
+    let arr = usersRes?.data || [];
+    if (deptId) arr = arr.filter((u) => u.id_departement === deptId);
+    return arr;
+  }, [usersRes, deptId]);
+
+  const rows = useMemo(
+    () =>
+      users.map((u) => ({
+        id: u.id_user,
+        name: u.nama_pengguna || u.email,
         email: u.email,
       })),
-    [usersRes]
+    [users]
   );
 
-  // ambil pola kerja (bisa dipakai filter & form)
-  const { data: polaRes } = useSWR(`${ApiEndpoints.GetPolaKerja}?page=1&pageSize=200`, fetcher);
-  const polaOptions = useMemo(() => {
-    const arr = polaRes?.data || [];
-    return [
-      { value: "null", label: "Tanpa Pola" },
-      ...arr.map((p) => ({ value: p.id_pola_kerja, label: p.nama_pola_kerja })),
-    ];
+  /* ======= Pola Kerja ======= */
+  const { data: polaRes } = useSWR(
+    `${ApiEndpoints.GetPolaKerja}?page=1&pageSize=500`,
+    fetcher
+  );
+  const polaMap = useMemo(() => {
+    const map = new Map();
+    for (const p of polaRes?.data || []) {
+      const jam =
+        dayjs(p.jam_mulai).format("HH:mm") +
+        " - " +
+        dayjs(p.jam_selesai).format("HH:mm");
+      map.set(p.id_pola_kerja, { nama: p.nama_pola_kerja, jam });
+    }
+    return map;
   }, [polaRes]);
 
-  /* ===================== CRUD ===================== */
-  const addSchedule = useCallback(
-    async (values) => {
-      const payload = {
-        id_user: values.id_user,
-        hari_kerja: values.hari_kerja?.trim(),
-        status: values.status,
-        tanggal_mulai: toIsoDate(values.tanggal_mulai),
-        tanggal_selesai: toIsoDate(values.tanggal_selesai),
-        id_pola_kerja:
-          values.id_pola_kerja === "null" ? null : values.id_pola_kerja ?? null,
-      };
-      await crudService.post(ApiEndpoints.CreateShiftKerja, payload);
-      notification.success({ message: "Berhasil", description: "Shift kerja dibuat." });
-      await mutate();
-    },
-    [mutate, notification]
+  /* ======= data shift minggu ini (SEMUA user) ======= */
+  const qs = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set("page", "1");
+    p.set("pageSize", "5000");
+    p.set("tanggalMulaiFrom", toISO(weekStart));
+    p.set("tanggalMulaiTo", toISO(weekEnd));
+    return p.toString();
+  }, [weekStart, weekEnd]);
+
+  const { data: shiftRes, mutate } = useSWR(
+    `${ApiEndpoints.GetShiftKerja}?${qs}`,
+    fetcher
   );
 
-  const [selected, setSelected] = useState(null);
-  const openEdit = !!selected;
-  const onEditOpen = useCallback((row) => setSelected(row), []);
-  const onEditClose = useCallback(() => setSelected(null), []);
-  const getEditInitial = useCallback(() => {
-    if (!selected) return {};
-    return {
-      id_user: userOptions.find((o) => o.value === selected._raw?.id_user)?.value || selected._raw?.id_user,
-      hari_kerja: selected.hariKerja,
-      status: selected.status,
-      id_pola_kerja:
-        selected.polaId === null ? "null" : selected.polaId || undefined,
-      tanggal_mulai: selected.mulai ? dayjs(selected.mulai) : null,
-      tanggal_selesai: selected.selesai ? dayjs(selected.selesai) : null,
-    };
-  }, [selected, userOptions]);
+  // Map: key = userId + "|" + dateStr
+  const cellMap = useMemo(() => {
+    const map = new Map();
+    for (const it of (shiftRes?.data || [])) {
+      const key =
+        it.id_user + "|" + dayjs(it.tanggal_mulai).format("YYYY-MM-DD");
+      map.set(key, {
+        userId: it.id_user,
+        date: dayjs(it.tanggal_mulai).format("YYYY-MM-DD"),
+        status: it.status,
+        polaId: it.id_pola_kerja ?? null,
+        rawId: it.id_shift_kerja,
+      });
+    }
+    return map;
+  }, [shiftRes]);
 
-  const editSchedule = useCallback(
-    async (values) => {
-      const id = selected?.id;
-      if (!id) return;
-      const payload = {
-        id_user: values.id_user,
-        hari_kerja: values.hari_kerja?.trim(),
-        status: values.status,
-        tanggal_mulai: toIsoDate(values.tanggal_mulai),
-        tanggal_selesai: toIsoDate(values.tanggal_selesai),
-        id_pola_kerja:
-          values.id_pola_kerja === "null" ? null : values.id_pola_kerja ?? undefined,
-      };
-      await crudService.put(ApiEndpoints.UpdateShiftKerja(id), payload);
-      notification.success({ message: "Berhasil", description: "Shift kerja diperbarui." });
-      setSelected(null);
-      await mutate();
-    },
-    [mutate, notification, selected]
+  // >>> Memoize getCell agar aman untuk dependency hooks lain
+  const getCell = useCallback(
+    (userId, dateStr) => cellMap.get(userId + "|" + dateStr),
+    [cellMap]
   );
 
-  const [deleting, setDeleting] = useState(null);
-  const openDelete = !!deleting;
-  const onDeleteOpen = useCallback((row) => setDeleting(row), []);
-  const onDeleteClose = useCallback(() => setDeleting(null), []);
-  const onDeleteConfirm = useCallback(async () => {
-    const id = deleting?.id;
-    if (!id) return;
-    await crudService.delete(ApiEndpoints.DeleteShiftKerja(id));
-    notification.success({ message: "Terhapus", description: "Shift kerja dihapus." });
-    setDeleting(null);
-    await mutate();
-  }, [deleting, mutate, notification]);
+  /* ======= assign/delete cell ======= */
 
-  const resetFilters = useCallback(() => {
-    setUserId(null);
-    setStatus(null);
-    setPolaId(null);
-    setMulaiRange([null, null]);
-    setSelesaiRange([null, null]);
-    setPage(1);
+  const assignCell = useCallback(
+    async (userId, dateStr, value) => {
+      const existing = getCell(userId, dateStr);
+      const payload =
+        value === "LIBUR"
+          ? {
+              id_user: userId,
+              status: "LIBUR",
+              hari_kerja: dayjs(dateStr).format("dddd"),
+              tanggal_mulai: dateStr,
+              tanggal_selesai: dateStr,
+              id_pola_kerja: null,
+            }
+          : {
+              id_user: userId,
+              status: "KERJA",
+              hari_kerja: dayjs(dateStr).format("dddd"),
+              tanggal_mulai: dateStr,
+              tanggal_selesai: dateStr,
+              id_pola_kerja: value,
+            };
+
+      if (existing?.rawId) {
+        await crudService.put(
+          ApiEndpoints.UpdateShiftKerja(existing.rawId),
+          payload
+        );
+      } else {
+        await crudService.post(ApiEndpoints.CreateShiftKerja, payload);
+      }
+      await mutate();
+    },
+    [getCell, mutate]
+  );
+
+  const deleteCell = useCallback(
+    async (userId, dateStr) => {
+      const existing = getCell(userId, dateStr);
+      if (!existing?.rawId) return;
+      await crudService.delete(ApiEndpoints.DeleteShiftKerja(existing.rawId));
+      await mutate();
+    },
+    [getCell, mutate]
+  );
+
+  /* ======= repeat mingguan (duplikasi ke depan) ======= */
+
+  const [repeatFlags, setRepeatFlags] = useState({});
+  const [repeatUntil, setRepeatUntil] = useState({});
+
+  const setRepeatFlag = useCallback((userId, v) => {
+    setRepeatFlags((s) => ({ ...s, [userId]: v }));
+  }, []);
+  const setRepeatUntilFor = useCallback((userId, d) => {
+    setRepeatUntil((s) => ({ ...s, [userId]: d }));
   }, []);
 
-  const onReset = useCallback((row) => {
-    notification.info({ message: "Riwayat/Reset", description: row?.userName || "" });
-  }, [notification]);
+  const applyRepeat = useCallback(
+    async (userId) => {
+      if (!repeatFlags[userId]) return;
+      const until =
+        repeatUntil[userId] || dayjs(weekStart).add(8, "week").toDate();
+
+      // ambil 7 pola minggu ini untuk userId
+      const curWeek = days.map((d) => getCell(userId, d.dateStr));
+      // iterasi minggu demi minggu
+      let curStart = dayjs(weekStart).add(1, "week");
+      while (curStart.isBefore(dayjs(until).endOf("day"))) {
+        for (let i = 0; i < 7; i++) {
+          const src = curWeek[i];
+          const dateStr = curStart.add(i, "day").format("YYYY-MM-DD");
+          if (!src) continue; // skip yg kosong
+          const val = src.status === "LIBUR" ? "LIBUR" : src.polaId;
+          // create/update
+          await assignCell(userId, dateStr, val);
+        }
+        curStart = curStart.add(1, "week");
+      }
+      notification.success({
+        message: "Diulang",
+        description:
+          "Jadwal minggu ini diterapkan ke minggu-minggu berikutnya.",
+      });
+      await mutate();
+    },
+    [assignCell, days, getCell, mutate, notification, repeatFlags, repeatUntil, weekStart]
+  );
+
+  /* ======= navigasi minggu ======= */
+  const prevWeek = useCallback(
+    () => setWeekStart(dayjs(weekStart).add(-1, "week").toDate()),
+    [weekStart]
+  );
+  const nextWeek = useCallback(
+    () => setWeekStart(dayjs(weekStart).add(1, "week").toDate()),
+    [weekStart]
+  );
+  const setMonthYear = useCallback((year, monthIdx) => {
+    const mid = dayjs().year(year).month(monthIdx).date(15).toDate();
+    setWeekStart(startOfWeek(mid));
+  }, []);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([mutate(), mutUsers()]);
+  }, [mutate, mutUsers]);
 
   return {
-    // list
+    // waktu & hari
+    weekStart,
+    weekEnd,
+    days,
+
+    // grid
     rows,
-    loading: isLoading,
-    pagination: { page, pageSize, total: pagination.total },
-    onTableChange,
+    polaMap,
+    getCell,
+    assignCell,
+    deleteCell,
 
-    // filters
-    userId,
-    setUserId,
-    status,
-    setStatus,
-    polaId,
-    setPolaId,
-    mulaiRange,
-    setMulaiRange,
-    selesaiRange,
-    setSelesaiRange,
-    resetFilters,
+    // dept & users
+    deptId,
+    setDeptId,
+    deptOptions,
 
-    // selects
-    userOptions,
-    polaOptions,
+    // repeat
+    repeatFlags,
+    setRepeatFlag,
+    repeatUntil,
+    setRepeatUntil: setRepeatUntilFor,
+    applyRepeat,
 
-    // CRUD
-    addSchedule,
-    openEdit,
-    onEditOpen,
-    onEditClose,
-    getEditInitial,
-    editSchedule,
-    openDelete,
-    onDeleteOpen,
-    onDeleteClose,
-    onDeleteConfirm,
-    selected,
-
-    onReset,
+    // navigasi
+    prevWeek,
+    nextWeek,
+    setMonthYear,
+    refresh,
   };
 }
