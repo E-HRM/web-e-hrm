@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Table, Input, Button, Space, Tooltip, Modal, Form,
@@ -80,9 +80,18 @@ export default function KaryawanContent() {
     return data;
   }, [rows, search, filterRole, filterAgama]);
 
-  const openAdd = () => { setEditing(null); form.resetFields(); setOpenForm(true); };
+  // === Handlers: Add/Edit/Delete ===
+  const openAdd = () => {
+    setEditing(null);
+    form.resetFields();
+    // default role saat tambah
+    form.setFieldsValue({ role: "KARYAWAN" });
+    setOpenForm(true);
+  };
+
   const openEdit = (rec) => {
     setEditing(rec);
+    // set nilai form untuk edit
     form.setFieldsValue({
       nama_pengguna: rec.nama_pengguna,
       email: rec.email,
@@ -94,6 +103,7 @@ export default function KaryawanContent() {
     });
     setOpenForm(true);
   };
+
   const handleDelete = (rec) =>
     Modal.confirm({
       title: "Hapus Karyawan?",
@@ -104,13 +114,32 @@ export default function KaryawanContent() {
       onOk: async () => { await deleteKaryawan(rec.id_user); },
     });
 
+  // Sinkronisasi nilai form saat modal dibuka & mode berubah (aman terhadap race)
+  useEffect(() => {
+    if (!openForm) return;
+    if (editing) {
+      form.setFieldsValue({
+        nama_pengguna: editing.nama_pengguna,
+        email: editing.email,
+        kontak: editing.kontak,
+        agama: prettyAgama(editing.agama),
+        role: editing.role || "KARYAWAN",
+        tanggal_lahir: editing.tanggal_lahir ? dayjs(editing.tanggal_lahir) : null,
+        id_location: editing.id_location || null,
+      });
+    } else {
+      form.resetFields();
+      form.setFieldsValue({ role: "KARYAWAN" });
+    }
+  }, [openForm, editing, form]);
+
   const roleTag = (val) => {
     const key = String(val || "").toLowerCase();
     const map = { direktur: "magenta", admin: "gold", hr: "green", operasional: "blue", karyawan: "geekblue" };
     return <Tag color={map[key] || "default"}>{String(val || "-").toUpperCase()}</Tag>;
   };
 
-  // Lebarkan kolom nama + X-scroll; Opsi fixed right
+  // Kolom tabel
   const columns = [
     {
       title: "Nama Karyawan",
@@ -183,7 +212,9 @@ export default function KaryawanContent() {
             onChange={setFilterAgama}
             options={["Islam","Kristen Protestan","Katolik","Hindu","Buddha","Konghucu"].map(v => ({value:v,label:v}))}
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpenForm(true)}>Tambah</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+            Tambah
+          </Button>
         </div>
       </div>
 
@@ -218,136 +249,141 @@ export default function KaryawanContent() {
       </Card>
 
       {/* Modal Add/Edit */}
-<Modal
-  open={openForm}
-  title={<div className="text-lg font-semibold">{title}</div>}
-  onCancel={() => setOpenForm(false)}
-  onOk={() => form.submit()}
-  okText="Simpan"
-  destroyOnClose
->
-  <Form
-    form={form}
-    layout="vertical"
-    initialValues={{ role: "KARYAWAN" }}
-    onFinish={async (vals) => {
-      const payload = {
-        ...vals,
-        // kirim DOB dalam format tanggal saja (hindari pergeseran zona waktu)
-        tanggal_lahir: vals.tanggal_lahir
-          ? dayjs(vals.tanggal_lahir).format("YYYY-MM-DD")
-          : null,
-        agama: prettyAgama(vals.agama),
-      };
-
-      if (editing) {
-        delete payload.password;               // password tidak dikirim saat edit
-        await updateKaryawan(editing.id_user, payload);
-      } else {
-        await addKaryawan({
-          ...payload,
-          id_departement: departementId,
-          role: vals.role || "KARYAWAN",
-        });
-      }
-      setOpenForm(false);
-    }}
-  >
-    {/* Nama */}
-    <Form.Item
-      label="Nama Karyawan"
-      name="nama_pengguna"
-      rules={[{ required: true, message: "Nama wajib diisi" }]}
-    >
-      <AntInput placeholder="Nama lengkap" />
-    </Form.Item>
-
-    {/* Email */}
-    <Form.Item
-      label="Email"
-      name="email"
-      rules={[
-        { required: true, message: "Email wajib diisi" },
-        { type: "email", message: "Format email tidak valid" },
-      ]}
-    >
-      <AntInput placeholder="nama@domain.com" />
-    </Form.Item>
-
-    {/* Password hanya saat TAMBAH */}
-    {!editing && (
-      <Form.Item
-        label="Password"
-        name="password"
-        rules={[
-          { required: true, message: "Password wajib diisi" },
-          { min: 6, message: "Minimal 6 karakter" },
-        ]}
+      <Modal
+        open={openForm}
+        title={<div className="text-lg font-semibold">{title}</div>}
+        onCancel={() => setOpenForm(false)}
+        onOk={() => form.submit()}
+        okText="Simpan"
+        destroyOnClose
+        afterClose={() => {
+          // Bersihkan jejak mode edit dan nilai form ketika modal ditutup
+          setEditing(null);
+          form.resetFields();
+        }}
       >
-        <AntInput.Password placeholder="Password" />
-      </Form.Item>
-    )}
+        <Form
+          key={editing ? `edit-${editing.id_user}` : "add"} // Paksa remount ketika mode berubah
+          form={form}
+          layout="vertical"
+          initialValues={{ role: "KARYAWAN" }}
+          onFinish={async (vals) => {
+            const payload = {
+              ...vals,
+              // kirim DOB dalam format tanggal saja (hindari pergeseran zona waktu)
+              tanggal_lahir: vals.tanggal_lahir
+                ? dayjs(vals.tanggal_lahir).format("YYYY-MM-DD")
+                : null,
+              agama: prettyAgama(vals.agama),
+            };
 
-    {/* Baris: Kontak & Agama */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <Form.Item label="Kontak" name="kontak">
-        <AntInput placeholder="08xxxx" />
-      </Form.Item>
+            if (editing) {
+              delete payload.password;               // password tidak dikirim saat edit
+              await updateKaryawan(editing.id_user, payload);
+            } else {
+              await addKaryawan({
+                ...payload,
+                id_departement: departementId,
+                role: vals.role || "KARYAWAN",
+              });
+            }
+            setOpenForm(false);
+          }}
+        >
+          {/* Nama */}
+          <Form.Item
+            label="Nama Karyawan"
+            name="nama_pengguna"
+            rules={[{ required: true, message: "Nama wajib diisi" }]}
+          >
+            <AntInput placeholder="Nama lengkap" />
+          </Form.Item>
 
-      <Form.Item label="Agama" name="agama">
-        <Select
-          allowClear
-          placeholder="Pilih agama"
-          options={[
-            { value: "Islam", label: "Islam" },
-            { value: "Kristen Protestan", label: "Kristen Protestan" },
-            { value: "Katolik", label: "Katolik" },
-            { value: "Hindu", label: "Hindu" },
-            { value: "Buddha", label: "Buddha" },
-            { value: "Konghucu", label: "Konghucu" },
-          ]}
-        />
-      </Form.Item>
-    </div>
+          {/* Email */}
+          <Form.Item
+            label="Email"
+            name="email"
+            rules={[
+              { required: true, message: "Email wajib diisi" },
+              { type: "email", message: "Format email tidak valid" },
+            ]}
+          >
+            <AntInput placeholder="nama@domain.com" />
+          </Form.Item>
 
-    {/* Baris: Tanggal lahir & Role */}
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-      <Form.Item label="Tanggal Lahir" name="tanggal_lahir">
-        <DatePicker
-          className="w-full"
-          format="DD/MM/YYYY"
-          // cegah pilih tanggal masa depan
-          disabledDate={(d) => d && d > dayjs().endOf("day")}
-        />
-      </Form.Item>
+          {/* Password hanya saat TAMBAH */}
+          {!editing && (
+            <Form.Item
+              label="Password"
+              name="password"
+              rules={[
+                { required: true, message: "Password wajib diisi" },
+                { min: 6, message: "Minimal 6 karakter" },
+              ]}
+            >
+              <AntInput.Password placeholder="Password" />
+            </Form.Item>
+          )}
 
-      <Form.Item label="Role" name="role">
-        <Select
-          options={[
-            { value: "KARYAWAN", label: "KARYAWAN" },
-            { value: "HR", label: "HR" },
-            { value: "OPERASIONAL", label: "OPERASIONAL" },
-            { value: "DIREKTUR", label: "DIREKTUR" },
-            { value: "ADMIN", label: "ADMIN" },
-          ]}
-        />
-      </Form.Item>
-    </div>
+          {/* Baris: Kontak & Agama */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Form.Item label="Kontak" name="kontak">
+              <AntInput placeholder="08xxxx" />
+            </Form.Item>
 
-    {/* Lokasi */}
-    <Form.Item label="Lokasi" name="id_location">
-      <Select
-        showSearch
-        allowClear
-        placeholder="Pilih lokasi / kantor"
-        loading={locationLoading}
-        options={locationOptions}
-        optionFilterProp="label"
-      />
-    </Form.Item>
-  </Form>
-</Modal>
+            <Form.Item label="Agama" name="agama">
+              <Select
+                allowClear
+                placeholder="Pilih agama"
+                options={[
+                  { value: "Islam", label: "Islam" },
+                  { value: "Kristen Protestan", label: "Kristen Protestan" },
+                  { value: "Katolik", label: "Katolik" },
+                  { value: "Hindu", label: "Hindu" },
+                  { value: "Buddha", label: "Buddha" },
+                  { value: "Konghucu", label: "Konghucu" },
+                ]}
+              />
+            </Form.Item>
+          </div>
 
+          {/* Baris: Tanggal lahir & Role */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Form.Item label="Tanggal Lahir" name="tanggal_lahir">
+              <DatePicker
+                className="w-full"
+                format="DD/MM/YYYY"
+                // cegah pilih tanggal masa depan
+                disabledDate={(d) => d && d > dayjs().endOf("day")}
+              />
+            </Form.Item>
+
+            <Form.Item label="Role" name="role">
+              <Select
+                options={[
+                  { value: "KARYAWAN", label: "KARYAWAN" },
+                  { value: "HR", label: "HR" },
+                  { value: "OPERASIONAL", label: "OPERASIONAL" },
+                  { value: "DIREKTUR", label: "DIREKTUR" },
+                  { value: "ADMIN", label: "ADMIN" },
+                ]}
+              />
+            </Form.Item>
+          </div>
+
+          {/* Lokasi */}
+          <Form.Item label="Lokasi" name="id_location">
+            <Select
+              showSearch
+              allowClear
+              placeholder="Pilih lokasi / kantor"
+              loading={locationLoading}
+              options={locationOptions}
+              optionFilterProp="label"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

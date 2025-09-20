@@ -29,7 +29,7 @@ const MENU = [
     hasCaret: true,
     children: [
       { href: "/home/pola/shift", match: ["/home/pola/shift"], label: "Shift" },
-      { href: "/home/pola/hari", match: ["/home/pola/hari"], label: "Hari Kerja" },
+      { href: "/home/pola/hari_kerja", match: ["/home/pola/hari_kerja"], label: "Hari Kerja" },
     ],
   },
   {

@@ -38,7 +38,8 @@ export default function useKaryawanViewModel({ departementId, departementName })
       r.departement || (departementName ? { nama_departement: departementName } : undefined),
   }));
 
-  const pagination = data?.pagination || { page, pageSize, total: rows.length };
+  const apiPagination = data?.pagination;
+  const pagination = apiPagination || { page, pageSize, total: rows.length };
 
   const fetchList = useCallback(() => mutate(), [mutate]);
 

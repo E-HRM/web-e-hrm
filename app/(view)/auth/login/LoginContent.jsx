@@ -29,7 +29,7 @@ export default function LoginContent() {
           priority
         />
         {/* overlay putih 50% → efek bening/terang */}
-        <div className="absolute inset-0 bg-white/30 pointer-events-none" />
+        <div className="absolute inset-0 bg-white/40 pointer-events-none" />
         {/*
           Ingin lebih/kurang bening?
           - bg-white/30  => lebih tembus
