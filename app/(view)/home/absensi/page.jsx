@@ -1,7 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Spin } from "antd";
 
-const Abse = lazy(() => import("./AbsensiContent"));
+const AbsensiContent = lazy(() => import("./AbsensiContent"));
 
 export default function Page() {
   return (
@@ -12,7 +12,7 @@ export default function Page() {
         </div>
       }
     >
-      <Abse />
+      <AbsensiContent />
     </Suspense>
   );
 }

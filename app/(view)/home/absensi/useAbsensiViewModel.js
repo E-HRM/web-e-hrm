@@ -1,60 +1,68 @@
 "use client";
 
+import useSWR from "swr";
 import dayjs from "dayjs";
-
-const NAMES = [
-  "Kadek Sri Meiyani, S.Pd",
-  "Ni Putu Melly Antari, S.Pd",
-  "Dewa Nyoman Aditya Yogantara",
-  "Putri Karunia",
-  "Febe",
-  "Dewa Arsana",
-];
-const DIVISI = ["Divisi IDE", "Divisi IT", "Divisi HR", "Divisi Operasional"];
-
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-const makeRow = (id, type = "in") => {
-  const name = pick(NAMES);
-  const div  = pick(DIVISI);
-  const d    = dayjs("2025-06-21").add(Math.floor(Math.random()*5), "day");
-  const jam = type === "in"
-    ? ["07:45","07:50","07:55","08:05","08:10","08:30"][Math.floor(Math.random()*6)]
-    : ["17:00","17:30","18:00","18:30","19:00"][Math.floor(Math.random()*5)];
-
-  let status = "Tepat Waktu";
-  if (type === "in") {
-    if (jam >= "08:05") status = "Terlambat";
-  } else {
-    if (jam >= "18:00") status = "Lembur";
-  }
-
-  return {
-    id,
-    tanggal: d.toISOString(),
-    nama: name,
-    divisi: div,
-    jam,
-    status,
-    avatar: null, // taruh URL kalau ada
-  };
-};
+import { useMemo, useState } from "react";
+import { fetcher } from "../../../utils/fetcher";
+import { ApiEndpoints } from "../../../../constrainst/endpoints";
 
 export default function useAbsensiViewModel() {
-  const kedatangan = Array.from({ length: 42 }, (_, i) => makeRow(i + 1, "in"));
-  const kepulangan = Array.from({ length: 42 }, (_, i) => makeRow(i + 1, "out"));
+  // filter per kartu
+  const [dateIn, setDateIn] = useState(dayjs());
+  const [dateOut, setDateOut] = useState(dayjs());
+  const [filterIn, setFilterIn]   = useState({ q: "", divisi: undefined, status: undefined });
+  const [filterOut, setFilterOut] = useState({ q: "", divisi: undefined, status: undefined });
 
-  const divisiOptions = DIVISI.map((d) => ({ value: d, label: d }));
-  const statusOptions = [
-    { value: "Tepat Waktu", label: "Tepat Waktu" },
-    { value: "Terlambat", label: "Terlambat" },
-    { value: "Izin", label: "Izin" },
-    { value: "Sakit", label: "Sakit" },
+  // build URL via ApiEndpoints
+  const urlIn = useMemo(() => {
+    const qs = {
+      date: dateIn ? dayjs(dateIn).format("YYYY-MM-DD") : undefined,
+      type: "in",
+      q: filterIn.q || undefined,
+      divisi: filterIn.divisi || undefined,
+      status: filterIn.status || undefined,
+    };
+    return ApiEndpoints.GetAbsensiRecords(qs);
+  }, [dateIn, filterIn]);
+
+  const urlOut = useMemo(() => {
+    const qs = {
+      date: dateOut ? dayjs(dateOut).format("YYYY-MM-DD") : undefined,
+      type: "out",
+      q: filterOut.q || undefined,
+      divisi: filterOut.divisi || undefined,
+      status: filterOut.status || undefined,
+    };
+    return ApiEndpoints.GetAbsensiRecords(qs);
+  }, [dateOut, filterOut]);
+
+  const { data: resIn,  isLoading: loadingIn  } = useSWR(urlIn,  fetcher, { keepPreviousData: true });
+  const { data: resOut, isLoading: loadingOut } = useSWR(urlOut, fetcher, { keepPreviousData: true });
+
+  const kedatangan = resIn?.data || [];
+  const kepulangan = resOut?.data || [];
+
+  const divisiOptions = (resIn?.facets?.divisi || resOut?.facets?.divisi || []).map((d) => ({ value: d, label: d }));
+  const statusOptionsIn = [
+    { value: "tepat",      label: "Tepat Waktu" },
+    { value: "terlambat",  label: "Terlambat"   },
+    { value: "izin",       label: "Izin"        },
+    { value: "sakit",      label: "Sakit"       },
   ];
-  const statusOptionsKepulangan = [
-    { value: "Tepat Waktu", label: "Tepat Waktu" },
-    { value: "Lembur", label: "Lembur" },
+  const statusOptionsOut = [
+    { value: "tepat",  label: "Tepat Waktu" },
+    { value: "lembur", label: "Lembur"      },
   ];
 
-  return { kedatangan, kepulangan, divisiOptions, statusOptions, statusOptionsKepulangan };
+  return {
+    kedatangan, kepulangan,
+    loadingIn, loadingOut,
+    dateIn, setDateIn,
+    dateOut, setDateOut,
+    filterIn, setFilterIn,
+    filterOut, setFilterOut,
+    divisiOptions,
+    statusOptionsIn,
+    statusOptionsOut,
+  };
 }

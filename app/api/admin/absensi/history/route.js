@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../../lib/jwt';
 
 const REPORT_STATUSES = new Set(['terkirim', 'disetujui', 'ditolak']);
 
