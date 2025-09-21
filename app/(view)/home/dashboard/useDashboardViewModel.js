@@ -65,11 +65,11 @@ export default function useDashboardViewModel() {
   ];
 
   const leaveList = [
-    { name: "Kadek Sri Meyani, S.Pd", days: 3, color: "#FDE68A" },
-    { name: "Ni Putu Melli Antari, S.Pd", days: 2, color: "#BBF7D0" },
-    { name: "Ni Putu Melli Antari, S.Pd", days: 1, color: "#BFDBFE" },
-    { name: "Ni Putu Melli Antari, S.Pd", days: 1, color: "#FBCFE8" },
-    { name: "Ni Putu Melli Antari, S.Pd", days: 1, color: "#FCA5A5" },
+    { name: "Kadek Sri Meyani", days: 3, color: "#FDE68A" },
+    { name: "Ni Putu Melli Antari", days: 2, color: "#BBF7D0" },
+    { name: "Ni Putu Melli Antari", days: 1, color: "#BFDBFE" },
+    { name: "Ni Putu Melli Antari", days: 1, color: "#FBCFE8" },
+    { name: "Ni Putu Melli Antari", days: 1, color: "#FCA5A5" },
   ];
   const onLeaveCount = leaveList.length;
 

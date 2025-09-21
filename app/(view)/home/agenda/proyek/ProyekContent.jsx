@@ -1,15 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, Table, Input, Button, Modal, Form, Popconfirm, Tooltip, message } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from "@ant-design/icons";
-import { useRouter } from "next/navigation";
+import {
+  Card, Table, Input, Button, Modal, Form, Popconfirm, Tooltip, message,
+  Select, Tag, DatePicker, Alert, Divider
+} from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
+import useSWR from "swr";
+import { fetcher } from "../../../../utils/fetcher";
+import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import useProyekViewModel from "./ProyekViewModel";
 
-const BRAND = { accent: "#D9A96F", dark: "#0A3848" };
+const BRAND = { accent: "#D9A96F" };
 
 export default function ProyekContent() {
-  const router = useRouter();
   const vm = useProyekViewModel();
 
   // modal tambah & edit
@@ -22,11 +27,15 @@ export default function ProyekContent() {
   const [editForm] = Form.useForm();
   const [editingRow, setEditingRow] = useState(null);
 
+  // modal activity list
+  const [openList, setOpenList] = useState(false);
+  const [listProject, setListProject] = useState(null); // {id_agenda, nama_agenda}
+
   const onAddSubmit = async () => {
     try {
-      const { nama_agenda } = await addForm.validateFields();
+      const v = await addForm.validateFields();
       setSavingAdd(true);
-      await vm.create(nama_agenda.trim());
+      await vm.create(v.nama_agenda.trim());
       setOpenAdd(false);
       addForm.resetFields();
       message.success("Proyek berhasil ditambahkan");
@@ -46,9 +55,9 @@ export default function ProyekContent() {
 
   const onEditSubmit = async () => {
     try {
-      const { nama_agenda } = await editForm.validateFields();
+      const v = await editForm.validateFields();
       setSavingEdit(true);
-      await vm.update(editingRow.id_agenda, nama_agenda.trim());
+      await vm.update(editingRow.id_agenda, v.nama_agenda.trim());
       setOpenEdit(false);
       setEditingRow(null);
       editForm.resetFields();
@@ -61,6 +70,11 @@ export default function ProyekContent() {
     }
   };
 
+  const openActivities = (row) => {
+    setListProject({ id_agenda: row.id_agenda, nama_agenda: row.nama_agenda });
+    setOpenList(true);
+  };
+
   const columns = useMemo(
     () => [
       {
@@ -68,39 +82,31 @@ export default function ProyekContent() {
         dataIndex: "nama_agenda",
         key: "nama",
         render: (v, row) => (
-          <a
-            onClick={() =>
-              router.push(`/home/agenda-kerja/aktivitas?id_agenda=${encodeURIComponent(row.id_agenda)}`)
-            }
-          >
+          <a className="underline" onClick={() => openActivities(row)}>
             {v}
           </a>
         ),
       },
       {
-        title: "Warna",
-        key: "warna",
-        render: () => "—", // API belum mendukung warna; tampilkan placeholder
-      },
-      {
         title: "Anggota",
         key: "anggota",
-        render: () => "—", // API belum mendukung anggota; placeholder
+        render: (_, row) => {
+          const names = vm.membersNames(row.id_agenda);
+          if (names.length === 0) return "—";
+          return (
+            <div className="whitespace-pre-wrap">
+              {names.slice(0, 3).map((n, i) => `${i + 1}. ${n}`).join("\n")}
+              {names.length > 3 ? `\n+${names.length - 3} lainnya` : ""}
+            </div>
+          );
+        },
       },
       {
         title: "Jml. Pekerjaan",
         dataIndex: ["_count", "items"],
         key: "jumlah",
         align: "center",
-        render: (n = 0, row) => (
-          <a
-            onClick={() =>
-              router.push(`/home/agenda-kerja/aktivitas?id_agenda=${encodeURIComponent(row.id_agenda)}`)
-            }
-          >
-            {n}
-          </a>
-        ),
+        render: (n = 0, row) => <a onClick={() => openActivities(row)}>{n}</a>,
       },
       {
         title: "Aksi",
@@ -113,7 +119,7 @@ export default function ProyekContent() {
             </Tooltip>
             <Popconfirm
               title="Hapus proyek?"
-              description="Ini adalah penghapusan lembut (soft delete)."
+              description="Soft delete."
               onConfirm={() => vm.remove(row.id_agenda)}
               okText="Hapus"
               cancelText="Batal"
@@ -124,32 +130,36 @@ export default function ProyekContent() {
         ),
       },
     ],
-    [router, vm]
+    [vm]
   );
 
   return (
     <div className="p-4">
-      <Card
-        title={<span className="text-lg font-semibold">Proyek</span>}
-        extra={
-          <Button icon={<ReloadOutlined />} onClick={vm.refresh} style={{ background: BRAND.accent, color: BRAND.dark }}>
-            Muat Ulang
-          </Button>
-        }
-      >
-        {/* Toolbar */}
-        <div className="flex flex-wrap gap-3 items-center mb-4">
+      <Card styles={{ body: { paddingTop: 16 } }} title={<span className="text-lg font-semibold">Proyek</span>}>
+        {/* Toolbar 1 baris (dipendekkan) */}
+        <div className="flex items-center gap-2 md:flex-nowrap flex-wrap mb-4">
           <Input.Search
-            className="w-[320px] max-w-full"
-            placeholder="Cari"
+            placeholder="Cari proyek"
+            className="w-[150px]"
             value={vm.q}
             onChange={(e) => vm.setQ(e.target.value)}
-            onSearch={() => vm.refresh()}
+            onSearch={(v) => vm.setQ(v)}
+            allowClear
+          />
+          <Select
+            className="w-[220px]"
+            placeholder="Filter Karyawan"
+            allowClear
+            value={vm.filterUserId || undefined}
+            onChange={(v) => vm.setFilterUserId(v || "")}
+            options={vm.userOptions}
+            showSearch
+            optionFilterProp="label"
           />
           <Button
             icon={<PlusOutlined />}
             onClick={() => setOpenAdd(true)}
-            style={{ background: BRAND.accent, color: BRAND.dark }}
+            style={{ background: BRAND.accent, color: "#fff", borderColor: BRAND.accent }}
           >
             Tambah Proyek
           </Button>
@@ -159,7 +169,7 @@ export default function ProyekContent() {
         <Table
           rowKey="id_agenda"
           columns={columns}
-          dataSource={vm.rows}
+          dataSource={vm.filteredRows}
           loading={vm.loading}
           pagination={false}
           size="middle"
@@ -172,13 +182,18 @@ export default function ProyekContent() {
         open={openAdd}
         onCancel={() => setOpenAdd(false)}
         okText="Simpan"
+        okButtonProps={{ style: { background: BRAND.accent, color: "#fff" } }}
         confirmLoading={savingAdd}
         onOk={onAddSubmit}
         destroyOnClose
       >
         <Form form={addForm} layout="vertical">
-          <Form.Item name="nama_agenda" label="Nama Proyek" rules={[{ required: true, message: "Wajib diisi" }]}>
-            <Input placeholder="Mis. Pengembangan HRIS" />
+          <Form.Item
+            name="nama_agenda"
+            label="Nama"
+            rules={[{ required: true, message: "Wajib diisi" }]}
+          >
+            <Input placeholder="Mis. The Day OSS EXPO" />
           </Form.Item>
         </Form>
       </Modal>
@@ -189,16 +204,168 @@ export default function ProyekContent() {
         open={openEdit}
         onCancel={() => setOpenEdit(false)}
         okText="Simpan"
+        okButtonProps={{ style: { background: BRAND.accent, color: "#fff" } }}
         confirmLoading={savingEdit}
         onOk={onEditSubmit}
         destroyOnClose
       >
         <Form form={editForm} layout="vertical">
-          <Form.Item name="nama_agenda" label="Nama Proyek" rules={[{ required: true, message: "Wajib diisi" }]}>
+          <Form.Item
+            name="nama_agenda"
+            label="Nama"
+            rules={[{ required: true, message: "Wajib diisi" }]}
+          >
             <Input />
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Modal Daftar Pekerjaan Proyek (tetap inline) */}
+      <ActivitiesModal open={openList} onClose={() => setOpenList(false)} project={listProject} />
     </div>
   );
+}
+
+/* ======================= Modal List Aktivitas ======================= */
+function ActivitiesModal({ open, onClose, project }) {
+  const [from, setFrom] = useState(null);
+  const [to, setTo] = useState(null);
+  const [status, setStatus] = useState("");
+  const [division, setDivision] = useState(""); // pakai user.role
+  const [q, setQ] = useState("");
+
+  const qs = useMemo(() => {
+    if (!project?.id_agenda) return null;
+    const p = new URLSearchParams();
+    p.set("id_agenda", project.id_agenda);
+    if (from) p.set("from", dayjs(from).startOf("day").toISOString());
+    if (to) p.set("to", dayjs(to).endOf("day").toISOString());
+    if (status) p.set("status", status);
+    p.set("perPage", "500");
+    return `${ApiEndpoints.GetAgendaKerja}?${p.toString()}`;
+  }, [project?.id_agenda, from, to, status]);
+
+  const { data, isLoading } = useSWR(open && qs ? qs : null, fetcher, { revalidateOnFocus: false });
+  const rows = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data]);
+
+  const divisionOptions = useMemo(() => {
+    const s = new Set();
+    rows.forEach((r) => r.user?.role && s.add(r.user.role));
+    return Array.from(s).map((v) => ({ value: v, label: v }));
+  }, [rows]);
+
+  const filteredRows = useMemo(() => {
+    let xs = rows;
+    if (division) xs = xs.filter((r) => (r.user?.role || "") === division);
+    const qq = q.trim().toLowerCase();
+    if (qq) {
+      xs = xs.filter(
+        (r) =>
+          (r.deskripsi_kerja || "").toLowerCase().includes(qq) ||
+          (r.user?.nama_pengguna || r.user?.email || "").toLowerCase().includes(qq)
+      );
+    }
+    return xs;
+  }, [rows, division, q]);
+
+  const columns = useMemo(
+    () => [
+      {
+        title: "Pekerjaan",
+        dataIndex: "deskripsi_kerja",
+        key: "pek",
+        render: (v) => <a className="underline">{v}</a>,
+      },
+      {
+        title: "Diproses Oleh",
+        key: "oleh",
+        render: (_, r) => r.user?.nama_pengguna || r.user?.email || "—",
+      },
+      {
+        title: "Diproses Pada",
+        key: "pada",
+        render: (_, r) => {
+          const s = r.start_date ? dayjs(r.start_date).format("DD MMM YYYY HH:mm") : "-";
+          const e = r.end_date ? dayjs(r.end_date).format("DD MMM YYYY HH:mm") : "-";
+          return <div className="whitespace-pre">{`${s}\n${e}`}</div>;
+        },
+      },
+      {
+        title: "Durasi",
+        dataIndex: "duration_seconds",
+        key: "dur",
+        render: (s) => formatDuration(s),
+      },
+      {
+        title: "Status",
+        dataIndex: "status",
+        key: "status",
+        render: (st) => {
+          const c = st === "selesai" ? "success" : st === "ditunda" ? "warning" : "processing";
+          const t = st === "selesai" ? "Selesai" : st === "ditunda" ? "Ditunda" : "Diproses";
+          return <Tag color={c}>{t}</Tag>;
+        },
+      },
+      {
+        title: "Pembuat",
+        key: "pb",
+        render: (_, r) => (
+          <div className="flex flex-col">
+            <span>{r.user?.nama_pengguna || r.user?.email || "—"}</span>
+            <span className="opacity-60 text-xs">{dayjs(r.created_at).format("DD MMM YYYY HH:mm")}</span>
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
+  return (
+    <Modal
+      title={<span className="text-xl font-semibold">Daftar Pekerjaan Proyek: {project?.nama_agenda || "-"}</span>}
+      open={open}
+      onCancel={onClose}
+      footer={<Button onClick={onClose} style={{ background: "#F4F4F5" }}>Tutup</Button>}
+      width={1000}
+      destroyOnClose
+    >
+      {/* Filter bar satu row, search diperkecil */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <DatePicker placeholder="Tanggal Mulai" value={from ? dayjs(from) : null} onChange={(d) => setFrom(d ? d.toDate() : null)} />
+        <span className="opacity-60">-</span>
+        <DatePicker placeholder="Tanggal Selesai" value={to ? dayjs(to) : null} onChange={(d) => setTo(d ? d.toDate() : null)} />
+        <Select className="min-w-[160px]" placeholder="--Filter Divisi--" allowClear options={divisionOptions}
+                value={division || undefined} onChange={(v) => setDivision(v || "")} />
+        <Select className="min-w-[160px]" placeholder="--Filter Status--" allowClear value={status || undefined}
+                onChange={(v) => setStatus(v || "")}
+                options={[{ value: "diproses", label: "Diproses" }, { value: "ditunda", label: "Ditunda" }, { value: "selesai", label: "Selesai" }]} />
+        <Input.Search className="w-[140px]" placeholder="Cari" value={q} onChange={(e) => setQ(e.target.value)} allowClear />
+      </div>
+
+      {isLoading ? (
+        <Alert type="info" message="Memuat data..." />
+      ) : (
+        <Table
+          rowKey="id_agenda_kerja"
+          columns={columns}
+          dataSource={filteredRows}
+          pagination={{ pageSize: 10 }}
+          size="middle"
+          footer={() => <div className="font-semibold">Menampilkan {filteredRows.length} dari {rows.length} total data</div>}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function formatDuration(sec = 0) {
+  if (!sec || sec < 1) return "0 detik";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const parts = [];
+  if (h) parts.push(`${h} jam`);
+  if (m) parts.push(`${m} menit`);
+  if (s) parts.push(`${s} detik`);
+  return parts.join(" ");
 }

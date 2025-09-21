@@ -55,7 +55,7 @@ export const ApiEndpoints = {
   GetAgendaKerja: API_AGENDA_KERJA,                 // GET list (filter user_id,id_agenda,status,date|from|to,page,perPage)
   CreateAgendaKerja: API_AGENDA_KERJA,              // POST {...}
   GetAgendaKerjaById: (id) => `${API_AGENDA_KERJA}/${id}`, // GET detail
-  UpdateAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,  // PATCH {...}
+  UpdateAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,  // PUT
   DeleteAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,  // DELETE ?hard=0|1
 
   // POLA KERJA

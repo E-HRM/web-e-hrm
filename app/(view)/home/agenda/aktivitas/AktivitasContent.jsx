@@ -9,7 +9,6 @@ import {
   Tag,
   Table,
   Space,
-  Alert,
   Button,
   Tooltip,
   Empty,
@@ -17,28 +16,29 @@ import {
   Modal,
   Form,
   message,
+  Popconfirm,
+  Alert,
 } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
   UndoOutlined,
-  ReloadOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import useAktivitasTimesheetViewModel from "./AktivitasViewModel";
 
-const BRAND = { accent: "#D9A96F", dark: "#0A3848" };
+const BRAND = { accent: "#D9A96F" };
 
 export default function AktivitasContent() {
   const vm = useAktivitasTimesheetViewModel();
 
-  // State Modal Tambah Pekerjaan
+  // modal tambah aktivitas
   const [openAdd, setOpenAdd] = useState(false);
   const [savingAdd, setSavingAdd] = useState(false);
   const [addForm] = Form.useForm();
 
-  // State Modal Tambah Proyek/Agenda
+  // modal tambah proyek master
   const [openAddAgenda, setOpenAddAgenda] = useState(false);
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [agendaForm] = Form.useForm();
@@ -51,7 +51,7 @@ export default function AktivitasContent() {
         key: "deskripsi_kerja",
         render: (v, r) => (
           <div className="flex flex-col">
-            <a className="font-medium">{v}</a>
+            <span className="font-medium">{v}</span>
             <span className="opacity-60 text-xs">
               Dibuat: {dayjs(r.created_at).format("DD MMM YYYY HH:mm")}
             </span>
@@ -59,7 +59,7 @@ export default function AktivitasContent() {
         ),
       },
       {
-        title: "Proyek/Agenda",
+        title: "Proyek",
         dataIndex: ["agenda", "nama_agenda"],
         key: "agenda",
         render: (v) => v || "—",
@@ -97,7 +97,7 @@ export default function AktivitasContent() {
         title: "Pembuat",
         dataIndex: "user",
         key: "user",
-        render: (u) => (u?.nama_pengguna ? u.nama_pengguna : "—"),
+        render: (u) => u?.nama_pengguna || u?.email || "—",
       },
       {
         title: "Aksi",
@@ -105,20 +105,28 @@ export default function AktivitasContent() {
         align: "right",
         render: (_, r) => (
           <Space>
-            <Tooltip title="Tandai selesai (contoh)">
-              <Button size="small" icon={<EditOutlined />} onClick={() => vm.quickFinish(r)} />
-            </Tooltip>
-            <Tooltip title="Hapus">
+            <Tooltip title="Tandai selesai">
               <Button
-                danger
                 size="small"
-                icon={<DeleteOutlined />}
-                onClick={() => vm.remove(r.id_agenda_kerja)}
+                icon={<EditOutlined />}
+                onClick={() => vm.quickFinish(r)}
               />
             </Tooltip>
             <Tooltip title="Set Ulang ke Diproses">
-              <Button size="small" icon={<UndoOutlined />} onClick={() => vm.resetToDiproses(r)} />
+              <Button
+                size="small"
+                icon={<UndoOutlined />}
+                onClick={() => vm.resetToDiproses(r)}
+              />
             </Tooltip>
+            <Popconfirm
+              title="Hapus pekerjaan?"
+              onConfirm={() => vm.remove(r.id_agenda_kerja)}
+              okText="Hapus"
+              cancelText="Batal"
+            >
+              <Button danger size="small" icon={<DeleteOutlined />} />
+            </Popconfirm>
           </Space>
         ),
       },
@@ -126,7 +134,7 @@ export default function AktivitasContent() {
     [vm]
   );
 
-  // Submit Tambah Pekerjaan
+  // submit tambah aktivitas
   const onSubmitAdd = async () => {
     try {
       const values = await addForm.validateFields();
@@ -134,19 +142,21 @@ export default function AktivitasContent() {
       await vm.createActivity({
         deskripsi_kerja: values.deskripsi_kerja.trim(),
         id_agenda: values.id_agenda,
+        start_date: values.start_date ? values.start_date.toISOString() : undefined,
+        end_date: values.end_date ? values.end_date.toISOString() : undefined,
       });
       setOpenAdd(false);
       addForm.resetFields();
       message.success("Pekerjaan ditambahkan");
     } catch (e) {
-      if (e?.errorFields) return; // validation
+      if (e?.errorFields) return;
       message.error(e?.message || "Gagal menambahkan pekerjaan");
     } finally {
       setSavingAdd(false);
     }
   };
 
-  // Submit Tambah Agenda Master
+  // submit tambah proyek master
   const onSubmitAgenda = async () => {
     try {
       const { nama_agenda } = await agendaForm.validateFields();
@@ -170,15 +180,16 @@ export default function AktivitasContent() {
         title={<span className="text-lg font-semibold">Aktivitas</span>}
         extra={
           <Button
-            icon={<ReloadOutlined />}
-            onClick={vm.refresh}
-            style={{ background: BRAND.accent, color: BRAND.dark }}
+            disabled={!vm.filters.user_id}
+            icon={<PlusOutlined />}
+            onClick={() => setOpenAdd(true)}
+            style={{ background: BRAND.accent, color: "#fff" }}
           >
-            Muat Ulang
+            Tambah Pekerjaan
           </Button>
         }
       >
-        {/* BAR FILTER ATAS */}
+        {/* BAR FILTER ATAS: Pilih Karyawan + Range Tanggal */}
         <div className="flex flex-wrap gap-3 items-center mb-4">
           <Select
             className="min-w-[260px]"
@@ -192,13 +203,23 @@ export default function AktivitasContent() {
           />
           <DatePicker
             value={vm.filters.from ? dayjs(vm.filters.from) : null}
-            onChange={(d) => vm.setFilters((s) => ({ ...s, from: d ? d.startOf("day").toISOString() : "" }))}
+            onChange={(d) =>
+              vm.setFilters((s) => ({
+                ...s,
+                from: d ? d.startOf("day").toISOString() : "",
+              }))
+            }
             format="DD/MM/YYYY"
           />
           <span className="opacity-60">-</span>
           <DatePicker
             value={vm.filters.to ? dayjs(vm.filters.to) : null}
-            onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.endOf("day").toISOString() : "" }))}
+            onChange={(d) =>
+              vm.setFilters((s) => ({
+                ...s,
+                to: d ? d.endOf("day").toISOString() : "",
+              }))
+            }
             format="DD/MM/YYYY"
           />
         </div>
@@ -221,23 +242,32 @@ export default function AktivitasContent() {
                         "text-left whitespace-nowrap",
                         active ? "border-transparent" : "border-white/10",
                       ].join(" ")}
-                      style={{ background: active ? BRAND.accent : "transparent", color: active ? BRAND.dark : "inherit" }}
+                      style={{
+                        background: active ? BRAND.accent : "transparent",
+                        color: active ? "#0A3848" : "inherit",
+                      }}
                     >
-                      <div className="font-semibold">{dayjs(d.date).format("DD MMM YYYY")}</div>
-                      <div className={active ? "" : "opacity-70"}>{d.count} Pekerjaan</div>
+                      <div className="font-semibold">
+                        {dayjs(d.date).format("DD MMM YYYY")}
+                      </div>
+                      <div className={active ? "" : "opacity-70"}>
+                        {d.count} Pekerjaan
+                      </div>
                     </button>
                   );
                 })}
               </div>
 
-              {/* FILTER BAR KEDUA */}
+              {/* FILTER BAR KEDUA: Status + Proyek + Cari */}
               <div className="flex flex-wrap gap-3 items-center mt-4">
                 <Select
-                  className="min-w-[220px]"
+                  className="min-w-[200px]"
                   placeholder="-- Filter Status --"
                   allowClear
                   value={vm.filters.status || undefined}
-                  onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
+                  onChange={(v) =>
+                    vm.setFilters((s) => ({ ...s, status: v || "" }))
+                  }
                   options={[
                     { value: "diproses", label: "Diproses" },
                     { value: "ditunda", label: "Ditunda" },
@@ -246,34 +276,28 @@ export default function AktivitasContent() {
                 />
                 <Select
                   className="min-w-[220px]"
-                  placeholder="Filter Proyek/Agenda"
+                  placeholder="Filter Proyek"
                   allowClear
                   value={vm.filters.id_agenda || undefined}
-                  onChange={(v) => vm.setFilters((s) => ({ ...s, id_agenda: v || "" }))}
+                  onChange={(v) =>
+                    vm.setFilters((s) => ({ ...s, id_agenda: v || "" }))
+                  }
                   options={vm.agendaOptions}
                   showSearch
                   optionFilterProp="label"
                 />
                 <Input.Search
-                  className="w-[280px] max-w-full"
+                  className="w-[240px]"
                   placeholder="Cari"
                   value={vm.filters.q}
-                  onChange={(e) => vm.setFilters((s) => ({ ...s, q: e.target.value }))}
-                  onSearch={() => vm.refresh()}
+                  onChange={(e) =>
+                    vm.setFilters((s) => ({ ...s, q: e.target.value }))
+                  }
                 />
               </div>
 
-              {/* TABEL + TOMBOL TAMBAH */}
+              {/* TABEL */}
               <div className="mt-4">
-                <div className="mb-3">
-                  <Button
-                    icon={<PlusOutlined />}
-                    onClick={() => setOpenAdd(true)}
-                    style={{ background: BRAND.accent, color: BRAND.dark }}
-                  >
-                    Tambah Pekerjaan
-                  </Button>
-                </div>
                 {vm.filteredRows.length === 0 ? (
                   <Empty description="Tidak ada pekerjaan pada rentang/tanggal ini" />
                 ) : (
@@ -289,7 +313,12 @@ export default function AktivitasContent() {
             </>
           )
         ) : (
-          <Alert className="mt-4" type="info" message="Silakan pilih karyawan terlebih dahulu" showIcon />
+          <Alert
+            className="mt-2"
+            type="info"
+            message="Silakan pilih karyawan terlebih dahulu"
+            showIcon
+          />
         )}
       </Card>
 
@@ -299,6 +328,7 @@ export default function AktivitasContent() {
         open={openAdd}
         onCancel={() => setOpenAdd(false)}
         okText="Simpan"
+        okButtonProps={{ style: { background: BRAND.accent, color: "#fff" } }}
         confirmLoading={savingAdd}
         onOk={onSubmitAdd}
         destroyOnClose
@@ -314,7 +344,11 @@ export default function AktivitasContent() {
 
           <Form.Item label="Proyek" required>
             <Space.Compact className="w-full">
-              <Form.Item name="id_agenda" noStyle rules={[{ required: true, message: "Pilih proyek/agenda" }]}>
+              <Form.Item
+                name="id_agenda"
+                noStyle
+                rules={[{ required: true, message: "Pilih proyek/agenda" }]}
+              >
                 <Select
                   placeholder="Pilih Proyek"
                   options={vm.agendaOptions}
@@ -323,20 +357,31 @@ export default function AktivitasContent() {
                   optionFilterProp="label"
                 />
               </Form.Item>
-              <Button onClick={() => setOpenAddAgenda(true)} style={{ background: BRAND.accent, color: BRAND.dark }}>
+              <Button
+                onClick={() => setOpenAddAgenda(true)}
+                style={{ background: BRAND.accent, color: "#0A3848" }}
+              >
                 Tambah Proyek
               </Button>
             </Space.Compact>
           </Form.Item>
+
+          <Form.Item label="Mulai" name="start_date">
+            <DatePicker showTime className="w-full" />
+          </Form.Item>
+          <Form.Item label="Selesai" name="end_date">
+            <DatePicker showTime className="w-full" />
+          </Form.Item>
         </Form>
       </Modal>
 
-      {/* MODAL: TAMBAH PROYEK/AGENDA MASTER */}
+      {/* MODAL: TAMBAH PROYEK MASTER */}
       <Modal
         title="Tambah Proyek/Agenda"
         open={openAddAgenda}
         onCancel={() => setOpenAddAgenda(false)}
         okText="Simpan"
+        okButtonProps={{ style: { background: BRAND.accent, color: "#fff" } }}
         confirmLoading={savingAgenda}
         onOk={onSubmitAgenda}
         destroyOnClose
@@ -347,7 +392,7 @@ export default function AktivitasContent() {
             name="nama_agenda"
             rules={[{ required: true, message: "Wajib diisi" }]}
           >
-            <Input placeholder="Mis. Pengembangan Fitur HRIS" />
+            <Input placeholder="Mis. Pengembangan HRIS" />
           </Form.Item>
         </Form>
       </Modal>

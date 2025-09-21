@@ -6,41 +6,83 @@ import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import { fetcher } from "../../../../utils/fetcher";
 import { crudService } from "../../../../utils/services/crudService";
 
-// referensi stabil biar lolos eslint react-hooks/exhaustive-deps
 const EMPTY = Object.freeze([]);
 
 export default function useProyekViewModel() {
-  // query & pagination (kalau nanti mau dipakai)
+  // query & filter
   const [q, setQ] = useState("");
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(20);
+  const [filterUserId, setFilterUserId] = useState("");
 
+  // Users (untuk opsi filter karyawan & render anggota)
+  const { data: usersRes } = useSWR(ApiEndpoints.GetUsers, fetcher, { revalidateOnFocus: false });
+  const users = useMemo(() => (Array.isArray(usersRes?.data) ? usersRes.data : EMPTY), [usersRes]);
+  const userOptions = useMemo(
+    () => users.map((u) => ({ value: u.id_user, label: u.nama_pengguna || u.email || u.id_user })),
+    [users]
+  );
+  const userName = (id) =>
+    users.find((u) => u.id_user === id)?.nama_pengguna || users.find((u) => u.id_user === id)?.email || id;
+
+  // Daftar proyek (boleh re-fetch by q; tapi juga kita filter client-side)
   const listUrl = useMemo(() => {
     const p = new URLSearchParams();
     if (q) p.set("q", q);
-    p.set("page", String(page));
-    p.set("perPage", String(perPage));
+    p.set("perPage", "200");
     return `${ApiEndpoints.GetAgenda}?${p.toString()}`;
-  }, [q, page, perPage]);
+  }, [q]);
+  const { data: agendaRes, isLoading: loadingAgenda, mutate } = useSWR(listUrl, fetcher, { revalidateOnFocus: false });
+  const rows = useMemo(() => (Array.isArray(agendaRes?.data) ? agendaRes.data : EMPTY), [agendaRes]);
 
-  const { data, isLoading, mutate, error } = useSWR(listUrl, fetcher, { revalidateOnFocus: false });
+  // Ambil semua aktivitas (untuk “anggota proyek” otomatis)
+  const { data: aktRes } = useSWR(`${ApiEndpoints.GetAgendaKerja}?perPage=1000`, fetcher, { revalidateOnFocus: false });
+  const aktivitas = useMemo(() => (Array.isArray(aktRes?.data) ? aktRes.data : EMPTY), [aktRes]);
 
-  const rows = useMemo(() => (Array.isArray(data?.data) ? data.data : EMPTY), [data]);
-  const meta = data?.meta ?? { page, perPage, total: rows.length, totalPages: 1 };
+  // id_agenda -> Set<id_user> (anggota dari aktivitas)
+  const membersMap = useMemo(() => {
+    const map = new Map();
+    for (const r of aktivitas) {
+      if (!r.id_agenda || !r.user?.id_user) continue;
+      if (!map.has(r.id_agenda)) map.set(r.id_agenda, new Set());
+      map.get(r.id_agenda).add(r.user.id_user);
+    }
+    return map;
+  }, [aktivitas]);
 
+  const membersNames = (agendaId) => {
+    const set = membersMap.get(agendaId);
+    if (!set || set.size === 0) return [];
+    return Array.from(set).map((uid) => userName(uid));
+  };
+
+  // Filter proyek berdasarkan karyawan + q (client-side juga)
+  const filteredRows = useMemo(() => {
+    let xs = rows;
+    if (filterUserId) {
+      xs = xs.filter((ag) => {
+        const set = membersMap.get(ag.id_agenda);
+        return set ? set.has(filterUserId) : false;
+      });
+    }
+    const qq = (q || "").trim().toLowerCase();
+    if (qq) xs = xs.filter((ag) => (ag.nama_agenda || "").toLowerCase().includes(qq));
+    return xs;
+  }, [rows, filterUserId, q, membersMap]);
+
+  // Actions
   const refresh = () => mutate();
 
   const create = async (nama_agenda) => {
-    await crudService.post(ApiEndpoints.CreateAgenda, { nama_agenda });
+    const res = await crudService.post(ApiEndpoints.CreateAgenda, { nama_agenda });
     await mutate();
+    return res?.data || {};
   };
 
   const update = async (id, nama_agenda) => {
-    await crudService.patch(ApiEndpoints.UpdateAgenda(id), { nama_agenda });
+    const put = crudService.put || crudService.patch; // fallback jika helper .put belum ada
+    await put(ApiEndpoints.UpdateAgenda(id), { nama_agenda });
     await mutate();
   };
 
-  // soft delete secara default
   const remove = async (id, { hard = false } = {}) => {
     const url = ApiEndpoints.DeleteAgenda(id) + (hard ? "?hard=1" : "");
     await crudService.del(url);
@@ -48,21 +90,16 @@ export default function useProyekViewModel() {
   };
 
   return {
-    // state
-    loading: isLoading,
-    error,
+    loading: loadingAgenda,
     rows,
-    meta,
+    filteredRows,
 
-    // query
     q, setQ,
-    page, setPage,
-    perPage, setPerPage,
+    filterUserId, setFilterUserId,
 
-    // actions
-    refresh,
-    create,
-    update,
-    remove,
+    userOptions,
+    membersNames,
+
+    refresh, create, update, remove,
   };
 }

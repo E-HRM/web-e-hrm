@@ -225,7 +225,6 @@ export default function LokasiContent() {
         </div>
         <div className="flex items-center gap-2">
           <Tag color="geekblue">Total Lokasi: {totalLokasi}</Tag>
-          <Tag color="success">Karyawan Tertaut: {totalKaryawan}</Tag>
           <Button
             type="primary"
             icon={<PlusOutlined />}

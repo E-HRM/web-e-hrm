@@ -54,10 +54,9 @@ const MENU = [
     icon: FileTextOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/agenda/aktivitas", match: ["/home/agenda/aktivitas"], label: "Aktivitas" },
       { href: "/home/agenda/proyek", match: ["/home/agenda/proyek"], label: "Proyek" },
+      { href: "/home/agenda/aktivitas", match: ["/home/agenda/aktivitas"], label: "Aktivitas" },
       { href: "/home/agenda/agenda_kerja", match: ["/home/agenda/agenda_kerja"], label: "Agenda Kerja" },
-      { href: "/home/agenda/perma"}
     ],
   },
 ];

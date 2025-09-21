@@ -19,24 +19,13 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import UseShiftScheduleViewModel from "./UseShiftScheduleViewModel";
 
 const GOLD = "#D9A96F";
-const { MonthPicker } = DatePicker; // just alias (antd DatePicker month mode)
 
-function Cell({ cell, polaMap, onAssign, onDelete }) {
-  const options = useMemo(() => {
-    const arr = [{ value: "LIBUR", label: "Jadwal Libur" }];
-    for (const [id, p] of polaMap) {
-      arr.push({
-        value: id,
-        label: `${p.nama} (${p.jam})`,
-      });
-    }
-    return arr;
-  }, [polaMap]);
-
+/* ====================== CELL ====================== */
+function Cell({ cell, polaMap, selectedShift, onAssign, onDelete }) {
   const assigned =
     cell?.status === "LIBUR"
       ? { label: "Libur", jam: "" }
@@ -47,20 +36,28 @@ function Cell({ cell, polaMap, onAssign, onDelete }) {
   return (
     <div className="p-2">
       {assigned ? (
-        <div className={`rounded-xl border ${cell.status === "LIBUR" ? "border-rose-300 bg-rose-50" : "border-sky-200 bg-sky-50"} p-2`}>
+        <div
+          className={`rounded-xl border ${
+            cell.status === "LIBUR"
+              ? "border-rose-300 bg-rose-50"
+              : "border-sky-200 bg-sky-50"
+          } p-2`}
+        >
           <div className="text-sm font-medium">
-            {cell.status === "LIBUR" ? "Libur" : assigned.nama}
+            {cell.status === "LIBUR" ? "Libur" : assigned?.nama || "Kerja"}
           </div>
           <div className="text-xs text-slate-500">
-            {cell.status === "LIBUR" ? "" : assigned.jam}
+            {cell.status === "LIBUR" ? "" : assigned?.jam || ""}
           </div>
           <div className="mt-2 flex gap-1">
-            <Tooltip title="Edit">
+            <Tooltip title="Terapkan pilihan jadwal (di atas)">
               <Button
                 size="small"
                 icon={<EditOutlined />}
+                disabled={!selectedShift}
                 onClick={() =>
-                  onAssign(cell.userId, cell.date, cell.status === "LIBUR" ? "LIBUR" : cell.polaId)
+                  selectedShift &&
+                  onAssign(cell.userId, cell.date, selectedShift)
                 }
               />
             </Tooltip>
@@ -75,20 +72,41 @@ function Cell({ cell, polaMap, onAssign, onDelete }) {
           </div>
         </div>
       ) : (
-        <Select
-          size="middle"
-          placeholder="Pilih Jadwal"
-          className="w-full"
-          options={options}
-          onChange={(val) => onAssign(cell.userId, cell.date, val)}
-        />
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 p-3 text-center">
+          <Button
+            size="small"
+            type="primary"
+            className="!text-white"
+            style={{ backgroundColor: GOLD, borderColor: GOLD }}
+            disabled={!selectedShift}
+            onClick={() =>
+              selectedShift && onAssign(cell.userId, cell.date, selectedShift)
+            }
+          >
+            Terapkan
+          </Button>
+          <div className="mt-1 text-xs text-slate-500">
+            {selectedShift ? "Gunakan pilihan di atas" : "Pilih jadwal di atas"}
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
+/* ====================== PAGE ====================== */
 export default function ShiftScheduleContent() {
   const vm = UseShiftScheduleViewModel();
+  const [selectedShift, setSelectedShift] = useState(null);
+
+  // opsi jadwal untuk SELECT di toolbar
+  const shiftOptions = useMemo(() => {
+    const arr = [{ value: "LIBUR", label: "Jadwal Libur" }];
+    vm.polaMap.forEach((p, id) => {
+      arr.push({ value: id, label: `${p.nama} (${p.jam})` });
+    });
+    return arr;
+  }, [vm.polaMap]);
 
   return (
     <ConfigProvider
@@ -114,6 +132,17 @@ export default function ShiftScheduleContent() {
             className="min-w-[220px]"
             allowClear
           />
+
+          {/* >>> Pilihan Jadwal dipindahkan ke ATAS tabel <<< */}
+          <Select
+            value={selectedShift || undefined}
+            placeholder="Pilih Jadwal"
+            options={shiftOptions}
+            onChange={setSelectedShift}
+            className="min-w-[240px]"
+            allowClear
+          />
+
           <div className="ml-auto flex items-center gap-2">
             <Button
               icon={<ReloadOutlined />}
@@ -147,11 +176,11 @@ export default function ShiftScheduleContent() {
 
         {/* Info */}
         <div className="text-xs text-slate-500 mb-3">
-          * Jadwal akan mengisi **tanggal per hari** dalam rentang
-          minggu {dayjs(vm.weekStart).format("DD MMM")} -{" "}
+          * Jadwal mengisi tanggal per hari pada rentang minggu{" "}
+          {dayjs(vm.weekStart).format("DD MMM")} -{" "}
           {dayjs(vm.weekEnd).format("DD MMM YYYY")}. Centang
           <span className="mx-1 font-semibold">“Ulang tiap minggu”</span>
-          untuk menduplikasi ke minggu-minggu berikutnya.
+          untuk menduplikasi ke minggu berikutnya.
         </div>
 
         {/* Grid */}
@@ -201,10 +230,7 @@ export default function ShiftScheduleContent() {
                                 : null
                             }
                             onChange={(d) =>
-                              vm.setRepeatUntil(
-                                r.id,
-                                d ? d.toDate() : null
-                              )
+                              vm.setRepeatUntil(r.id, d ? d.toDate() : null)
                             }
                           />
                           <Button
@@ -239,23 +265,21 @@ export default function ShiftScheduleContent() {
                     </div>
                   </td>
 
-                  {/* 7 cells */}
-                  {vm.days.map((d) => {
-                    const cell = vm.getCell(r.id, d.dateStr) || {
-                      userId: r.id,
-                      date: d.dateStr,
-                    };
-                    return (
-                      <td key={d.key} className="align-top">
-                        <Cell
-                          cell={cell}
-                          polaMap={vm.polaMap}
-                          onAssign={vm.assignCell}
-                          onDelete={vm.deleteCell}
-                        />
-                      </td>
-                    );
-                  })}
+                {vm.days.map((d) => {
+                  const cell = vm.getCell(r.id, d.dateStr) || { userId: r.id, date: d.dateStr };
+                  return (
+                    <td key={d.key} className="align-top p-2" style={{ verticalAlign: 'top' }}>
+                      <Cell
+                        cell={cell}
+                        polaMap={vm.polaMap}
+                        selectedShift={selectedShift}
+                        onAssign={vm.assignCell}
+                        onDelete={vm.deleteCell}
+                      />
+                    </td>
+                  );
+                })}
+
                 </tr>
               ))}
             </tbody>

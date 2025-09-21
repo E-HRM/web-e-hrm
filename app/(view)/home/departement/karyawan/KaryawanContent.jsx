@@ -386,4 +386,6 @@ export default function KaryawanContent() {
       </Modal>
     </div>
   );
-}
+} 
+
+

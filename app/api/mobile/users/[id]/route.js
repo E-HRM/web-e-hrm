@@ -2,10 +2,10 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import db from '@/lib/prisma';
+import db from '../../../../../lib/prisma';
 import { createClient } from '@supabase/supabase-js';
 import jwt from 'jsonwebtoken';
-import { verifyAuthToken } from '@/lib/jwt';
+import { verifyAuthToken } from '../../../../../lib/jwt';
 
 // KARYAWAN hanya boleh ubah field ini
 const KARYAWAN_ALLOW = new Set(['nama_pengguna', 'email', 'kontak', 'agama', 'foto_profil_user', 'tanggal_lahir']);
