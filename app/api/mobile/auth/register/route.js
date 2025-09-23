@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import db from '../../../../../lib/prisma';
-import { parseDateOnlyToUTC } from '@/helpers/date-helper';
+import { parseDateOnlyToUTC } from '../../../../../helpers/date-helper';
 
 const ROLES = ['KARYAWAN', 'HR', 'OPERASIONAL', 'DIREKTUR'];
 
