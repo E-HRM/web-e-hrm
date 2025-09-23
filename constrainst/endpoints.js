@@ -18,7 +18,7 @@ const API_SHIFT_KERJA = "/api/admin/shift-kerja";
 
 // === NEW: Absensi (records harian) & Approvals (persetujuan kehadiran)
 const API_ABSENSI_RECORDS = "/api/admin/absensi/history";      // GET ?date=YYYY-MM-DD&type=in|out&divisi=&status=&q=
-const API_ABSENSI_APPROVALS = "/api/admin/absensi/history";   // GET list, PATCH /[id]
+const API_ABSENSI_APPROVALS = "/api/admin/absensi/";   // GET list, PATCH /[id]
 
 export const ApiEndpoints = {
   // Location

@@ -11,7 +11,6 @@ import {
   Form,
   InputNumber,
   TimePicker,
-  ColorPicker,
   theme,
 } from "antd";
 import {
@@ -30,36 +29,6 @@ import dayjs from "dayjs";
 /* warna utama untuk tombol custom */
 const GOLD = "#D9A96F";
 
-/* Swatch warna kecil seperti di tabel */
-function ColorSwatch({ hex = "#60A5FA" }) {
-  return (
-    <div className="inline-flex items-center">
-      <div className="h-6 w-10 rounded-md bg-slate-300/60 shadow-inner">
-        <div className="h-6 m-[3px] rounded-sm" style={{ background: hex }} />
-      </div>
-    </div>
-  );
-}
-
-/* Trigger ColorPicker dengan kotak swatch */
-function SwatchPicker({ value, onChange }) {
-  const hex =
-    typeof value === "string"
-      ? value
-      : value?.toHexString
-      ? value.toHexString()
-      : "#60A5FA";
-  return (
-    <ColorPicker value={value} onChange={onChange}>
-      <div
-        className="h-9 w-24 rounded-md border border-slate-300 bg-slate-200/60 shadow-inner cursor-pointer"
-        style={{ background: hex }}
-        title={hex}
-      />
-    </ColorPicker>
-  );
-}
-
 export default function ShiftContent() {
   const vm = UseShiftViewModel();
 
@@ -73,7 +42,7 @@ export default function ShiftContent() {
     if (vm.openEdit && vm.selected) {
       formEdit.setFieldsValue(vm.getEditInitial());
     }
-  }, [vm.openEdit, vm.selected]);
+  }, [vm.openEdit, vm.selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const columns = [
     {
@@ -96,13 +65,6 @@ export default function ShiftContent() {
       key: "istirahat",
       width: 230,
       render: (v) => <span className="text-slate-700">{v}</span>,
-    },
-    {
-      title: <span className="text-slate-600">Warna</span>,
-      dataIndex: "color",
-      key: "color",
-      width: 120,
-      render: (hex) => <ColorSwatch hex={hex} />,
     },
     {
       title: <span className="text-slate-600">Toleransi Keterlambatan</span>,
@@ -266,7 +228,6 @@ export default function ShiftContent() {
             maxIstirahat: 60,
             jamMasuk: dayjs("09:00", "HH:mm"),
             jamKeluar: dayjs("18:00", "HH:mm"),
-            warna: "#60A5FA",
           }}
           onFinish={async (vals) => {
             await vm.onAddSubmit(vals);
@@ -292,15 +253,6 @@ export default function ShiftContent() {
 
           <Form.Item label="Catatan" name="catatan">
             <Input className="rounded-xl" />
-          </Form.Item>
-
-          <Form.Item
-            label="Warna"
-            name="warna"
-            valuePropName="value"
-            getValueFromEvent={(c) => c}
-          >
-            <SwatchPicker />
           </Form.Item>
 
           {/* Jadwal Kerja */}
@@ -388,15 +340,6 @@ export default function ShiftContent() {
 
           <Form.Item label="Catatan" name="catatan">
             <Input className="rounded-xl" />
-          </Form.Item>
-
-          <Form.Item
-            label="Warna"
-            name="warna"
-            valuePropName="value"
-            getValueFromEvent={(c) => c}
-          >
-            <SwatchPicker />
           </Form.Item>
 
           <div className="pl-[25%] -mt-2 mb-2 text-slate-700 flex items-center gap-2">

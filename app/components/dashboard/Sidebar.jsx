@@ -12,11 +12,13 @@ import {
   DownOutlined,
   EnvironmentOutlined,
   FieldTimeOutlined,
+  ScheduleOutlined,
 } from "@ant-design/icons";
 
 const MENU = [
   { href: "/home/dashboard", label: "Home", icon: HomeOutlined },
   { href: "/home/absensi", match: ["/home/absensi", "/absensi-karyawan"], label: "Absensi Karyawan", icon: CalendarOutlined },
+  { href: "/home/approve_absensi", match: ["/home/approve_absensi",], label: "Aprrove", icon: ScheduleOutlined },
   { href: "/home/kunjungan", match: ["/kunjungan", "/home/kunjungan"], label: "Kunjungan", icon: UserOutlined },
   { href: "/pengajuan-cuti", match: ["/pengajuan-cuti", "/home/pengajuan-cuti"], label: "Pengajuan Cuti", icon: FileTextOutlined },
   { href: "/home/lokasi", match: ["/home/lokasi"], label: "Lokasi", icon: EnvironmentOutlined },

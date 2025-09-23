@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { authenticateRequest } from '@/app/utils/auth/authUtils';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
+import { authenticateRequest } from '../../../../../app/utils/auth/authUtils';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../../lib/jwt';
 
 const DECISION_STATUSES = new Set(['disetujui', 'ditolak']);
 

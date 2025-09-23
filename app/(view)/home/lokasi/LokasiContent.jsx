@@ -23,18 +23,20 @@ import {
   DeleteOutlined,
   EnvironmentOutlined,
   AimOutlined,
+  CompassOutlined,
 } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import useLokasiViewModel from "./useLokasiViewModel";
 
-const { Text, Title } = Typography;
+const { Title } = Typography;
 const BRAND = { accent: "#D9A96F" };
 
 // react-leaflet butuh DOM → matikan SSR
-const LocationPicker = dynamic(() => import("../../../components/map/LocationPicker"), {
-  ssr: false,
-});
+const LocationPicker = dynamic(
+  () => import("../../../components/map/LocationPicker"),
+  { ssr: false }
+);
 
 export default function LokasiContent() {
   const {
@@ -77,10 +79,6 @@ export default function LokasiContent() {
 
   // quick stats
   const totalLokasi = rows?.length || 0;
-  const totalKaryawan = useMemo(
-    () => (rows || []).reduce((sum, r) => sum + (Number(r.employeeCount) || 0), 0),
-    [rows]
-  );
 
   // badge radius (warna by kategori)
   const radiusBadge = (v) => {
@@ -107,14 +105,17 @@ export default function LokasiContent() {
           </div>
         ),
       },
-      // HAPUS tampilan angka Lat/Lng. Ganti kolom 'Lokasi' yang hanya menyediakan link peta.
+      // Tetap: kolom 'Lokasi' berupa link OSM (tanpa tampilkan angka lat/lng)
       {
         title: "Lokasi",
         key: "lokasi",
-        width: 220,
+        width: 240,
         render: (_, r) => {
           const has = r.latitude != null && r.longitude != null;
-          if (!has) return <span className="text-xs text-slate-500">Belum ditentukan</span>;
+          if (!has)
+            return (
+              <span className="text-xs text-slate-500">Belum ditentukan</span>
+            );
 
           const lat = Number(r.latitude);
           const lng = Number(r.longitude);
@@ -143,14 +144,6 @@ export default function LokasiContent() {
         render: radiusBadge,
       },
       {
-        title: "Jumlah Karyawan",
-        dataIndex: "employeeCount",
-        key: "employeeCount",
-        width: 160,
-        align: "center",
-        render: (v) => <Tag color="processing">{v ?? 0}</Tag>,
-      },
-      {
         title: "Dibuat",
         dataIndex: "created_at",
         key: "created_at",
@@ -169,7 +162,7 @@ export default function LokasiContent() {
       {
         title: "Aksi",
         key: "aksi",
-        width: 140,
+        width: 160,
         fixed: "right",
         align: "center",
         render: (_, row) => (
@@ -183,10 +176,18 @@ export default function LokasiContent() {
                   setCurrentRow(row);
                   editForm.setFieldsValue({
                     nama_kantor: row.nama_kantor,
-                    // lat/lng TETAP DI BALIK LAYAR
-                    latitude: row.latitude,
-                    longitude: row.longitude,
-                    radius: row.radius ?? null,
+                    latitude:
+                      typeof row.latitude === "number"
+                        ? row.latitude
+                        : Number(row.latitude ?? -8.65),
+                    longitude:
+                      typeof row.longitude === "number"
+                        ? row.longitude
+                        : Number(row.longitude ?? 115.21),
+                    radius:
+                      row.radius === null || row.radius === undefined
+                        ? null
+                        : Number(row.radius),
                   });
                   setOpenEdit(true);
                 }}
@@ -353,7 +354,6 @@ export default function LokasiContent() {
         <Form
           form={addForm}
           layout="vertical"
-          // default lat/lng disiapkan DI BALIK LAYAR
           initialValues={{ latitude: -8.65, longitude: 115.21, radius: 50 }}
           onFinish={async (values) => {
             setAddLoading(true);
@@ -379,13 +379,62 @@ export default function LokasiContent() {
             <Input placeholder="Contoh: OSS Bali Denpasar" />
           </Form.Item>
 
-          {/* HIDDEN fields untuk lat/lng */}
-          <Form.Item name="latitude" hidden>
-            <Input type="hidden" />
-          </Form.Item>
-          <Form.Item name="longitude" hidden>
-            <Input type="hidden" />
-          </Form.Item>
+          {/* Koordinat manual */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Form.Item
+              label="Latitude"
+              name="latitude"
+              rules={[
+                { required: true, message: "Latitude wajib diisi" },
+                {
+                  validator: (_, v) =>
+                    v >= -90 && v <= 90
+                      ? Promise.resolve()
+                      : Promise.reject("Latitude harus di -90..90"),
+                },
+              ]}
+            >
+              <InputNumber
+                className="w-full"
+                step={0.000001}
+                min={-90}
+                max={90}
+                placeholder="-90 .. 90"
+                onChange={(lat) => {
+                  const lng = addForm.getFieldValue("longitude");
+                  const radius = addForm.getFieldValue("radius");
+                  // trigger sinkron ke map
+                  addForm.setFieldsValue({ latitude: lat });
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="Longitude"
+              name="longitude"
+              rules={[
+                { required: true, message: "Longitude wajib diisi" },
+                {
+                  validator: (_, v) =>
+                    v >= -180 && v <= 180
+                      ? Promise.resolve()
+                      : Promise.reject("Longitude harus di -180..180"),
+                },
+              ]}
+            >
+              <InputNumber
+                className="w-full"
+                step={0.000001}
+                min={-180}
+                max={180}
+                placeholder="-180 .. 180"
+                onChange={(lng) => {
+                  const lat = addForm.getFieldValue("latitude");
+                  addForm.setFieldsValue({ longitude: lng });
+                }}
+              />
+            </Form.Item>
+          </div>
 
           {/* Peta OSM (Tambah) */}
           <Form.Item noStyle shouldUpdate>
@@ -396,7 +445,8 @@ export default function LokasiContent() {
 
               const lat = Number(latRaw ?? -8.65);
               const lng = Number(lngRaw ?? 115.21);
-              const radius = typeof rRaw === "number" ? rRaw : Number(rRaw ?? 50);
+              const radius =
+                typeof rRaw === "number" ? rRaw : Number(rRaw ?? 50);
 
               return (
                 <div className="mb-3">
@@ -416,7 +466,11 @@ export default function LokasiContent() {
           </Form.Item>
 
           <Form.Item label="Radius (meter)" name="radius">
-            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />
+            <InputNumber
+              className="w-full"
+              placeholder="Opsional, contoh: 50"
+              min={0}
+            />
           </Form.Item>
 
           <Button
@@ -472,13 +526,60 @@ export default function LokasiContent() {
             <Input placeholder="Contoh: OSS Bali Denpasar" />
           </Form.Item>
 
-          {/* HIDDEN fields untuk lat/lng */}
-          <Form.Item name="latitude" hidden>
-            <Input type="hidden" />
-          </Form.Item>
-          <Form.Item name="longitude" hidden>
-            <Input type="hidden" />
-          </Form.Item>
+          {/* Koordinat manual */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <Form.Item
+              label="Latitude"
+              name="latitude"
+              rules={[
+                { required: true, message: "Latitude wajib diisi" },
+                {
+                  validator: (_, v) =>
+                    v >= -90 && v <= 90
+                      ? Promise.resolve()
+                      : Promise.reject("Latitude harus di -90..90"),
+                },
+              ]}
+            >
+              <InputNumber
+                className="w-full"
+                step={0.000001}
+                min={-90}
+                max={90}
+                placeholder="-90 .. 90"
+                onChange={(lat) => {
+                  const lng = editForm.getFieldValue("longitude");
+                  editForm.setFieldsValue({ latitude: lat });
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label="Longitude"
+              name="longitude"
+              rules={[
+                { required: true, message: "Longitude wajib diisi" },
+                {
+                  validator: (_, v) =>
+                    v >= -180 && v <= 180
+                      ? Promise.resolve()
+                      : Promise.reject("Longitude harus di -180..180"),
+                },
+              ]}
+            >
+              <InputNumber
+                className="w-full"
+                step={0.000001}
+                min={-180}
+                max={180}
+                placeholder="-180 .. 180"
+                onChange={(lng) => {
+                  const lat = editForm.getFieldValue("latitude");
+                  editForm.setFieldsValue({ longitude: lng });
+                }}
+              />
+            </Form.Item>
+          </div>
 
           {/* Peta OSM (Edit) */}
           <Form.Item noStyle shouldUpdate>
@@ -489,7 +590,8 @@ export default function LokasiContent() {
 
               const lat = Number(latRaw ?? -8.65);
               const lng = Number(lngRaw ?? 115.21);
-              const radius = typeof rRaw === "number" ? rRaw : Number(rRaw ?? 50);
+              const radius =
+                typeof rRaw === "number" ? rRaw : Number(rRaw ?? 50);
 
               return (
                 <div className="mb-3">
@@ -509,7 +611,11 @@ export default function LokasiContent() {
           </Form.Item>
 
           <Form.Item label="Radius (meter)" name="radius">
-            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />
+            <InputNumber
+              className="w-full"
+              placeholder="Opsional, contoh: 50"
+              min={0}
+            />
           </Form.Item>
 
           <Button
@@ -532,7 +638,11 @@ export default function LokasiContent() {
           setCurrentRow(null);
         }}
         footer={null}
-        title={<div className="text-lg font-semibold text-red-600">Konfirmasi Hapus</div>}
+        title={
+          <div className="text-lg font-semibold text-red-600">
+            Konfirmasi Hapus
+          </div>
+        }
         destroyOnClose
       >
         <p className="text-gray-600 mb-4">
