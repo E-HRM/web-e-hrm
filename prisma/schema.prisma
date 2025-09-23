@@ -387,7 +387,7 @@ model User {
   divisi                    String?       @db.VarChar(100)
   id_jabatan                String?       @db.Char(36) // Relasi ke model Jabatan
   status_kerja              StatusKerja?
-  tanggal_mulai_bekerja     DateTime?     @db.Date
+  tanggal_mulai_bekerja     DateTime?     @db.Date //
   nomor_rekening            String?       @db.VarChar(50)
   jenis_bank                String?       @db.VarChar(50)
 
