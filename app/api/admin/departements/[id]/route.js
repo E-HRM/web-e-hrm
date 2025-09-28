@@ -24,9 +24,17 @@ export async function GET(_req, { params }) {
       select: {
         id_departement: true,
         nama_departement: true,
+        id_supervisor: true,
         created_at: true,
         updated_at: true,
         deleted_at: true,
+        supervisor: {
+          select: {
+            id_user: true,
+            nama_lengkap: true,
+            email: true,
+          },
+        },
       },
     });
     if (!data) return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
@@ -49,18 +57,44 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ message: 'departement tidak boleh kosong.' }, { status: 400 });
     }
 
+    let supervisorConnect;
+    if (body.id_supervisor !== undefined) {
+      const idSupervisor = String(body.id_supervisor).trim();
+      if (idSupervisor === '') {
+        supervisorConnect = null;
+      } else {
+        const supervisor = await db.user.findUnique({
+          where: { id_user: idSupervisor },
+          select: { id_user: true },
+        });
+        if (!supervisor) {
+          return NextResponse.json({ message: 'Supervisor tidak ditemukan.' }, { status: 404 });
+        }
+        supervisorConnect = idSupervisor;
+      }
+    }
+
     const updated = await db.departement.update({
       where: { id_departement: id },
       data: {
         ...(body.nama_departement !== undefined && { nama_departement: String(body.nama_departement).trim() }),
+        ...(body.id_supervisor !== undefined && { id_supervisor: supervisorConnect ?? null }),
       },
-      select: { id_departement: true, nama_departement: true, updated_at: true },
+      select: {
+        id_departement: true,
+        nama_departement: true,
+        id_supervisor: true,
+        updated_at: true,
+      },
     });
 
     return NextResponse.json({ message: 'Departement diperbarui.', data: updated });
   } catch (err) {
     if (err?.code === 'P2025') {
       return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
+    }
+    if (err?.code === 'P2002') {
+      return NextResponse.json({ message: 'Supervisor sudah terpasang pada departement lain.' }, { status: 409 });
     }
     console.error('PUT /departements/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
