@@ -30,7 +30,7 @@ import { useMemo, useState } from "react";
 import useLokasiViewModel from "./useLokasiViewModel";
 
 const { Title } = Typography;
-const BRAND = { accent: "#D9A96F" };
+const BRAND = { accent: "#003A6F" };
 
 // react-leaflet butuh DOM → matikan SSR
 const LocationPicker = dynamic(

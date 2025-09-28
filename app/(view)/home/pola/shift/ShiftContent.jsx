@@ -27,7 +27,7 @@ import { useEffect, useState } from "react";
 import dayjs from "dayjs";
 
 /* warna utama untuk tombol custom */
-const GOLD = "#D9A96F";
+const GOLD = "#003A6F";
 
 export default function ShiftContent() {
   const vm = UseShiftViewModel();

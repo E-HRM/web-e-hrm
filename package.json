@@ -11,6 +11,12 @@
   "dependencies": {
     "@ant-design/icons": "^5.6.1",
     "@ant-design/nextjs-registry": "^1.0.2",
+    "@fullcalendar/core": "^6.1.19",
+    "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/list": "^6.1.19",
+    "@fullcalendar/react": "^6.1.19",
+    "@fullcalendar/timegrid": "^6.1.19",
     "@prisma/client": "^6.10.1",
     "@supabase/supabase-js": "^2.56.0",
     "bcrypt": "^6.0.0",

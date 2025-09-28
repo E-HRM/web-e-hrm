@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   HomeOutlined,
   TeamOutlined,
@@ -13,16 +13,17 @@ import {
   EnvironmentOutlined,
   FieldTimeOutlined,
   ScheduleOutlined,
+  ProductOutlined,
 } from "@ant-design/icons";
 
 const MENU = [
-  { href: "/home/dashboard", label: "Home", icon: HomeOutlined },
+  { href: "/home/dashboard", label: "Dashboard", icon: ProductOutlined },
   { href: "/home/absensi", match: ["/home/absensi", "/absensi-karyawan"], label: "Absensi Karyawan", icon: CalendarOutlined },
-  { href: "/home/approve_absensi", match: ["/home/approve_absensi",], label: "Aprrove", icon: ScheduleOutlined },
+  { href: "/home/approve_absensi", match: ["/home/approve_absensi"], label: "Aprrove", icon: ScheduleOutlined },
   { href: "/home/kunjungan", match: ["/kunjungan", "/home/kunjungan"], label: "Kunjungan", icon: UserOutlined },
-  { href: "/pengajuan-cuti", match: ["/pengajuan-cuti", "/home/pengajuan-cuti"], label: "Pengajuan Cuti", icon: FileTextOutlined },
   { href: "/home/lokasi", match: ["/home/lokasi"], label: "Lokasi", icon: EnvironmentOutlined },
-    {
+
+  {
     key: "Pola Kerja",
     href: "/pola",
     match: ["/pola"],
@@ -38,14 +39,14 @@ const MENU = [
     key: "karyawan",
     href: "/karyawan",
     match: ["/karyawan"],
-    label: "Karyawan",
+    label: "Kelola Karyawan",
     icon: TeamOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/departement", match: ["/home/departement"], label: "Data Karyawan" },
-      { href: "/home/shift_schedule", match: ["/home/shift_schedule"], label: "Penjadwalan Shift" },
-      { href: "/karyawan/piket", match: ["/karyawan/piket"], label: "Jadwal Piket & Story" },
-      { href: "/karyawan/libur", match: ["/karyawan/libur"], label: "Pengajuan Hari Libur" },
+      { href: "/home/kelola_karyawan/departement", match: ["/home/kelola_karyawan/departement"], label: "Divisi" },
+      { href: "/home/kelola_karyawan/jabatan", match: ["/home/kelola_karyawan/jabatan"], label: "Jabatan" },
+      { href: "/home/kelola_karyawan/karyawan", match: ["/home/kelola_karyawan/karyawan"], label: "Karyawan" },
+      { href: "/home/kelola_karyawan/shift_schedule", match: ["/home/kelola_karyawan/shift_schedule"], label: "Penjadwalan Shift" },
     ],
   },
   {
@@ -59,27 +60,19 @@ const MENU = [
       { href: "/home/agenda/proyek", match: ["/home/agenda/proyek"], label: "Proyek" },
       { href: "/home/agenda/aktivitas", match: ["/home/agenda/aktivitas"], label: "Aktivitas" },
       { href: "/home/agenda/agenda_kerja", match: ["/home/agenda/agenda_kerja"], label: "Agenda Kerja" },
+      { href: "/home/agenda/agenda_calendar", match: ["/home/agenda/agenda_calendar"], label: "Kalender Agenda" },
     ],
   },
 ];
 
 const LS_OPEN_SECTIONS = "oss.sidebar.openSections";
+const LS_SCROLL_TOP = "oss.sidebar.scrollTop";
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [openSections, setOpenSections] = useState({});
+  const scrollRef = useRef(null);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(LS_OPEN_SECTIONS);
-      if (saved) setOpenSections(JSON.parse(saved));
-    } catch {}
-  }, []);
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_OPEN_SECTIONS, JSON.stringify(openSections));
-    } catch {}
-  }, [openSections]);
+  const [openSections, setOpenSections] = useState({}); // { [groupKey]: boolean }
 
   const isActive = (item) => {
     const prefixes = item.match?.length ? item.match : [item.href];
@@ -90,90 +83,124 @@ export default function Sidebar() {
     return prefixes.some((p) => pathname === p);
   };
 
+  // load awal: restore openSections; kalau belum ada → auto-open grup yang memuat route aktif
   useEffect(() => {
-    const groups = MENU.filter((m) => m.children?.length);
-    let needUpdate = false;
-    const next = { ...openSections };
-    groups.forEach((g) => {
-      const anyChildActive = g.children.some((c) => isActive(c));
-      if (anyChildActive && !next[g.key]) {
-        next[g.key] = true;
-        needUpdate = true;
+    try {
+      const saved = localStorage.getItem(LS_OPEN_SECTIONS);
+      if (saved) {
+        setOpenSections(JSON.parse(saved));
+        return;
       }
-    });
-    if (needUpdate) setOpenSections(next);
+      const groups = MENU.filter((m) => m.children?.length);
+      const init = {};
+      groups.forEach((g) => {
+        const anyChildActive = g.children.some((c) => isActive(c));
+        if (anyChildActive) init[g.key] = true;
+      });
+      setOpenSections(init);
+    } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, []);
 
-  // ===== tokens (ubah warna hover/active ke #D9A96F) =====
+  // simpan openSections setiap berubah
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_OPEN_SECTIONS, JSON.stringify(openSections));
+    } catch {}
+  }, [openSections]);
+
+  // restore & persist posisi scroll
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    try {
+      const saved = localStorage.getItem(LS_SCROLL_TOP);
+      if (saved) el.scrollTop = parseInt(saved, 10) || 0;
+    } catch {}
+    const onScroll = () => {
+      try {
+        localStorage.setItem(LS_SCROLL_TOP, String(el.scrollTop));
+      } catch {}
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // ===== tokens UI =====
   const baseItem =
-    "group flex items-center justify-between gap-3 mx-3 my-2 px-4 py-3 rounded-2xl text-white/80 transition w-[calc(100%-24px)] hover:!bg-[#155163] hover:!text-[#D9A96F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
-  const activeItem = "!bg-[#155163] !text-[#D9A96F]";
+    "group flex items-center justify-between gap-3 w-full px-4 py-3 rounded-lg text-white/80 transition-colors duration-200 hover:!bg-[#FFFFFF] hover:!text-[#003A6F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
+  const activeItem = "!bg-[#FFFFFF] !text-[#003A6F]";
   const subItem =
-    "group flex items-center gap-3 mx-3 mt-1 ml-7 px-3.5 py-2.5 rounded-xl text-white/85 transition hover:!bg-[#155163] hover:!text-[#D9A96F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
-  const subActive = "!bg-[#155163] !text-[#D9A96F]";
-  const iconCls = "text-[18px] leading-none";
-  const iconBox = "w-6 shrink-0 flex items-center justify-center";
-  const rightSlot = "w-3 flex items-center justify-center";
+    "group flex items-center gap-3 w-full pl-10 pr-4 py-2.5 rounded-lg text-white/80 transition-colors duration-200 hover:!bg-[#FFFFFF] hover:!text-[#003A6F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
+  const subActive = "!bg-[#FFFFFF] !text-[#003A6F]";
 
-  // Bullet sub menu — ikut emas saat hover/active
+  
+  const iconCls = "menu-icon text-xl leading-none";
+  const iconBox = "w-6 shrink-0 flex items-center justify-center";
+  const rightSlot = "w-4 flex items-center justify-center";
+
   const StripBullet = ({ active = false }) => (
     <span
       aria-hidden="true"
       className={[
-        "block w-3 h-[2px] rounded-full transition",
-        active ? "bg-[#D9A96F]" : "bg-white/70",
-        "group-hover:!bg-[#D9A96F]",
+        "block w-2 h-2 rounded-full transition-colors",
+        active ? "bg-[#003A6F]" : "bg-white/70",
+        "group-hover:!bg-[#003A6F]",
       ].join(" ")}
     />
   );
 
+  const toggleGroup = (key) => setOpenSections((s) => ({ ...s, [key]: !s[key] }));
+
   return (
-    <aside className="flex flex-col h-full bg-[#0A3848] text-white">
-      <nav className="flex-1 py-6">
+    <aside className="flex flex-col h-full bg-[#003A6F] text-white">
+      <nav ref={scrollRef} className="flex-1 py-4 px-3 sider-scroll overflow-y-auto">
         <ul className="space-y-1">
           {MENU.map((m) => {
             const Icon = m.icon;
 
             if (m.children?.length) {
               const key = m.key;
-              const anyChildActive = m.children.some((c) => isActive(c));
               const selfExactActive = isExactActive(m);
+              const anyChildActive = m.children.some((c) => isActive(c));
+              const displayOpen = (openSections[key] ?? anyChildActive) === true;
               const highlightParent = selfExactActive && !anyChildActive;
-              const opened = !!openSections[key] || anyChildActive;
 
               return (
                 <li key={m.href}>
                   <button
                     type="button"
-                    onClick={() => setOpenSections((s) => ({ ...s, [key]: !opened }))}
+                    onClick={() => toggleGroup(key)}
                     className={[baseItem, highlightParent ? activeItem : ""].join(" ")}
-                    aria-expanded={opened}
+                    aria-expanded={displayOpen}
+                    aria-controls={`submenu-${key}`}
                   >
-                    <span className="flex items-center gap-3">
+                    <span className="flex items-center gap-4">
                       <span className={iconBox}>
-                        <Icon className={[iconCls, "group-hover:!text-[#D9A96F]"].join(" ")} />
+                        {/* Parent icon: default 98D5FF; tetap 98D5FF saat expanded (diatur CSS) */}
+                        <Icon className={iconCls} />
                       </span>
-                      <span className="leading-none group-hover:!text-[#D9A96F]">{m.label}</span>
+                      <span className="leading-none transition-colors font-semibold">{m.label}</span>
                     </span>
                     <span className={rightSlot}>
                       <DownOutlined
                         className={[
-                          "text-xs opacity-80 transition-transform group-hover:!text-[#D9A96F]",
-                          opened ? "rotate-180 opacity-100" : "rotate-0",
-                          highlightParent ? "!text-[#D9A96F]" : "",
+                          "text-xs opacity-80 transition-all",
+                          displayOpen ? "rotate-180 opacity-100" : "rotate-0",
+                          highlightParent ? "!text-[#003A6F]" : "",
                         ].join(" ")}
                       />
                     </span>
                   </button>
 
                   <div
+                    id={`submenu-${key}`}
                     className={[
                       "overflow-hidden transition-[max-height] duration-200 ease-in-out",
-                      opened ? "max-h-96" : "max-h-0",
+                      displayOpen ? "max-h-96" : "max-h-0",
                     ].join(" ")}
                   >
-                    <ul className="mt-0">
+                    <ul className="pt-1 space-y-1">
                       {m.children.map((c) => {
                         const active = isActive(c);
                         return (
@@ -186,7 +213,7 @@ export default function Sidebar() {
                               <span className={iconBox}>
                                 <StripBullet active={active} />
                               </span>
-                              <span className="leading-none group-hover:!text-[#D9A96F]">{c.label}</span>
+                              <span className="leading-none transition-colors font-semibold">{c.label}</span>
                             </Link>
                           </li>
                         );
@@ -198,6 +225,7 @@ export default function Sidebar() {
             }
 
             const active = isActive(m);
+
             return (
               <li key={m.href}>
                 <Link
@@ -205,11 +233,11 @@ export default function Sidebar() {
                   className={[baseItem, active ? activeItem : ""].join(" ")}
                   aria-current={active ? "page" : undefined}
                 >
-                  <span className="flex items-center gap-3">
+                  <span className="flex items-center gap-4">
                     <span className={iconBox}>
-                      <Icon className={[iconCls, "group-hover:!text-[#D9A96F]"].join(" ")} />
+                      <m.icon className={iconCls} />
                     </span>
-                    <span className="leading-none group-hover:!text-[#D9A96F]">{m.label}</span>
+                    <span className="leading-none transition-colors font-semibold">{m.label}</span>
                   </span>
                   <span className={rightSlot} aria-hidden="true" />
                 </Link>

@@ -30,46 +30,44 @@ const { useBreakpoint } = Grid;
 
 const LS_COLLAPSED_KEY = "oss.sider.collapsed";
 
-/* ======= THEME GLOBAL ======= */
 const THEME = {
   token: {
-    colorPrimary: "#D9A96F",
+    colorPrimary: "#003A6F",
     colorPrimaryHover: "#C89B63",
     colorPrimaryActive: "#B98953",
-    colorLink: "#D9A96F",
+    colorLink: "#003A6F",
     colorLinkHover: "#C89B63",
     colorLinkActive: "#B98953",
     controlOutline: "rgba(217,169,111,0.25)",
   },
   components: {
     Button: {
-      defaultHoverBorderColor: "#D9A96F",
+      defaultHoverBorderColor: "#003A6F",
       defaultActiveBorderColor: "#B98953",
       primaryShadow: "0 0 0 2px rgba(217,169,111,0.18)",
       linkHoverBg: "rgba(217,169,111,0.08)",
     },
-    Input: { hoverBorderColor: "#D9A96F", activeBorderColor: "#D9A96F" },
+    Input: { hoverBorderColor: "#003A6F", activeBorderColor: "#003A6F" },
     Select: {
-      hoverBorderColor: "#D9A96F",
-      activeBorderColor: "#D9A96F",
+      hoverBorderColor: "#003A6F",
+      activeBorderColor: "#003A6F",
       optionSelectedBg: "rgba(217,169,111,0.10)",
       optionSelectedColor: "#3a2c17",
     },
-    Pagination: { itemActiveBg: "#D9A96F" },
+    Pagination: { itemActiveBg: "#003A6F" },
     Modal: { contentBg: "#ffffff" },
     Badge: {},
   },
 };
 
-/* ======= Komponen Lonceng Notifikasi ======= */
+/* ======= Notifikasi ======= */
 function NotificationBell() {
-  // Contoh data awal. Ganti dengan fetch dari API kamu (SWR) bila siap.
   const [items, setItems] = useState([
     {
       id: "n1",
       title: "Persetujuan Absensi",
       desc: "Andi mengajukan approval absensi masuk.",
-      time: new Date(Date.now() - 2 * 60 * 1000), // 2 menit lalu
+      time: new Date(Date.now() - 2 * 60 * 1000),
       read: false,
       type: "absensi",
     },
@@ -77,7 +75,7 @@ function NotificationBell() {
       id: "n2",
       title: "Perubahan Jadwal",
       desc: "Shift Rina (Rabu) diubah ke Pola A.",
-      time: new Date(Date.now() - 45 * 60 * 1000), // 45 menit lalu
+      time: new Date(Date.now() - 45 * 60 * 1000),
       read: false,
       type: "shift",
     },
@@ -85,7 +83,7 @@ function NotificationBell() {
       id: "n3",
       title: "Pengumuman",
       desc: "Maintenance sistem Jumat 21:00–22:00.",
-      time: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 jam lalu
+      time: new Date(Date.now() - 6 * 60 * 60 * 1000),
       read: true,
       type: "info",
     },
@@ -99,30 +97,18 @@ function NotificationBell() {
     if (diff < 3600) return `${Math.floor(diff / 60)}m lalu`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}j lalu`;
     return `${Math.floor(diff / 86400)}h lalu`;
-    // bebas ganti ke dayjs/plugin relativeTime
   };
 
-  const markAllRead = () =>
-    setItems((arr) => arr.map((it) => ({ ...it, read: true })));
-  const markOneRead = (id) =>
-    setItems((arr) =>
-      arr.map((it) => (it.id === id ? { ...it, read: true } : it))
-    );
+  const markAllRead = () => setItems((arr) => arr.map((it) => ({ ...it, read: true })));
+  const markOneRead = (id) => setItems((arr) => arr.map((it) => (it.id === id ? { ...it, read: true } : it)));
 
-  const filtered = (tabKey) => {
-    if (tabKey === "unread") return items.filter((i) => !i.read);
-    return items;
-  };
+  const filtered = (tabKey) => (tabKey === "unread" ? items.filter((i) => !i.read) : items);
 
   const renderItem = (it) => {
     const icon =
-      it.type === "absensi" ? (
-        <CheckCircleOutlined />
-      ) : it.type === "shift" ? (
-        <ExclamationCircleOutlined />
-      ) : (
-        <ClockCircleOutlined />
-      );
+      it.type === "absensi" ? <CheckCircleOutlined /> :
+      it.type === "shift" ? <ExclamationCircleOutlined /> :
+      <ClockCircleOutlined />;
 
     return (
       <button
@@ -145,62 +131,14 @@ function NotificationBell() {
             <div className="text-xs text-slate-600 line-clamp-2">{it.desc}</div>
             <div className="text-[11px] text-slate-400 mt-1">{formatRelTime(it.time)}</div>
           </div>
-          {!it.read && (
-            <span className="ml-auto mt-1 inline-block h-2 w-2 rounded-full bg-red-500" />
-          )}
+          {!it.read && <span className="ml-auto mt-1 inline-block h-2 w-2 rounded-full bg-red-500" />}
         </div>
       </button>
     );
   };
 
-  const dropdown = (
-    <div
-      className="rounded-2xl border border-slate-200 bg-white shadow-xl"
-      style={{ width: 360, overflow: "hidden" }}
-    >
-      <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-white/60 backdrop-blur">
-        <div>
-          <div className="font-semibold text-slate-800">Notifikasi</div>
-          <div className="text-xs text-slate-500">
-            {unreadCount} belum dibaca
-          </div>
-        </div>
-        <Button size="small" onClick={markAllRead}>
-          Tandai semua dibaca
-        </Button>
-      </div>
-
-      <div className="px-2 pt-2">
-        <Tabs
-          size="small"
-          items={[
-            { key: "all", label: "Semua" },
-            { key: "unread", label: "Belum Dibaca" },
-          ]}
-          renderTabBar={(props, DefaultTabBar) => (
-            <div className="px-1">
-              <DefaultTabBar {...props} />
-            </div>
-          )}
-          tabBarGutter={12}
-          animated
-          destroyInactiveTabPane
-          defaultActiveKey="all"
-          itemsRender={(node) => node} // silencer
-        >
-          {/* (Antd v5 tak pakai children di <Tabs> default.
-              Kita akan mapping manual di onChange, tapi mudahnya pakai state. ) */}
-        </Tabs>
-      </div>
-
-      {/* Konten tabs manual biar mudah */}
-      <TabContent items={filtered("all")} renderItem={renderItem} emptyText="Tidak ada notifikasi" />
-      {/* Untuk implementasi tab yang aktif, kita buat state */}
-    </div>
-  );
-
-  // Implementasi tabs aktif kecil
   const [activeKey, setActiveKey] = useState("all");
+
   const dropdownWithTabs = (
     <div
       className="rounded-2xl border border-slate-200 bg-white shadow-xl"
@@ -209,13 +147,9 @@ function NotificationBell() {
       <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-white/60 backdrop-blur">
         <div>
           <div className="font-semibold text-slate-800">Notifikasi</div>
-          <div className="text-xs text-slate-500">
-            {unreadCount} belum dibaca
-          </div>
+          <div className="text-xs text-slate-500">{unreadCount} belum dibaca</div>
         </div>
-        <Button size="small" onClick={markAllRead}>
-          Tandai semua dibaca
-        </Button>
+        <Button size="small" onClick={markAllRead}>Tandai semua dibaca</Button>
       </div>
 
       <div className="px-2 pt-2">
@@ -248,24 +182,14 @@ function NotificationBell() {
   );
 
   return (
-    <Dropdown
-      trigger={["click"]}
-      placement="bottomRight"
-      dropdownRender={() => dropdownWithTabs}
-      overlayStyle={{ padding: 0 }}
-    >
+    <Dropdown trigger={["click"]} placement="bottomRight" dropdownRender={() => dropdownWithTabs} overlayStyle={{ padding: 0 }}>
       <Badge
         count={unreadCount}
         overflowCount={99}
         offset={[-2, 2]}
         style={{ backgroundColor: "#ef4444", boxShadow: "0 0 0 1.5px #fff inset" }}
       >
-        <Button
-          type="text"
-          aria-label="Notifikasi"
-          icon={<BellOutlined />}
-          className="hover:!bg-amber-50"
-        />
+        <Button type="text" aria-label="Notifikasi" icon={<BellOutlined />} className="hover:!bg-amber-50" />
       </Badge>
     </Dropdown>
   );
@@ -275,10 +199,7 @@ function TabContent({ items, renderItem, emptyText }) {
   if (!items?.length) {
     return (
       <div className="px-4 py-8">
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<span className="text-slate-500 text-sm">{emptyText}</span>}
-        />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-slate-500 text-sm">{emptyText}</span>} />
       </div>
     );
   }
@@ -289,7 +210,7 @@ function TabContent({ items, renderItem, emptyText }) {
   );
 }
 
-/* ======= Layout Utama ======= */
+/* ======= Layout ======= */
 export default function ViewLayout({ children }) {
   const screens = useBreakpoint();
   const { onLogout } = useLogoutViewModel();
@@ -319,7 +240,7 @@ export default function ViewLayout({ children }) {
           theme="dark"
           trigger={null}
           style={{
-            backgroundColor: "#0A3848",
+            backgroundColor: "#003A6F",      
             height: "100vh",
             position: "sticky",
             top: 0,
@@ -329,7 +250,7 @@ export default function ViewLayout({ children }) {
             zIndex: 100,
           }}
         >
-          {/* HEADER SIDER — logo kiri sejajar menu */}
+          {/* HEADER SIDER */}
           <div
             style={{
               height: 64,
@@ -338,14 +259,15 @@ export default function ViewLayout({ children }) {
               justifyContent: "flex-start",
               paddingInline: 16,
               paddingLeft: 28,
-              borderBottom: "1px solid rgba(255,255,255,.15)",
+              backgroundColor: "transparent", 
+              borderBottom: "1px solid rgba(255,255,255,.18)",
               flexShrink: 0,
             }}
           >
             <Link href="/home/dashboard" className="block">
               <div className="relative h-8 w-[160px] shrink-0">
                 <Image
-                  src="/loogo.png"
+                  src="/loogo3.png"
                   alt="E-HRM"
                   fill
                   className="object-contain object-left"
@@ -355,9 +277,21 @@ export default function ViewLayout({ children }) {
             </Link>
           </div>
 
-          {/* area menu yang scroll; 64 = tinggi header di atas */}
-          <div className="h-[calc(100vh-64px)] overflow-y-auto sider-scroll pr-1">
-            <Sidebar />
+          {/* AREA MENU SCROLL */}
+          <div className="h-[calc(100vh-64px)] relative">
+            {/* fade hint atas & bawah (opsional, estetis) */}
+            <div
+              className="absolute inset-x-0 top-0 h-3 pointer-events-none"
+              style={{ background: "linear-gradient(180deg, rgba(0,74,159,0.6), rgba(0,74,159,0))" }}
+            />
+            <div
+              className="absolute inset-x-0 bottom-0 h-3 pointer-events-none"
+              style={{ background: "linear-gradient(0deg, rgba(0,74,159,0.6), rgba(0,74,159,0))" }}
+            />
+
+            <div className="h-full overflow-y-auto sider-scroll pr-1">
+              <Sidebar />
+            </div>
           </div>
         </Sider>
 
@@ -385,11 +319,8 @@ export default function ViewLayout({ children }) {
             />
 
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-              {/* Lonceng di sebelah kiri tulisan Admin */}
               <NotificationBell />
-
               <span className="hidden md:inline text-sm text-gray-600">Admin</span>
-
               <div className="relative w-8 h-8">
                 <Image
                   src="/logo-burung.png"
@@ -410,11 +341,13 @@ export default function ViewLayout({ children }) {
           </Header>
 
           <Content
+            className="content-scroll" // aktifkan scrollbar halus di konten panjang
             style={{
               background: "#F6F7F9",
               padding: screens.md ? 24 : 16,
               flex: 1,
               minHeight: 0,
+              overflowY: "auto",
             }}
           >
             {children}

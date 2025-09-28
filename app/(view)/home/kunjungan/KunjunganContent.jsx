@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Row, Col, Input, Select, Button, Space, Tooltip, Card, Empty } from "antd";
 import { AppstoreOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import DepartmentCard from "../../../components/card/DepartementCard"; // re-use
-import { useDepartementViewModel } from "../departement/useDepartementViewModel";
+import { useDepartementViewModel } from "../kelola_karyawan/departement/useDepartementViewModel";
 
 export default function KunjunganContent() {
   const router = useRouter();

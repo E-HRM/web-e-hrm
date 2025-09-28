@@ -9,7 +9,40 @@ body{ background:var(--background); color:var(--foreground); font-family:Arial, 
 
 /* Tailwind hover */
 .ant-layout-sider a { color: inherit !important; text-decoration: none; }
-.ant-layout-sider .anticon { color: inherit !important; }
+
+/* Hapus aturan ini agar ikon menu tidak ikut color:inherit */
+/* .ant-layout-sider .anticon { color: inherit !important; } */
+
+/* ====== WARNA IKON MENU ======
+   default: 98D5FF
+   hover (parent/leaf): 004A9F
+   leaf active (aria-current): 004A9F
+   parent expanded: tetap 98D5FF (kecuali di-hover)
+============================================================== */
+.ant-layout-sider .anticon.menu-icon {
+  color: #98D5FF !important;
+  transition: color .2s ease;
+}
+
+/* Hover pada container item (punya class .group) */
+.ant-layout-sider .group:hover .anticon.menu-icon {
+  color: #004A9F !important;
+}
+
+/* Leaf aktif */
+.ant-layout-sider a[aria-current="page"] .anticon.menu-icon {
+  color: #004A9F !important;
+}
+
+/* Parent expanded: ikon tetap 98D5FR */
+.ant-layout-sider button[aria-expanded="true"] .anticon.menu-icon {
+  color: #98D5FF !important;
+}
+
+/* Parent expanded & di-hover: jadi 004A9F */
+.ant-layout-sider button[aria-expanded="true"].group:hover .anticon.menu-icon {
+  color: #004A9F !important;
+}
 
 /* Scrollbar */
 /* Sider: track transparan, thumb semi-putih */
@@ -23,11 +56,13 @@ body{ background:var(--background); color:var(--foreground); font-family:Arial, 
 .sider-scroll::-webkit-scrollbar-track{ background: transparent; }
 .sider-scroll::-webkit-scrollbar-thumb{
   background-color: rgba(255,255,255,.35);
-  border-radius: 9999px;
-  border: 2px solid transparent;       /* efek “floating” */
+  border-radius: 9999px;               /* efek “floating” */
+  border: 2px solid transparent;
   background-clip: padding-box;
 }
-.sider-scroll::-webkit-scrollbar-thumb:hover{ background-color: rgba(255,255,255,.55); }
+.sider-scroll::-webkit-scrollbar-thumb:hover{
+  background-color: rgba(255,255,255,.55);
+}
 
 /* Content: thumb abu tipis, track transparan */
 .content-scroll{
@@ -68,8 +103,8 @@ body{ background:var(--background); color:var(--foreground); font-family:Arial, 
 /* ====== Pagination: angka jelas di kotak kuning ====== */
 .ant-pagination .ant-pagination-item a { color: #334155; }              /* item biasa */
 .ant-pagination .ant-pagination-item-active {
-  background-color: #D9A96F !important;
-  border-color: #D9A96F !important;
+  background-color: #003A6F !important;
+  border-color: #003A6F !important;
 }
 .ant-pagination .ant-pagination-item-active a {
   color: #ffffff !important;                                              /* angka putih */
