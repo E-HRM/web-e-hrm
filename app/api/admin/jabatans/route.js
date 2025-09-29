@@ -3,6 +3,9 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
+// Helper: ubah undefined => {defined:false}
+// "" (string kosong) => {defined:true, value:null}
+// lainnya => {defined:true, value:trimmed}
 function normalizeNullableString(value) {
   if (value === undefined) return { defined: false };
   const trimmed = String(value).trim();
@@ -29,13 +32,19 @@ export async function GET(req) {
 
   try {
     const { searchParams } = new URL(req.url);
+
     const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
     const search = (searchParams.get('search') || '').trim();
     const includeDeleted = searchParams.get('includeDeleted') === '1';
     const departementIdParam = (searchParams.get('departementId') || '').trim();
     const parentIdParam = (searchParams.get('parentId') || '').trim();
-    const orderBy = searchParams.get('orderBy') || 'created_at';
+
+    // Whitelist kolom orderBy agar aman
+    const allowedOrder = new Set(['created_at', 'updated_at', 'nama_jabatan', 'id_departement', 'id_induk_jabatan', 'deleted_at']);
+    const rawOrderBy = (searchParams.get('orderBy') || 'created_at').trim();
+    const orderBy = allowedOrder.has(rawOrderBy) ? rawOrderBy : 'created_at';
+
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
     const where = {
@@ -76,15 +85,13 @@ export async function GET(req) {
       }),
     ]);
 
+    // Hitung jumlah user aktif per jabatan
     const ids = data.map((item) => item.id_jabatan);
     let userCounts = {};
     if (ids.length > 0) {
       const counts = await db.user.groupBy({
         by: ['id_jabatan'],
-        where: {
-          id_jabatan: { in: ids },
-          deleted_at: null,
-        },
+        where: { id_jabatan: { in: ids }, deleted_at: null },
         _count: { _all: true },
       });
       userCounts = Object.fromEntries(counts.map((c) => [c.id_jabatan, c._count._all]));
@@ -105,19 +112,27 @@ export async function GET(req) {
   }
 }
 
+// CATATAN:
+// - id_induk_jabatan TIDAK WAJIB di body POST.
+//   * Tidak dikirim (undefined) => tidak diset.
+//   * Dikirim "" => disimpan sebagai NULL.
+//   * Dikirim nilai (UUID) => divalidasi harus ada di tabel jabatan.
 export async function POST(req) {
   const ok = await ensureAuth(req);
   if (ok instanceof NextResponse) return ok;
 
   try {
     const body = await req.json();
+
+    // Validasi wajib hanya untuk nama_jabatan
     if (!body.nama_jabatan || String(body.nama_jabatan).trim() === '') {
       return NextResponse.json({ message: "Field 'nama_jabatan' wajib diisi." }, { status: 400 });
     }
 
     const departementId = normalizeNullableString(body.id_departement);
-    const parentId = normalizeNullableString(body.id_induk_jabatan);
+    const parentId = normalizeNullableString(body.id_induk_jabatan); // OPSIONAL
 
+    // Validasi foreign key departement bila DIISI
     if (departementId.defined && departementId.value) {
       const departement = await db.departement.findUnique({
         where: { id_departement: departementId.value },
@@ -128,6 +143,7 @@ export async function POST(req) {
       }
     }
 
+    // Validasi induk jabatan bila DIISI (opsional)
     if (parentId.defined && parentId.value) {
       const parent = await db.jabatan.findUnique({
         where: { id_jabatan: parentId.value },
@@ -141,8 +157,9 @@ export async function POST(req) {
     const created = await db.jabatan.create({
       data: {
         nama_jabatan: String(body.nama_jabatan).trim(),
+        // Jika field DIKIRIM: set ke value (termasuk null). Jika tidak dikirim: tidak diset.
         ...(departementId.defined && { id_departement: departementId.value }),
-        ...(parentId.defined && { id_induk_jabatan: parentId.value }),
+        ...(parentId.defined && { id_induk_jabatan: parentId.value }), // <- boleh null
       },
       select: {
         id_jabatan: true,
