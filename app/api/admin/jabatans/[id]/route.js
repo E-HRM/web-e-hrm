@@ -23,7 +23,30 @@ async function ensureAuth(req) {
   return true;
 }
 
-export async function GET(_req, { params }) {
+// Cegah siklus: tidak boleh set induk ke dirinya sendiri atau ke salah satu turunannya.
+async function assertNoCycle(newParentId, selfId) {
+  if (!newParentId) return;
+  if (newParentId === selfId) throw new Error('CYCLE_SELF'); // langsung dilarang
+
+  let cursor = newParentId;
+  const seen = new Set([selfId]); // jika ketemu self => siklus
+  // batasi langkah agar aman dari loop tak berujung
+  for (let i = 0; i < 50 && cursor; i++) {
+    if (seen.has(cursor)) throw new Error('CYCLE_DETECTED');
+    seen.add(cursor);
+    const node = await db.jabatan.findUnique({
+      where: { id_jabatan: cursor },
+      select: { id_induk_jabatan: true },
+    });
+    if (!node) break; // parent hilang: validasi eksistensi ditangani terpisah
+    cursor = node.id_induk_jabatan;
+  }
+}
+
+export async function GET(req, { params }) {
+  const ok = await ensureAuth(req);
+  if (ok instanceof NextResponse) return ok;
+
   try {
     const { id } = params;
     const data = await db.jabatan.findUnique({
@@ -55,7 +78,11 @@ export async function GET(_req, { params }) {
       return NextResponse.json({ message: 'Jabatan tidak ditemukan' }, { status: 404 });
     }
 
-    return NextResponse.json({ data });
+    const users_active_count = await db.user.count({
+      where: { id_jabatan: id, deleted_at: null },
+    });
+
+    return NextResponse.json({ data: { ...data, users_active_count } });
   } catch (err) {
     console.error('GET /jabatans/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
@@ -77,10 +104,12 @@ export async function PUT(req, { params }) {
     const departementId = normalizeNullableString(body.id_departement);
     const parentId = normalizeNullableString(body.id_induk_jabatan);
 
+    // Larang self-parent
     if (parentId.defined && parentId.value === id) {
       return NextResponse.json({ message: 'Induk jabatan tidak boleh sama dengan jabatan itu sendiri.' }, { status: 400 });
     }
 
+    // Validasi eksistensi departement jika DIISI (bukan null)
     if (departementId.defined && departementId.value) {
       const departement = await db.departement.findUnique({
         where: { id_departement: departementId.value },
@@ -91,6 +120,7 @@ export async function PUT(req, { params }) {
       }
     }
 
+    // Validasi eksistensi parent jika DIISI (bukan null)
     if (parentId.defined && parentId.value) {
       const parent = await db.jabatan.findUnique({
         where: { id_jabatan: parentId.value },
@@ -99,14 +129,16 @@ export async function PUT(req, { params }) {
       if (!parent) {
         return NextResponse.json({ message: 'Induk jabatan tidak ditemukan.' }, { status: 404 });
       }
+      // Cek siklus lebih dalam (parent tidak boleh keturunan dari id)
+      await assertNoCycle(parentId.value, id);
     }
 
     const updated = await db.jabatan.update({
       where: { id_jabatan: id },
       data: {
         ...(body.nama_jabatan !== undefined && { nama_jabatan: String(body.nama_jabatan).trim() }),
-        ...(departementId.defined && { id_departement: departementId.value }),
-        ...(parentId.defined && { id_induk_jabatan: parentId.value }),
+        ...(departementId.defined && { id_departement: departementId.value }), // bisa null
+        ...(parentId.defined && { id_induk_jabatan: parentId.value }), // bisa null
       },
       select: {
         id_jabatan: true,
@@ -119,6 +151,9 @@ export async function PUT(req, { params }) {
 
     return NextResponse.json({ message: 'Jabatan diperbarui.', data: updated });
   } catch (err) {
+    if (err?.message === 'CYCLE_SELF' || err?.message === 'CYCLE_DETECTED') {
+      return NextResponse.json({ message: 'Pengaturan induk jabatan menimbulkan siklus hierarki.' }, { status: 400 });
+    }
     if (err?.code === 'P2025') {
       return NextResponse.json({ message: 'Jabatan tidak ditemukan' }, { status: 404 });
     }
@@ -133,18 +168,33 @@ export async function DELETE(req, { params }) {
 
   try {
     const { id } = params;
+    const { searchParams } = new URL(req.url);
+    const hard = searchParams.get('hard') === '1' || searchParams.get('force') === '1';
 
-    const exists = await db.jabatan.findUnique({
+    const existing = await db.jabatan.findUnique({
       where: { id_jabatan: id },
-      select: { id_jabatan: true },
+      select: { id_jabatan: true, deleted_at: true },
     });
-    if (!exists) {
+    if (!existing) {
       return NextResponse.json({ message: 'Jabatan tidak ditemukan' }, { status: 404 });
     }
 
-    await db.jabatan.delete({ where: { id_jabatan: id } });
+    if (!hard) {
+      // Soft delete (idempoten)
+      if (existing.deleted_at) {
+        return NextResponse.json({ message: 'Jabatan sudah dihapus.' });
+      }
+      const soft = await db.jabatan.update({
+        where: { id_jabatan: id },
+        data: { deleted_at: new Date() },
+        select: { id_jabatan: true, deleted_at: true },
+      });
+      return NextResponse.json({ message: 'Jabatan dihapus (soft delete).', data: soft });
+    }
 
-    return NextResponse.json({ message: 'Jabatan dihapus.' });
+    // Hard delete (bisa gagal bila FK masih refer ke jabatan ini)
+    await db.jabatan.delete({ where: { id_jabatan: id } });
+    return NextResponse.json({ message: 'Jabatan dihapus permanen.' });
   } catch (err) {
     if (err?.code === 'P2003') {
       return NextResponse.json({ message: 'Gagal menghapus: jabatan masih direferensikan oleh entitas lain.' }, { status: 409 });

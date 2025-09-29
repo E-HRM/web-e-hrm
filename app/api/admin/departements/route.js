@@ -26,20 +26,31 @@ export async function GET(req) {
     const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
     const search = (searchParams.get('search') || '').trim();
     const includeDeleted = searchParams.get('includeDeleted') === '1';
-    const orderBy = searchParams.get('orderBy') || 'created_at';
+
+    // sanitize orderBy + sort
+    const rawOrderBy = (searchParams.get('orderBy') || 'created_at').trim().toLowerCase();
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    // hanya kolom yang valid untuk Prisma
+    const allowedOrderFields = new Set(['created_at', 'updated_at', 'nama_departement']);
+    // alias dari UI lama
+    const orderAliasMap = { name: 'nama_departement' };
+
+    let orderByField = allowedOrderFields.has(rawOrderBy) ? rawOrderBy : allowedOrderFields.has(orderAliasMap[rawOrderBy]) ? orderAliasMap[rawOrderBy] : 'created_at';
+
+    // kalau minta "members", urutkan nanti setelah enrichment
+    const sortByMembers = rawOrderBy === 'members';
 
     const where = {
       ...(includeDeleted ? {} : { deleted_at: null }),
       ...(search ? { nama_departement: { contains: search, mode: 'insensitive' } } : {}),
     };
 
-    // Ambil total departement & page data dulu
-    const [total, data] = await Promise.all([
+    const [total, pageData] = await Promise.all([
       db.departement.count({ where }),
       db.departement.findMany({
         where,
-        orderBy: { [orderBy]: sort },
+        orderBy: sortByMembers ? { created_at: 'desc' } : { [orderByField]: sort }, // safe
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
@@ -50,63 +61,56 @@ export async function GET(req) {
           updated_at: true,
           deleted_at: true,
           supervisor: {
-            select: {
-              id_user: true,
-              nama_lengkap: true,
-              email: true,
-            },
+            select: { id_user: true, nama_lengkap: true, email: true },
           },
         },
       }),
     ]);
 
-    // Kumpulkan id departement pada halaman ini
-    const ids = data.map((d) => d.id_departement);
+    const ids = pageData.map((d) => d.id_departement);
+
     let activeCountsMap = {};
     let totalCountsMap = {};
 
     if (ids.length > 0) {
-      // Hitung user aktif (deleted_at = null)
-      const activeCounts = await db.user.groupBy({
-        by: ['id_departement'],
-        where: {
-          id_departement: { in: ids },
-          deleted_at: null,
-        },
-        _count: { _all: true },
-      });
-
-      // Hitung total user (termasuk yang deleted)
-      const totalCounts = await db.user.groupBy({
-        by: ['id_departement'],
-        where: {
-          id_departement: { in: ids },
-        },
-        _count: { _all: true },
-      });
+      const [activeCounts, totalCounts] = await Promise.all([
+        db.user.groupBy({
+          by: ['id_departement'],
+          where: { id_departement: { in: ids }, deleted_at: null },
+          _count: { _all: true },
+        }),
+        db.user.groupBy({
+          by: ['id_departement'],
+          where: { id_departement: { in: ids } },
+          _count: { _all: true },
+        }),
+      ]);
 
       activeCountsMap = Object.fromEntries(activeCounts.map((r) => [r.id_departement, r._count._all]));
       totalCountsMap = Object.fromEntries(totalCounts.map((r) => [r.id_departement, r._count._all]));
     }
 
-    // Tambahkan field count ke setiap item
-    const enriched = data.map((d) => ({
+    let enriched = pageData.map((d) => ({
       ...d,
       users_active_count: activeCountsMap[d.id_departement] ?? 0,
       users_total_count: totalCountsMap[d.id_departement] ?? 0,
     }));
+
+    // jika minta urut "members"
+    if (sortByMembers) {
+      enriched.sort((a, b) => (sort === 'asc' ? a.users_active_count - b.users_active_count : b.users_active_count - a.users_active_count));
+    }
 
     return NextResponse.json({
       data: enriched,
       pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     });
   } catch (err) {
-    console.error('GET /departements error:', err);
+    console.error('GET /departements error:', err?.code || err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
-// POST tetap sama seperti punyamu
 export async function POST(req) {
   const ok = await ensureAuth(req);
   if (ok instanceof NextResponse) return ok;
@@ -152,7 +156,7 @@ export async function POST(req) {
     if (err?.code === 'P2002') {
       return NextResponse.json({ message: 'Supervisor sudah terpasang pada departement lain.' }, { status: 409 });
     }
-    console.error('POST /departements error:', err);
+    console.error('POST /departements error:', err?.code || err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
