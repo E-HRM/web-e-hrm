@@ -1,3 +1,4 @@
+// app/api/admin/departements/route.js
 import { NextResponse } from 'next/server';
 import db from '../../../../lib/prisma';
 import { verifyAuthToken } from '../../../../lib/jwt';
@@ -31,14 +32,12 @@ export async function GET(req) {
     const rawOrderBy = (searchParams.get('orderBy') || 'created_at').trim().toLowerCase();
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-    // hanya kolom yang valid untuk Prisma
     const allowedOrderFields = new Set(['created_at', 'updated_at', 'nama_departement']);
-    // alias dari UI lama
     const orderAliasMap = { name: 'nama_departement' };
 
     let orderByField = allowedOrderFields.has(rawOrderBy) ? rawOrderBy : allowedOrderFields.has(orderAliasMap[rawOrderBy]) ? orderAliasMap[rawOrderBy] : 'created_at';
 
-    // kalau minta "members", urutkan nanti setelah enrichment
+    // jika minta "members", urutkan setelah enrichment
     const sortByMembers = rawOrderBy === 'members';
 
     const where = {
@@ -50,7 +49,7 @@ export async function GET(req) {
       db.departement.count({ where }),
       db.departement.findMany({
         where,
-        orderBy: sortByMembers ? { created_at: 'desc' } : { [orderByField]: sort }, // safe
+        orderBy: sortByMembers ? { created_at: 'desc' } : { [orderByField]: sort },
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
@@ -61,7 +60,7 @@ export async function GET(req) {
           updated_at: true,
           deleted_at: true,
           supervisor: {
-            select: { id_user: true, nama_lengkap: true, email: true },
+            select: { id_user: true, nama_pengguna: true, email: true },
           },
         },
       }),
@@ -90,13 +89,21 @@ export async function GET(req) {
       totalCountsMap = Object.fromEntries(totalCounts.map((r) => [r.id_departement, r._count._all]));
     }
 
+    // alias supervisor.nama_pengguna -> supervisor.nama_lengkap
     let enriched = pageData.map((d) => ({
       ...d,
+      supervisor: d.supervisor
+        ? {
+            id_user: d.supervisor.id_user,
+            email: d.supervisor.email,
+            nama_lengkap: d.supervisor.nama_pengguna,
+            nama_pengguna: d.supervisor.nama_pengguna,
+          }
+        : null,
       users_active_count: activeCountsMap[d.id_departement] ?? 0,
       users_total_count: totalCountsMap[d.id_departement] ?? 0,
     }));
 
-    // jika minta urut "members"
     if (sortByMembers) {
       enriched.sort((a, b) => (sort === 'asc' ? a.users_active_count - b.users_active_count : b.users_active_count - a.users_active_count));
     }
@@ -125,7 +132,7 @@ export async function POST(req) {
     if (body.id_supervisor !== undefined) {
       const idSupervisor = String(body.id_supervisor).trim();
       if (idSupervisor === '') {
-        supervisorConnect = null;
+        supervisorConnect = null; // eksplisit lepas supervisor
       } else {
         const supervisor = await db.user.findUnique({
           where: { id_user: idSupervisor },
