@@ -31,33 +31,33 @@ const { Title } = Typography;
 
 const THEME = {
   token: {
-    colorPrimary: "#D9A96F",
+    colorPrimary: "#003A6F",
     colorPrimaryHover: "#C89B63",
     colorPrimaryActive: "#B98953",
-    colorLink: "#D9A96F",
+    colorLink: "#003A6F",
     colorLinkHover: "#C89B63",
     colorLinkActive: "#B98953",
     controlOutline: "rgba(217,169,111,0.25)",
   },
   components: {
     Button: {
-      defaultHoverBorderColor: "#D9A96F",
+      defaultHoverBorderColor: "#003A6F",
       defaultActiveBorderColor: "#B98953",
       primaryShadow: "0 0 0 2px rgba(217,169,111,0.18)",
       linkHoverBg: "rgba(217,169,111,0.08)",
     },
     Input: {
-      hoverBorderColor: "#D9A96F",
-      activeBorderColor: "#D9A96F",
+      hoverBorderColor: "#003A6F",
+      activeBorderColor: "#003A6F",
     },
     Select: {
-      hoverBorderColor: "#D9A96F",
-      activeBorderColor: "#D9A96F",
+      hoverBorderColor: "#003A6F",
+      activeBorderColor: "#003A6F",
       optionSelectedBg: "rgba(217,169,111,0.10)",
       optionSelectedColor: "#3a2c17",
     },
     Pagination: {
-      itemActiveBg: "#D9A96F",
+      itemActiveBg: "#003A6F",
     },
   },
 };

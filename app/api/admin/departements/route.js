@@ -45,9 +45,17 @@ export async function GET(req) {
         select: {
           id_departement: true,
           nama_departement: true,
+          id_supervisor: true,
           created_at: true,
           updated_at: true,
           deleted_at: true,
+          supervisor: {
+            select: {
+              id_user: true,
+              nama_lengkap: true,
+              email: true,
+            },
+          },
         },
       }),
     ]);
@@ -109,13 +117,41 @@ export async function POST(req) {
       return NextResponse.json({ message: "Field 'nama_departement' wajib diisi." }, { status: 400 });
     }
 
+    let supervisorConnect = undefined;
+    if (body.id_supervisor !== undefined) {
+      const idSupervisor = String(body.id_supervisor).trim();
+      if (idSupervisor === '') {
+        supervisorConnect = null;
+      } else {
+        const supervisor = await db.user.findUnique({
+          where: { id_user: idSupervisor },
+          select: { id_user: true },
+        });
+        if (!supervisor) {
+          return NextResponse.json({ message: 'Supervisor tidak ditemukan.' }, { status: 404 });
+        }
+        supervisorConnect = idSupervisor;
+      }
+    }
+
     const created = await db.departement.create({
-      data: { nama_departement: String(body.nama_departement).trim() },
-      select: { id_departement: true, nama_departement: true, created_at: true },
+      data: {
+        nama_departement: String(body.nama_departement).trim(),
+        ...(supervisorConnect !== undefined && { id_supervisor: supervisorConnect }),
+      },
+      select: {
+        id_departement: true,
+        nama_departement: true,
+        id_supervisor: true,
+        created_at: true,
+      },
     });
 
     return NextResponse.json({ message: 'Departement dibuat.', data: created }, { status: 201 });
   } catch (err) {
+    if (err?.code === 'P2002') {
+      return NextResponse.json({ message: 'Supervisor sudah terpasang pada departement lain.' }, { status: 409 });
+    }
     console.error('POST /departements error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }

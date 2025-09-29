@@ -12,13 +12,16 @@ const API_REGISTER = "/api/mobile/auth/register";
 const API_AGENDA = "/api/mobile/agenda";
 const API_AGENDA_KERJA = "/api/mobile/agenda-kerja";
 
+// === NEW: Jabatan
+const API_JABATAN = "/api/admin/jabatans";
+
 // POLA & SHIFT KERJA
 const API_POLA_KERJA = "/api/admin/pola-kerja";
 const API_SHIFT_KERJA = "/api/admin/shift-kerja";
 
 // === NEW: Absensi (records harian) & Approvals (persetujuan kehadiran)
-const API_ABSENSI_RECORDS = "/api/admin/absensi/history";      // GET ?date=YYYY-MM-DD&type=in|out&divisi=&status=&q=
-const API_ABSENSI_APPROVALS = "/api/admin/absensi/";   // GET list, PATCH /[id]
+const API_ABSENSI_RECORDS = "/api/admin/absensi/history"; // GET ?date=YYYY-MM-DD&type=in|out&divisi=&status=&q=
+const API_ABSENSI_APPROVALS = "/api/admin/absensi";       // tanpa trailing slash
 
 export const ApiEndpoints = {
   // Location
@@ -61,6 +64,13 @@ export const ApiEndpoints = {
   UpdateAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,
   DeleteAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,
 
+  // Jabatan
+  GetJabatan: API_JABATAN,
+  CreateJabatan: API_JABATAN,
+  GetJabatanById: (id) => `${API_JABATAN}/${id}`,
+  UpdateJabatan: (id) => `${API_JABATAN}/${id}`,
+  DeleteJabatan: (id) => `${API_JABATAN}/${id}`,
+
   // Pola Kerja
   GetPolaKerja: API_POLA_KERJA,
   CreatePolaKerja: API_POLA_KERJA,
@@ -75,17 +85,16 @@ export const ApiEndpoints = {
   UpdateShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
   DeleteShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
 
-  // === Absensi (baru)
-  // List catatan absensi (kedatangan/kepulangan) siap tampil
+  // Absensi
   GetAbsensiRecords: (qsObj = {}) => {
     const qs = new URLSearchParams(qsObj);
-    return `${API_ABSENSI_RECORDS}?${qs.toString()}`;
+    const s = qs.toString();
+    return s ? `${API_ABSENSI_RECORDS}?${s}` : API_ABSENSI_RECORDS;
   },
-
-  // Approvals / persetujuan kehadiran
   GetAbsensiApprovals: (qsObj = {}) => {
     const qs = new URLSearchParams(qsObj);
-    return `${API_ABSENSI_APPROVALS}?${qs.toString()}`;
+    const s = qs.toString();
+    return s ? `${API_ABSENSI_APPROVALS}?${s}` : API_ABSENSI_APPROVALS;
   },
   UpdateAbsensiApproval: (id) => `${API_ABSENSI_APPROVALS}/${id}`,
 };
