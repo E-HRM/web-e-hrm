@@ -1,3 +1,4 @@
+// app/api/admin/departements/[id]/route.js
 import { NextResponse } from 'next/server';
 import db from '../../../../../lib/prisma';
 import { verifyAuthToken } from '../../../../../lib/jwt';
@@ -22,7 +23,7 @@ export async function GET(req, { params }) {
 
   try {
     const { id } = params;
-    const data = await db.departement.findUnique({
+    const row = await db.departement.findUnique({
       where: { id_departement: id },
       select: {
         id_departement: true,
@@ -32,11 +33,28 @@ export async function GET(req, { params }) {
         updated_at: true,
         deleted_at: true,
         supervisor: {
-          select: { id_user: true, nama_lengkap: true, email: true },
+          select: { id_user: true, nama_pengguna: true, email: true },
         },
       },
     });
-    if (!data) return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
+
+    if (!row) {
+      return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
+    }
+
+    // Alias nama_pengguna -> nama_lengkap untuk kompatibilitas FE
+    const data = {
+      ...row,
+      supervisor: row.supervisor
+        ? {
+            id_user: row.supervisor.id_user,
+            email: row.supervisor.email,
+            nama_lengkap: row.supervisor.nama_pengguna,
+            nama_pengguna: row.supervisor.nama_pengguna,
+          }
+        : null,
+    };
+
     return NextResponse.json({ data });
   } catch (err) {
     console.error('GET /departements/[id] error:', err?.code || err);
@@ -60,7 +78,7 @@ export async function PUT(req, { params }) {
     if (body.id_supervisor !== undefined) {
       const idSupervisor = String(body.id_supervisor).trim();
       if (idSupervisor === '') {
-        supervisorConnect = null;
+        supervisorConnect = null; // lepas supervisor
       } else {
         const supervisor = await db.user.findUnique({
           where: { id_user: idSupervisor },
@@ -76,7 +94,9 @@ export async function PUT(req, { params }) {
     const updated = await db.departement.update({
       where: { id_departement: id },
       data: {
-        ...(body.nama_departement !== undefined && { nama_departement: String(body.nama_departement).trim() }),
+        ...(body.nama_departement !== undefined && {
+          nama_departement: String(body.nama_departement).trim(),
+        }),
         ...(body.id_supervisor !== undefined && { id_supervisor: supervisorConnect ?? null }),
       },
       select: {
@@ -109,22 +129,24 @@ export async function DELETE(req, { params }) {
 
     const exists = await db.departement.findUnique({
       where: { id_departement: id },
-      select: { id_departement: true },
+      select: { id_departement: true, deleted_at: true },
     });
     if (!exists) {
       return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
     }
+    if (exists.deleted_at) {
+      // sudah soft-deleted -> idempotent sukses
+      return NextResponse.json({ message: 'Departement sudah dihapus.' });
+    }
 
-    await db.departement.delete({ where: { id_departement: id } });
+    // Soft delete
+    await db.departement.update({
+      where: { id_departement: id },
+      data: { deleted_at: new Date() },
+    });
 
     return NextResponse.json({ message: 'Departement dihapus.' });
   } catch (err) {
-    if (err?.code === 'P2003') {
-      return NextResponse.json({ message: 'Gagal menghapus: masih direferensikan oleh entitas lain. Ubah relasi (onDelete: SetNull) atau re-assign terlebih dulu.' }, { status: 409 });
-    }
-    if (err?.code === 'P2025') {
-      return NextResponse.json({ message: 'Departement tidak ditemukan' }, { status: 404 });
-    }
     console.error('DELETE /departements/[id] error:', err?.code || err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
