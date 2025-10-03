@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import {
   Card,
   Table,
@@ -16,10 +17,10 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  ReloadOutlined,
   SearchOutlined,
   EditOutlined,
   DeleteOutlined,
+  ApartmentOutlined, // <— ikon visualisasi
 } from "@ant-design/icons";
 import useJabatanViewModel from "./useJabatanViewModel";
 
@@ -33,18 +34,6 @@ export default function JabatanContent() {
       title: "Jabatan",
       dataIndex: "nama_jabatan",
       key: "nama_jabatan",
-      render: (text, row) => (
-        <div>
-          <div className="font-medium text-slate-800">{text}</div>
-          {row.induk?.nama_jabatan ? (
-            <div className="text-xs text-slate-500">
-              Induk: {row.induk.nama_jabatan}
-            </div>
-          ) : (
-            <div className="text-xs text-slate-400">Tanpa Induk</div>
-          )}
-        </div>
-      ),
     },
     {
       title: "Aksi",
@@ -100,6 +89,12 @@ export default function JabatanContent() {
         }
         extra={
           <Space>
+            {/* Tombol Visualisasi */}
+            <Link href="/home/kelola_karyawan/jabatan/visualisasi">
+              <Button icon={<ApartmentOutlined />}>Lihat Visualisasi</Button>
+            </Link>
+
+            {/* Tombol Tambah */}
             <Button type="primary" icon={<PlusOutlined />} onClick={vm.openCreate}>
               Tambah Jabatan
             </Button>
@@ -153,7 +148,7 @@ export default function JabatanContent() {
           }}
           initialValues={{
             nama_jabatan: "",
-            id_induk_jabatan: undefined, // agar Select tampil "Tanpa Induk"
+            id_induk_jabatan: undefined,
           }}
         >
           {/* Nama */}
@@ -182,12 +177,12 @@ export default function JabatanContent() {
               allowClear
               showSearch
               optionFilterProp="label"
-              options={vm.parentOptions}
-              filterOption={(input, option) => {
-                // sembunyikan opsi diri sendiri saat edit
-                if (vm.modal.mode === "edit" && option?.value === vm.modal.id) return false;
-                return (option?.label ?? "").toLowerCase().includes(input.toLowerCase());
-              }}
+              options={vm.parentOptions.filter(
+                (o) => !(vm.modal.mode === "edit" && o.value === vm.modal.id)
+              )}
+              filterOption={(input, option) =>
+                (option?.label ?? "").toLowerCase().includes(input.toLowerCase())
+              }
             />
           </Form.Item>
         </Form>

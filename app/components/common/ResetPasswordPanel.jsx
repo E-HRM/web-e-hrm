@@ -5,8 +5,9 @@ import { Form, Input, Button, Typography, Space } from "antd";
 import useResetPasswordViewModel from "../../(view)/auth/resetpass/useResetPassViewModel";
 
 const BRAND = {
-  primary: "#0A3848",
-  accent: "#D9A96F",
+  primary: "#003A6F",
+  accent: "#98D5FF",
+  accentHover: "#6FC0FF",
 };
 
 export default function ResetPasswordPanel({ onBackToLogin }) {
@@ -27,8 +28,7 @@ export default function ResetPasswordPanel({ onBackToLogin }) {
     if (step === "confirm") {
       return (
         <>
-          Masukkan <b>kode 6 digit</b> yang dikirim ke email{" "}
-          {email ? <b>{email}</b> : null}.
+          Masukkan <b>kode 6 digit</b> yang dikirim ke email {email ? <b>{email}</b> : null}.
         </>
       );
     }
@@ -39,10 +39,8 @@ export default function ResetPasswordPanel({ onBackToLogin }) {
     <div className="w-full max-w-md mx-auto md:ml-24 p-8 md:p-12">
       {/* Judul */}
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900">
-          Reset Password
-        </h1>
-        <Button type="link" onClick={onBackToLogin} className="p-0" style={{ color: BRAND.accent }}>
+        <h1 className="text-2xl font-semibold text-gray-900">Reset Password</h1>
+        <Button type="link" className="p-0" onClick={onBackToLogin} style={{ color: BRAND.accent }}>
           Kembali ke Login
         </Button>
       </div>
@@ -79,9 +77,7 @@ export default function ResetPasswordPanel({ onBackToLogin }) {
           layout="vertical"
           onFinish={async (values) => {
             const ok = await confirmReset(values);
-            if (ok && typeof onBackToLogin === "function") {
-              onBackToLogin();
-            }
+            if (ok && typeof onBackToLogin === "function") onBackToLogin();
           }}
         >
           <Form.Item
@@ -114,12 +110,8 @@ export default function ResetPasswordPanel({ onBackToLogin }) {
               { required: true, message: "Konfirmasi password wajib diisi" },
               ({ getFieldValue }) => ({
                 validator(_, value) {
-                  if (!value || getFieldValue("password") === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(
-                    new Error("Konfirmasi password tidak sama")
-                  );
+                  if (!value || getFieldValue("password") === value) return Promise.resolve();
+                  return Promise.reject(new Error("Konfirmasi password tidak sama"));
                 },
               }),
             ]}

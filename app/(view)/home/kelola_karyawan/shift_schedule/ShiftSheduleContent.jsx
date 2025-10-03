@@ -8,27 +8,78 @@ import {
   Tooltip,
   Tag,
   theme,
+  // Import Table dan Grid dari antd
+  Table,
+  Grid,
 } from "antd";
 import {
   LeftOutlined,
   RightOutlined,
   DeleteOutlined,
-  ReloadOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
 import { useMemo } from "react";
+import Link from "next/link"; // Menggunakan Link dari Next.js
 import UseShiftScheduleViewModel from "./UseShiftScheduleViewModel";
 
 dayjs.locale("id");
 
-/** Palet biru konsisten dengan sidebar */
+/** Palet dan Konstanta */
 const BRAND_BLUE = "#004A9F";
-const BRAND_BLUE_HOVER = "#0B63C7";   // hover lebih terang
-const BRAND_BLUE_ACTIVE = "#003A80";  // active lebih gelap
-const HEADER_BLUE_BG = "#F0F6FF";     // header table lembut
+const BRAND_BLUE_HOVER = "#0B63C7";
+const BRAND_BLUE_ACTIVE = "#003A80";
+const HEADER_BLUE_BG = "#F0F6FF";
+const BRAND = "#003A6F"; // Menggunakan BRAND dari referensi
 
-/* ===== CELL ===== */
+// --- Helper Functions dan Components dari Referensi ---
+
+/** Ambil URL foto dari row dengan berbagai kemungkinan nama field */
+function getPhotoUrl(row) {
+  return (
+    row?.foto_profil_user ||
+    row?.avatarUrl ||
+    row?.foto ||
+    row?.foto_url ||
+    row?.photoUrl ||
+    row?.photo ||
+    row?.avatar ||
+    row?.gambar ||
+    null
+  );
+}
+
+/** Gambar bulat anti-gepeng (selalu crop center) */
+function CircleImg({ src, size = 48, alt = "Foto" }) {
+  const s = {
+    width: size,
+    height: size,
+    borderRadius: "9999px",
+    overflow: "hidden",
+    border: `1px solid ${BRAND}22`,
+    background: "#E6F0FA",
+    flexShrink: 0,
+    display: "inline-block",
+  };
+  return (
+    <span style={s} className="shrink-0">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src || "/avatar-placeholder.jpg"}
+        alt={alt}
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        onError={(e) => {
+          e.currentTarget.src = "/avatar-placeholder.jpg";
+          e.currentTarget.onerror = null;
+        }}
+      />
+    </span>
+  );
+}
+
+// --- Komponen Cell Jadwal ---
+
 function Cell({ cell, polaMap, onAssign, onDelete }) {
   const value = cell
     ? cell.status === "LIBUR"
@@ -88,9 +139,130 @@ function Cell({ cell, polaMap, onAssign, onDelete }) {
   );
 }
 
-/* ===== PAGE ===== */
+// --- Komponen Utama ShiftScheduleContent ---
+
 export default function ShiftScheduleContent() {
   const vm = UseShiftScheduleViewModel();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.sm; // xs
+
+  // 1. Definisikan Kolom Hari (dinamis)
+  const dayColumns = vm.days.map((d) => ({
+    title: (
+      <div className="font-semibold text-slate-800 text-center">
+        {d.labelDay}, {d.labelDate}
+      </div>
+    ),
+    dataIndex: d.key,
+    key: d.key,
+    width: 280, 
+    render: (_, record) => {
+      const cell = vm.getCell(record.id, d.dateStr) || {
+        userId: record.id,
+        date: d.dateStr,
+      };
+      return (
+        <Cell
+          cell={cell}
+          polaMap={vm.polaMap}
+          onAssign={vm.assignCell}
+          onDelete={vm.deleteCell}
+        />
+      );
+    },
+  }));
+
+  // 2. Definisikan Kolom Nama (sticky & linkable)
+  const nameColumn = {
+    title: <div className="text-left font-medium">Nama Karyawan</div>,
+    dataIndex: "name",
+    key: "name",
+    fixed: "left", // Kunci kolom di kiri
+    width: isMobile ? 220 : 380, // Lebih ramping di mobile, lebar di desktop
+    render: (_, r) => {
+      const photo = getPhotoUrl(r) || "/avatar-placeholder.jpg";
+      
+      return (
+        <div className="p-1">
+          {/* Detail Karyawan (Linkable) */}
+          <Link
+            href={`/home/kelola_karyawan/karyawan/${r.id}`}
+            className="no-underline text-inherit hover:text-inherit"
+          >
+            <div className="flex items-center gap-3">
+              <CircleImg src={photo} alt={r.name} size={48} /> {/* Menggunakan CircleImg */}
+
+              <div className="min-w-0">
+                {/* Nama */}
+                <div
+                  style={{ fontWeight: 600, color: "#0f172a" }}
+                  className="truncate"
+                >
+                  {r.name}
+                </div>
+                {/* Jabatan dan Departemen (Email Dihapus) */}
+                <div
+                  style={{ fontSize: 12, color: "#475569" }}
+                  className="truncate"
+                >
+                  {r.jabatan || "—"}
+                  {r.jabatan && r.departemen && " "}
+                  {r.departemen ? `| ${r.departemen}` : r.jabatan ? "" : "—"}
+                </div>
+              </div>
+            </div>
+          </Link>
+
+          {/* Checkbox Ulang Jadwal (di luar Link) */}
+          <label className="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+            <input
+              type="checkbox"
+              className="accent-[#004A9F]"
+              onChange={(e) => vm.toggleRepeatSchedule(r.id, e.target.checked)}
+            />
+            Ulangi jadwal ini tiap minggu
+          </label>
+
+          {/* Ringkasan/Review Mingguan - DISIMPAN HANYA UNTUK DESKTOP/TABLET (sm:block) */}
+          <div className="mt-3 space-y-1 text-xs hidden sm:block">
+            <div className="font-semibold text-slate-600 mb-1">
+              Ringkasan Minggu Ini:
+            </div>
+            {vm.days.map((d) => {
+              const c = vm.getCell(r.id, d.dateStr);
+              let label = "—";
+              let color = "text-slate-500";
+              if (c?.status === "LIBUR") {
+                label = "Libur";
+                color = "text-red-500";
+              } else if (c?.polaId) {
+                const p = vm.polaMap.get(c.polaId);
+                label = p ? `${p.nama} ${p.jam}` : "Kerja";
+                color = "text-blue-600";
+              }
+              return (
+                <div
+                  key={d.key}
+                  className={`${color} flex justify-between`}
+                >
+                  <span className="w-16">{d.short}:</span>
+                  <span className="font-medium truncate">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    },
+  };
+
+  const columns = [nameColumn, ...dayColumns];
+
+  // 3. Siapkan data source
+  const dataSource = vm.rows.map((r) => ({
+    ...r,
+    key: r.id, 
+  }));
 
   return (
     <ConfigProvider
@@ -123,12 +295,19 @@ export default function ShiftScheduleContent() {
             activeBorderColor: BRAND_BLUE,
             hoverBorderColor: BRAND_BLUE,
           },
+          Table: {
+            headerBg: HEADER_BLUE_BG,
+            headerSortHoverBg: HEADER_BLUE_BG,
+            headerSortActiveBg: HEADER_BLUE_BG,
+            rowHoverBg: "#E6F3FF",
+          },
         },
       }}
     >
       <div className="p-6">
-        {/* Toolbar */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+        {/* Toolbar - Diatur dalam satu baris (1 row) */}
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          {/* Filter Dept */}
           <Select
             value={vm.deptId || undefined}
             placeholder="Semua Tim/Divisi"
@@ -151,13 +330,9 @@ export default function ShiftScheduleContent() {
             onChange={(y) => vm.setMonthYear(y, vm.currentMonthIdx)}
             options={vm.yearOptions}
           />
-
-          <div className="ml-auto flex items-center gap-2">
-            <Button icon={<ReloadOutlined />} onClick={vm.refresh} className="hidden md:inline-flex">
-              Muat Ulang
-            </Button>
-
-            {/* Tombol navigasi minggu sekarang pakai primary biru */}
+          
+          <div className="flex-grow-0 ml-auto flex items-center gap-2">
+            {/* Tombol navigasi minggu */}
             <Button type="primary" icon={<LeftOutlined />} onClick={vm.prevWeek}>
               Minggu sebelumnya
             </Button>
@@ -174,100 +349,28 @@ export default function ShiftScheduleContent() {
         </div>
 
         <div className="text-xs text-slate-500 mb-3">
-          * Centang “Ulang jadwal ini tiap minggu” → sistem menyalin pola minggu ini hingga akhir bulan.
+          * Centang “Ulangi jadwal ini tiap minggu” → sistem menyalin pola minggu ini hingga akhir bulan.
         </div>
 
-        {/* Card pembungkus tabel */}
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-xl">
-          {/* Scroll container */}
-          <div className="overflow-auto">
-            <table className="min-w-[1200px] w-full">
-              <thead className="sticky top-0 z-10" style={{ background: HEADER_BLUE_BG }}>
-                <tr>
-                  {/* Sticky kolom nama — tanpa shadow, pakai border-right agar sejajar dengan body */}
-                  <th
-                    className="text-left px-4 py-3 w-[320px] sticky left-0 z-20 border-r border-slate-200 bg-[--tbl-header-bg]"
-                    style={{ background: HEADER_BLUE_BG }}
-                  >
-                    Nama
-                  </th>
-                  {vm.days.map((d) => (
-                    <th key={d.key} className="text-left px-3 py-3 w-[240px]">
-                      <div className="font-semibold text-slate-800">
-                        {d.labelDay}, {d.labelDate}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {vm.rows.map((r, idx) => (
-                  <tr
-                    key={r.id}
-                    className={`${idx % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]"} hover:bg-[#E6F3FF] transition-colors`}
-                    style={{ transitionDuration: "150ms" }}
-                  >
-                    {/* Sticky cell nama — border-right yang sama dengan header */}
-                    <td className="align-top sticky left-0 bg-inherit z-10 border-r border-slate-200">
-                      <div className="p-3">
-                        <div className="font-semibold text-slate-800">{r.name}</div>
-                        <div className="text-xs text-slate-500">{r.email}</div>
-
-                        <label className="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="accent-[#004A9F]"
-                            onChange={(e) => vm.toggleRepeatSchedule(r.id, e.target.checked)}
-                          />
-                          Ulang jadwal ini tiap minggu (sampai akhir bulan)
-                        </label>
-
-                        {/* Ringkasan kecil */}
-                        <div className="mt-3 space-y-1">
-                          {vm.days.map((d) => {
-                            const c = vm.getCell(r.id, d.dateStr);
-                            let label = "—";
-                            if (c?.status === "LIBUR") label = "Libur";
-                            else if (c?.polaId) {
-                              const p = vm.polaMap.get(c.polaId);
-                              label = p ? `${p.nama} ${p.jam}` : "Kerja";
-                            }
-                            return (
-                              <div key={d.key} className="text-xs text-slate-500">
-                                {d.short}: {label}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </td>
-
-                    {vm.days.map((d) => {
-                      const cell = vm.getCell(r.id, d.dateStr) || { userId: r.id, date: d.dateStr };
-                      return (
-                        <td key={d.key} className="align-top p-2">
-                          <Cell
-                            cell={cell}
-                            polaMap={vm.polaMap}
-                            onAssign={vm.assignCell}
-                            onDelete={vm.deleteCell}
-                          />
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* legend + padding bawah */}
-          <div className="px-4 py-3 border-t rounded-b-2xl flex items-center gap-2" style={{ background: HEADER_BLUE_BG }}>
-            <Tag color="blue">KERJA</Tag>
-            <Tag color="geekblue">LIBUR</Tag>
-          </div>
-        </div>
+        {/* Tabel Utama menggunakan komponen Table Ant Design */}
+        <Table
+          columns={columns}
+          dataSource={dataSource}
+          pagination={false}
+          loading={vm.loading}
+          // Konfigurasi Scroll dan Sticky
+          scroll={{ 
+            x: "max-content", // Memastikan scroll horizontal jika lebar konten > container
+            y: 640 // Mengunci tinggi tabel dan memungkinkan scroll vertikal di body tabel
+          }}
+          sticky 
+          size="middle"
+          bordered={false}
+          className="rounded-2xl overflow-hidden shadow-xl border border-slate-200"
+          rowClassName={(record, index) =>
+            index % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]"
+          }
+        />
       </div>
     </ConfigProvider>
   );

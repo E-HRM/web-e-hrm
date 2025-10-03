@@ -120,12 +120,12 @@ export default function DepartementContent() {
                 placeholder="Cari departemen…"
                 onSearch={setQ}
                 onChange={(e) => setQ(e.target.value)}
-                className="w-52"              // dipendekkan
+                className="w-52"             
                 />
                 <Select
                 value={orderBy}
                 onChange={setOrderBy}
-                className="w-44"              // dipendekkan
+                className="w-44"             
                 options={[
                     { value: "name", label: "Urutkan: Nama" },
                     { value: "members", label: "Urutkan: Jumlah Karyawan" },
@@ -166,7 +166,7 @@ export default function DepartementContent() {
         ) : layout === "grid" ? (
           <Row gutter={[16, 16]}>
             {filtered.map((d) => (
-              <Col key={d.id} xs={24} sm={12} xl={8} xxl={6}>
+              <Col key={d.id} xs={30} sm={12} xl={8} xxl={6}>
                 <DepartmentCard
                   name={d.name}
                   count={d.count}

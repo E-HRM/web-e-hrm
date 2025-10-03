@@ -341,9 +341,9 @@ export default function ViewLayout({ children }) {
           </Header>
 
           <Content
-            className="content-scroll" // aktifkan scrollbar halus di konten panjang
+            className="content-scroll"
             style={{
-              background: "#F6F7F9",
+              background: "#F0F4F8",
               padding: screens.md ? 24 : 16,
               flex: 1,
               minHeight: 0,

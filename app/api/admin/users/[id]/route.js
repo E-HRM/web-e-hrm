@@ -5,7 +5,7 @@ import db from '../../../../../lib/prisma';
 import { verifyAuthToken } from '../../../../../lib/jwt';
 import { authenticateRequest } from '../../../../../app/utils/auth/authUtils';
 import { createClient } from '@supabase/supabase-js';
-import { JENIS_KELAMIN_VALUES, STATUS_KERJA_VALUES, normalizeNullableEnum, normalizeNullableInt, normalizeNullableString, normalizeOptionalDate } from '@/app/api/_utils/user-field-normalizer';
+import { JENIS_KELAMIN_VALUES, STATUS_KERJA_VALUES, normalizeNullableEnum, normalizeNullableInt, normalizeNullableString, normalizeOptionalDate } from '../../../_utils/user-field-normalizer';
 
 // ===== Helpers: Auth (Admin) =====
 async function getAdminActor(req) {
@@ -359,3 +359,4 @@ export async function DELETE(req, { params }) {
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
+  

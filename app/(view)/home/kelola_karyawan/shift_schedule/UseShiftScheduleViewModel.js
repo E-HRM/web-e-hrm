@@ -44,6 +44,21 @@ async function loadShiftMapForRange(startDate, endDate) {
   return map;
 }
 
+// --- Fungsi untuk mendapatkan URL foto (dari referensi Anda) ---
+function getPhotoUrl(row) {
+    return (
+      row?.foto_profil_user ||
+      row?.avatarUrl ||
+      row?.foto ||
+      row?.foto_url ||
+      row?.photoUrl ||
+      row?.photo ||
+      row?.avatar ||
+      row?.gambar ||
+      null
+    );
+  }
+
 export default function UseShiftScheduleViewModel() {
   const { notification, modal } = AntdApp.useApp();
 
@@ -113,10 +128,50 @@ export default function UseShiftScheduleViewModel() {
     return arr;
   }, [usersRes, deptId]);
 
-  const rows = useMemo(
-    () => users.map((u) => ({ id: u.id_user, name: u.nama_pengguna || u.email, email: u.email })),
-    [users]
-  );
+
+  const rows = useMemo(() => {
+    return (users || []).map((u) => {
+      // nama & email
+      const name  = u.nama_pengguna || u.nama || u.name || u.email || "—";
+      const email = u.email || "—";
+
+      // jabatan & departemen: ambil dari nested dulu, terus fallback ke kemungkinan lain
+      const jabatan =
+        u.jabatan?.nama_jabatan ||
+        u.nama_jabatan ||
+        (u.jabatan && u.jabatan.nama) ||
+        "";
+
+      const departemen =
+        u.departement?.nama_departement ||
+        u.nama_departement ||
+        u.divisi ||
+        "";
+
+      // foto: siapkan beberapa alias supaya komponen getPhotoUrl() jalan
+      const foto =
+        u.foto_profil_user ||
+        u.foto_url ||
+        u.foto ||
+        u.avatarUrl ||
+        u.photoUrl ||
+        null;
+
+      return {
+        id: u.id_user || u.id || u.uuid,
+        name,
+        email,
+        jabatan,
+        departemen,
+
+        // simpan dengan nama field yang dikenali getPhotoUrl(row)
+        foto_profil_user: foto,
+        avatarUrl: foto,
+        foto_url: foto,
+      };
+    });
+  }, [users]);
+
 
   /* ===== pola kerja ===== */
   const { data: polaRes } = useSWR(`${ApiEndpoints.GetPolaKerja}?page=1&pageSize=500`, fetcher);

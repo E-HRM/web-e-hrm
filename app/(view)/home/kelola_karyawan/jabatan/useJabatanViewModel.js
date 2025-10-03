@@ -3,18 +3,25 @@
 import { useCallback, useMemo, useState, useEffect } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
 import { Form, message } from "antd";
+import Cookies from "js-cookie";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import { fetcher } from "../../../../utils/fetcher";
 
-/** Helper POST/PUT/DELETE JSON */
+/** Helper POST/PUT/DELETE JSON + token */
 async function jsonFetch(url, init) {
+  const token = Cookies.get("token");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(init && init.headers),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
   const res = await fetch(url, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init && init.headers),
-    },
+    credentials: "same-origin",
+    headers,
   });
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.message || `Error ${res.status}`);
   return data;
@@ -32,13 +39,16 @@ export default function useJabatanViewModel() {
   const [modal, setModal] = useState({ open: false, mode: "create", id: null });
   const [saving, setSaving] = useState(false);
 
-  // ---- List SWR
+  // ---- List SWR (pakai base path + QS)
   const listKey = useMemo(() => {
     const sp = new URLSearchParams();
     sp.set("page", String(page));
     sp.set("pageSize", String(pageSize));
     if (search.trim()) sp.set("search", search.trim());
     sp.set("includeDeleted", "0");
+    // opsional order
+    sp.set("orderBy", "created_at");
+    sp.set("sort", "desc");
     return `${ApiEndpoints.GetJabatan}?${sp.toString()}`;
   }, [page, pageSize, search]);
 
@@ -49,20 +59,16 @@ export default function useJabatanViewModel() {
   const total = listRes?.pagination?.total || 0;
 
   // ---- Parent options SWR (opsi induk)
-  const parentKey = `${ApiEndpoints.GetJabatan}?page=1&pageSize=1000&includeDeleted=0`;
-  const { data: parentRes, isLoading: loadingAll } = useSWR(parentKey, fetcher);
-
-  // Stabilkan array 'allForParent' & 'parentOptions' (tanpa logical expr di deps)
-  const allForParent = useMemo(() => {
-    return Array.isArray(parentRes?.data) ? parentRes.data : [];
-  }, [parentRes]);
+  const parentKey = `${ApiEndpoints.GetJabatan}?page=1&pageSize=1000&includeDeleted=0&orderBy=nama_jabatan&sort=asc`;
+  const { data: parentRes } = useSWR(parentKey, fetcher);
 
   const parentOptions = useMemo(() => {
-    return allForParent.map((j) => ({
+    const arr = Array.isArray(parentRes?.data) ? parentRes.data : [];
+    return arr.map((j) => ({
       value: j.id_jabatan,
       label: j.nama_jabatan,
     }));
-  }, [allForParent]);
+  }, [parentRes]);
 
   // ---- Detail by id (saat modal edit)
   const detailKey =
@@ -77,7 +83,7 @@ export default function useJabatanViewModel() {
       const d = detailRes.data;
       form.setFieldsValue({
         nama_jabatan: d.nama_jabatan || "",
-        id_induk_jabatan: d.id_induk_jabatan || undefined,
+        id_induk_jabatan: d.id_induk_jabatan ?? undefined, // null → undefined untuk tampil "Tanpa Induk"
       });
     }
   }, [detailRes, form, modal.mode]);
@@ -124,9 +130,10 @@ export default function useJabatanViewModel() {
           );
         }
 
+        // Kirim "" untuk Tanpa Induk → backend normalisasikan ke NULL
         const payload = {
           nama_jabatan: values.nama_jabatan,
-          id_induk_jabatan: values.id_induk_jabatan || null,
+          id_induk_jabatan: values.id_induk_jabatan ?? "",
         };
 
         if (modal.mode === "create") {
@@ -145,13 +152,18 @@ export default function useJabatanViewModel() {
 
         closeModal();
         await Promise.all([globalMutate(listKey), globalMutate(parentKey)]);
+        // kalau halaman kosong setelah ubah filter/search, bawa balik ke 1
+        const after = await fetcher(listKey);
+        if ((after?.data?.length || 0) === 0 && page > 1) {
+          setPage(1);
+        }
       } catch (e) {
-        message.error(e.message);
+        message.error(e.message || "Gagal menyimpan jabatan.");
       } finally {
         setSaving(false);
       }
     },
-    [closeModal, listKey, modal.id, modal.mode, parentKey]
+    [closeModal, listKey, modal.id, modal.mode, page, parentKey]
   );
 
   const remove = useCallback(
@@ -166,7 +178,7 @@ export default function useJabatanViewModel() {
           setPage(page - 1);
         }
       } catch (e) {
-        message.error(e.message);
+        message.error(e.message || "Gagal menghapus jabatan.");
       }
     },
     [listKey, page, parentKey]
@@ -195,7 +207,6 @@ export default function useJabatanViewModel() {
 
     // parent options
     parentOptions,
-    loadingAll,
     remove,
   };
 }

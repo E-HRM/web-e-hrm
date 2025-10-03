@@ -6,19 +6,17 @@ import ResetPasswordPanel from "../../../components/common/ResetPasswordPanel";
 import { useRouter } from "next/navigation";
 
 const BRAND = {
-  primary: "#0A3848",
-  primaryHover: "#0D4A5E",
-  primaryActive: "#072B37",
-  accent: "#D9A96F",
-  accentHover: "#C08C55",
-  accentActive: "#A97C3E",
+  primary: "#003A6F",
+  primaryHover: "#003E86",
+  primaryActive: "#00366F",
+  accent: "#98D5FF",
+  accentHover: "#6FC0FF",
+  accentActive: "#4AAEFF",
 };
 
 export default function ResetPasswordContent() {
   const router = useRouter();
-
-  // Arahkan langsung ke halaman login (ganti path bila berbeda)
-  const onBackToLogin = () => router.replace("/auth/login"); // atau router.push("/auth/login")
+  const onBackToLogin = () => router.replace("/auth/login");
 
   return (
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-2 bg-white">
@@ -33,25 +31,35 @@ export default function ResetPasswordContent() {
               colorLink: BRAND.accent,
               colorLinkHover: BRAND.accentHover,
               colorLinkActive: BRAND.accentActive,
-              borderRadius: 8,
-              fontSize: 14,
+              controlOutline: BRAND.primary,
+              colorBorder: "#E5E7EB",
+              colorBorderSecondary: "#E5E7EB",
+              borderRadius: 10,
+              fontSize: 13,
             },
             components: {
-              Button: { controlHeight: 44 },
-              Input: { controlHeight: 44 },
+              Button: { controlHeight: 40 },
+              Input: {
+                controlHeight: 40,
+                // 20% alpha untuk efek fokus halus (selaras login)
+                activeShadow: `0 0 0 2px ${BRAND.accent}33`,
+              },
             },
           }}
         >
           <AntdApp>
-            <ResetPasswordPanel onBackToLogin={onBackToLogin} />
+            <div className="w-full">
+              <ResetPasswordPanel onBackToLogin={onBackToLogin} />
+            </div>
           </AntdApp>
         </ConfigProvider>
       </section>
 
-      {/* Kanan: sama seperti login */}
-      <section className="relative bg-gradient-to-b from-[#0E2A2E] to-[#0B1F22] text-white">
-        <div className="absolute inset-0 pointer-events-none ring-1 ring-white/10" />
-        <div className="relative min-h-svh flex flex-col items-center justify-center px-8 md:px-10 text-center pt-16 md:pt-20">
+      {/* Kanan: latar sama seperti login (gambar + overlay putih tipis) */}
+      <section className="relative">
+        <Image src="/bglogin2.jpg" alt="" fill className="object-cover" priority />
+        <div className="absolute inset-0 bg-white/40 pointer-events-none" />
+        <div className="relative min-h-svh flex flex-col items-center justify-center px-8 md:px-10 text-center">
           <Image
             src="/logo-oss.png"
             alt="OSS Mark"
@@ -61,10 +69,10 @@ export default function ResetPasswordContent() {
             priority
           />
           <div className="mt-4">
-            <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-[#E7B97A]">
+            <p className="text-2xl md:text-3xl font-extrabold tracking-wide text-[#003A6F]">
               ONE STEP SOLUTION
             </p>
-            <p className="mt-0 text-lg md:text-xl text-white/90">Make You Priority</p>
+            <p className="mt-0 text-lg md:text-xl text-[#003A6F]/80">Make You Priority</p>
           </div>
         </div>
       </section>

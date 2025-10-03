@@ -14,6 +14,7 @@ import {
   FieldTimeOutlined,
   ScheduleOutlined,
   ProductOutlined,
+  NotificationOutlined,
 } from "@ant-design/icons";
 
 const MENU = [
@@ -22,7 +23,6 @@ const MENU = [
   { href: "/home/approve_absensi", match: ["/home/approve_absensi"], label: "Aprrove", icon: ScheduleOutlined },
   { href: "/home/kunjungan", match: ["/kunjungan", "/home/kunjungan"], label: "Kunjungan", icon: UserOutlined },
   { href: "/home/lokasi", match: ["/home/lokasi"], label: "Lokasi", icon: EnvironmentOutlined },
-
   {
     key: "Pola Kerja",
     href: "/pola",
@@ -63,6 +63,7 @@ const MENU = [
       { href: "/home/agenda/agenda_calendar", match: ["/home/agenda/agenda_calendar"], label: "Kalender Agenda" },
     ],
   },
+  { href: "/home/broadcast", match: ["/home/broadcast"], label: "Broadcast", icon: NotificationOutlined },
 ];
 
 const LS_OPEN_SECTIONS = "oss.sidebar.openSections";
