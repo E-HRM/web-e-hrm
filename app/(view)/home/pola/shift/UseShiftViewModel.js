@@ -10,17 +10,21 @@ import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 
 /* ===================== Utils ===================== */
 
-// Format tampil di tabel
+// Format tampil di tabel (jam-menit)
 const hhmm = (v) => (v ? dayjs(v).format("HH:mm") : "");
 
-// Kirim ISO UTC standar (aman untuk parser server)
-const toIso = (t) => (t ? dayjs(t).toISOString() : null);
+// Kirim ISO UTC standar (aman untuk parser server) — tanpa bergantung plugin dayjs
+const toIso = (t) => {
+  if (!t) return null;
+  const d = dayjs(t).second(0).millisecond(0);
+  return d.toDate().toISOString(); // selalu ISO 8601 UTC
+};
 
 // Selisih menit absolut
 const minutesDiff = (a, b) =>
   a && b ? Math.abs(dayjs(b).diff(dayjs(a), "minute")) : null;
 
-// Warna fallback
+// Warna fallback deterministik dari string
 function colorFromString(s = "") {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
@@ -33,6 +37,25 @@ const getErrMsg = (err) =>
   err?.data?.message ||
   err?.message ||
   "Terjadi kesalahan";
+
+// Konversi rekursif: semua Date/dayjs -> ISO UTC string (guard terakhir sebelum kirim)
+const isoify = (val) => {
+  if (val == null) return val;
+  // dayjs object
+  if (dayjs.isDayjs(val)) return val.toDate().toISOString();
+  // Date object
+  if (val instanceof Date) return val.toISOString();
+  // Array
+  if (Array.isArray(val)) return val.map(isoify);
+  // Object (plain)
+  if (typeof val === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(val)) out[k] = isoify(v);
+    return out;
+  }
+  // Primitive
+  return val;
+};
 
 /* ===================== ViewModel ===================== */
 
@@ -181,7 +204,7 @@ export default function UseShiftViewModel() {
       };
 
       try {
-        await crudService.post(ApiEndpoints.CreatePolaKerja, payload);
+        await crudService.post(ApiEndpoints.CreatePolaKerja, isoify(payload));
         notification.success({ message: "Berhasil", description: "Pola kerja dibuat." });
         await mutate();
       } catch (err) {
@@ -274,7 +297,6 @@ export default function UseShiftViewModel() {
       }
 
       // Jika user isi window baru, cek harus di dalam jam kerja efektif
-      // Tentukan jam kerja efektif (baru kalau dikirim, kalau tidak pakai yang lama)
       const raw = selected?._raw || {};
       const effMasuk = values.jamMasuk ? dayjs(values.jamMasuk) : dayjs(raw.jam_mulai);
       const effKeluar = values.jamKeluar ? dayjs(values.jamKeluar) : dayjs(raw.jam_selesai);
@@ -313,7 +335,7 @@ export default function UseShiftViewModel() {
       };
 
       try {
-        await crudService.put(ApiEndpoints.UpdatePolaKerja(id), payload);
+        await crudService.put(ApiEndpoints.UpdatePolaKerja(id), isoify(payload));
         notification.success({ message: "Berhasil", description: "Pola kerja diperbarui." });
         setSelected(null);
         await mutate();

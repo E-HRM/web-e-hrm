@@ -2,10 +2,10 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
-import { authenticateRequest } from '@/app/utils/auth/authUtils';
-import { parseDateOnlyToUTC, parseDateTimeToUTC } from '@/helpers/date-helper';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../../lib/jwt';
+import { authenticateRequest } from '../../../../../app/utils/auth/authUtils';
+import { parseDateOnlyToUTC, parseDateTimeToUTC } from '../../../../../helpers/date-helper';
 
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 

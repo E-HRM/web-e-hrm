@@ -1,9 +1,9 @@
 // app/api/agenda-kerja/[id]/route.js
 import { NextResponse } from 'next/server';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
-import { authenticateRequest } from '@/app/utils/auth/authUtils';
-import { parseDateTimeToUTC } from '@/helpers/date-helper';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '../../../../../lib/jwt';
+import { authenticateRequest } from '../../../../../app/utils/auth/authUtils';
+import { parseDateTimeToUTC } from '../../../../../helpers/date-helper';
 
 // Autentikasi (JWT/NextAuth)
 async function ensureAuth(req) {

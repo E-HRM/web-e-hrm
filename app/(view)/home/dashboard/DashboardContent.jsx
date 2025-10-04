@@ -13,8 +13,10 @@ import {
   Cell,
 } from "recharts";
 import useDashboardViewModel from "./useDashboardViewModel";
+import PerformanceSection from "../../../components/dashboard/PerfomanceSection";
+import Top5Section from "../../../components/dashboard/Top5Section";
 
-/* ---------- Mini Avatar ---------- */
+/* --- Mini Avatar utk list cuti --- */
 function Avatar({ name = "", bg = "#E5E7EB" }) {
   const initials = name
     .split(" ")
@@ -32,39 +34,47 @@ function Avatar({ name = "", bg = "#E5E7EB" }) {
   );
 }
 
-/* ---------- Calendar (static) ---------- */
-function MiniCalendar() {
-  const year = 2025;
-  const monthIndex = 8; // September
+/* --- Mini calendar (DINAMIS) --- */
+function MiniCalendar({
+  year,
+  monthIndex,
+  today,
+  eventsByDay,        // { [dayNumber]: { color: 'bg-...', tip?: string } }
+  onPrevMonth,
+  onNextMonth,
+}) {
   const first = new Date(year, monthIndex, 1);
   const startOffset = (first.getDay() + 6) % 7; // Senin=0
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const cells = Array.from({ length: startOffset + daysInMonth }, (_, i) =>
     i < startOffset ? null : i - startOffset + 1
   );
-  const eventMap = {
-    3: "bg-emerald-500",
-    6: "bg-rose-500",
-    7: "bg-fuchsia-500",
-    14: "bg-rose-500",
-    17: "bg-violet-500",
-    18: "bg-emerald-500",
-    19: "bg-emerald-500",
-    20: "bg-violet-500",
-    21: "bg-fuchsia-500",
-    23: "bg-emerald-500",
-  };
+
+  const monthLabel = new Date(year, monthIndex, 1).toLocaleString("id-ID", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div className="rounded-2xl bg-[#F2F8FF] p-3 h-full">
       <div className="flex items-center justify-between">
-        <button className="h-7 w-7 rounded-md hover:bg-white/70 flex items-center justify-center">
+        <button
+          onClick={onPrevMonth}
+          className="h-7 w-7 rounded-md hover:bg-white/70 flex items-center justify-center"
+          aria-label="Bulan sebelumnya"
+        >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
             <path d="M15.4 7.4L14 6l-6 6 6 6 1.4-1.4L10.8 12z" />
           </svg>
         </button>
-        <div className="text-sm font-semibold text-gray-800">September 2025</div>
-        <button className="h-7 w-7 rounded-md hover:bg-white/70 flex items-center justify-center">
+
+        <div className="text-sm font-semibold text-gray-800">{monthLabel}</div>
+
+        <button
+          onClick={onNextMonth}
+          className="h-7 w-7 rounded-md hover:bg-white/70 flex items-center justify-center"
+          aria-label="Bulan berikutnya"
+        >
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
             <path d="M8.6 16.6L10 18l6-6-6-6-1.4 1.4L13.2 12z" />
           </svg>
@@ -75,7 +85,9 @@ function MiniCalendar() {
         {["SEN", "SEL", "RAB", "KAM", "JUM", "SAB", "MIN"].map((d, i) => (
           <div
             key={d}
-            className={`text-center ${i === 6 ? "text-rose-500" : "text-gray-500"}`}
+            className={`text-center ${
+              i === 6 ? "text-rose-500" : "text-gray-500"
+            }`}
           >
             {d}
           </div>
@@ -84,34 +96,40 @@ function MiniCalendar() {
 
       <div className="mt-1 grid grid-cols-7 gap-y-3 text-sm">
         {cells.map((day, idx) => {
-          const hasEvent = !!(day && eventMap[day]);
-          const is17 = day === 17;
+          if (!day) return <div key={idx} className="h-10" />;
+
+          const isToday =
+            today.getFullYear() === year &&
+            today.getMonth() === monthIndex &&
+            today.getDate() === day;
+
+          const ev = eventsByDay[day]; // { color, tip? }
+
           return (
             <div key={idx} className="h-10 relative group">
-              {day ? (
-                <>
-                  <div
-                    className={`mx-auto h-7 w-7 flex items-center justify-center rounded-full ${
-                      is17 ? "bg-violet-100 text-violet-700" : ""
-                    } text-gray-700`}
-                  >
-                    {day}
+              <div
+                className={`mx-auto h-7 w-7 flex items-center justify-center rounded-full ${
+                  isToday ? "bg-violet-100 text-violet-700" : "text-gray-700"
+                }`}
+                title={ev?.tip || undefined}
+              >
+                {day}
+              </div>
+
+              {ev?.color && (
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-1 w-14">
+                  <span className={`block h-1 rounded-full ${ev.color}`} />
+                </div>
+              )}
+
+              {isToday && ev?.tip && (
+                <div className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition">
+                  <div className="rounded-md bg-black/80 text-white text-[10px] px-2 py-1">
+                    {ev.tip}
                   </div>
-                  {hasEvent && (
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-1 w-14">
-                      <span className={`block h-1 rounded-full ${eventMap[day]}`} />
-                    </div>
-                  )}
-                  {is17 && (
-                    <div className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition">
-                      <div className="rounded-md bg-black/80 text-white text-[10px] px-2 py-1">
-                        1 Karyawan Cuti
-                      </div>
-                      <div className="mx-auto h-0 w-0 border-x-8 border-x-transparent border-t-8 border-t-black/80" />
-                    </div>
-                  )}
-                </>
-              ) : null}
+                  <div className="mx-auto h-0 w-0 border-x-8 border-x-transparent border-t-8 border-t-black/80" />
+                </div>
+              )}
             </div>
           );
         })}
@@ -122,12 +140,10 @@ function MiniCalendar() {
 
 export default function DashboardContent() {
   const vm = useDashboardViewModel();
-
-  // palet bar mini (mirip desain)
   const miniColors = ["#D1D5DB", "#F5A524", "#E7B67E", "#E8C39B", "#EEE2CF"];
 
   return (
-    <div className="min-h-screen bg-[#F5F6F8]">
+
       <div className="mx-auto max-w-6xl px-4 py-6">
         {/* Header */}
         <div className="mb-4">
@@ -135,9 +151,8 @@ export default function DashboardContent() {
           <p className="text-xs text-gray-500">{vm.tanggalTampilan}</p>
         </div>
 
-        {/* ===================== BARIS ATAS (2 CARD) ===================== */}
+        {/* ===== BARIS ATAS: Total Karyawan + Calendar ===== */}
         <div className="grid grid-cols-12 gap-4">
-          {/* === KIRI: Total Karyawan (FULL HEIGHT) === */}
           <div className="col-span-12 md:col-span-7 bg-white rounded-2xl shadow-sm p-4 pb-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-gray-700">Total Karyawan</p>
@@ -148,16 +163,12 @@ export default function DashboardContent() {
               </div>
             </div>
 
-            {/* atur tinggi isi card, grafik pakai height 100% */}
             <div className="mt-1 grid grid-cols-12 gap-6 h-[260px]">
-              {/* angka besar di kiri, dipusatkan vertikal */}
               <div className="col-span-3 flex">
                 <div className="m-auto text-5xl font-semibold text-gray-800 leading-none">
                   {vm.totalKaryawan}
                 </div>
               </div>
-
-              {/* grafik mengambil seluruh tinggi kolom */}
               <div className="col-span-9">
                 <div className="w-full h-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -168,19 +179,10 @@ export default function DashboardContent() {
                       margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
                     >
                       <CartesianGrid vertical={false} stroke="#EFF2F6" strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="label"
-                        interval={0}
-                        axisLine={false}
-                        tickLine={false}
-                        tickMargin={8}
-                        tick={{ fontSize: 11, fill: "#6B7280" }}
-                      />
+                      <XAxis dataKey="label" interval={0} axisLine={false} tickLine={false} tickMargin={8} tick={{ fontSize: 11, fill: "#6B7280" }}/>
                       <YAxis hide domain={[0, "dataMax + 20"]} />
-                      <Bar dataKey="value" radius={[10, 10, 10, 10]}>
-                        {vm.miniBars.map((_, i) => (
-                          <Cell key={i} fill={["#D1D5DB", "#F5A524", "#E7B67E", "#E8C39B", "#EEE2CF"][i % 5]} />
-                        ))}
+                      <Bar dataKey="value" radius={[10,10,10,10]}>
+                        {vm.miniBars.map((_,i)=>(<Cell key={i} fill={miniColors[i%5]} />))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -189,16 +191,20 @@ export default function DashboardContent() {
             </div>
           </div>
 
-
-          {/* === KANAN: Calendar Card === */}
           <div className="col-span-12 md:col-span-5 bg-white rounded-2xl shadow-sm p-4">
-            <MiniCalendar />
+            <MiniCalendar
+              year={vm.calYear}
+              monthIndex={vm.calMonth}
+              today={vm.today}
+              eventsByDay={vm.calendarEvents}
+              onPrevMonth={vm.prevMonth}
+              onNextMonth={vm.nextMonth}
+            />
           </div>
 
-          {/* ====== STAT CARDS (8 kartu) ====== */}
+          {/* ===== STAT CARDS (ikon lama dipulihkan) ===== */}
           <div className="col-span-12 grid grid-cols-12 gap-4">
             {[
-              // row 1
               {
                 value: vm.totalKaryawan, label: "Karyawan",
                 bg: "bg-indigo-50", ring: "ring-indigo-200/60", text: "text-indigo-600",
@@ -222,7 +228,7 @@ export default function DashboardContent() {
                 bg: "bg-rose-50", ring: "ring-rose-200/60", text: "text-rose-500",
                 icon: (
                   <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-                    <path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2V6zm6 0v12l6 2V8l-6-2z"/>
+                    <path d="M12 2a7 7 0 0 0-7 7c0 5.3 7 13 7 13s7-7.7 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/>
                   </svg>
                 ),
               },
@@ -231,12 +237,10 @@ export default function DashboardContent() {
                 bg: "bg-slate-50", ring: "ring-slate-200/60", text: "text-slate-600",
                 icon: (
                   <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-                    <path d="M12 2a7 7 0 0 0-7 7c0 5.3 7 13 7 13s7-7.7 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/>
+                    <path d="M12 2a7 7 0 0 0-7 7c0 5.3 7 13 7 13s7-7.7 7-13a7 7 0 0 0-7-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>
                   </svg>
                 ),
               },
-
-              // row 2
               {
                 value: 2, label: "Admin",
                 bg: "bg-emerald-50", ring: "ring-emerald-200/60", text: "text-emerald-600",
@@ -269,14 +273,13 @@ export default function DashboardContent() {
                 bg: "bg-teal-50", ring: "ring-teal-200/60", text: "text-teal-600",
                 icon: (
                   <svg viewBox="0 0 24 24" className="h-6 w-6" fill="currentColor">
-                    <path d="M3 17h2l2.2-4.4 2.8 4.4H21v2H9.5l-3.3-5.2L4.2 19H3v-2zm6.5-7.5l6-3 .9 1.8-6 3-.9-1.8zm4.3 4.5l4.7-2.3.9 1.8L14.7 16l-.9-1.9zM7 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>
+                    <path d="M20 6h-3V4a2 2 0 0 0-4 0v2H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-5-2a1 1 0 0 1 2 0v2h-2V4zM7 8h13v2H7V8zm0 4h13v6H7v-6z" />
                   </svg>
                 ),
               },
             ].map((s, idx) => (
               <div key={idx} className="col-span-6 md:col-span-3">
-                <div className="h-full rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 p-4
-                                flex items-center gap-3 hover:shadow-md transition">
+                <div className="h-full rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 p-4 flex items-center gap-3 hover:shadow-md transition">
                   <div className={`h-10 w-10 rounded-xl ring-1 flex items-center justify-center ${s.bg} ${s.ring} ${s.text}`}>
                     {s.icon}
                   </div>
@@ -290,7 +293,7 @@ export default function DashboardContent() {
           </div>
 
 
-          {/* === Chart akumulasi (tidak diubah) === */}
+          {/* ===== Akumulasi Grafik (tetap) ===== */}
           <div className="col-span-12 bg-white rounded-2xl shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -306,9 +309,7 @@ export default function DashboardContent() {
               </div>
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <span>This Week</span>
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
-                  <path d="M12 8l6 6H6l6-6z" />
-                </svg>
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor"><path d="M12 8l6 6H6l6-6z" /></svg>
               </div>
             </div>
 
@@ -316,35 +317,45 @@ export default function DashboardContent() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={vm.chartData} barCategoryGap={16}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 10, fill: "#6B7280" }}
-                    tickMargin={8}
-                    axisLine={false}
-                    tickLine={false}
-                  />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6B7280" }} tickMargin={8} axisLine={false} tickLine={false}/>
                   <YAxis
-                    label={{
-                      value: "Menit",
-                      angle: -90,
-                      position: "insideLeft",
-                      offset: 8,
-                      style: { fill: "#9CA3AF", fontSize: 11 },
-                    }}
+                    label={{ value: "Menit", angle: -90, position: "insideLeft", offset: 8, style: { fill: "#9CA3AF", fontSize: 11 } }}
                     tick={{ fontSize: 10, fill: "#6B7280" }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <RTooltip />
                   <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ paddingTop: 8 }} />
-                  <Bar dataKey="Kedatangan" name="Kedatangan" fill="#3B82F6" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="Kepulangan"   name="Kepulangan"   fill="#10B981" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="Kedatangan" fill="#3B82F6" radius={[6,6,0,0]} />
+                  <Bar dataKey="Kepulangan" fill="#10B981" radius={[6,6,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            </div>
+          </div>
 
-          {/* Daftar cuti di bawah – tetap */}
+          {/* ===== Performa Kehadiran (BARU) ===== */}
+          <div className="col-span-12">
+            <PerformanceSection
+              tabs={vm.perfTabs}
+              tab={vm.perfTab}
+              setTab={vm.setPerfTab}
+              date={vm.perfDate}
+              setDate={vm.setPerfDate}
+              division={vm.perfDivision}
+              setDivision={vm.setPerfDivision}
+              divisionOptions={vm.perfDivisionOptions}
+              q={vm.perfQuery}
+              setQ={vm.setPerfQuery}
+              rows={vm.perfRows}
+            />
+          </div>
+
+          {/* ===== Top 5 (BARU) ===== */}
+          <div className="col-span-12">
+            <Top5Section leftRows={vm.top5Late} rightRows={vm.top5Discipline} />
+          </div>
+
+          {/* ===== Karyawan Cuti (tetap, di bawah) ===== */}
           <div className="col-span-12 bg-white rounded-2xl shadow-sm p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -380,8 +391,9 @@ export default function DashboardContent() {
               <div className="px-2 py-2 text-xs text-gray-400">...</div>
             </div>
           </div>
+
         </div>
       </div>
-    </div>
+
   );
 }

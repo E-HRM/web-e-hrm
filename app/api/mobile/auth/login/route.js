@@ -1,8 +1,8 @@
 // app/api/mobile/auth/login/route.js
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import db from '../../../../../lib/prisma';
-import { signAuthToken } from '../../../../../lib/jwt';
+import db from '@/lib/prisma';
+import { signAuthToken } from '@/lib/jwt';
 
 export async function POST(req) {
   try {

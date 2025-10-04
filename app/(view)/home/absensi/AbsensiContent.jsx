@@ -34,17 +34,40 @@ import useAbsensiViewModel from "./useAbsensiViewModel";
 
 dayjs.extend(customParseFormat);
 
-/* ====================== UTIL ====================== */
-function onlyHHmm(v) {
+/* -------------------- Helpers "pure" -------------------- */
+// Ambil HH:mm dari string tanpa mengubah zona. Kalau objek Date/dayjs, pakai format biasa.
+function pureHHmm(v) {
   if (!v) return "-";
   if (typeof v === "string") {
-    const m = v.match(/^(\d{2}):(\d{2})/);
+    // Cari pola HH:mm[:ss] di mana pun berada
+    const m = v.match(/(?:T|\s)?(\d{2}):(\d{2})(?::\d{2})?/);
     if (m) return `${m[1]}:${m[2]}`;
-    const parsed = dayjs(v);
-    return parsed.isValid() ? parsed.format("HH:mm") : v;
+    const d = dayjs(v);
+    return d.isValid() ? d.format("HH:mm") : "-";
   }
   const d = dayjs(v);
   return d.isValid() ? d.format("HH:mm") : "-";
+}
+
+// Untuk sorter, ubah HH:mm menjadi menit dari tengah malam.
+function minutesFromHHmm(v) {
+  const s = pureHHmm(v);
+  const m = s.match(/^(\d{2}):(\d{2})$/);
+  if (!m) return -1;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+// Ambil kunci tanggal "YYYY-MM-DD" dari field tanggal tanpa konversi
+function getDateKey(v) {
+  if (!v) return "";
+  if (typeof v === "string") {
+    const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+    const d = dayjs(v);
+    return d.isValid() ? d.format("YYYY-MM-DD") : "";
+  }
+  const d = dayjs(v);
+  return d.isValid() ? d.format("YYYY-MM-DD") : "";
 }
 
 /* ====================== AVATAR ====================== */
@@ -141,8 +164,15 @@ function AttendanceCard({
         title: "Tanggal",
         dataIndex: "tanggal",
         width: 120,
-        render: (v) => (v ? dayjs(v).format("DD/MM/YYYY") : "-"),
-        sorter: (a, b) => dayjs(a.tanggal).unix() - dayjs(b.tanggal).unix(),
+        render: (v) => {
+          const key = getDateKey(v);
+          return key ? dayjs(key, "YYYY-MM-DD").format("DD/MM/YYYY") : "-";
+        },
+        sorter: (a, b) => {
+          const ak = getDateKey(a.tanggal);
+          const bk = getDateKey(b.tanggal);
+          return ak.localeCompare(bk);
+        },
       },
       {
         title: "Karyawan",
@@ -170,12 +200,8 @@ function AttendanceCard({
         title: jamColumnTitle,
         dataIndex: "jam",
         width: 120,
-        render: (v) => onlyHHmm(v),
-        sorter: (a, b) => {
-          const av = onlyHHmm(a.jam);
-          const bv = onlyHHmm(b.jam);
-          return av.localeCompare(bv);
-        },
+        render: (v) => pureHHmm(v),
+        sorter: (a, b) => minutesFromHHmm(a.jam) - minutesFromHHmm(b.jam),
       },
       {
         title: "Status",
@@ -345,17 +371,11 @@ function AttendanceCard({
 export default function AbsensiContent() {
   const vm = useAbsensiViewModel();
 
-  // mode: 'in' (Kedatangan) | 'out' (Kepulangan)
   const [mode, setMode] = useState("in");
   const isIn = mode === "in";
 
-  // Pastikan default tanggal = hari ini (sudah default di VM)
-  // Tidak mengosongkan tanggal supaya selalu terfilter hari ini
-  useEffect(() => {
-    // no-op
-  }, []);
+  useEffect(() => {}, []);
 
-  // Ambil binding sesuai mode
   const rows = isIn ? vm.kedatangan : vm.kepulangan;
   const filters = isIn ? vm.filterIn : vm.filterOut;
   const setFilters = isIn ? vm.setFilterIn : vm.setFilterOut;
@@ -364,7 +384,7 @@ export default function AbsensiContent() {
   const dateValue = isIn ? vm.dateIn : vm.dateOut;
   const setDateValue = isIn ? vm.setDateIn : vm.setDateOut;
 
-  const dateLabel = `Tanggal: ${dayjs(dateValue).format(
+  const dateLabel = `${dayjs(dateValue).format(
     "dddd, DD MMMM YYYY"
   )}`;
 
@@ -389,7 +409,6 @@ export default function AbsensiContent() {
             </Typography.Text>
           </div>
 
-          {/* Select Kedatangan/Kepulangan di header page */}
           <Select
             value={mode}
             onChange={setMode}
@@ -413,15 +432,12 @@ export default function AbsensiContent() {
           jamColumnTitle={jamColumnTitle}
           stats={stats}
           headerRight={
-            <>
-              {/* DatePicker kembali, default hari ini, tapi bisa dipilih */}
-              <DatePicker
-                value={dateValue}
-                onChange={setDateValue}
-                format="DD/MM/YYYY"
-                allowClear={false}
-              />
-            </>
+            <DatePicker
+              value={dateValue}
+              onChange={setDateValue}
+              format="DD/MM/YYYY"
+              allowClear={false}
+            />
           }
         />
       </div>

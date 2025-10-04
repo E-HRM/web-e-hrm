@@ -9,7 +9,24 @@ import { ApiEndpoints } from "../../../../constrainst/endpoints";
 // default array yang stabil agar tak bikin dependency berubah
 const EMPTY = Object.freeze([]);
 
-/** Meratakan satu baris recipient + absensi nested */
+/* -------------------- Helpers "pure" -------------------- */
+// Ambil kunci tanggal "YYYY-MM-DD" dari berbagai tipe input,
+// TANPA konversi zona waktu; kalau string "2025-10-03 17:00:43" -> "2025-10-03"
+function getDateKey(v) {
+  if (!v) return "";
+  if (typeof v === "string") {
+    const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+    // fallback: biar nggak meledak kalau formatnya beda
+    const d = dayjs(v);
+    return d.isValid() ? d.format("YYYY-MM-DD") : "";
+  }
+  // dayjs/Date/number → baca lokal runtime saja (tanpa TZ transform)
+  const d = dayjs(v);
+  return d.isValid() ? d.format("YYYY-MM-DD") : "";
+}
+
+/** Meratakan satu baris recipient + absensi nested (tetap) */
 function flattenRecipient(rec) {
   const a = rec?.absensi ?? {};
   const user = a.user ?? rec.user ?? null;
@@ -69,9 +86,13 @@ function applyFilters(list, dateVal, filters) {
   const needStatus = (filters?.status || "").toLowerCase().trim();
 
   return list
-    .filter((r) =>
-      dateVal ? (r.tanggal ? dayjs(r.tanggal).isSame(dateVal, "day") : false) : true
-    )
+    .filter((r) => {
+      if (!dateVal) return true;
+      if (!r.tanggal) return false;
+      const rowKey = getDateKey(r.tanggal);
+      const targetKey = getDateKey(dateVal);
+      return rowKey && targetKey ? rowKey === targetKey : false;
+    })
     .filter((r) =>
       needDiv ? r.user?.departement?.nama_departement === needDiv : true
     )
@@ -116,8 +137,7 @@ export default function useAbsensiViewModel() {
     keepPreviousData: true,
   });
 
-  // HILANGKAN WARNING ESLINT:
-  // lakukan fallback [] DI DALAM useMemo, bukan di luar.
+  // flatten
   const base = useMemo(() => {
     const list = Array.isArray(resp?.data) ? resp.data : EMPTY;
     return list.map(flattenRecipient);

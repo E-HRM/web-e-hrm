@@ -341,14 +341,15 @@ export default function ViewLayout({ children }) {
           </Header>
 
           <Content
-            className="content-scroll"
-            style={{
-              background: "#F0F4F8",
-              padding: screens.md ? 24 : 16,
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-            }}
+          className="content-scroll"
+          style={{
+            background: "rgba(152, 213, 255, 0.3)",
+            padding: screens.md ? 24 : 16,
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+          }}
+
           >
             {children}
           </Content>
