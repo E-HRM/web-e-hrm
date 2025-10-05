@@ -9,7 +9,7 @@ import { fetcher } from "@/app/utils/fetcher";
 
 dayjs.extend(utc);
 
-/** tampilkan angka jam persis seperti DB */
+/** tampilkan angka jam persis seperti di DB (tanpa pergeseran zona) */
 export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
   if (!v) return "-";
   const s = String(v);
@@ -26,21 +26,32 @@ export default function useKunjunganRekapanViewModel() {
     q: "",
     userId: "",
     status: "",
+    kategoriId: "",
     from: null,
     to: null,
   });
 
+  /** Users untuk filter */
   const { data: usersRes } = useSWR(`${ApiEndpoints.GetUsers}?perPage=1000`, fetcher, { revalidateOnFocus: false });
   const userOptions = useMemo(() => {
     const xs = Array.isArray(usersRes?.data) ? usersRes.data : [];
     return xs.map((u) => ({ value: u.id_user, label: u.nama_pengguna || u.email || u.id_user }));
   }, [usersRes]);
 
+  /** Kategori untuk filter */
+  const { data: katRes } = useSWR(`${ApiEndpoints.GetKategoriKunjungan}?pageSize=1000&orderBy=kategori_kunjungan&sort=asc`, fetcher, { revalidateOnFocus: false });
+  const kategoriOptions = useMemo(() => {
+    const xs = Array.isArray(katRes?.data) ? katRes.data : [];
+    return xs.map((k) => ({ value: k.id_kategori_kunjungan, label: k.kategori_kunjungan }));
+  }, [katRes]);
+
+  /** List kunjungan */
   const listUrl = useMemo(() => {
     const p = new URLSearchParams();
     if (filters.q?.trim()) p.set("q", filters.q.trim());
     if (filters.userId) p.set("id_user", filters.userId);
-    if (filters.status) p.set("status_kunjungan", filters.status);
+    if (filters.status) p.set("status_kunjungan", filters.status); // diproses | berlangsung | selesai
+    if (filters.kategoriId) p.set("id_kategori_kunjungan", filters.kategoriId);
     const f = asDateOnly(filters.from);
     const t = asDateOnly(filters.to);
     if (f) p.set("tanggal_mulai", f);
@@ -54,15 +65,17 @@ export default function useKunjunganRekapanViewModel() {
   const { data: listRes, isLoading } = useSWR(listUrl, fetcher, { revalidateOnFocus: false });
   const rows = useMemo(() => (Array.isArray(listRes?.data) ? listRes.data : []), [listRes]);
 
+  /** Link OSM untuk lihat titik */
   const osmUrl = (lat, lon) =>
     lat != null && lon != null
       ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`
       : null;
 
-  // foto/koordinat kemungkinan nama field
+  /** Ambil foto dari beberapa kemungkinan nama field */
   const pickPhotoUrl = (r) =>
     r.lampiran_kunjungan_url || r.lampiran_url || r.foto_url || r.image_url || r.photo_url || null;
 
+  /** Koordinat start/end dengan fallback naming */
   const getStartCoord = (r) => ({
     lat: r.start_latitude ?? r.latitude_start ?? null,
     lon: r.start_longitude ?? r.longitude_start ?? null,
@@ -78,6 +91,7 @@ export default function useKunjunganRekapanViewModel() {
     filters,
     setFilters,
     userOptions,
+    kategoriOptions,
     showFromDB,
     osmUrl,
     pickPhotoUrl,

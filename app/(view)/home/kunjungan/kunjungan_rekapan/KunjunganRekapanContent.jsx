@@ -29,6 +29,12 @@ export default function KunjunganRekapanContent() {
   const columns = useMemo(
     () => [
       {
+        title: "Kategori",
+        key: "kategori",
+        width: 180,
+        render: (_, r) => r.kategori?.kategori_kunjungan || "—",
+      },
+      {
         title: "Deskripsi",
         dataIndex: "deskripsi",
         key: "desk",
@@ -120,8 +126,8 @@ export default function KunjunganRekapanContent() {
           const m =
             st === "selesai"
               ? { color: "success", text: "Selesai" }
-              : st === "ditunda"
-              ? { color: "warning", text: "Ditunda" }
+              : st === "berlangsung"
+              ? { color: "warning", text: "Berlangsung" }
               : { color: "processing", text: "Diproses" };
           return <Tag color={m.color}>{m.text}</Tag>;
         },
@@ -145,9 +151,7 @@ export default function KunjunganRekapanContent() {
   );
 
   return (
-    <ConfigProvider
-      theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: NAVY, borderRadius: 12 } }}
-    >
+    <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: NAVY, borderRadius: 12 } }}>
       <div className="p-4">
         <Card
           title={<span className="text-lg font-semibold">Rekapan Kunjungan</span>}
@@ -156,7 +160,7 @@ export default function KunjunganRekapanContent() {
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <Select
-              className="min-w-[240px]"
+              className="min-w-[220px]"
               placeholder="Filter Karyawan"
               allowClear
               value={vm.filters.userId || undefined}
@@ -165,18 +169,31 @@ export default function KunjunganRekapanContent() {
               showSearch
               optionFilterProp="label"
             />
+
             <Select
-              className="min-w-[180px]"
+              className="min-w-[220px]"
+              placeholder="Kategori Kunjungan"
+              allowClear
+              value={vm.filters.kategoriId || undefined}
+              options={vm.kategoriOptions}
+              onChange={(v) => vm.setFilters((s) => ({ ...s, kategoriId: v || "" }))}
+              showSearch
+              optionFilterProp="label"
+            />
+
+            <Select
+              className="min-w-[160px]"
               placeholder="Status"
               allowClear
               value={vm.filters.status || undefined}
               onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
               options={[
                 { value: "diproses", label: "Diproses" },
-                { value: "ditunda", label: "Ditunda" },
+                { value: "berlangsung", label: "Berlangsung" },
                 { value: "selesai", label: "Selesai" },
               ]}
             />
+
             <DatePicker
               placeholder="Dari"
               value={vm.filters.from ? dayjs(vm.filters.from) : null}
@@ -190,8 +207,9 @@ export default function KunjunganRekapanContent() {
               onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.toDate() : null }))}
               format="DD/MM/YYYY"
             />
+
             <Input.Search
-              className="w-[240px]"
+              className="w-[260px]"
               placeholder="Cari deskripsi/hand over"
               value={vm.filters.q}
               onChange={(e) => vm.setFilters((s) => ({ ...s, q: e.target.value }))}

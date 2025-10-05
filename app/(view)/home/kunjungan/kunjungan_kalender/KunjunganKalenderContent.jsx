@@ -15,7 +15,6 @@ import {
   Tag,
   message,
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import idLocale from "@fullcalendar/core/locales/id";
 import useVM, { showFromDB } from "./useKunjunganKalenderViewModel";
@@ -23,14 +22,11 @@ import useVM, { showFromDB } from "./useKunjunganKalenderViewModel";
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
 import interactionPlugin from "@fullcalendar/interaction";
 import dayGridPlugin from "@fullcalendar/daygrid";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import listPlugin from "@fullcalendar/list";
 
 const NAVY = "#003A6F";
 
 export default function KunjunganKalenderContent() {
   const vm = useVM();
-
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
@@ -41,7 +37,7 @@ export default function KunjunganKalenderContent() {
   }, [form]);
 
   const handleDatesSet = useCallback((info) => {
-    // Panggil VM hanya bila range benar-benar berubah (VM sudah guard juga)
+    // VM sudah punya guard agar tidak loop; tetap panggil di sini.
     vm.setRange({ start: info.start, end: info.end });
   }, [vm]);
 
@@ -54,6 +50,7 @@ export default function KunjunganKalenderContent() {
         jam_mulai: v.jam_mulai?.toDate(),
         jam_selesai: v.jam_selesai?.toDate(),
         deskripsi: v.deskripsi,
+        kategoriId: v.id_kategori_kunjungan || null,
       });
       setOpen(false);
       message.success("Rencana kunjungan tersimpan");
@@ -68,22 +65,21 @@ export default function KunjunganKalenderContent() {
         <Card
           title={<span className="text-lg font-semibold">Kalender Kunjungan</span>}
           styles={{ body: { paddingTop: 16 } }}
-          extra={<PlusOutlined style={{ color: NAVY }} />}
         >
           <FullCalendar
             height="auto"
             locales={[idLocale]}
             locale="id"
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+            plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
             headerToolbar={{
               left: "prev,next today",
               center: "title",
-              right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
+              right: "", // <-- HILANGKAN tombol view switcher (hanya Month)
             }}
             selectable
             selectMirror
-            datesSet={handleDatesSet}              // <- handler stabil
+            datesSet={handleDatesSet}
             dateClick={onDateClick}
             events={vm.events}
             eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
@@ -137,6 +133,20 @@ export default function KunjunganKalenderContent() {
               options={vm.userOptions}
               showSearch
               optionFilterProp="label"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Kategori Kunjungan"
+            name="id_kategori_kunjungan"
+            rules={[{ required: !!vm.kategoriRequired, message: "Pilih kategori" }]}
+          >
+            <Select
+              placeholder="Pilih kategori"
+              options={vm.kategoriOptions}
+              showSearch
+              optionFilterProp="label"
+              allowClear
             />
           </Form.Item>
 
