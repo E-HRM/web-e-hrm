@@ -1,25 +1,23 @@
+// app/(view)/auth/login/useLoginViewModel.js
 "use client";
 
 import { useState } from "react";
 import { App as AntdApp } from "antd";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
+
+const DASHBOARD_BY_ROLE = {
+  HR: "/home/dashboard",
+  DIREKTUR: "/home/dashboard",
+  OPERASIONAL: "/home/dashboard2",
+};
+
+const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL"]);
 
 export default function useLoginViewModel() {
   const router = useRouter();
-  const { notification: apiNotification } = AntdApp.useApp();
+  const { notification } = AntdApp.useApp();
   const [loading, setLoading] = useState(false);
-
-  const redirectByRole = (role) => {
-    switch (role) {
-      case "HR":
-      case "DIREKTUR":
-      case "OPERASIONAL":
-      default:
-        router.push("/home/dashboard");
-        break;
-    }
-  };
 
   const onFinish = async (values) => {
     try {
@@ -35,18 +33,32 @@ export default function useLoginViewModel() {
         throw new Error(res?.error || "Email atau password salah.");
       }
 
+      // cek role dari session
       const sRes = await fetch("/api/auth/session", { cache: "no-store" });
       const session = await sRes.json();
+      const role = session?.user?.role;
 
-      redirectByRole(session?.user?.role);
+      // tolak selain HR/DIREKTUR/OPERASIONAL
+      if (!ALLOWED_ROLES.has(role)) {
+        notification.error({
+          message: "Akses Ditolak",
+          description: "Role Anda tidak diizinkan mengakses panel ini.",
+          placement: "topRight",
+        });
+        await signOut({ redirect: true, callbackUrl: "/auth/login?e=forbidden" });
+        return;
+      }
 
-      apiNotification.success({
+      const dest = DASHBOARD_BY_ROLE[role];
+      router.push(dest);
+
+      notification.success({
         message: "Login Berhasil",
         description: "Anda berhasil masuk ke sistem.",
         placement: "topRight",
       });
     } catch (err) {
-      apiNotification.error({
+      notification.error({
         message: "Login Gagal",
         description: err?.message || "Terjadi kesalahan saat login.",
         placement: "topRight",
