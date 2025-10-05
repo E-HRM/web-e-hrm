@@ -59,6 +59,7 @@ const MENU = [
     hasCaret: true,
     children: [
       { href: "/home/kunjungan/kunjungan_rekapan", match: ["/home/kunjungan/kunjungan_rekapan"], label: "Review Kunjungan" },
+      { href: "/home/kunjungan/kategori_kunjungan", match: ["/home/kunjungan/kategori_kunjungan"], label: "Kategori Kunjungan" },
       { href: "/home/kunjungan/kunjungan_kalender", match: ["/home/kunjungan/kunjungan_kalender"], label: "Kalender Kunjung" },
     ],
   },
