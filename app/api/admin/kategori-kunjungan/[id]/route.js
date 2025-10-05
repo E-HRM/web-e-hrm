@@ -89,7 +89,6 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ message: 'Tidak ada perubahan yang diberikan.' }, { status: 400 });
     }
 
-    // Mengganti model dan field ID
     const updated = await db.kategoriKunjungan.update({
       where: { id_kategori_kunjungan: params.id },
       data: payload,
@@ -120,14 +119,26 @@ export async function DELETE(req, { params }) {
   if (forbidden) return forbidden;
 
   try {
-    // Mengganti model dan field ID
-    await db.kategoriKunjungan.update({
-      where: { id_kategori_kunjungan: params.id },
-      data: { deleted_at: new Date() },
-    });
+    // Cek query parameter untuk hard delete
+    const { searchParams } = new URL(req.url);
+    const isHardDelete = searchParams.get('hard') === 'true';
 
-    return NextResponse.json({ message: 'Kategori kunjungan dihapus (soft delete).' });
+    if (isHardDelete) {
+      // Hard delete: Hapus record dari database secara permanen
+      await db.kategoriKunjungan.delete({
+        where: { id_kategori_kunjungan: params.id },
+      });
+      return NextResponse.json({ message: 'Kategori kunjungan dihapus secara permanen (hard delete).' });
+    } else {
+      // Soft delete (default): Update kolom deleted_at
+      await db.kategoriKunjungan.update({
+        where: { id_kategori_kunjungan: params.id },
+        data: { deleted_at: new Date() },
+      });
+      return NextResponse.json({ message: 'Kategori kunjungan dihapus (soft delete).' });
+    }
   } catch (err) {
+    // Error P2025: Record to delete/update does not exist.
     if (err?.code === 'P2025') {
       return NextResponse.json({ message: 'Kategori kunjungan tidak ditemukan.' }, { status: 404 });
     }
