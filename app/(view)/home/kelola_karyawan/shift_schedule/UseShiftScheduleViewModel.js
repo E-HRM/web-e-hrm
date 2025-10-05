@@ -44,20 +44,39 @@ async function loadShiftMapForRange(startDate, endDate) {
   return map;
 }
 
-// --- Fungsi untuk mendapatkan URL foto (dari referensi Anda) ---
+// --- URL foto (opsional) ---
 function getPhotoUrl(row) {
-    return (
-      row?.foto_profil_user ||
-      row?.avatarUrl ||
-      row?.foto ||
-      row?.foto_url ||
-      row?.photoUrl ||
-      row?.photo ||
-      row?.avatar ||
-      row?.gambar ||
-      null
-    );
+  return (
+    row?.foto_profil_user ||
+    row?.avatarUrl ||
+    row?.foto ||
+    row?.foto_url ||
+    row?.photoUrl ||
+    row?.photo ||
+    row?.avatar ||
+    row?.gambar ||
+    null
+  );
+}
+
+/* ======== FORMATTER JAM DARI DB (TANPA KONVERSI) ======== */
+/** Terima string "HH:mm:ss" atau "HH:mm" dari DB dan tampilkan "HH:mm".
+ *  Bila bukan string, baru fallback ke dayjs (tanpa mengubah zona waktu).
+ */
+const CLOCK_HHMM = /^\d{2}:\d{2}$/;
+const CLOCK_HHMMSS = /^\d{2}:\d{2}:\d{2}$/;
+function hhmmFromDb(v) {
+  if (v == null || v === "") return "";
+  if (typeof v === "string") {
+    if (CLOCK_HHMM.test(v)) return v;
+    if (CLOCK_HHMMSS.test(v)) return v.slice(0, 5);
+    // Kadang API bisa kirim "2025-10-04T09:00:00" → ambil HH:mm di sana juga
+    const m = v.match(/(\d{2}):(\d{2})(?::\d{2})?/);
+    if (m) return `${m[1]}:${m[2]}`;
   }
+  const d = dayjs(v);
+  return d.isValid() ? d.format("HH:mm") : "";
+}
 
 export default function UseShiftScheduleViewModel() {
   const { notification, modal } = AntdApp.useApp();
@@ -112,9 +131,16 @@ export default function UseShiftScheduleViewModel() {
 
   /* ===== filter & users ===== */
   const [deptId, setDeptId] = useState(null);
-  const { data: deptRes } = useSWR(`${ApiEndpoints.GetDepartement}?page=1&pageSize=200`, fetcher);
+  const { data: deptRes } = useSWR(
+    `${ApiEndpoints.GetDepartement}?page=1&pageSize=200`,
+    fetcher
+  );
   const deptOptions = useMemo(
-    () => (deptRes?.data || []).map((d) => ({ value: d.id_departement, label: d.nama_departement })),
+    () =>
+      (deptRes?.data || []).map((d) => ({
+        value: d.id_departement,
+        label: d.nama_departement,
+      })),
     [deptRes]
   );
 
@@ -128,34 +154,21 @@ export default function UseShiftScheduleViewModel() {
     return arr;
   }, [usersRes, deptId]);
 
-
   const rows = useMemo(() => {
     return (users || []).map((u) => {
       // nama & email
-      const name  = u.nama_pengguna || u.nama || u.name || u.email || "—";
+      const name = u.nama_pengguna || u.nama || u.name || u.email || "—";
       const email = u.email || "—";
 
-      // jabatan & departemen: ambil dari nested dulu, terus fallback ke kemungkinan lain
+      // jabatan & departemen
       const jabatan =
-        u.jabatan?.nama_jabatan ||
-        u.nama_jabatan ||
-        (u.jabatan && u.jabatan.nama) ||
-        "";
-
+        u.jabatan?.nama_jabatan || u.nama_jabatan || (u.jabatan && u.jabatan.nama) || "";
       const departemen =
-        u.departement?.nama_departement ||
-        u.nama_departement ||
-        u.divisi ||
-        "";
+        u.departement?.nama_departement || u.nama_departement || u.divisi || "";
 
-      // foto: siapkan beberapa alias supaya komponen getPhotoUrl() jalan
+      // foto (opsional)
       const foto =
-        u.foto_profil_user ||
-        u.foto_url ||
-        u.foto ||
-        u.avatarUrl ||
-        u.photoUrl ||
-        null;
+        u.foto_profil_user || u.foto_url || u.foto || u.avatarUrl || u.photoUrl || null;
 
       return {
         id: u.id_user || u.id || u.uuid,
@@ -164,7 +177,7 @@ export default function UseShiftScheduleViewModel() {
         jabatan,
         departemen,
 
-        // simpan dengan nama field yang dikenali getPhotoUrl(row)
+        // alias yang dikenali getPhotoUrl(row)
         foto_profil_user: foto,
         avatarUrl: foto,
         foto_url: foto,
@@ -172,13 +185,18 @@ export default function UseShiftScheduleViewModel() {
     });
   }, [users]);
 
-
-  /* ===== pola kerja ===== */
-  const { data: polaRes } = useSWR(`${ApiEndpoints.GetPolaKerja}?page=1&pageSize=500`, fetcher);
+  /* ===== pola kerja: TAMPILKAN JAM SESUAI STRING DB ===== */
+  const { data: polaRes } = useSWR(
+    `${ApiEndpoints.GetPolaKerja}?page=1&pageSize=500`,
+    fetcher
+  );
   const polaMap = useMemo(() => {
     const map = new Map();
     for (const p of polaRes?.data || []) {
-      const jam = `${dayjs(p.jam_mulai).format("HH:mm")} - ${dayjs(p.jam_selesai).format("HH:mm")}`;
+      // Ambil langsung string jam dari DB (tanpa convert)
+      const mulai = p.jam_mulai ?? p.jamMulai ?? "";
+      const selesai = p.jam_selesai ?? p.jamSelesai ?? "";
+      const jam = `${hhmmFromDb(mulai)} - ${hhmmFromDb(selesai)}`;
       map.set(p.id_pola_kerja, { nama: p.nama_pola_kerja, jam });
     }
     return map;
@@ -194,7 +212,10 @@ export default function UseShiftScheduleViewModel() {
     return p.toString();
   }, [weekStart, weekEnd]);
 
-  const { data: shiftRes, mutate } = useSWR(`${ApiEndpoints.GetShiftKerja}?${qs}`, fetcher);
+  const { data: shiftRes, mutate } = useSWR(
+    `${ApiEndpoints.GetShiftKerja}?${qs}`,
+    fetcher
+  );
 
   const cellMap = useMemo(() => {
     const map = new Map();
@@ -211,7 +232,10 @@ export default function UseShiftScheduleViewModel() {
     return map;
   }, [shiftRes]);
 
-  const getCell = useCallback((userId, dateStr) => cellMap.get(`${userId}|${dateStr}`), [cellMap]);
+  const getCell = useCallback(
+    (userId, dateStr) => cellMap.get(`${userId}|${dateStr}`),
+    [cellMap]
+  );
 
   /* ===== payload helpers (SELALU kirim 'hari_kerja') ===== */
   const assignPayload = (userId, dateStr, value) => {
@@ -265,7 +289,7 @@ export default function UseShiftScheduleViewModel() {
     async (userId) => {
       const sourceWeek = days.map((d) => getCell(userId, d.dateStr) || null);
       const rangeStart = dayjs(weekStart).add(1, "week").startOf("day").toDate();
-      const rangeEnd = dayjs(weekStart).endOf("month").toDate(); // <= diubah: end of month
+      const rangeEnd = dayjs(weekStart).endOf("month").toDate(); // akhir bulan
 
       let curStart = dayjs(rangeStart);
       while (curStart.isBefore(rangeEnd) || curStart.isSame(rangeEnd, "day")) {
@@ -273,7 +297,10 @@ export default function UseShiftScheduleViewModel() {
         const weekDates = Array.from({ length: 7 }).map((_, i) =>
           curStart.add(i, "day").format("YYYY-MM-DD")
         );
-        const targetMap = await loadShiftMapForRange(curStart.toDate(), weekEndLocal.endOf("day").toDate());
+        const targetMap = await loadShiftMapForRange(
+          curStart.toDate(),
+          weekEndLocal.endOf("day").toDate()
+        );
 
         for (let i = 0; i < 7; i++) {
           const src = sourceWeek[i];
@@ -309,14 +336,16 @@ export default function UseShiftScheduleViewModel() {
   const clearRepetition = useCallback(
     async (userId) => {
       const rangeStart = dayjs(weekStart).add(1, "week").startOf("day").toDate();
-      const rangeEnd = dayjs(weekStart).endOf("month").toDate(); // <= diubah: end of month
+      const rangeEnd = dayjs(weekStart).endOf("month").toDate(); // akhir bulan
 
       const targetMap = await loadShiftMapForRange(rangeStart, rangeEnd);
       const toDelete = [];
       targetMap.forEach((v, key) => {
         if (key.startsWith(`${userId}|`)) toDelete.push(v.rawId);
       });
-      await Promise.all(toDelete.map((id) => crudService.delete(ApiEndpoints.DeleteShiftKerja(id))));
+      await Promise.all(
+        toDelete.map((id) => crudService.delete(ApiEndpoints.DeleteShiftKerja(id)))
+      );
       notification.success({ message: "Jadwal berulang dihapus untuk sisa bulan ini." });
       await mutate();
     },
@@ -347,8 +376,14 @@ export default function UseShiftScheduleViewModel() {
   );
 
   /* ===== navigasi & refresh ===== */
-  const prevWeek = useCallback(() => setWeekStart(dayjs(weekStart).add(-1, "week").toDate()), [weekStart]);
-  const nextWeek = useCallback(() => setWeekStart(dayjs(weekStart).add(1, "week").toDate()), [weekStart]);
+  const prevWeek = useCallback(
+    () => setWeekStart(dayjs(weekStart).add(-1, "week").toDate()),
+    [weekStart]
+  );
+  const nextWeek = useCallback(
+    () => setWeekStart(dayjs(weekStart).add(1, "week").toDate()),
+    [weekStart]
+  );
 
   const refresh = useCallback(async () => {
     await Promise.all([mutUsers(), mutate()]);
@@ -356,19 +391,33 @@ export default function UseShiftScheduleViewModel() {
 
   return {
     // waktu & hari
-    weekStart, weekEnd, days,
-    monthOptions, yearOptions, currentMonthIdx, currentYear, setMonthYear,
+    weekStart,
+    weekEnd,
+    days,
+    monthOptions,
+    yearOptions,
+    currentMonthIdx,
+    currentYear,
+    setMonthYear,
 
     // grid
-    rows, polaMap, getCell, assignCell, deleteCell,
+    rows,
+    polaMap,
+    getCell,
+    assignCell,
+    deleteCell,
 
     // filter
-    deptId, setDeptId, deptOptions,
+    deptId,
+    setDeptId,
+    deptOptions,
 
     // repeat
     toggleRepeatSchedule,
 
     // nav
-    prevWeek, nextWeek, refresh,
+    prevWeek,
+    nextWeek,
+    refresh,
   };
 }

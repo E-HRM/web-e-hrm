@@ -1,13 +1,15 @@
 "use client";
 
 import { Suspense, lazy } from "react";
-
-const Broadcast = lazy(() => import("./BroadcastContent"));
+import KunjunganContent from "./KunjunganKalenderContent";
 import LoadingSplash from "@/app/components/common/LoadingSplash";
+
+
+const KunjunganKalenderContent = lazy(() => import("./KunjunganKalenderContent"));
 
 export default function Page() {
   return (
-      <Suspense
+        <Suspense
       fallback={
         <div className="grid place-items-center min-h-[calc(100dvh-64px-56px)]">
           <LoadingSplash
@@ -19,7 +21,7 @@ export default function Page() {
         </div>
       }
     >
-      <Broadcast /> 
+      <KunjunganKalenderContent/>
     </Suspense>
   );
 }

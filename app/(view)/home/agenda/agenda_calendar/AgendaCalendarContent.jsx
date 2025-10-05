@@ -2,10 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { App as AntdApp, Button, Modal, Form, Input, DatePicker, Select, Space, Tag } from "antd";
+import {
+  App as AntdApp,
+  Button,
+  Modal,
+  Form,
+  Input,
+  DatePicker,
+  Select,
+  Space,
+  Tag,
+} from "antd";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
-import useAgendaCalendarViewModel from "./useAgendaCalendarViewModel";
+import useAgendaCalendarViewModel from "./useAgendaCalendarViewModel.js";
 
 dayjs.locale("id");
 
@@ -18,31 +28,28 @@ import listPlugin from "@fullcalendar/list";
 export default function AgendaCalendarContent() {
   const { notification } = AntdApp.useApp();
   const calRef = useRef(null);
-
   const vm = useAgendaCalendarViewModel();
 
-  // modal state
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
   const [editId, setEditId] = useState(null);
 
-  // open create with prefilled dates
   const openCreate = (startStr, endStr) => {
     setEditId(null);
     form.setFieldsValue({
       title: "",
-      start: dayjs(startStr),
+      start: dayjs(startStr), // biarkan sebagai lokal
       end: dayjs(endStr),
       status: "diproses",
     });
     setOpen(true);
   };
 
-  // open edit
   const openEdit = (event) => {
     setEditId(event.id);
     form.setFieldsValue({
       title: event.title,
+      // event.start/end sudah lokal karena kita kirim string lokal ke FC
       start: dayjs(event.start),
       end: dayjs(event.end || event.start),
       status: event.extendedProps?.status || "diproses",
@@ -54,8 +61,8 @@ export default function AgendaCalendarContent() {
     const values = await form.validateFields();
     const payload = {
       title: values.title.trim(),
-      start: values.start.toDate(),
-      end: values.end?.toDate() ?? values.start.toDate(),
+      start: values.start.toDate(), // VM akan serialize ke "YYYY-MM-DD HH:mm:ss"
+      end: (values.end || values.start).toDate(),
       status: values.status,
     };
     try {
@@ -68,17 +75,16 @@ export default function AgendaCalendarContent() {
       }
       setOpen(false);
       form.resetFields();
-    } catch (e) {
+    } catch {
       notification.error({ message: "Gagal menyimpan agenda" });
     }
   };
 
-  // drag/resize update
   const commitMoveResize = async ({ event }) => {
     try {
       await vm.updateEvent(event.id, {
         title: event.title,
-        start: event.start,
+        start: event.start,            // Date -> VM serialize lokal
         end: event.end || event.start,
         status: event.extendedProps?.status || "diproses",
       });
@@ -89,50 +95,35 @@ export default function AgendaCalendarContent() {
     }
   };
 
-  // delete
-  const confirmDelete = (id) => {
-    Modal.confirm({
-      title: "Hapus agenda ini?",
-      okText: "Hapus",
-      okButtonProps: { danger: true },
-      cancelText: "Batal",
-      onOk: async () => {
-        try {
-          await vm.deleteEvent(id);
-          notification.success({ message: "Agenda dihapus" });
-        } catch {
-          notification.error({ message: "Gagal menghapus agenda" });
-        }
-      },
-    });
-  };
-
-  // render event content (label + status tag)
   const renderEventContent = (info) => {
     const status = info.event.extendedProps?.status;
     const color =
-      status === "selesai" ? "green" :
-      status === "ditunda" ? "orange" : "blue";
+      status === "selesai" ? "green" : status === "ditunda" ? "orange" : "blue";
     return (
       <div className="fc-event-custom">
-        <div>{info.timeText ? `${info.timeText} ` : ""}{info.event.title}</div>
-        {status ? <Tag color={color} style={{ marginTop: 2 }}>{status}</Tag> : null}
+        <div>
+          {info.timeText ? `${info.timeText} ` : ""}
+          {info.event.title}
+        </div>
+        {status ? (
+          <Tag color={color} style={{ marginTop: 2 }}>
+            {status}
+          </Tag>
+        ) : null}
       </div>
     );
   };
-
-  // height responsif
-  const height = "auto";
 
   return (
     <div className="p-4">
       <div className="rounded-2xl border border-slate-200 bg-white shadow-xl p-3">
         <FullCalendar
           ref={calRef}
-          height={height}
+          height="auto"
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
           initialView="dayGridMonth"
           locale="id"
+          timeZone="local"         // <- eksplisit: pakai waktu lokal
           dayMaxEventRows={3}
           headerToolbar={{
             left: "prev,next today",
@@ -150,11 +141,14 @@ export default function AgendaCalendarContent() {
               content: (
                 <Space direction="vertical">
                   <div>
-                    <b>Mulai:</b> {dayjs(arg.event.start).format("DD MMM YYYY HH:mm")}
+                    <b>Mulai:</b>{" "}
+                    {dayjs(arg.event.start).format("DD MMM YYYY HH:mm")}
                   </div>
                   <div>
                     <b>Selesai:</b>{" "}
-                    {dayjs(arg.event.end || arg.event.start).format("DD MMM YYYY HH:mm")}
+                    {dayjs(arg.event.end || arg.event.start).format(
+                      "DD MMM YYYY HH:mm"
+                    )}
                   </div>
                   {arg.event.extendedProps?.deskripsi && (
                     <div>
@@ -173,10 +167,21 @@ export default function AgendaCalendarContent() {
               icon: null,
               footer: (
                 <div className="flex justify-end gap-2">
-                  <Button onClick={() => { Modal.destroyAll(); openEdit(arg.event); }}>
+                  <Button
+                    onClick={() => {
+                      Modal.destroyAll();
+                      openEdit(arg.event);
+                    }}
+                  >
                     Edit
                   </Button>
-                  <Button danger onClick={() => { Modal.destroyAll(); confirmDelete(arg.event.id); }}>
+                  <Button
+                    danger
+                    onClick={() => {
+                      Modal.destroyAll();
+                      confirmDelete(arg.event.id);
+                    }}
+                  >
                     Hapus
                   </Button>
                 </div>
@@ -191,6 +196,7 @@ export default function AgendaCalendarContent() {
         />
       </div>
 
+      {/* Modal form */}
       <Modal
         title={editId ? "Edit Agenda" : "Agenda Baru"}
         open={open}
@@ -233,4 +239,21 @@ export default function AgendaCalendarContent() {
       </Modal>
     </div>
   );
+
+  function confirmDelete(id) {
+    Modal.confirm({
+      title: "Hapus agenda ini?",
+      okText: "Hapus",
+      okButtonProps: { danger: true },
+      cancelText: "Batal",
+      onOk: async () => {
+        try {
+          await vm.deleteEvent(id);
+          notification.success({ message: "Agenda dihapus" });
+        } catch {
+          notification.error({ message: "Gagal menghapus agenda" });
+        }
+      },
+    });
+  }
 }

@@ -9,7 +9,7 @@ import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import useAgendaViewModel from "./AgendaViewModel";
 
-const BRAND = { accent: "#D9A96F" };
+const BRAND = { accent: "#003A6F" };
 
 export default function AgendaContent() {
   const vm = useAgendaViewModel();

@@ -23,6 +23,8 @@ const API_SHIFT_KERJA = "/api/admin/shift-kerja";
 const API_ABSENSI_RECORDS = "/api/admin/absensi/history"; // GET ?date=YYYY-MM-DD&type=in|out&divisi=&status=&q=
 const API_ABSENSI_APPROVALS = "/api/admin/absensi";       // tanpa trailing slash
 
+const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -97,4 +99,12 @@ export const ApiEndpoints = {
     return s ? `${API_ABSENSI_APPROVALS}?${s}` : API_ABSENSI_APPROVALS;
   },
   UpdateAbsensiApproval: (id) => `${API_ABSENSI_APPROVALS}/${id}`,
+
+  GetKunjungan: API_KUNJUNGAN,
+  CreateKunjungan: API_KUNJUNGAN,
+  GetKunjunganById: (id) => `${API_KUNJUNGAN}/${id}`,
+  UpdateKunjungan: (id) => `${API_KUNJUNGAN}/${id}`,
+  DeleteKunjungan: (id) => `${API_KUNJUNGAN}/${id}`,
 };
+
+

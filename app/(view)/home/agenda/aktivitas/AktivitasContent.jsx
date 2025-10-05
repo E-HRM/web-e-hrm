@@ -26,9 +26,12 @@ import {
   PlusOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import useAktivitasTimesheetViewModel from "./AktivitasViewModel";
 
-const BRAND = { accent: "#D9A96F" };
+dayjs.extend(utc);
+
+const BRAND = { accent: "#003A6F" };
 
 export default function AktivitasContent() {
   const vm = useAktivitasTimesheetViewModel();
@@ -53,7 +56,8 @@ export default function AktivitasContent() {
           <div className="flex flex-col">
             <span className="font-medium">{v}</span>
             <span className="opacity-60 text-xs">
-              Dibuat: {dayjs(r.created_at).format("DD MMM YYYY HH:mm")}
+              {/* tampilkan created_at apa adanya (tanpa offset) */}
+              Dibuat: {dayjs.utc(r.created_at).format("DD MMM YYYY HH:mm")}
             </span>
           </div>
         ),
@@ -68,8 +72,9 @@ export default function AktivitasContent() {
         title: "Waktu",
         key: "waktu",
         render: (_, r) => {
-          const s = r.start_date ? dayjs(r.start_date).format("HH:mm") : "-";
-          const e = r.end_date ? dayjs(r.end_date).format("HH:mm") : "-";
+          // tampilkan jam apa adanya dari DB
+          const s = r.start_date ? dayjs.utc(r.start_date).format("HH:mm") : "-";
+          const e = r.end_date ? dayjs.utc(r.end_date).format("HH:mm") : "-";
           return `${s} - ${e}`;
         },
       },
@@ -106,18 +111,10 @@ export default function AktivitasContent() {
         render: (_, r) => (
           <Space>
             <Tooltip title="Tandai selesai">
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => vm.quickFinish(r)}
-              />
+              <Button size="small" icon={<EditOutlined />} onClick={() => vm.quickFinish(r)} />
             </Tooltip>
             <Tooltip title="Set Ulang ke Diproses">
-              <Button
-                size="small"
-                icon={<UndoOutlined />}
-                onClick={() => vm.resetToDiproses(r)}
-              />
+              <Button size="small" icon={<UndoOutlined />} onClick={() => vm.resetToDiproses(r)} />
             </Tooltip>
             <Popconfirm
               title="Hapus pekerjaan?"
@@ -142,8 +139,13 @@ export default function AktivitasContent() {
       await vm.createActivity({
         deskripsi_kerja: values.deskripsi_kerja.trim(),
         id_agenda: values.id_agenda,
-        start_date: values.start_date ? values.start_date.toISOString() : undefined,
-        end_date: values.end_date ? values.end_date.toISOString() : undefined,
+        // kirim string lokal polos (tanpa Z)
+        start_date: values.start_date
+          ? values.start_date.format("YYYY-MM-DD HH:mm:ss")
+          : undefined,
+        end_date: values.end_date
+          ? values.end_date.format("YYYY-MM-DD HH:mm:ss")
+          : undefined,
       });
       setOpenAdd(false);
       addForm.resetFields();
@@ -202,22 +204,22 @@ export default function AktivitasContent() {
             optionFilterProp="label"
           />
           <DatePicker
-            value={vm.filters.from ? dayjs(vm.filters.from) : null}
+            value={vm.filters.from ? dayjs(vm.filters.from, "YYYY-MM-DD HH:mm:ss") : null}
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
-                from: d ? d.startOf("day").toISOString() : "",
+                from: d ? d.startOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
               }))
             }
             format="DD/MM/YYYY"
           />
           <span className="opacity-60">-</span>
           <DatePicker
-            value={vm.filters.to ? dayjs(vm.filters.to) : null}
+            value={vm.filters.to ? dayjs(vm.filters.to, "YYYY-MM-DD HH:mm:ss") : null}
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
-                to: d ? d.endOf("day").toISOString() : "",
+                to: d ? d.endOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
               }))
             }
             format="DD/MM/YYYY"

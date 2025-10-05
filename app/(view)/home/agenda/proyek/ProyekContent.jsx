@@ -3,16 +3,21 @@
 import { useMemo, useState } from "react";
 import {
   Card, Table, Input, Button, Modal, Form, Popconfirm, Tooltip, message,
-  Select, Tag, DatePicker, Alert, Divider
+  Select, Tag, DatePicker, Alert
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+import utc from "dayjs/plugin/utc";
 import useSWR from "swr";
 import { fetcher } from "../../../../utils/fetcher";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import useProyekViewModel from "./ProyekViewModel";
 
-const BRAND = { accent: "#D9A96F" };
+dayjs.extend(customParseFormat);
+dayjs.extend(utc);
+
+const BRAND = { accent: "#003A6F" };
 
 export default function ProyekContent() {
   const vm = useProyekViewModel();
@@ -136,7 +141,6 @@ export default function ProyekContent() {
   return (
     <div className="p-4">
       <Card styles={{ body: { paddingTop: 16 } }} title={<span className="text-lg font-semibold">Proyek</span>}>
-        {/* Toolbar 1 baris (dipendekkan) */}
         <div className="flex items-center gap-2 md:flex-nowrap flex-wrap mb-4">
           <Input.Search
             placeholder="Cari proyek"
@@ -165,7 +169,6 @@ export default function ProyekContent() {
           </Button>
         </div>
 
-        {/* Table */}
         <Table
           rowKey="id_agenda"
           columns={columns}
@@ -220,7 +223,6 @@ export default function ProyekContent() {
         </Form>
       </Modal>
 
-      {/* Modal Daftar Pekerjaan Proyek (tetap inline) */}
       <ActivitiesModal open={openList} onClose={() => setOpenList(false)} project={listProject} />
     </div>
   );
@@ -231,15 +233,26 @@ function ActivitiesModal({ open, onClose, project }) {
   const [from, setFrom] = useState(null);
   const [to, setTo] = useState(null);
   const [status, setStatus] = useState("");
-  const [division, setDivision] = useState(""); // pakai user.role
+  const [division, setDivision] = useState("");
   const [q, setQ] = useState("");
+
+  // Tampilkan waktu PERSIS seperti di DB (tanpa konversi zona waktu)
+  const showDB = (v) => (v ? dayjs.utc(v).format("DD MMM YYYY HH:mm") : "-");
+
+  // Kirim filter range sebagai lokal polos "YYYY-MM-DD HH:mm:ss" (tanpa Z/offset)
+  const fmtLocal = (d, edge /* 'start'|'end' */) =>
+    d
+      ? dayjs(d)[edge === "end" ? "endOf" : "startOf"]("day").format("YYYY-MM-DD HH:mm:ss")
+      : null;
 
   const qs = useMemo(() => {
     if (!project?.id_agenda) return null;
     const p = new URLSearchParams();
     p.set("id_agenda", project.id_agenda);
-    if (from) p.set("from", dayjs(from).startOf("day").toISOString());
-    if (to) p.set("to", dayjs(to).endOf("day").toISOString());
+    const f = fmtLocal(from, "start");
+    const t = fmtLocal(to, "end");
+    if (f) p.set("from", f);
+    if (t) p.set("to", t);
     if (status) p.set("status", status);
     p.set("perPage", "500");
     return `${ApiEndpoints.GetAgendaKerja}?${p.toString()}`;
@@ -284,11 +297,11 @@ function ActivitiesModal({ open, onClose, project }) {
       {
         title: "Diproses Pada",
         key: "pada",
-        render: (_, r) => {
-          const s = r.start_date ? dayjs(r.start_date).format("DD MMM YYYY HH:mm") : "-";
-          const e = r.end_date ? dayjs(r.end_date).format("DD MMM YYYY HH:mm") : "-";
-          return <div className="whitespace-pre">{`${s}\n${e}`}</div>;
-        },
+        render: (_, r) => (
+          <div className="whitespace-pre">
+            {`${showDB(r.start_date)}\n${showDB(r.end_date)}`}
+          </div>
+        ),
       },
       {
         title: "Durasi",
@@ -312,12 +325,12 @@ function ActivitiesModal({ open, onClose, project }) {
         render: (_, r) => (
           <div className="flex flex-col">
             <span>{r.user?.nama_pengguna || r.user?.email || "—"}</span>
-            <span className="opacity-60 text-xs">{dayjs(r.created_at).format("DD MMM YYYY HH:mm")}</span>
+            <span className="opacity-60 text-xs">{showDB(r.created_at)}</span>
           </div>
         ),
       },
     ],
-    []
+    [] // kolom statis
   );
 
   return (
@@ -329,7 +342,7 @@ function ActivitiesModal({ open, onClose, project }) {
       width={1000}
       destroyOnClose
     >
-      {/* Filter bar satu row, search diperkecil */}
+      {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <DatePicker placeholder="Tanggal Mulai" value={from ? dayjs(from) : null} onChange={(d) => setFrom(d ? d.toDate() : null)} />
         <span className="opacity-60">-</span>

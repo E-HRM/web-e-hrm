@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import db from '../../../lib/prisma';
+import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { endOfUTCDay, parseDateOnlyToUTC, parseDateTimeToUTC, startOfUTCDay } from '@/helpers/date-helper';

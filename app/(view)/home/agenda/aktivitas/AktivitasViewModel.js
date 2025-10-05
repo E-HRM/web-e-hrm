@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import { fetcher } from "../../../../utils/fetcher";
 import { crudService } from "../../../../utils/services/crudService";
+
+dayjs.extend(utc);
 
 const DEFAULT_FROM = dayjs().startOf("week").add(1, "day");
 const DEFAULT_TO = dayjs(DEFAULT_FROM).add(6, "day");
@@ -14,15 +17,18 @@ const EMPTY_ROWS = Object.freeze([]);
 const EMPTY_AGENDA = Object.freeze([]);
 const EMPTY_USERS = Object.freeze([]);
 
-// === helper overlap sehari
+// === helper overlap sehari (tanpa transform zona waktu)
 function overlapsDay(row, ymd) {
-  const start = row.start_date ? new Date(row.start_date) : null;
-  const end = row.end_date ? new Date(row.end_date) : null;
-  const sod = dayjs(ymd).startOf("day").toDate();
-  const eod = dayjs(ymd).endOf("day").toDate();
-  const sOK = !start || start <= eod;
-  const eOK = !end || end >= sod;
-  return sOK && eOK;
+  const s = row.start_date ? dayjs.utc(row.start_date) : null; // treat as literal
+  const e = row.end_date ? dayjs.utc(row.end_date) : null;     // treat as literal
+
+  const sod = dayjs.utc(`${ymd} 00:00:00`, "YYYY-MM-DD HH:mm:ss");
+  const eod = dayjs.utc(`${ymd} 23:59:59`, "YYYY-MM-DD HH:mm:ss");
+
+  const sMs = s ? s.valueOf() : Number.NEGATIVE_INFINITY;
+  const eMs = e ? e.valueOf() : Number.POSITIVE_INFINITY;
+
+  return sMs <= eod.valueOf() && eMs >= sod.valueOf();
 }
 
 export default function useAktivitasTimesheetViewModel() {
@@ -31,8 +37,9 @@ export default function useAktivitasTimesheetViewModel() {
     id_agenda: "",
     status: "",
     q: "",
-    from: DEFAULT_FROM.startOf("day").toISOString(),
-    to: DEFAULT_TO.endOf("day").toISOString(),
+    // kirim ke backend pakai format lokal polos (tanpa Z)
+    from: DEFAULT_FROM.startOf("day").format("YYYY-MM-DD HH:mm:ss"),
+    to: DEFAULT_TO.endOf("day").format("YYYY-MM-DD HH:mm:ss"),
   });
   const [selectedDay, setSelectedDay] = useState(""); // YYYY-MM-DD
 
@@ -86,11 +93,9 @@ export default function useAktivitasTimesheetViewModel() {
   }, [filters.user_id, filters.id_agenda, filters.status, filters.from, filters.to]);
 
   // Fetch agenda-kerja
-  const { data, isLoading, mutate } = useSWR(
-    listUrl,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+  const { data, isLoading, mutate } = useSWR(listUrl, fetcher, {
+    revalidateOnFocus: false,
+  });
   const rows = useMemo(
     () => (Array.isArray(data?.data) ? data.data : EMPTY_ROWS),
     [data]
@@ -121,11 +126,13 @@ export default function useAktivitasTimesheetViewModel() {
         return s1.includes(q) || s2.includes(q);
       });
     }
-    return xs.slice().sort((a, b) => {
-      const ad = +new Date(a.start_date || a.created_at);
-      const bd = +new Date(b.start_date || b.created_at);
-      return bd - ad;
-    });
+    return xs
+      .slice()
+      .sort((a, b) => {
+        const ad = dayjs.utc(a.start_date || a.created_at).valueOf();
+        const bd = dayjs.utc(b.start_date || b.created_at).valueOf();
+        return bd - ad;
+      });
   }, [rows, selectedDay, filters.q]);
 
   // Actions
@@ -156,6 +163,7 @@ export default function useAktivitasTimesheetViewModel() {
       id_agenda,
       deskripsi_kerja,
       status: "diproses",
+      // kirim string lokal polos (tanpa Z) jika ada
       start_date,
       end_date,
     });
@@ -181,8 +189,10 @@ export default function useAktivitasTimesheetViewModel() {
     userOptions,
 
     // state
-    filters, setFilters,
-    selectedDay, setSelectedDay,
+    filters,
+    setFilters,
+    selectedDay,
+    setSelectedDay,
 
     // ops
     refresh,

@@ -23,7 +23,7 @@ export default function useProyekViewModel() {
   const userName = (id) =>
     users.find((u) => u.id_user === id)?.nama_pengguna || users.find((u) => u.id_user === id)?.email || id;
 
-  // Daftar proyek (boleh re-fetch by q; tapi juga kita filter client-side)
+  // Daftar proyek
   const listUrl = useMemo(() => {
     const p = new URLSearchParams();
     if (q) p.set("q", q);
@@ -37,7 +37,7 @@ export default function useProyekViewModel() {
   const { data: aktRes } = useSWR(`${ApiEndpoints.GetAgendaKerja}?perPage=1000`, fetcher, { revalidateOnFocus: false });
   const aktivitas = useMemo(() => (Array.isArray(aktRes?.data) ? aktRes.data : EMPTY), [aktRes]);
 
-  // id_agenda -> Set<id_user> (anggota dari aktivitas)
+  // id_agenda -> Set<id_user>
   const membersMap = useMemo(() => {
     const map = new Map();
     for (const r of aktivitas) {
@@ -78,7 +78,7 @@ export default function useProyekViewModel() {
   };
 
   const update = async (id, nama_agenda) => {
-    const put = crudService.put || crudService.patch; // fallback jika helper .put belum ada
+    const put = crudService.put || crudService.patch;
     await put(ApiEndpoints.UpdateAgenda(id), { nama_agenda });
     await mutate();
   };

@@ -1,23 +1,67 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import { App as AntdApp } from "antd";
 import useSWR from "swr";
 import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { fetcher } from "../../../../utils/fetcher";
 import { crudService } from "../../../../utils/services/crudService";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 
+dayjs.extend(customParseFormat);
+
 /* ===================== Utils ===================== */
 
-// Format tampil di tabel (jam-menit)
-const hhmm = (v) => (v ? dayjs(v).format("HH:mm") : "");
+// Regex ambil "HH:mm" dari string "HH:mm" / "HH:mm:ss" di mana pun berada
+const EXTRACT_HHMM = /(\d{1,2}):(\d{2})(?::\d{2})?/;
 
-// Kirim ISO UTC standar (aman untuk parser server) — tanpa bergantung plugin dayjs
-const toIso = (t) => {
+// Tampilkan jam-menit "HH:mm" dari berbagai bentuk input
+const hhmm = (v) => {
+  if (v == null || v === "") return "";
+  if (typeof v === "string") {
+    const m = v.match(EXTRACT_HHMM);
+    if (m) {
+      const hh = m[1].padStart(2, "0");
+      const mm = m[2];
+      return `${hh}:${mm}`;
+    }
+  }
+  const d = dayjs(v);
+  return d.isValid() ? d.format("HH:mm") : "";
+};
+
+/**
+ * Kirim ke server sebagai "YYYY-MM-DD HH:mm:ss" agar lolos validasi "date/datetime".
+ * - Ambil jam lokal dari input (dayjs/string/Date)
+ * - Pad ke HH:mm:ss
+ * - Tempelkan tanggal (pakai hari ini) → "YYYY-MM-DD HH:mm:ss"
+ * NB: Tampilan di UI tetap pakai HH:mm (fungsi hhmm), jadi tidak mengubah UX.
+ */
+const toServerDateTime = (t) => {
   if (!t) return null;
-  const d = dayjs(t).second(0).millisecond(0);
-  return d.toDate().toISOString(); // selalu ISO 8601 UTC
+
+  let hhmmss = null;
+
+  if (dayjs.isDayjs(t)) {
+    hhmmss = t.second(0).millisecond(0).format("HH:mm:ss");
+  } else if (typeof t === "string") {
+    if (/^\d{2}:\d{2}:\d{2}$/.test(t)) {
+      hhmmss = t;
+    } else if (/^\d{2}:\d{2}$/.test(t)) {
+      hhmmss = `${t}:00`;
+    } else {
+      const d = dayjs(t);
+      if (d.isValid()) hhmmss = d.format("HH:mm:ss");
+    }
+  } else {
+    const d = dayjs(t);
+    if (d.isValid()) hhmmss = d.second(0).millisecond(0).format("HH:mm:ss");
+  }
+
+  if (!hhmmss) return null;
+  const baseDate = dayjs().format("YYYY-MM-DD");
+  return `${baseDate} ${hhmmss}`;
 };
 
 // Selisih menit absolut
@@ -38,23 +82,27 @@ const getErrMsg = (err) =>
   err?.message ||
   "Terjadi kesalahan";
 
-// Konversi rekursif: semua Date/dayjs -> ISO UTC string (guard terakhir sebelum kirim)
-const isoify = (val) => {
-  if (val == null) return val;
-  // dayjs object
-  if (dayjs.isDayjs(val)) return val.toDate().toISOString();
-  // Date object
-  if (val instanceof Date) return val.toISOString();
-  // Array
-  if (Array.isArray(val)) return val.map(isoify);
-  // Object (plain)
-  if (typeof val === "object") {
-    const out = {};
-    for (const [k, v] of Object.entries(val)) out[k] = isoify(v);
-    return out;
+/**
+ * Parse server value (apapun: "HH:mm", "HH:mm:ss", ISO) → dayjs "HH:mm" TANPA TZ offset.
+ * Caranya ekstrak HH:mm dari string, lalu build dayjs("HH:mm","HH:mm").
+ */
+const parseTimeToDayjs = (v) => {
+  if (!v) return null;
+  if (dayjs.isDayjs(v)) return v;
+
+  if (typeof v === "string") {
+    const m = v.match(EXTRACT_HHMM);
+    if (m) {
+      const hh = m[1].padStart(2, "0");
+      const mm = m[2];
+      return dayjs(`${hh}:${mm}`, "HH:mm");
+    }
+    const d = dayjs(v);
+    return d.isValid() ? d : null;
   }
-  // Primitive
-  return val;
+
+  const d = dayjs(v);
+  return d.isValid() ? d : null;
 };
 
 /* ===================== ViewModel ===================== */
@@ -79,10 +127,15 @@ export default function UseShiftViewModel() {
   const swrKey = `${ApiEndpoints.GetPolaKerja}?${qs}`;
   const { data, isLoading, mutate } = useSWR(swrKey, fetcher);
 
+  useEffect(() => {
+    // console.log("SAMPLE:", data?.data?.[0]);
+  }, [data]);
+
   const rows = useMemo(() => {
     const arr = data?.data || [];
     return arr.map((it) => {
       const name = it.nama_pola_kerja || it.name;
+
       const jamMulai = it.jam_mulai || it.jamMulai;
       const jamSelesai = it.jam_selesai || it.jamSelesai;
       const istMulai = it.jam_istirahat_mulai || it.jamIstirahatMulai;
@@ -122,89 +175,49 @@ export default function UseShiftViewModel() {
   /* -------- ADD -------- */
   const onAddSubmit = useCallback(
     async (values) => {
-      // Nama & jam kerja wajib
       if (!values?.nama?.trim()) {
         notification.error({ message: "Nama wajib", description: "Isi Nama Pola Kerja." });
         throw new Error("empty-name");
       }
       if (!values?.jamMasuk || !values?.jamKeluar) {
-        notification.error({
-          message: "Jam kerja wajib",
-          description: "Isi Jam Masuk & Jam Keluar.",
-        });
+        notification.error({ message: "Jam kerja wajib", description: "Isi Jam Masuk & Jam Keluar." });
         throw new Error("empty-worktime");
       }
-      // Urutan jam kerja
       if (dayjs(values.jamKeluar).isBefore(dayjs(values.jamMasuk))) {
-        notification.error({
-          message: "Urutan jam kerja salah",
-          description: "Jam keluar tidak boleh lebih awal dari jam masuk.",
-        });
+        notification.error({ message: "Urutan jam kerja salah", description: "Jam keluar tidak boleh lebih awal dari jam masuk." });
         throw new Error("worktime-order");
       }
 
       const hasIstMulai = !!values.mulaiIstirahat;
       const hasIstSelesai = !!values.selesaiIstirahat;
 
-      // window istirahat harus berpasangan bila diisi
       if (hasIstMulai !== hasIstSelesai) {
-        notification.error({
-          message: "Jam istirahat tidak lengkap",
-          description: "Isi keduanya: Mulai Istirahat dan Selesai Istirahat.",
-        });
+        notification.error({ message: "Jam istirahat tidak lengkap", description: "Isi keduanya: Mulai & Selesai Istirahat." });
         throw new Error("invalid-break-range");
       }
 
-      // window harus di dalam jam kerja & urutan benar
-      if (hasIstMulai && hasIstSelesai) {
-        const jm = dayjs(values.jamMasuk);
-        const jk = dayjs(values.jamKeluar);
-        const bi = dayjs(values.mulaiIstirahat);
-        const bs = dayjs(values.selesaiIstirahat);
-        if (bi.isBefore(jm) || bs.isAfter(jk)) {
-          notification.error({
-            message: "Istirahat di luar jam kerja",
-            description: "Rentang istirahat harus berada di dalam jam kerja.",
-          });
-          throw new Error("break-outside");
-        }
-        if (bs.isBefore(bi)) {
-          notification.error({
-            message: "Urutan istirahat salah",
-            description: "Selesai istirahat tidak boleh lebih awal dari mulai istirahat.",
-          });
-          throw new Error("break-order");
-        }
-      }
-
-      // validasi: MAX ≤ durasi window (jika window ada)
       if (hasIstMulai && hasIstSelesai && values.maxIstirahat != null) {
         const dur = minutesDiff(values.mulaiIstirahat, values.selesaiIstirahat);
         if (dur != null && Number(values.maxIstirahat) > dur) {
-          notification.error({
-            message: "Maks istirahat terlalu besar",
-            description: `Maks ${values.maxIstirahat} menit > durasi jendela (${dur} menit).`,
-          });
+          notification.error({ message: "Maks istirahat terlalu besar", description: `Maks ${values.maxIstirahat} menit > durasi jendela (${dur} menit).` });
           throw new Error("invalid-max-break");
         }
       }
 
       const payload = {
         nama_pola_kerja: values.nama.trim(),
-        jam_mulai: toIso(values.jamMasuk),
-        jam_selesai: toIso(values.jamKeluar),
+        jam_mulai: toServerDateTime(values.jamMasuk),   // <<— now datetime
+        jam_selesai: toServerDateTime(values.jamKeluar),// <<— now datetime
         ...(hasIstMulai &&
           hasIstSelesai && {
-            jam_istirahat_mulai: toIso(values.mulaiIstirahat),
-            jam_istirahat_selesai: toIso(values.selesaiIstirahat),
-            ...(values.maxIstirahat != null && {
-              maks_jam_istirahat: Number(values.maxIstirahat),
-            }),
+            jam_istirahat_mulai: toServerDateTime(values.mulaiIstirahat),
+            jam_istirahat_selesai: toServerDateTime(values.selesaiIstirahat),
+            ...(values.maxIstirahat != null && { maks_jam_istirahat: Number(values.maxIstirahat) }),
           }),
       };
 
       try {
-        await crudService.post(ApiEndpoints.CreatePolaKerja, isoify(payload));
+        await crudService.post(ApiEndpoints.CreatePolaKerja, payload);
         notification.success({ message: "Berhasil", description: "Pola kerja dibuat." });
         await mutate();
       } catch (err) {
@@ -230,10 +243,13 @@ export default function UseShiftViewModel() {
         : undefined,
       catatan: selected.note || "",
       warna: selected.color,
-      jamMasuk: raw.jam_mulai ? dayjs(raw.jam_mulai) : null,
-      jamKeluar: raw.jam_selesai ? dayjs(raw.jam_selesai) : null,
-      mulaiIstirahat: raw.jam_istirahat_mulai ? dayjs(raw.jam_istirahat_mulai) : null,
-      selesaiIstirahat: raw.jam_istirahat_selesai ? dayjs(raw.jam_istirahat_selesai) : null,
+
+      // Prefill aman TZ (hanya HH:mm)
+      jamMasuk: parseTimeToDayjs(raw.jam_mulai),
+      jamKeluar: parseTimeToDayjs(raw.jam_selesai),
+      mulaiIstirahat: parseTimeToDayjs(raw.jam_istirahat_mulai),
+      selesaiIstirahat: parseTimeToDayjs(raw.jam_istirahat_selesai),
+
       maxIstirahat: selected.maksIst ?? undefined,
     };
   }, [selected]);
@@ -246,13 +262,9 @@ export default function UseShiftViewModel() {
       const id = selected?.id;
       if (!id) return;
 
-      // Jika user mengubah jam kerja, validasi urutan
       if (values.jamMasuk && values.jamKeluar) {
         if (dayjs(values.jamKeluar).isBefore(dayjs(values.jamMasuk))) {
-          notification.error({
-            message: "Urutan jam kerja salah",
-            description: "Jam keluar tidak boleh lebih awal dari jam masuk.",
-          });
+          notification.error({ message: "Urutan jam kerja salah", description: "Jam keluar tidak boleh lebih awal dari jam masuk." });
           throw new Error("worktime-order");
         }
       }
@@ -261,73 +273,61 @@ export default function UseShiftViewModel() {
       const hasIstSelesai = !!values.selesaiIstirahat;
 
       if (hasIstMulai !== hasIstSelesai) {
-        notification.error({
-          message: "Jam istirahat tidak lengkap",
-          description: "Isi keduanya: Mulai Istirahat dan Selesai Istirahat.",
-        });
+        notification.error({ message: "Jam istirahat tidak lengkap", description: "Isi keduanya: Mulai & Selesai Istirahat." });
         throw new Error("invalid-break-range");
       }
 
-      // validasi MAX saat edit (boleh update MAX saja kalau window SUDAH ada)
       if (values.maxIstirahat != null) {
         let dur = null;
         if (hasIstMulai && hasIstSelesai) {
           dur = minutesDiff(values.mulaiIstirahat, values.selesaiIstirahat);
         } else {
-          const raw = selected?._raw || {};
-          if (raw.jam_istirahat_mulai && raw.jam_istirahat_selesai) {
-            dur = minutesDiff(raw.jam_istirahat_mulai, raw.jam_istirahat_selesai);
+          const raw2 = selected?._raw || {};
+          if (raw2.jam_istirahat_mulai && raw2.jam_istirahat_selesai) {
+            dur = minutesDiff(
+              parseTimeToDayjs(raw2.jam_istirahat_mulai),
+              parseTimeToDayjs(raw2.jam_istirahat_selesai)
+            );
           }
         }
         if (dur == null) {
           notification.error({
             message: "Tidak ada jendela istirahat",
-            description:
-              "Isi Mulai & Selesai Istirahat terlebih dahulu sebelum mengatur maksimal menit.",
+            description: "Isi Mulai & Selesai Istirahat terlebih dahulu sebelum mengatur maksimal menit.",
           });
           throw new Error("no-break-window");
         }
         if (Number(values.maxIstirahat) > dur) {
-          notification.error({
-            message: "Maks istirahat terlalu besar",
-            description: `Maks ${values.maxIstirahat} menit > durasi jendela (${dur} menit).`,
-          });
+          notification.error({ message: "Maks istirahat terlalu besar", description: `Maks ${values.maxIstirahat} menit > durasi jendela (${dur} menit).` });
           throw new Error("invalid-max-break");
         }
       }
 
-      // Jika user isi window baru, cek harus di dalam jam kerja efektif
       const raw = selected?._raw || {};
-      const effMasuk = values.jamMasuk ? dayjs(values.jamMasuk) : dayjs(raw.jam_mulai);
-      const effKeluar = values.jamKeluar ? dayjs(values.jamKeluar) : dayjs(raw.jam_selesai);
+      const effMasuk = values.jamMasuk ? dayjs(values.jamMasuk) : parseTimeToDayjs(raw.jam_mulai);
+      const effKeluar = values.jamKeluar ? dayjs(values.jamKeluar) : parseTimeToDayjs(raw.jam_selesai);
 
       if (hasIstMulai && hasIstSelesai) {
         const bi = dayjs(values.mulaiIstirahat);
         const bs = dayjs(values.selesaiIstirahat);
         if (bi.isBefore(effMasuk) || bs.isAfter(effKeluar)) {
-          notification.error({
-            message: "Istirahat di luar jam kerja",
-            description: "Rentang istirahat harus berada di dalam jam kerja.",
-          });
+          notification.error({ message: "Istirahat di luar jam kerja", description: "Rentang istirahat harus berada di dalam jam kerja." });
           throw new Error("break-outside");
         }
         if (bs.isBefore(bi)) {
-          notification.error({
-            message: "Urutan istirahat salah",
-            description: "Selesai istirahat tidak boleh lebih awal dari mulai istirahat.",
-          });
+          notification.error({ message: "Urutan istirahat salah", description: "Selesai istirahat tidak boleh lebih awal dari mulai istirahat." });
           throw new Error("break-order");
         }
       }
 
       const payload = {
         ...(values.nama != null && { nama_pola_kerja: values.nama }),
-        ...(values.jamMasuk && { jam_mulai: toIso(values.jamMasuk) }),
-        ...(values.jamKeluar && { jam_selesai: toIso(values.jamKeluar) }),
+        ...(values.jamMasuk && { jam_mulai: toServerDateTime(values.jamMasuk) }),   // <<—
+        ...(values.jamKeluar && { jam_selesai: toServerDateTime(values.jamKeluar) }),// <<—
         ...(hasIstMulai &&
           hasIstSelesai && {
-            jam_istirahat_mulai: toIso(values.mulaiIstirahat),
-            jam_istirahat_selesai: toIso(values.selesaiIstirahat),
+            jam_istirahat_mulai: toServerDateTime(values.mulaiIstirahat),          // <<—
+            jam_istirahat_selesai: toServerDateTime(values.selesaiIstirahat),      // <<—
           }),
         ...(values.maxIstirahat != null && {
           maks_jam_istirahat: Number(values.maxIstirahat),
@@ -335,7 +335,7 @@ export default function UseShiftViewModel() {
       };
 
       try {
-        await crudService.put(ApiEndpoints.UpdatePolaKerja(id), isoify(payload));
+        await crudService.put(ApiEndpoints.UpdatePolaKerja(id), payload);
         notification.success({ message: "Berhasil", description: "Pola kerja diperbarui." });
         setSelected(null);
         await mutate();
@@ -357,7 +357,7 @@ export default function UseShiftViewModel() {
     const id = deleting?.id;
     if (!id) return;
     try {
-      await crudService.delete(ApiEndpoints.DeletePolaKerja(id)); // soft delete (default API)
+      await crudService.delete(ApiEndpoints.DeletePolaKerja(id)); // soft delete
       notification.success({ message: "Terhapus", description: "Pola kerja dihapus." });
       setDeleting(null);
       await mutate();
@@ -369,7 +369,11 @@ export default function UseShiftViewModel() {
   }, [deleting, mutate, notification]);
 
   const onReset = useCallback(
-    (row) => notification.info({ message: "Riwayat/Reset", description: row?.name || "" }),
+    (row) =>
+      notification.info({
+        message: "Riwayat/Reset",
+        description: row?.name || "",
+      }),
     [notification]
   );
 
