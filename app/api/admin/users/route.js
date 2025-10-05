@@ -21,8 +21,8 @@ const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_pengguna', '
 
 export async function GET(req) {
   const actor = await getActor(req);
-  if (actor instanceof NextResponse) return actor; 
-  if (!['HR', 'DIREKTUR'].includes(actor.role)) {
+  if (actor instanceof NextResponse) return actor; // unauthorized
+  if (!['HR', 'DIREKTUR', 'OPERASIONAL'].includes(actor.role)) {
     return NextResponse.json({ message: 'Forbidden: tidak memiliki akses.' }, { status: 403 });
   }
 
