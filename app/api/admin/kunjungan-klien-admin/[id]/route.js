@@ -635,31 +635,35 @@ export async function DELETE(req, { params }) {
   const forbidden = guardOperational(auth.actor);
   if (forbidden) return forbidden;
 
-  try {
-    // Cek query parameter untuk hard delete
-    const { searchParams } = new URL(req.url);
-    const isHardDelete = searchParams.get('hard') === 'true';
+  const { id } = params || {};
+  if (!id) {
+    return NextResponse.json({ message: "Parameter 'id' wajib diisi." }, { status: 400 });
+  }
 
-    if (isHardDelete) {
-      // Hard delete: Hapus record dari database secara permanen
-      await db.kategoriKunjungan.delete({
-        where: { id_kategori_kunjungan: params.id },
-      });
-      return NextResponse.json({ message: 'Kategori kunjungan dihapus secara permanen (hard delete).' });
-    } else {
-      // Soft delete (default): Update kolom deleted_at
-      await db.kategoriKunjungan.update({
-        where: { id_kategori_kunjungan: params.id },
-        data: { deleted_at: new Date() },
-      });
-      return NextResponse.json({ message: 'Kategori kunjungan dihapus (soft delete).' });
+  try {
+    const existing = await db.kunjungan.findFirst({
+      where: { id_kunjungan: id, deleted_at: null },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ message: 'Kunjungan klien tidak ditemukan.' }, { status: 404 });
     }
+
+    const now = new Date();
+    await db.$transaction([
+      db.kunjungan.update({
+        where: { id_kunjungan: id },
+        data: { deleted_at: now },
+      }),
+      db.kunjunganReportRecipient.updateMany({
+        where: { id_kunjungan: id, deleted_at: null },
+        data: { deleted_at: now },
+      }),
+    ]);
+
+    return NextResponse.json({ message: 'Kunjungan klien dihapus.' });
   } catch (err) {
-    // Error P2025: Record to delete/update does not exist.
-    if (err?.code === 'P2025') {
-      return NextResponse.json({ message: 'Kategori kunjungan tidak ditemukan.' }, { status: 404 });
-    }
-    console.error('DELETE /kategori-kunjungan/[id] error:', err);
+    console.error('DELETE /api/admin/kunjungan-klien/[id] error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }
