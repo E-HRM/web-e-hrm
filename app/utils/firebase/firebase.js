@@ -1,7 +1,7 @@
 // File: app/utils/firebase.js
 
 import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 // TODO: Ganti dengan konfigurasi Firebase proyek Anda
 const firebaseConfig = {
@@ -15,13 +15,25 @@ const firebaseConfig = {
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
+
+// Inisialisasi messaging hanya di sisi client
+const getFirebaseMessaging = async () => {
+  const supported = await isSupported();
+  if (typeof window !== 'undefined' && supported) {
+    return getMessaging(app);
+  }
+  return null;
+};
 
 /**
  * Meminta izin notifikasi dan mendapatkan token FCM.
  */
 export const requestPermissionAndGetToken = async () => {
-  console.log('Requesting user permission for notifications...');
+  const messaging = await getFirebaseMessaging();
+  if (!messaging) {
+    console.log('Firebase Messaging is not supported in this browser or environment.');
+    return;
+  }
 
   try {
     // 1. Minta izin dari pengguna
@@ -79,10 +91,16 @@ const sendTokenToServer = async (token) => {
  * Menangani notifikasi yang masuk saat website sedang dibuka (foreground).
  */
 export const onMessageListener = () =>
-  new Promise((resolve) => {
-    onMessage(messaging, (payload) => {
-      console.log('Foreground message received. ', payload);
-      // Di sini Anda bisa menampilkan toast atau notifikasi kustom
-      resolve(payload);
-    });
+  new Promise(async (resolve) => {
+    const messaging = await getFirebaseMessaging();
+    if (messaging) {
+      onMessage(messaging, (payload) => {
+        console.log('Foreground message received. ', payload);
+        // Di sini Anda bisa menampilkan toast atau notifikasi kustom
+        resolve(payload);
+      });
+    } else {
+      // Resolve with null or handle the case where messaging is not available
+      resolve(null);
+    }
   });

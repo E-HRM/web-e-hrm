@@ -1,37 +1,30 @@
-'use client';
+import "antd/dist/reset.css";
+import "./globals.css";
+import { Poppins } from "next/font/google";
+import LayoutClient from "./layout-client";
+import { App } from "antd"; 
 
-import { useEffect } from 'react';
-import { SessionProvider } from 'next-auth/react';
-import AuthWrapper from './utils/auth/authWrapper';
-import { AntdRegistry } from '@ant-design/nextjs-registry';
-import { requestPermissionAndGetToken } from './utils/firebase/firebase';
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-poppins",
+  display: "swap",
+});
 
-export default function LayoutClient({ children }) {
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
+export const metadata = {
+  title: "E-HRM",
+  description: "HR Management System",
+};
 
-    const registerFirebaseMessaging = async () => {
-      if (!('serviceWorker' in navigator)) {
-        console.warn('[LayoutClient] Service workers are not supported in this browser.');
-        return;
-      }
-
-      try {
-        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        await requestPermissionAndGetToken(registration);
-      } catch (error) {
-        console.error('[LayoutClient] Failed to register Firebase messaging service worker.', error);
-      }
-    };
-
-    registerFirebaseMessaging();
-  }, []);
-
+ export default function RootLayout({ children }) {
   return (
-    <SessionProvider>
-      <AuthWrapper>
-        <AntdRegistry>{children}</AntdRegistry>
-      </AuthWrapper>
-    </SessionProvider>
+
+    <html lang="en">
+      <body className={poppins.variable}>
+        <App>
+          <LayoutClient>{children}</LayoutClient>
+        </App>
+      </body>
+    </html>
   );
 }
