@@ -1,13 +1,12 @@
-// app/api/auth/[...nextauth]/option.js
+//app/api/admin/auth/[...nextauth]/option.js
+
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
-import db from '@/lib/prisma'; // pastikan alias @/ sudah di jsconfig/tsconfig
+import db from '@/lib/prisma';
 
 export const authOptions = {
   session: { strategy: 'jwt' },
   secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true,
-  pages: { signIn: '/auth/login' }, // sesuaikan dgn halaman login kamu
 
   providers: [
     CredentialsProvider({
@@ -22,26 +21,12 @@ export const authOptions = {
           .trim();
         const password = String(credentials?.password || '');
 
-        const user = await db.user.findUnique({
-          where: { email },
-          select: {
-            id_user: true,
-            nama_pengguna: true,
-            email: true,
-            role: true,
-            id_departement: true,
-            id_location: true,
-            password_hash: true,
-            deleted_at: true, // kalau pakai soft delete
-          },
-        });
-
-        if (!user || user.deleted_at) return null;
+        const user = await db.user.findUnique({ where: { email } });
+        if (!user) return null;
 
         const ok = await bcrypt.compare(password, user.password_hash);
         if (!ok) return null;
 
-        // minimal identity utk JWT
         return {
           id: user.id_user,
           name: user.nama_pengguna,

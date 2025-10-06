@@ -4,6 +4,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateTimeToUTC } from '@/helpers/date-helper';
+import { sendNotification } from '@/app/utils/services/notificationService';
 
 // Autentikasi (JWT/NextAuth)
 async function ensureAuth(req) {
@@ -27,6 +28,16 @@ function toDateOrNull(v) {
   if (!v) return null;
   const parsed = parseDateTimeToUTC(v);
   return parsed ?? null;
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  try {
+    return value.toISOString();
+  } catch (err) {
+    console.warn('Gagal memformat tanggal agenda (mobile detail):', err);
+    return '-';
+  }
 }
 
 // GET /api/agenda-kerja/[id]
@@ -127,6 +138,17 @@ export async function PUT(request, { params }) {
         user: { select: { id_user: true, nama_pengguna: true, email: true, role: true } },
       },
     });
+
+    const notificationPayload = {
+      nama_karyawan: updated.user?.nama_pengguna || 'Karyawan',
+      judul_agenda: updated.agenda?.nama_agenda || 'Agenda Kerja',
+      nama_komentator: 'Anda',
+      tanggal_deadline: formatDateTime(updated.end_date),
+    };
+
+    console.info('[NOTIF] (Mobile) Mengirim notifikasi AGENDA_COMMENTED untuk user %s dengan payload %o', updated.id_user, notificationPayload);
+    await sendNotification('AGENDA_COMMENTED', updated.id_user, notificationPayload);
+    console.info('[NOTIF] (Mobile) Notifikasi AGENDA_COMMENTED selesai diproses untuk user %s', updated.id_user);
 
     return NextResponse.json({ ok: true, data: updated });
   } catch (err) {

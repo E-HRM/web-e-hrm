@@ -4,7 +4,7 @@ import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 import { extractWeeklyScheduleInput, normalizeWeeklySchedule, parseHariKerjaField, serializeHariKerja, transformShiftRecord } from '../schedul-utils';
-
+import { sendNotification } from '@/app/utils/services/notificationService';
 const SHIFT_STATUS = ['KERJA', 'LIBUR'];
 
 async function ensureAuth(req) {
@@ -71,6 +71,27 @@ export async function GET(_req, { params }) {
   } catch (err) {
     console.error('GET /shift-kerja/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
+  }
+}
+function formatDateOnly(value) {
+  if (!value) return '-';
+  try {
+    return value.toISOString().slice(0, 10);
+  } catch (err) {
+    console.warn('Gagal memformat tanggal shift:', err);
+    return '-';
+  }
+}
+
+function formatTimeValue(value) {
+  if (!value) return '-';
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toISOString().slice(11, 16);
+  } catch (err) {
+    console.warn('Gagal memformat waktu shift:', err);
+    return '-';
   }
 }
 
@@ -207,8 +228,29 @@ export async function PUT(req, { params }) {
         id_pola_kerja: true,
         updated_at: true,
         deleted_at: true,
+        user: { select: { id_user: true, nama_pengguna: true } },
+        polaKerja: {
+          select: {
+            id_pola_kerja: true,
+            nama_pola_kerja: true,
+            jam_mulai: true,
+            jam_selesai: true,
+          },
+        },
       },
     });
+
+    const notificationPayload = {
+      nama_karyawan: updated.user?.nama_pengguna || 'Karyawan',
+      tanggal_shift: formatDateOnly(updated.tanggal_mulai ?? updated.tanggal_selesai),
+      nama_shift: updated.polaKerja?.nama_pola_kerja || 'Shift',
+      jam_masuk: formatTimeValue(updated.polaKerja?.jam_mulai),
+      jam_pulang: formatTimeValue(updated.polaKerja?.jam_selesai),
+    };
+
+    console.info('[NOTIF] Mengirim notifikasi SHIFT_UPDATED untuk user %s dengan payload %o', updated.id_user, notificationPayload);
+    await sendNotification('SHIFT_UPDATED', updated.id_user, notificationPayload);
+    console.info('[NOTIF] Notifikasi SHIFT_UPDATED selesai diproses untuk user %s', updated.id_user);
 
     return NextResponse.json({ message: 'Shift kerja diperbarui.', data: transformShiftRecord(updated) });
   } catch (err) {
