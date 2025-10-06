@@ -361,7 +361,7 @@ export default function AktivitasContent() {
               </Form.Item>
               <Button
                 onClick={() => setOpenAddAgenda(true)}
-                style={{ background: BRAND.accent, color: "#0A3848" }}
+                style={{ background: BRAND.accent, color: "#FFFFFF" }}
               >
                 Tambah Proyek
               </Button>

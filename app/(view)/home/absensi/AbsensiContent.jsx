@@ -17,6 +17,9 @@ import {
   Divider,
   Tooltip,
   Avatar as AntAvatar,
+  Modal,
+  Image,
+  Segmented,
 } from "antd";
 import {
   SearchOutlined,
@@ -27,58 +30,30 @@ import {
   WarningOutlined,
   TeamOutlined,
   BarChartOutlined,
+  EnvironmentOutlined,
+  PictureOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import customParseFormat from "dayjs/plugin/customParseFormat";
 import useAbsensiViewModel from "./useAbsensiViewModel";
 
-dayjs.extend(customParseFormat);
-
-/* -------------------- Helpers "pure" -------------------- */
-// Ambil HH:mm dari string tanpa mengubah zona. Kalau objek Date/dayjs, pakai format biasa.
-function pureHHmm(v) {
-  if (!v) return "-";
+/* -------------------- Helpers tampilan -------------------- */
+function fmtHHmmss(v) {
+  if (!v) return "—";
   if (typeof v === "string") {
-    // Cari pola HH:mm[:ss] di mana pun berada
-    const m = v.match(/(?:T|\s)?(\d{2}):(\d{2})(?::\d{2})?/);
-    if (m) return `${m[1]}:${m[2]}`;
+    const m = v.match(/(?:T|\s)?(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (m) return `${m[1]}:${m[2]}:${m[3] ?? "00"}`;
     const d = dayjs(v);
-    return d.isValid() ? d.format("HH:mm") : "-";
+    return d.isValid() ? d.format("HH:mm:ss") : "—";
   }
   const d = dayjs(v);
-  return d.isValid() ? d.format("HH:mm") : "-";
-}
-
-// Untuk sorter, ubah HH:mm menjadi menit dari tengah malam.
-function minutesFromHHmm(v) {
-  const s = pureHHmm(v);
-  const m = s.match(/^(\d{2}):(\d{2})$/);
-  if (!m) return -1;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-}
-
-// Ambil kunci tanggal "YYYY-MM-DD" dari field tanggal tanpa konversi
-function getDateKey(v) {
-  if (!v) return "";
-  if (typeof v === "string") {
-    const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
-    if (m) return m[1];
-    const d = dayjs(v);
-    return d.isValid() ? d.format("YYYY-MM-DD") : "";
-  }
-  const d = dayjs(v);
-  return d.isValid() ? d.format("YYYY-MM-DD") : "";
+  return d.isValid() ? d.format("HH:mm:ss") : "—";
 }
 
 /* ====================== AVATAR ====================== */
 function Avatar({ src, alt, name }) {
   if (src) {
     return (
-      <AntAvatar
-        src={src}
-        alt={alt || ""}
-        className="ring-2 ring-white shadow-sm"
-      />
+      <AntAvatar src={src} alt={alt || ""} className="ring-2 ring-white shadow-sm" />
     );
   }
   return (
@@ -96,37 +71,37 @@ const statusTag = (s) => {
   const key = String(s || "").toLowerCase();
   if (key.includes("tepat"))
     return (
-      <Tag
-        icon={<CheckCircleOutlined />}
-        color="green"
-        className="px-2 py-1 rounded-md flex items-center gap-1"
-      >
+      <Tag icon={<CheckCircleOutlined />} color="green" className="px-2 py-1 rounded-md flex items-center gap-1">
         Tepat Waktu
       </Tag>
     );
   if (key.includes("lambat"))
     return (
-      <Tag
-        icon={<WarningOutlined />}
-        color="orange"
-        className="px-2 py-1 rounded-md flex items-center gap-1"
-      >
+      <Tag icon={<WarningOutlined />} color="orange" className="px-2 py-1 rounded-md flex items-center gap-1">
         Terlambat
       </Tag>
     );
   if (key.includes("lembur"))
     return (
-      <Tag
-        icon={<ClockCircleOutlined />}
-        color="blue"
-        className="px-2 py-1 rounded-md flex items-center gap-1"
-      >
+      <Tag icon={<ClockCircleOutlined />} color="blue" className="px-2 py-1 rounded-md flex items-center gap-1">
         Lembur
       </Tag>
     );
   if (key.includes("izin")) return <Tag color="geekblue">Izin</Tag>;
   if (key.includes("sakit")) return <Tag color="purple">Sakit</Tag>;
   return <Tag>{s || "-"}</Tag>;
+};
+
+/* kecil untuk sel Masuk/Keluar */
+const tinyStatus = (s) => {
+  const key = String(s || "").toLowerCase();
+  if (!key) return null;
+  if (key.includes("tepat")) return <Tag color="green" className="px-2 py-0.5 rounded-full">Tepat</Tag>;
+  if (key.includes("lambat")) return <Tag color="orange" className="px-2 py-0.5 rounded-full">Terlambat</Tag>;
+  if (key.includes("lembur")) return <Tag color="blue" className="px-2 py-0.5 rounded-full">Lembur</Tag>;
+  if (key.includes("izin")) return <Tag color="geekblue" className="px-2 py-0.5 rounded-full">Izin</Tag>;
+  if (key.includes("sakit")) return <Tag color="purple" className="px-2 py-0.5 rounded-full">Sakit</Tag>;
+  return <Tag className="px-2 py-0.5 rounded-full">{s}</Tag>;
 };
 
 /* ====================== STATS CARD ====================== */
@@ -144,50 +119,116 @@ function StatsCard({ title, value, icon, color, loading }) {
   );
 }
 
-/* ====================== ATTENDANCE CARD ====================== */
+/* ====================== TABEL DENGAN MODAL ====================== */
 function AttendanceCard({
   title,
-  rows,
+  rows,                 // gunakan vm.rowsAll
   loading,
-  divisiOptions,
-  statusOptions,
+  divisiOptions,        // untuk future filter (nama/divisi bisa ditambah)
+  statusOptions,        // keep compatibility
   filters,
   setFilters,
   dateLabel,
-  jamColumnTitle,
+  jamColumnTitle,       // tidak dipakai, aman
   stats,
-  headerRight,
+  headerRight,          // DatePicker
+  selectedDate,         // dateIn/dateOut untuk filter hari
 }) {
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoSrc, setPhotoSrc] = useState(null);
+
+  const [mapOpen, setMapOpen] = useState(false);
+  const [mapWhich, setMapWhich] = useState("start");
+  const [mapEmbedUrl, setMapEmbedUrl] = useState(null);
+  const [activeRow, setActiveRow] = useState(null);
+
+  // mini helpers
+  const normalizePhotoUrl = (u) => {
+    if (!u) return null;
+    if (/^https?:\/\//i.test(u)) return u;
+    if (typeof window !== "undefined" && u.startsWith("/"))
+      return `${window.location.origin}${u}`;
+    return u;
+  };
+  const makeOsmEmbed = (lat, lon) => {
+    const dx = 0.0025,
+      dy = 0.0025;
+    const bbox = `${(lon - dx).toFixed(6)}%2C${(lat - dy).toFixed(
+      6
+    )}%2C${(lon + dx).toFixed(6)}%2C${(lat + dy).toFixed(6)}`;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat.toFixed(
+      6
+    )}%2C${lon.toFixed(6)}`;
+  };
+  const getStartCoord = (row) => row?.lokasiIn || null;
+  const getEndCoord = (row) => row?.lokasiOut || null;
+
+  // filter baris sesuai tanggal/nama/divisi/status (opsional)
+  const data = useMemo(() => {
+    const q = (filters?.q || "").toLowerCase().trim();
+    const needDiv = filters?.divisi;
+    const needStatus = (filters?.status || "").toLowerCase().trim();
+    const dateKey = selectedDate ? dayjs(selectedDate).format("YYYY-MM-DD") : null;
+
+    return (rows || [])
+      .filter((r) => {
+        if (!dateKey) return true;
+        const rk = r?.tanggal ? dayjs(r.tanggal).format("YYYY-MM-DD") : "";
+        return rk === dateKey;
+      })
+      .filter((r) => (needDiv ? r.user?.departement?.nama_departement === needDiv : true))
+      .filter((r) => {
+        if (!needStatus) return true;
+        const hay = [r.status_masuk, r.status_pulang]
+          .map((x) => String(x || "").toLowerCase())
+          .join(" ");
+        return hay.includes(needStatus);
+      })
+      .filter((r) => {
+        if (!q) return true;
+        const hay = [
+          r.user?.nama_pengguna,
+          r.user?.departement?.nama_departement,
+        ]
+          .map((s) => String(s || "").toLowerCase())
+          .join(" ");
+        return hay.includes(q);
+      });
+  }, [rows, filters, selectedDate]);
+
+  const openPhoto = (which, row) => {
+    const src = which === "in" ? row?.photo_in : row?.photo_out;
+    if (!src) return;
+    setPhotoSrc(normalizePhotoUrl(src));
+    setPhotoOpen(true);
+  };
+
+  const openMap = (which, row) => {
+    const coord = which === "end" ? getEndCoord(row) : getStartCoord(row);
+    if (!coord) return;
+    const url = makeOsmEmbed(coord.lat, coord.lon);
+    setActiveRow(row);
+    setMapWhich(which);
+    setMapEmbedUrl(url);
+    setMapOpen(true);
+  };
+
   const columns = useMemo(
     () => [
       {
-        title: "Tanggal",
-        dataIndex: "tanggal",
-        width: 120,
-        render: (v) => {
-          const key = getDateKey(v);
-          return key ? dayjs(key, "YYYY-MM-DD").format("DD/MM/YYYY") : "-";
-        },
-        sorter: (a, b) => {
-          const ak = getDateKey(a.tanggal);
-          const bk = getDateKey(b.tanggal);
-          return ak.localeCompare(bk);
-        },
-      },
-      {
         title: "Karyawan",
         dataIndex: ["user", "nama_pengguna"],
-        width: 280,
+        width: 320,
         render: (t, r) => (
           <div className="flex items-center gap-3 min-w-0">
             <Avatar src={r.user?.foto_profil_user} alt={t} name={t} />
-            <div className="flex flex-col min-w-0">
-              <span className="font-medium text-gray-900 truncate">
-                {t || r.nama || "-"}
-              </span>
-              <span className="text-xs text-gray-500 truncate">
-                {r.user?.departement?.nama_departement || "-"}
-              </span>
+            <div className="min-w-0">
+              <div className="font-medium text-gray-900 truncate">
+                {t || "—"}
+              </div>
+              <div className="text-xs text-gray-500 truncate">
+                {r.user?.departement?.nama_departement || "—"}
+              </div>
             </div>
           </div>
         ),
@@ -195,44 +236,125 @@ function AttendanceCard({
           (a.user?.nama_pengguna || "").localeCompare(
             b.user?.nama_pengguna || ""
           ),
+        fixed: "left",
       },
+
       {
-        title: jamColumnTitle,
-        dataIndex: "jam",
-        width: 120,
-        render: (v) => pureHHmm(v),
-        sorter: (a, b) => minutesFromHHmm(a.jam) - minutesFromHHmm(b.jam),
+        title: "Presensi Masuk",
+        dataIndex: "jam_masuk",
+        width: 280,
+        render: (_, r) => (
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
+                {fmtHHmmss(r.jam_masuk)}
+              </div>
+              <div className="mt-1">{tinyStatus(r.status_masuk)}</div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip title="Lihat foto masuk">
+                <Button
+                  size="middle"
+                  shape="circle"
+                  icon={<PictureOutlined />}
+                  onClick={() => openPhoto("in", r)}
+                  disabled={!r.photo_in}
+                />
+              </Tooltip>
+              <Tooltip title="Lihat lokasi masuk">
+                <Button
+                  size="middle"
+                  shape="circle"
+                  icon={<EnvironmentOutlined />}
+                  onClick={() => openMap("start", r)}
+                  disabled={!getStartCoord(r)}
+                />
+              </Tooltip>
+            </div>
+          </div>
+        ),
+        sorter: (a, b) =>
+          String(a.jam_masuk || "").localeCompare(String(b.jam_masuk || "")),
       },
+
       {
-        title: "Status",
-        dataIndex: "status_label",
-        width: 150,
-        render: statusTag,
-        filters: statusOptions.map((opt) => ({
-          text: opt.label,
-          value: opt.value,
-        })),
-        onFilter: (value, record) =>
-          String(record.status_label || "").toLowerCase().includes(value),
+        title: "Mulai Istirahat",
+        dataIndex: "istirahat_mulai",
+        width: 220,
+        render: (v) => (
+          <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
+            {fmtHHmmss(v)}
+          </div>
+        ),
+        sorter: (a, b) =>
+          String(a.istirahat_mulai || "").localeCompare(
+            String(b.istirahat_mulai || "")
+          ),
+      },
+
+      {
+        title: "Selesai Istirahat",
+        dataIndex: "istirahat_selesai",
+        width: 220,
+        render: (v) => (
+          <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
+            {fmtHHmmss(v)}
+          </div>
+        ),
+        sorter: (a, b) =>
+          String(a.istirahat_selesai || "").localeCompare(
+            String(b.istirahat_selesai || "")
+          ),
+      },
+
+      {
+        title: "Presensi Keluar",
+        dataIndex: "jam_pulang",
+        width: 280,
+        render: (_, r) => (
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
+                {fmtHHmmss(r.jam_pulang)}
+              </div>
+              <div className="mt-1">{tinyStatus(r.status_pulang)}</div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip title="Lihat foto pulang">
+                <Button
+                  size="middle"
+                  shape="circle"
+                  icon={<PictureOutlined />}
+                  onClick={() => openPhoto("out", r)}
+                  disabled={!r.photo_out}
+                />
+              </Tooltip>
+              <Tooltip title="Lihat lokasi pulang">
+                <Button
+                  size="middle"
+                  shape="circle"
+                  icon={<EnvironmentOutlined />}
+                  onClick={() => openMap("end", r)}
+                  disabled={!getEndCoord(r)}
+                />
+              </Tooltip>
+            </div>
+          </div>
+        ),
+        sorter: (a, b) =>
+          String(a.jam_pulang || "").localeCompare(String(b.jam_pulang || "")),
       },
     ],
-    [statusOptions, jamColumnTitle]
+    [] // kolom statis
   );
 
-  const data = rows || [];
-
   return (
-    <Card
-      className="p-0 rounded-xl shadow-sm border-0 overflow-hidden"
-      bodyStyle={{ padding: 0 }}
-    >
+    <Card className="p-0 rounded-xl shadow-sm border-0 overflow-hidden" bodyStyle={{ padding: 0 }}>
+      {/* Header (biarkan seperti semula) */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <Typography.Title
-              level={4}
-              className="!m-0 !text-gray-800 flex items-center gap-2"
-            >
+            <Typography.Title level={4} className="!m-0 !text-gray-800 flex items-center gap-2">
               <BarChartOutlined />
               {title}
             </Typography.Title>
@@ -242,11 +364,7 @@ function AttendanceCard({
           <div className="flex items-center gap-2">
             {headerRight}
             <Tooltip title="Export data">
-              <Button
-                icon={<DownloadOutlined />}
-                className="rounded-lg flex items-center"
-                type="primary"
-              >
+              <Button icon={<DownloadOutlined />} className="rounded-lg flex items-center" type="primary">
                 Export
               </Button>
             </Tooltip>
@@ -258,46 +376,23 @@ function AttendanceCard({
             <Divider className="!my-4" />
             <Row gutter={16}>
               <Col xs={12} sm={6}>
-                <StatsCard
-                  title="Karyawan Presensi"
-                  value={stats.total}
-                  icon={<TeamOutlined />}
-                  color="blue"
-                  loading={loading}
-                />
+                <StatsCard title="Karyawan Presensi" value={stats.total} icon={<TeamOutlined />} color="blue" loading={loading} />
               </Col>
               <Col xs={12} sm={6}>
-                <StatsCard
-                  title="Tepat Waktu"
-                  value={stats.onTime}
-                  icon={<CheckCircleOutlined />}
-                  color="green"
-                  loading={loading}
-                />
+                <StatsCard title="Tepat Waktu" value={stats.onTime} icon={<CheckCircleOutlined />} color="green" loading={loading} />
               </Col>
               <Col xs={12} sm={6}>
-                <StatsCard
-                  title="Terlambat"
-                  value={stats.late}
-                  icon={<WarningOutlined />}
-                  color="orange"
-                  loading={loading}
-                />
+                <StatsCard title="Terlambat" value={stats.late} icon={<WarningOutlined />} color="orange" loading={loading} />
               </Col>
               <Col xs={12} sm={6}>
-                <StatsCard
-                  title="Lembur"
-                  value={stats.overtime}
-                  icon={<ClockCircleOutlined />}
-                  color="blue"
-                  loading={loading}
-                />
+                <StatsCard title="Lembur" value={stats.overtime} icon={<ClockCircleOutlined />} color="blue" loading={loading} />
               </Col>
             </Row>
           </div>
         )}
       </div>
 
+      {/* Filter ringkas (cari nama/divisi/status bisa kamu kembangkan) */}
       <div className="px-6 py-4">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-4">
           <Input
@@ -308,61 +403,94 @@ function AttendanceCard({
             onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
             className="rounded-lg"
           />
-          <Select
-            allowClear
-            placeholder="Semua Divisi"
-            className="w-full rounded-lg"
-            value={filters.divisi}
-            onChange={(v) => setFilters((p) => ({ ...p, divisi: v }))}
-            options={divisiOptions}
-          />
-          <Select
-            allowClear
-            placeholder="Semua Status"
-            className="w-full rounded-lg"
-            value={filters.status}
-            onChange={(v) => setFilters((p) => ({ ...p, status: v }))}
-            options={statusOptions}
-          />
-          <div className="flex items-center justify-end lg:justify-start">
-            <span className="text-sm text-gray-500 whitespace-nowrap">
-              {data.length} data ditemukan
-            </span>
-          </div>
+          {/* Siapkan slot untuk Select divisi/status kalau dibutuhkan */}
         </div>
 
         <Table
-          rowKey={(r) =>
-            r.id_absensi ||
-            r.id_absensi_report_recipient ||
-            r.id ||
-            `${r.user?.id_user}-${r.tanggal}`
-          }
+          rowKey={(r) => r.id_absensi || `${r.user?.id_user}-${r.tanggal}` || Math.random()}
           size="middle"
           loading={loading}
           locale={{
             emptyText: (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="Tidak ada data absensi"
-              />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Tidak ada data absensi" />
             ),
           }}
-          scroll={{ x: "100%" }}
+          scroll={{ x: 1100 }}
           columns={columns}
           dataSource={data}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} dari ${total} data`,
+            showTotal: (total, range) => `${range[0]}-${range[1]} dari ${total} data`,
             className: "px-4 py-2",
           }}
           className="rounded-lg border border-gray-200"
           rowClassName="hover:bg-blue-50 transition-colors"
         />
       </div>
+
+      {/* Modal Foto */}
+      <Modal
+        title="Attachment"
+        open={photoOpen}
+        onCancel={() => setPhotoOpen(false)}
+        footer={null}
+        width={560}
+        zIndex={1500}
+        getContainer={() => document.body}
+      >
+        {photoSrc ? (
+          <Image
+            src={photoSrc}
+            alt="Attachment"
+            style={{ width: "100%", maxWidth: 520, maxHeight: "50vh", objectFit: "contain" }}
+            preview={{ mask: "Click to zoom", zIndex: 1600 }}
+            onError={(e) => (e.currentTarget.src = "/image-not-found.png")}
+          />
+        ) : (
+          <div style={{ opacity: 0.6 }}>No attachment</div>
+        )}
+      </Modal>
+
+      {/* Modal Lokasi (OSM) */}
+      <Modal
+        title="Location"
+        open={mapOpen}
+        onCancel={() => setMapOpen(false)}
+        footer={null}
+        width={860}
+        zIndex={1550}
+        getContainer={() => document.body}
+      >
+        <div className="mb-2">
+          <Segmented
+            value={mapWhich}
+            onChange={(v) => {
+              setMapWhich(v);
+              if (!activeRow) return;
+              const src = v === "end" ? (activeRow?.lokasiOut || null) : (activeRow?.lokasiIn || null);
+              if (src) setMapEmbedUrl(makeOsmEmbed(src.lat, src.lon));
+            }}
+            options={[
+              { label: "Start", value: "start" },
+              { label: "End", value: "end" },
+            ]}
+          />
+        </div>
+        {mapEmbedUrl ? (
+          <div style={{ width: "100%", height: 420, borderRadius: 12, overflow: "hidden", border: "1px solid #e5e7eb" }}>
+            <iframe
+              src={mapEmbedUrl}
+              style={{ width: "100%", height: "100%", border: 0 }}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        ) : (
+          <div style={{ opacity: 0.6 }}>No coordinates</div>
+        )}
+      </Modal>
     </Card>
   );
 }
@@ -376,6 +504,7 @@ export default function AbsensiContent() {
 
   useEffect(() => {}, []);
 
+  // tetap dipakai untuk rekap/statistik
   const rows = isIn ? vm.kedatangan : vm.kepulangan;
   const filters = isIn ? vm.filterIn : vm.filterOut;
   const setFilters = isIn ? vm.setFilterIn : vm.setFilterOut;
@@ -384,9 +513,7 @@ export default function AbsensiContent() {
   const dateValue = isIn ? vm.dateIn : vm.dateOut;
   const setDateValue = isIn ? vm.setDateIn : vm.setDateOut;
 
-  const dateLabel = `${dayjs(dateValue).format(
-    "dddd, DD MMMM YYYY"
-  )}`;
+  const dateLabel = `${dayjs(dateValue).format("dddd, DD MMMM YYYY")}`;
 
   const stats = useMemo(() => {
     const total = rows.length;
@@ -395,6 +522,9 @@ export default function AbsensiContent() {
     const overtime = rows.filter((r) => /lembur/i.test(r.status_label)).length;
     return { total, onTime, late, overtime };
   }, [rows]);
+
+  // tanggal yang dipakai untuk filter tabel
+  const tableDate = isIn ? vm.dateIn : vm.dateOut;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
@@ -409,27 +539,18 @@ export default function AbsensiContent() {
             </Typography.Text>
           </div>
 
-          <Select
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: "in", label: "Kedatangan" },
-              { value: "out", label: "Kepulangan" },
-            ]}
-            style={{ minWidth: 180 }}
-          />
         </div>
 
         <AttendanceCard
           title={isIn ? "Absensi Kedatangan Karyawan" : "Absensi Kepulangan Karyawan"}
-          rows={rows}
+          rows={vm.rowsAll}                // data lengkap untuk tabel (dengan istirahat)
           loading={vm.loading}
           divisiOptions={vm.divisiOptions}
           statusOptions={statusOptions}
           filters={filters}
           setFilters={setFilters}
           dateLabel={dateLabel}
-          jamColumnTitle={jamColumnTitle}
+          jamColumnTitle={jamColumnTitle}  // tidak dipakai
           stats={stats}
           headerRight={
             <DatePicker
@@ -439,6 +560,7 @@ export default function AbsensiContent() {
               allowClear={false}
             />
           }
+          selectedDate={tableDate}         // filter tanggal untuk tabel
         />
       </div>
     </div>
