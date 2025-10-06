@@ -1,106 +1,42 @@
-// File: app/utils/firebase.js
-
-import { initializeApp } from 'firebase/app';
-import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
-
-// TODO: Ganti dengan konfigurasi Firebase proyek Anda
-const firebaseConfig = {
-  apiKey: 'AIzaSy...',
-  authDomain: 'your-project-id.firebaseapp.com',
-  projectId: 'your-project-id',
-  storageBucket: 'your-project-id.appspot.com',
-  messagingSenderId: '...',
-  appId: '1:...:web:...',
+/* eslint-disable no-undef */
+// File: public/firebase-messaging-sw.js
+/* global importScripts */
+// Import skrip Firebase (gunakan versi compat agar API lama tetap berfungsi)
+importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js');
+importScripts('/firebase-config.js');
+importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-messaging-compat.js');
+// Konfigurasi Firebase. Jika tersedia, gunakan yang disuntikkan melalui global
+// `self.__FIREBASE_CONFIG__` (misalnya dari file public/firebase-config.js).
+// Jika tidak tersedia, fallback ke nilai default berikut—PASTIKAN diganti
+// dengan konfigurasi proyek Anda sendiri.
+const firebaseConfig = self.__FIREBASE_CONFIG__ || {
+  apiKey: 'AIzaSyBHaHOsrtZghC2JAeP53-rtg9gUKUmmMcM',
+  authDomain: 'e-hrm-2d3fe.firebaseapp.com',
+  projectId: 'e-hrm-2d3fe',
+  storageBucket: 'e-hrm-2d3fe.firebasestorage.app',
+  messagingSenderId: '584929841793',
+  appId: '1:584929841793:web:1a1cff15646de867067380',
+  measurementId: 'G-K58K7RVTHS',
 };
-
-// Inisialisasi Firebase
-const app = initializeApp(firebaseConfig);
-
-// Inisialisasi messaging hanya di sisi client
-const getFirebaseMessaging = async () => {
-  const supported = await isSupported();
-  if (typeof window !== 'undefined' && supported) {
-    return getMessaging(app);
-  }
-  return null;
-};
-
-/**
- * Meminta izin notifikasi dan mendapatkan token FCM.
- */
-export const requestPermissionAndGetToken = async () => {
-  const messaging = await getFirebaseMessaging();
-  if (!messaging) {
-    console.log('Firebase Messaging is not supported in this browser or environment.');
-    return;
-  }
-
-  try {
-    // 1. Minta izin dari pengguna
-    const permission = await Notification.requestPermission();
-
-    if (permission === 'granted') {
-      console.log('Notification permission granted.');
-
-      // 2. Dapatkan token FCM
-      const currentToken = await getToken(messaging, {
-        // TODO: Ganti dengan VAPID key dari Firebase Console Anda
-        vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE',
-      });
-
-      if (currentToken) {
-        console.log('FCM Token received:', currentToken);
-        // 3. Kirim token ke backend untuk disimpan
-        await sendTokenToServer(currentToken);
-      } else {
-        console.log('No registration token available. Request permission to generate one.');
-      }
-    } else {
-      console.log('Unable to get permission to notify.');
-    }
-  } catch (error) {
-    console.error('An error occurred while retrieving token. ', error);
-  }
-};
-
-/**
- * Mengirim token ke server backend.
- * @param {string} token - FCM token.
- */
-const sendTokenToServer = async (token) => {
-  try {
-    const response = await fetch('/api/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ token }),
-    });
-
-    if (response.ok) {
-      console.log('Token sent to server successfully.');
-    } else {
-      console.error('Failed to send token to server.');
-    }
-  } catch (error) {
-    console.error('Error sending token to server:', error);
-  }
-};
-
-/**
- * Menangani notifikasi yang masuk saat website sedang dibuka (foreground).
- */
-export const onMessageListener = () =>
-  new Promise(async (resolve) => {
-    const messaging = await getFirebaseMessaging();
-    if (messaging) {
-      onMessage(messaging, (payload) => {
-        console.log('Foreground message received. ', payload);
-        // Di sini Anda bisa menampilkan toast atau notifikasi kustom
-        resolve(payload);
-      });
-    } else {
-      // Resolve with null or handle the case where messaging is not available
-      resolve(null);
-    }
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+if (!firebase.messaging.isSupported()) {
+  console.warn('[firebase-messaging-sw.js] Firebase Cloud Messaging tidak didukung di environment ini.');
+} else {
+  const messaging = firebase.messaging();
+  // Handler untuk notifikasi yang diterima saat website di background
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[firebase-messaging-sw.js] Received background message ', payload);
+    const notificationPayload = payload.notification || {};
+    const dataPayload = payload.data || {};
+    const notificationTitle = notificationPayload.title || dataPayload.title || 'Notifikasi';
+    const notificationOptions = {
+      body: notificationPayload.body || dataPayload.body || 'Anda memiliki notifikasi baru.',
+      icon: notificationPayload.icon || dataPayload.icon || '/favicon.ico',
+      image: notificationPayload.image || dataPayload.image,
+      data: dataPayload,
+    };
+    self.registration.showNotification(notificationTitle, notificationOptions);
   });
+}
