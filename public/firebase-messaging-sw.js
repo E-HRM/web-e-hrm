@@ -4,12 +4,13 @@ import { getMessaging, onBackgroundMessage } from 'firebase/messaging/sw';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: 'AIzaSy...',
-  authDomain: 'your-project-id.firebaseapp.com',
-  projectId: 'your-project-id',
-  storageBucket: 'your-project-id.appspot.com',
-  messagingSenderId: '...',
-  appId: '1:...:web:...',
+  apiKey: 'AIzaSyBHaHOsrtZghC2JAeP53-rtg9gUKUmmMcM',
+  authDomain: 'e-hrm-2d3fe.firebaseapp.com',
+  projectId: 'e-hrm-2d3fe',
+  storageBucket: 'e-hrm-2d3fe.firebasestorage.app',
+  messagingSenderId: '584929841793',
+  appId: '1:584929841793:web:1a1cff15646de867067380',
+  measurementId: 'G-K58K7RVTHS',
 };
 
 // Initialize the Firebase app in the service worker
