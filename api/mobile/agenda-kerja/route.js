@@ -1,10 +1,9 @@
-// app/api/mobile/agenda-kerja/route.js
+// app/api/agenda-kerja/route.js
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { endOfUTCDay, parseDateTimeToUTC, startOfUTCDay } from '@/helpers/date-helper';
-import { sendNotification } from '@/app/utils/services/notificationService';
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -41,21 +40,22 @@ function overlapRangeFilter(fromSOD, toEOD) {
   };
 }
 
-function formatDateTime(value) {
-  if (!value) return '-';
-  try {
-    return value.toISOString();
-  } catch (err) {
-    console.warn('Gagal memformat tanggal agenda (mobile):', err);
-    return '-';
-  }
-}
-
 const VALID_STATUS = ['diproses', 'ditunda', 'selesai'];
 
 const MIN_RANGE_DATE = startOfUTCDay('1970-01-01') ?? new Date(Date.UTC(1970, 0, 1));
 const MAX_RANGE_DATE = endOfUTCDay('2999-12-31') ?? new Date(Date.UTC(2999, 11, 31, 23, 59, 59, 999));
 
+/**
+ * GET /api/agenda-kerja
+ * Query (opsional):
+ *  - user_id
+ *  - id_agenda
+ *  - id_absensi
+ *  - status=diproses|ditunda|selesai
+ *  - date=YYYY-MM-DD  (overlap 1 hari)
+ *  - from=YYYY-MM-DD&to=YYYY-MM-DD  (overlap range)
+ *  - page, perPage
+ */
 export async function GET(request) {
   const okAuth = await ensureAuth(request);
   if (okAuth instanceof NextResponse) return okAuth;
@@ -127,6 +127,18 @@ export async function GET(request) {
   }
 }
 
+/**
+ * POST /api/agenda-kerja
+ * Body JSON:
+ *  - id_user (required)
+ *  - id_agenda (required)
+ *  - deskripsi_kerja (required)
+ *  - status? 'diproses'|'ditunda'|'selesai' (default: 'diproses')
+ *  - start_date? (ISO datetime)
+ *  - end_date?   (ISO datetime)
+ *  - duration_seconds? (number; jika tak dikirim & ada start/end, dihitung otomatis)
+ *  - id_absensi? (string|null)
+ */
 export async function POST(request) {
   const okAuth = await ensureAuth(request);
   if (okAuth instanceof NextResponse) return okAuth;
@@ -141,28 +153,6 @@ export async function POST(request) {
     if (!id_user) return NextResponse.json({ ok: false, message: 'id_user wajib diisi' }, { status: 400 });
     if (!id_agenda) return NextResponse.json({ ok: false, message: 'id_agenda wajib diisi' }, { status: 400 });
     if (!deskripsi_kerja) return NextResponse.json({ ok: false, message: 'deskripsi_kerja wajib diisi' }, { status: 400 });
-
-    // --- PERBAIKAN: VALIDASI FOREIGN KEY SEBELUM CREATE ---
-    // 1. Validasi id_user dan id_agenda secara bersamaan
-    const [userExists, agendaExists] = await Promise.all([
-      db.user.findUnique({
-        where: { id_user: id_user },
-        select: { id_user: true },
-      }),
-      db.agenda.findUnique({
-        where: { id_agenda: id_agenda },
-        select: { id_agenda: true },
-      }),
-    ]);
-
-    if (!userExists) {
-      return NextResponse.json({ ok: false, message: 'User dengan ID yang diberikan tidak ditemukan.' }, { status: 404 });
-    }
-
-    if (!agendaExists) {
-      return NextResponse.json({ ok: false, message: 'Agenda dengan ID yang diberikan tidak ditemukan.' }, { status: 404 });
-    }
-    // --- AKHIR PERBAIKAN ---
 
     const statusValue = String(body.status || 'diproses').toLowerCase();
     if (!VALID_STATUS.includes(statusValue)) {
@@ -206,29 +196,16 @@ export async function POST(request) {
       },
     });
 
-    const notificationPayload = {
-      nama_karyawan: created.user?.nama_pengguna || 'Karyawan',
-      judul_agenda: created.agenda?.nama_agenda || 'Agenda Baru',
-      tanggal_deadline: formatDateTime(created.end_date),
-      pemberi_tugas: 'Aplikasi Mobile',
-    };
-
-    console.info('[NOTIF] (Mobile) Mengirim notifikasi NEW_AGENDA_ASSIGNED untuk user %s dengan payload %o', created.id_user, notificationPayload);
-    await sendNotification('NEW_AGENDA_ASSIGNED', created.id_user, notificationPayload);
-    console.info('[NOTIF] (Mobile) Notifikasi NEW_AGENDA_ASSIGNED selesai diproses untuk user %s', created.id_user);
-
     return NextResponse.json({ ok: true, data: created }, { status: 201 });
   } catch (err) {
-    // Blok catch ini sekarang menjadi fallback jika ada error lain
     console.error(err);
     return NextResponse.json({ ok: false, message: 'Gagal membuat agenda kerja' }, { status: 500 });
   }
 }
-
 function normalizeKebutuhanInput(input) {
   if (input === undefined) return { value: undefined };
   if (input === null) return { value: null };
-  
+
   const trimmed = String(input).trim();
   if (!trimmed) return { value: null };
   return { value: trimmed };
