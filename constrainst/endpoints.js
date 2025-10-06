@@ -24,7 +24,7 @@ const API_ABSENSI_RECORDS = "/api/admin/absensi/history"; // GET ?date=YYYY-MM-D
 const API_ABSENSI_APPROVALS = "/api/admin/absensi";       // tanpa trailing slash
 
 // === Kunjungan
-const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
+const API_KUNJUNGAN = "/api/mobile/kunjungan-klien";
 
 // === Kategori Kunjungan (BARU)
 const API_KATEGORI_KUNJUNGAN = "/api/admin/kategori-kunjungan";
