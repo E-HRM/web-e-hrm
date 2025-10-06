@@ -33,32 +33,39 @@ export async function sendNotification(eventTrigger, userId, dynamicData) {
       where: { eventTrigger: eventTrigger },
     });
 
-    // Jangan kirim jika template tidak ada atau tidak aktif
-    if (!template || !template.isActive) {
-      console.log(`Template untuk ${eventTrigger} tidak ditemukan atau tidak aktif.`);
-      return;
+    let title, body;
+
+    // --- PERBAIKAN: Gunakan fallback jika template tidak ada ---
+    // Jika template dari DB ada dan aktif, gunakan itu.
+    if (template && template.isActive) {
+      console.log(`Menggunakan template kustom dari DB untuk [${eventTrigger}].`);
+      title = formatMessage(template.titleTemplate, dynamicData);
+      body = formatMessage(template.bodyTemplate, dynamicData);
+    } else {
+      // Jika tidak, gunakan pesan default sebagai cadangan.
+      console.warn(`Template untuk [${eventTrigger}] tidak ditemukan atau tidak aktif. Menggunakan pesan default.`);
+
+      // Anda bisa menambahkan lebih banyak kasus di sini
+      switch (eventTrigger) {
+        case 'NEW_AGENDA_ASSIGNED':
+          title = `Tugas Baru: ${dynamicData.judul_agenda || 'Agenda Kerja'}`;
+          body = `Anda mendapatkan tugas baru dari ${dynamicData.pemberi_tugas || 'atasan'}. Mohon diperiksa.`;
+          break;
+        case 'SHIFT_UPDATED':
+          title = 'Jadwal Shift Diperbarui';
+          body = `Jadwal shift Anda untuk tanggal ${dynamicData.tanggal_shift || ''} telah diperbarui.`;
+          break;
+        default:
+          // Fallback paling umum jika event tidak dikenal
+          title = 'Pemberitahuan Baru';
+          body = 'Anda memiliki pembaruan baru di aplikasi E-HRM.';
+          break;
+      }
     }
+    // --- AKHIR PERBAIKAN ---
 
-    // 2. Ambil semua token FCM milik pengguna dari tabel Device
-    const devices = await prisma.device.findMany({
-      where: {
-        id_user: userId,
-        fcm_token: { not: null }, // Pastikan hanya ambil yang punya token
-      },
-    });
-
-    const fcmTokens = devices.map((device) => device.fcm_token);
-
-    if (fcmTokens.length === 0) {
-      console.log(`Tidak ada token FCM yang ditemukan untuk user ID: ${userId}`);
-      return;
-    }
-
-    // 3. Format judul dan isi pesan dengan data dinamis
-    const title = formatMessage(template.titleTemplate, dynamicData);
-    const body = formatMessage(template.bodyTemplate, dynamicData);
-
-    // 4. Simpan riwayat notifikasi ke database (tabel Notification)
+    // 2. Simpan riwayat notifikasi ke database (tabel Notification)
+    //    Langkah ini sekarang DIJAMIN berjalan.
     await prisma.notification.create({
       data: {
         id_user: userId,
@@ -68,8 +75,24 @@ export async function sendNotification(eventTrigger, userId, dynamicData) {
         // data_json: JSON.stringify({ screen: 'AbsensiDetail', id: dynamicData.absensiId }),
       },
     });
+    console.log(`Notifikasi untuk [${eventTrigger}] berhasil disimpan ke DB untuk user ${userId}.`);
 
-    // 5. Kirim Push Notification menggunakan Firebase Admin SDK
+    // 3. Ambil semua token FCM milik pengguna untuk dikirim
+    const devices = await prisma.device.findMany({
+      where: {
+        id_user: userId,
+        fcm_token: { not: null },
+      },
+    });
+
+    const fcmTokens = devices.map((device) => device.fcm_token);
+
+    if (fcmTokens.length === 0) {
+      console.log(`Tidak ada token FCM yang ditemukan untuk user ID: ${userId}. Push notification tidak dikirim.`);
+      return;
+    }
+
+    // 4. Kirim Push Notification menggunakan Firebase Admin SDK
     const message = {
       notification: {
         title: title,
@@ -91,7 +114,7 @@ export async function sendNotification(eventTrigger, userId, dynamicData) {
     };
 
     const response = await getMessaging(adminApp).sendEachForMulticast(message);
-    console.log(`Notifikasi ${eventTrigger} berhasil dikirim ke user ${userId}. Response:`, response);
+    console.log(`Push notification [${eventTrigger}] berhasil dikirim ke user ${userId}. Response:`, response);
   } catch (error) {
     console.error(`Gagal mengirim notifikasi ${eventTrigger} untuk user ${userId}:`, error);
   }

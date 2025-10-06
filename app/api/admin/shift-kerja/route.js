@@ -3,7 +3,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
-import { extractWeeklyScheduleInput, normalizeWeeklySchedule, serializeHariKerja, transformShiftRecord } from './schedule-utils';
+import { extractWeeklyScheduleInput, normalizeWeeklySchedule, serializeHariKerja, transformShiftRecord } from './schedul-utils';
 import { sendNotification } from '@/app/utils/services/notificationService';
 const SHIFT_STATUS = ['KERJA', 'LIBUR'];
 
@@ -12,7 +12,7 @@ async function ensureAuth(req) {
   if (auth.startsWith('Bearer ')) {
     try {
       verifyAuthToken(auth.slice(7));
-      return true;  
+      return true;
     } catch (_) {}
   }
   const sessionOrRes = await authenticateRequest();
