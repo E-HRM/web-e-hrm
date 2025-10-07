@@ -37,7 +37,6 @@ const serializeLocalWallTime = (d) =>
 export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
   if (!v) return "-";
   const s = String(v).trim();
-  // treat sebagai literal tanpa TZ
   const local = toLocalWallTime(s);
   return dayjs(local).format(fmt);
 };
@@ -64,6 +63,7 @@ const mapServerToFC = (row) => {
   else if (status === "ditunda") backgroundColor = "#f59e0b";
 
   return {
+    // PASTIKAN id = id_agenda_kerja agar DELETE/PUT tepat
     id: row.id_agenda_kerja || row.id || row._id,
     title,
     start, // string lokal agar FC tak geser TZ
@@ -234,9 +234,13 @@ export default function useAgendaCalendarViewModel() {
     [mutate]
   );
 
+  // ==== DELETE diperbaiki ====
   const deleteEvent = useCallback(
-    async (id) => {
-      await crudService.del(ApiEndpoints.DeleteAgendaKerja(id));
+    async (id, { hard = false } = {}) => {
+      // Pakai endpoint by id_agenda_kerja, optional hard delete
+      const url = ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : "");
+      const delFn = crudService.del || crudService.delete; // fallback
+      await delFn(url);
       await mutate();
     },
     [mutate]

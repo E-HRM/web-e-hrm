@@ -100,7 +100,6 @@ export default function AgendaCalendarContent() {
 
   const openEdit = (fcEvent) => {
     setEditId(fcEvent.id);
-    const raw = fcEvent.extendedProps?.raw || {};
     form.setFieldsValue({
       title: fcEvent.title,
       status: fcEvent.extendedProps?.status || "diproses",
@@ -136,8 +135,9 @@ export default function AgendaCalendarContent() {
       }
       setFormOpen(false);
       form.resetFields();
-    } catch {
-      notification.error({ message: "Gagal menyimpan agenda" });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Gagal menyimpan agenda";
+      notification.error({ message: msg });
     }
   };
 
@@ -149,11 +149,13 @@ export default function AgendaCalendarContent() {
       cancelText: "Batal",
       onOk: async () => {
         try {
+          // soft delete (tanpa ?hard=1). Jika ingin hard, gunakan: await vm.deleteEvent(id, { hard: true })
           await vm.deleteEvent(id);
           notification.success({ message: "Agenda dihapus" });
           setDetailOpen(false);
-        } catch {
-          notification.error({ message: "Gagal menghapus agenda" });
+        } catch (e) {
+          const msg = e?.response?.data?.message || e?.message || "Gagal menghapus agenda";
+          notification.error({ message: msg });
         }
       },
     });
@@ -174,13 +176,14 @@ export default function AgendaCalendarContent() {
         id_agenda: event.extendedProps?.id_agenda || null,
       });
       notification.success({ message: "Agenda diperbarui" });
-    } catch {
-      notification.error({ message: "Gagal memperbarui agenda" });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Gagal memperbarui agenda";
+      notification.error({ message: msg });
       event.revert();
     }
   };
 
-  /* ===== Render ===== */
+  /* ===== Render event ===== */
   const renderEventContent = (info) => {
     const status = info.event.extendedProps?.status;
     const color =
@@ -200,7 +203,7 @@ export default function AgendaCalendarContent() {
     );
   };
 
-  /* ====== user header untuk Detail ====== */
+  /* ===== user header untuk Detail ===== */
   const detailUser = useMemo(() => {
     if (!detailEvent) return null;
     const raw = detailEvent.extendedProps?.raw || {};
@@ -359,7 +362,6 @@ export default function AgendaCalendarContent() {
                   icon={<EditOutlined />}
                   onClick={() => {
                     setDetailOpen(false);
-                    // buka form edit
                     openEdit(detailEvent);
                   }}
                 />
@@ -428,7 +430,7 @@ export default function AgendaCalendarContent() {
             />
           </Form.Item>
 
-          {/* Proyek/Agenda dengan tombol tambah cepat */}
+          {/* Proyek/Agenda + tambah cepat */}
           <Form.Item label="Proyek/Agenda" required>
             <Space.Compact className="w-full">
               <Form.Item
@@ -475,7 +477,6 @@ export default function AgendaCalendarContent() {
           const { nama } = await agendaForm.validateFields();
           const id = await vm.createAgendaMaster(nama.trim());
           if (id) {
-            // set nilai select di form utama
             form.setFieldsValue({ id_agenda: id });
           }
           setAgendaOpen(false);
