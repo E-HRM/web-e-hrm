@@ -1,16 +1,13 @@
 "use client";
 
 import { useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 export default function useLogoutViewModel() {
-  const router = useRouter();
-
   const onLogout = useCallback(() => {
-    localStorage.removeItem("eh-token");
-    localStorage.removeItem("eh-user");
-    router.push("/auth/login");
-  }, [router]);
+  
+    signOut({ redirect: true, callbackUrl: "/auth/login" });
+  }, []);
 
   return { onLogout };
 }

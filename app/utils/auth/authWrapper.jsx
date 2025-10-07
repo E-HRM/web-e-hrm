@@ -12,15 +12,8 @@ export default function AuthWrapper({ children }) {
 
   const authRoutes = useMemo(
     () => [
-      "/",
-      "/register",
-      "/change-password",
-      "/reset-password",
-      "/free-placement-test",
-      "/free-placement-test/result",
-      "/free-mock-test",
-      "/free-mock-test/result",
-      "/register-group-class",
+      "/auth/resetpass",
+      "/"
     ],
     []
   );
