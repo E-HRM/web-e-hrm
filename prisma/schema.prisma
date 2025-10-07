@@ -684,7 +684,7 @@ model Notification {
 // BARU: Model untuk menyimpan template notifikasi yang bisa di-custom
 model NotificationTemplate {
   id              String   @id @default(uuid())
-  eventTrigger    String   @unique // Kode unik untuk pemicu, cth: REMINDER_CHECK_IN
+  eventTrigger    String   @unique @map("event_trigger") // TAMBAHKAN @map di sini
   description     String   // Deskripsi untuk HR, cth: "Pengingat 15 menit sebelum jam masuk"
   titleTemplate   String   @map("title_template")
   bodyTemplate    String   @db.Text @map("body_template")
