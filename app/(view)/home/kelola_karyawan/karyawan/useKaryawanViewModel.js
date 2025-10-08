@@ -84,7 +84,8 @@ export default function useKaryawanViewModel() {
 
   /* ====== list users ====== */
   const listKey = useMemo(() => {
-    // Kompat: kirim dua nama param untuk filter jabatan
+    // Gunakan 'search' agar backend cari di nama/email/kontak.
+    // Sertakan jabatanId + fallback id_jabatan untuk kompatibilitas.
     const qs = buildQS({
       page,
       pageSize,

@@ -258,20 +258,14 @@ export default function KaryawanContent() {
           bodyStyle={{ paddingTop: 16 }}
           title={
             <Space wrap>
-              {/* Pencarian — dipendekkan */}
+              {/* Pencarian — pakai state vm.q */}
               <Input.Search
-                placeholder="Cari karyawan…"
+                placeholder="Cari nama/email…"
                 allowClear
                 enterButton={<SearchOutlined />}
                 value={vm.q}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  // ★ tidak perlu reload; SWR akan refetch saat key berubah
-                  vm.setQ(v);
-                }}
-                onSearch={(v) => {
-                  vm.setQ(v ?? "");
-                }}
+                onChange={(e) => vm.setQ(e.target.value)}
+                onSearch={(v) => vm.setQ(v ?? "")}
                 style={{ width: 280 }}
               />
 
