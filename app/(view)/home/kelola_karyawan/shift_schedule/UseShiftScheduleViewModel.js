@@ -143,6 +143,22 @@ export default function UseShiftScheduleViewModel() {
       })),
     [deptRes]
   );
+  // setelah: const [deptId, setDeptId] = useState(null);
+  const [jabatanId, setJabatanId] = useState(null);
+
+  // master jabatan
+  const { data: jabRes } = useSWR(
+    `${ApiEndpoints.GetJabatan}?page=1&pageSize=500`,
+    fetcher
+  );
+  const jabatanOptions = useMemo(
+    () =>
+      (jabRes?.data || []).map((j) => ({
+        value: j.id_jabatan,
+        label: j.nama_jabatan,
+      })),
+    [jabRes]
+  );
 
   const usersQS = useMemo(() => {
     const p = new URLSearchParams();
