@@ -513,8 +513,8 @@ export async function GET(req) {
       db.user.groupBy({
         by: ['id_departement'],
         where: activeUserWhere,
-        _count: { _all: true },
-        orderBy: { _count: { _all: 'desc' } },
+        _count: { id_user: true },
+        orderBy: { _count: { id_user: 'desc' } },
         take: 5,
       }),
       db.absensi.findMany({
@@ -693,7 +693,7 @@ export async function GET(req) {
 
     const miniBars = miniBarRaw.map((item) => ({
       label: (item.id_departement && departementNameMap.get(item.id_departement)) || (item.id_departement ? 'Departemen Tidak Aktif' : 'Tanpa Departemen'),
-      value: item._count._all,
+      value: item._count.id_user,
     }));
 
     const leaveList = leaveToday.map((item) => {
