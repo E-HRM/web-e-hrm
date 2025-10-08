@@ -16,7 +16,7 @@ function PerfRow({ name, division, time }) {
         </div>
       </div>
       <span className="text-[11px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-600">
-        {time}
+        {time ?? "—"}
       </span>
     </div>
   );
@@ -28,8 +28,10 @@ export default function PerformanceSection({
   date, setDate,
   division, setDivision, divisionOptions,
   q, setQ,
-  rows,
+  rows, // <-- array sudah dipilih oleh VM (bukan object)
 }) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+
   return (
     <div className="bg-white rounded-2xl shadow-sm p-4">
       <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -72,18 +74,18 @@ export default function PerformanceSection({
       </div>
 
       <div className="mt-3">
-        {rows.length === 0 ? (
+        {safeRows.length === 0 ? (
           <div className="text-sm text-slate-500">Tidak ada data.</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="divide-y divide-slate-100 bg-[#FAFAFB] rounded-xl p-3">
-              {rows.slice(0, Math.ceil(rows.length / 2)).map((r) => (
-                <PerfRow key={r.id} {...r} />
+              {safeRows.slice(0, Math.ceil(safeRows.length / 2)).map((r) => (
+                <PerfRow key={r.id || `${r.userId}-${r.time}-${r.name}`} {...r} />
               ))}
             </div>
             <div className="divide-y divide-slate-100 bg-[#FAFAFB] rounded-xl p-3">
-              {rows.slice(Math.ceil(rows.length / 2)).map((r) => (
-                <PerfRow key={r.id} {...r} />
+              {safeRows.slice(Math.ceil(safeRows.length / 2)).map((r) => (
+                <PerfRow key={r.id || `${r.userId}-${r.time}-${r.name}-2`} {...r} />
               ))}
             </div>
           </div>

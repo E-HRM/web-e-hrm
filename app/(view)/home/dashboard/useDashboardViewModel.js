@@ -1,184 +1,102 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-/* ==================== DUMMY CHART ==================== */
-const CHART_BY_DIVISION = {
-  IT: [
-    { name: "Dewa Ode", Kedatangan: 65, Kepulangan: 58 },
-    { name: "Putri Indah", Kedatangan: 78, Kepulangan: 56 },
-    { name: "Ngurah Manik", Kedatangan: 112, Kepulangan: 26 },
-    { name: "Dewa Adi", Kedatangan: 75, Kepulangan: 30 },
-    { name: "Febe Annika", Kedatangan: 62, Kepulangan: 52 },
-    { name: "Kevin Pratama", Kedatangan: 72, Kepulangan: 60 },
-    { name: "Ayu Maharani", Kedatangan: 102, Kepulangan: 50 },
-  ],
-  HR: [
-    { name: "Dewa Ode", Kedatangan: 45, Kepulangan: 30 },
-    { name: "Putri Indah", Kedatangan: 36, Kepulangan: 28 },
-    { name: "Ngurah Manik", Kedatangan: 58, Kepulangan: 18 },
-    { name: "Dewa Adi", Kedatangan: 42, Kepulangan: 22 },
-    { name: "Febe Annika", Kedatangan: 35, Kepulangan: 20 },
-    { name: "Kevin Pratama", Kedatangan: 40, Kepulangan: 30 },
-    { name: "Ayu Maharani", Kedatangan: 60, Kepulangan: 26 },
-  ],
-  Admin: [
-    { name: "Dewa Ode", Kedatangan: 55, Kepulangan: 38 },
-    { name: "Putri Indah", Kedatangan: 66, Kepulangan: 30 },
-    { name: "Ngurah Manik", Kedatangan: 84, Kepulangan: 25 },
-    { name: "Dewa Adi", Kedatangan: 58, Kepulangan: 28 },
-    { name: "Febe Annika", Kedatangan: 50, Kepulangan: 34 },
-    { name: "Kevin Pratama", Kedatangan: 64, Kepulangan: 40 },
-    { name: "Ayu Maharani", Kedatangan: 70, Kepulangan: 36 },
-  ],
-  IDE: [
-    { name: "Dewa Ode", Kedatangan: 62, Kepulangan: 48 },
-    { name: "Putri Indah", Kedatangan: 70, Kepulangan: 40 },
-    { name: "Ngurah Manik", Kedatangan: 96, Kepulangan: 30 },
-    { name: "Dewa Adi", Kedatangan: 60, Kepulangan: 32 },
-    { name: "Febe Annika", Kedatangan: 72, Kepulangan: 44 },
-    { name: "Kevin Pratama", Kedatangan: 80, Kepulangan: 50 },
-    { name: "Ayu Maharani", Kedatangan: 92, Kepulangan: 42 },
-  ],
-  Konsultan: [
-    { name: "Dewa Ode", Kedatangan: 40, Kepulangan: 35 },
-    { name: "Putri Indah", Kedatangan: 44, Kepulangan: 28 },
-    { name: "Ngurah Manik", Kedatangan: 60, Kepulangan: 20 },
-    { name: "Dewa Adi", Kedatangan: 52, Kepulangan: 24 },
-    { name: "Febe Annika", Kedatangan: 48, Kepulangan: 26 },
-    { name: "Kevin Pratama", Kedatangan: 55, Kepulangan: 30 },
-    { name: "Ayu Maharani", Kedatangan: 64, Kepulangan: 28 },
-  ],
-};
+const API = "/api/admin/dashboard";
 
-/* ==================== DUMMY PERFORMA & TOP5 ==================== */
-const DIVISION_OPTIONS = [
-  { label: "--Divisi--", value: "" },
-  { label: "IT", value: "IT" },
-  { label: "HR", value: "HR" },
-  { label: "Admin", value: "Admin" },
-  { label: "IDE", value: "IDE" },
-  { label: "Konsultan", value: "Konsultan" },
-];
-
-const PERF_TABS = [
-  { key: "onTime", label: "Tepat Waktu" },
-  { key: "late", label: "Terlambat" },
-  { key: "absent", label: "Tidak/belum hadir" },
-  { key: "autoOut", label: "Presensi Keluar Otomatis" },
-  { key: "leave", label: "Cuti" },
-  { key: "permit", label: "Izin" },
-];
-
-const PERF_DATA_MAP = {
-  onTime: [
-    { id: "u1", name: "Ngurah Manik Mahardika", division: "IT", time: "07:59:12" },
-    { id: "u2", name: "Robby Alan Prayogi", division: "IT", time: "08:00:03" },
-  ],
-  late: [
-    { id: "u3", name: "I Kadek Dwi Hendra", division: "IT", time: "08:21:17" },
-    { id: "u4", name: "Mesy Chintiya Sari", division: "Admin", time: "08:51:16" },
-    { id: "u5", name: "I Dewa Gede Arsana Pucanganom", division: "IT", time: "08:30:30" },
-    { id: "u6", name: "Kimartha Putri", division: "HR", time: "08:41:41" },
-  ],
-  absent: [{ id: "u7", name: "Made Rara", division: "IDE", time: "—" }],
-  autoOut: [{ id: "u8", name: "Gede Agus", division: "Konsultan", time: "18:10:00" }],
-  leave: [{ id: "u9", name: "Kadek Sri Meyani", division: "HR", time: "Cuti Tahunan" }],
-  permit: [{ id: "u10", name: "Putu Diah", division: "Admin", time: "Izin Dokter" }],
-};
-
-/* ===== Top 5 — dua periode (bulan ini vs bulan lalu) ===== */
-const TOP5_LATE_THIS = [
-  { rank: 1, name: "Ni Komang Ayu Tirta Utami", division: "Super Team OSS Bali", count: "2 hari", duration: "3 jam 7 menit 4 detik" },
-  { rank: 2, name: "Yusuf Stefanus",            division: "Super Team OSS Bali", count: "1 hari", duration: "5 menit 44 detik" },
-  { rank: 3, name: "I Nyoman Bagus Sudarsana",  division: "Super Team OSS Bali", count: "1 hari", duration: "3 menit" },
-  { rank: 4, name: "Dewa Adi",                  division: "Super Team OSS Bali", count: "1 hari", duration: "2 menit" },
-  { rank: 5, name: "Putri Indah",               division: "Super Team OSS Bali", count: "1 hari", duration: "2 menit" },
-];
-
-const TOP5_LATE_LAST = [
-  { rank: 1, name: "Robby Alan Prayogi",        division: "Super Team OSS Bali", count: "3 hari", duration: "4 jam 20 menit" },
-  { rank: 2, name: "Ngurah Manik Mahardika",    division: "Super Team OSS Bali", count: "2 hari", duration: "50 menit" },
-  { rank: 3, name: "Mesy Chintiya Sari",        division: "Super Team OSS Bali", count: "2 hari", duration: "42 menit" },
-  { rank: 4, name: "I Kadek Dwi Hendra",        division: "Super Team OSS Bali", count: "1 hari", duration: "15 menit" },
-  { rank: 5, name: "Kimartha Putri",            division: "Super Team OSS Bali", count: "1 hari", duration: "10 menit" },
-];
-
-const TOP5_DISC_THIS = [
-  { rank: 1, name: "Robby Alan Prayogi",        division: "Super Team OSS Bali", score: "100%" },
-  { rank: 2, name: "Ngurah Manik Mahardika",    division: "Super Team OSS Bali", score: "98%" },
-  { rank: 3, name: "Mesy Chintiya Sari",        division: "Super Team OSS Bali", score: "96%" },
-  { rank: 4, name: "I Kadek Dwi Hendra",        division: "Super Team OSS Bali", score: "95%" },
-  { rank: 5, name: "Kimartha Putri",            division: "Super Team OSS Bali", score: "94%" },
-];
-
-const TOP5_DISC_LAST = [
-  { rank: 1, name: "Ni Komang Ayu Tirta Utami", division: "Super Team OSS Bali", score: "99%" },
-  { rank: 2, name: "Yusuf Stefanus",            division: "Super Team OSS Bali", score: "97%" },
-  { rank: 3, name: "I Nyoman Bagus Sudarsana",  division: "Super Team OSS Bali", score: "96%" },
-  { rank: 4, name: "Dewa Adi",                  division: "Super Team OSS Bali", score: "94%" },
-  { rank: 5, name: "Putri Indah",               division: "Super Team OSS Bali", score: "93%" },
-];
+function toDateInput(isoLike) {
+  if (!isoLike) return "";
+  // Pastikan format YYYY-MM-DD untuk <input type="date">
+  return isoLike.slice(0, 10);
+}
 
 export default function useDashboardViewModel() {
-  /* ===== Header & mini stats ===== */
-  const tanggalTampilan = new Date().toLocaleDateString("id-ID", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-  const totalKaryawan = 12;
-  const totalDivisi = 5;
-
-  const miniBars = [
-    { label: "HR", value: 18 },
-    { label: "IDE", value: 72 },
-    { label: "Admin", value: 58 },
-    { label: "IT", value: 55 },
-    { label: "Konsultan", value: 42 },
-  ];
-
-  const leaveList = [
-    { name: "Kadek Sri Meyani", days: 3, color: "#FDE68A" },
-    { name: "Ni Putu Melli Antari", days: 2, color: "#BBF7D0" },
-    { name: "Ni Putu Melli Antari", days: 1, color: "#BFDBFE" },
-    { name: "Ni Putu Melli Antari", days: 1, color: "#FBCFE8" },
-    { name: "Ni Putu Melli Antari", days: 1, color: "#FCA5A5" },
-  ];
-  const onLeaveCount = leaveList.length;
-
-  /* ===== Chart ===== */
-  const [division, setDivision] = useState("IT");
-  const divisionOptions = Object.keys(CHART_BY_DIVISION).map((d) => ({
-    label: `Divisi ${d}`,
-    value: d,
-  }));
-  const chartData = useMemo(
-    () => CHART_BY_DIVISION[division] ?? [],
-    [division]
-  );
-
-  /* ===== Mini Calendar (dinamis dummy) ===== */
-  const today = new Date();
+  // ======== STATE FILTER / UI ========
+  const today = useMemo(() => new Date(), []);
+  const [division, setDivision] = useState("");              // untuk chart
   const [calYear, setCalYear] = useState(today.getFullYear());
-  const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-11
+  const [calMonth, setCalMonth] = useState(today.getMonth());
+  const [perfDate, setPerfDate] = useState(toDateInput(new Date().toISOString()));
+  const [perfDivision, setPerfDivision] = useState("");      // untuk performa
+  const [perfTab, setPerfTab] = useState("late");
+  const [perfQuery, setPerfQuery] = useState("");
+  const [top5Period, setTop5Period] = useState("this");      // "this" | "last"
 
-  const calendarEvents = useMemo(() => {
-    return {
-      3:  { color: "bg-emerald-500", tip: "Cuti Tahunan" },
-      6:  { color: "bg-rose-500",    tip: "Izin" },
-      7:  { color: "bg-fuchsia-500", tip: "Dinas Luar" },
-      14: { color: "bg-rose-500",    tip: "Izin Sakit" },
-      17: { color: "bg-violet-500",  tip: "1 Karyawan Cuti" },
-      18: { color: "bg-emerald-500", tip: "Cuti" },
-      19: { color: "bg-emerald-500", tip: "Cuti" },
-      20: { color: "bg-violet-500",  tip: "Training" },
-      21: { color: "bg-fuchsia-500", tip: "Dinas Luar" },
-      23: { color: "bg-emerald-500", tip: "Cuti" },
-    };
-  }, []);
+  // ======== DATA DARI API ========
+  const [loading, setLoading] = useState(false);
+  const [tanggalTampilan, setTanggalTampilan] = useState("");
+  const [totalKaryawan, setTotalKaryawan] = useState(0);
+  const [totalDivisi, setTotalDivisi] = useState(0);
+  const [miniBars, setMiniBars] = useState([]);
+  const [chartData, setChartData] = useState([]);
+  const [divisionOptions, setDivisionOptions] = useState([]);
+  const [perfTabs, setPerfTabs] = useState([]);
+  const [perfDivisionOptions, setPerfDivisionOptions] = useState([]);
+  const [perfRowsByTab, setPerfRowsByTab] = useState({ onTime: [], late: [], absent: [], autoOut: [], leave: [], permit: [] });
+  const [top5LateData, setTop5LateData] = useState({ this: [], last: [] });
+  const [top5DisciplineData, setTop5DisciplineData] = useState({ this: [], last: [] });
+  const [calendarEvents, setCalendarEvents] = useState({});
+  const [todayDate, setTodayDate] = useState(new Date());
 
+  // Section Cuti — dikosongkan sesuai permintaan
+  const leaveList = [];
+  const onLeaveCount = 0;
+
+  // ======== FETCHER ========
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (division) params.set("divisionId", division);
+      if (perfDate) params.set("performanceDate", perfDate);
+      if (perfDivision !== undefined) params.set("performanceDivisionId", perfDivision);
+      if (perfQuery) params.set("performanceQuery", perfQuery);
+      params.set("calendarYear", String(calYear));
+      params.set("calendarMonth", String(calMonth));
+
+      const res = await fetch(`${API}?${params.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const data = await res.json();
+
+      setTanggalTampilan(data.tanggalTampilan || "");
+      setTotalKaryawan(data.totalKaryawan || 0);
+      setTotalDivisi(data.totalDivisi || 0);
+      setMiniBars(Array.isArray(data.miniBars) ? data.miniBars : []);
+      setChartData(Array.isArray(data.chartData) ? data.chartData : []);
+
+      setDivisionOptions(Array.isArray(data.divisionOptions) ? data.divisionOptions : []);
+      // default division chart (hanya saat belum ada pilihan)
+      if (!division && data.defaultDivisionId) {
+        setDivision(data.defaultDivisionId);
+      }
+
+      // Perf tabs/options/rows
+      setPerfTabs(Array.isArray(data.perfTabs) ? data.perfTabs : []);
+      setPerfDivisionOptions(Array.isArray(data.perfDivisionOptions) ? data.perfDivisionOptions : []);
+      setPerfRowsByTab(data.perfRows || { onTime: [], late: [], absent: [], autoOut: [], leave: [], permit: [] });
+
+      // Top 5
+      setTop5LateData(data.top5Late || { this: [], last: [] });
+      setTop5DisciplineData(data.top5Discipline || { this: [], last: [] });
+
+      // Calendar & today
+      setCalendarEvents(data?.calendar?.eventsByDay || {});
+      setTodayDate(data.todayIso ? new Date(data.todayIso) : new Date());
+
+      // perfDate dari API → normalisasi utk <input type="date">
+      if (data.perfDate) setPerfDate(toDateInput(data.perfDate));
+    } catch (e) {
+      console.error("fetch dashboard error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [division, perfDate, perfDivision, perfQuery, calYear, calMonth]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // ======== Calendar navigation ========
   const prevMonth = () => {
     setCalMonth((m) => {
       if (m === 0) {
@@ -199,40 +117,20 @@ export default function useDashboardViewModel() {
     });
   };
 
-  /* ===== Performa Kehadiran (dummy) ===== */
-  const [perfDate, setPerfDate] = useState("2025-10-03");
-  const [perfDivision, setPerfDivision] = useState("");
-  const [perfTab, setPerfTab] = useState("late");
-  const [perfQuery, setPerfQuery] = useState("");
-
-  const perfDivisionOptions = DIVISION_OPTIONS;
-
-  const perfRowsRaw = useMemo(() => PERF_DATA_MAP[perfTab] ?? [], [perfTab]);
+  // ======== Derived for components ========
   const perfRows = useMemo(() => {
-    const q = perfQuery.trim().toLowerCase();
-    return perfRowsRaw.filter((r) => {
-      const okDiv = perfDivision ? r.division === perfDivision : true;
-      const okQ =
-        !q ||
-        r.name.toLowerCase().includes(q) ||
-        r.division.toLowerCase().includes(q);
-      return okDiv && okQ;
-    });
-  }, [perfDivision, perfQuery, perfRowsRaw]);
+    const obj = perfRowsByTab || {};
+    const arr = obj[perfTab];
+    return Array.isArray(arr) ? arr : [];
+  }, [perfRowsByTab, perfTab]);
 
-  /* ===== Top 5 (SATU FILTER untuk dua kartu) ===== */
-  const [top5Period, setTop5Period] = useState("this"); // "this" | "last"
-
-  const top5Late = useMemo(
-    () => (top5Period === "this" ? TOP5_LATE_THIS : TOP5_LATE_LAST),
-    [top5Period]
-  );
-  const top5Discipline = useMemo(
-    () => (top5Period === "this" ? TOP5_DISC_THIS : TOP5_DISC_LAST),
-    [top5Period]
-  );
+  const top5Late = useMemo(() => (top5Period === "this" ? (top5LateData.this || []) : (top5LateData.last || [])), [top5Period, top5LateData]);
+  const top5Discipline = useMemo(() => (top5Period === "this" ? (top5DisciplineData.this || []) : (top5DisciplineData.last || [])), [top5Period, top5DisciplineData]);
 
   return {
+    // loading (opsional jika mau dipakai)
+    loading,
+
     // header
     tanggalTampilan,
     totalKaryawan,
@@ -247,12 +145,12 @@ export default function useDashboardViewModel() {
     divisionOptions,
     chartData,
 
-    // leave list
+    // leave list (kosong sesuai request)
     leaveList,
     onLeaveCount,
 
     // calendar
-    today,
+    today: todayDate,
     calYear,
     calMonth,
     prevMonth,
@@ -260,7 +158,7 @@ export default function useDashboardViewModel() {
     calendarEvents,
 
     // performa
-    perfTabs: PERF_TABS,
+    perfTabs,
     perfDate,
     setPerfDate,
     perfDivision,

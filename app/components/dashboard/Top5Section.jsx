@@ -35,8 +35,8 @@ function RowDiscipline({ r }) {
  * props:
  * - period: "this" | "last"
  * - setPeriod: fn
- * - leftRows: array (sudah difilter sesuai period oleh VM)
- * - rightRows: array (sudah difilter sesuai period oleh VM)
+ * - leftRows: array
+ * - rightRows: array
  */
 export default function Top5Section({
   period = "this",
@@ -89,7 +89,7 @@ export default function Top5Section({
 
           <div className="bg-[#FAFAFB] rounded-xl p-2">
             {leftRows.map((r) => (
-              <RowLate key={`late-${r.rank}-${r.name}`} r={r} />
+              <RowLate key={`late-${r.rank}-${r.userId || r.name}`} r={r} />
             ))}
           </div>
         </div>
@@ -108,7 +108,7 @@ export default function Top5Section({
 
           <div className="bg-[#FAFAFB] rounded-xl p-2">
             {rightRows.map((r) => (
-              <RowDiscipline key={`disc-${r.rank}-${r.name}`} r={r} />
+              <RowDiscipline key={`disc-${r.rank}-${r.userId || r.name}`} r={r} />
             ))}
           </div>
         </div>
