@@ -30,6 +30,8 @@ import {
   CloseOutlined,
   ProfileOutlined,
   ClockCircleOutlined,
+  DeleteOutlined,
+  ExclamationCircleFilled,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import useVM, { showFromDB } from "./useKunjunganKalenderViewModel";
@@ -189,6 +191,30 @@ export default function KunjunganKalenderContent() {
     if (s === "berlangsung") return { color: "warning", text: "Berlangsung" }; // yellow
     return { color: "processing", text: "Diproses" }; // blue
   };
+
+    // Boleh dihapus jika selesai -> tidak boleh
+  const canDelete = activeRow
+    ? (activeRow.status_kunjungan || "").toLowerCase() !== "selesai"
+    : false;
+
+  const confirmDelete = useCallback(() => {
+    if (!activeRow || !canDelete) return;
+    Modal.confirm({
+      title: "Hapus kunjungan?",
+      icon: <ExclamationCircleFilled />,
+      okText: "Hapus",
+      okButtonProps: { danger: true },
+      cancelText: "Batal",
+      onOk: async () => {
+        await vm.deletePlan(activeRow.id_kunjungan);
+        message.success("Kunjungan dihapus.");
+        // tutup modal & reset state
+        setEditing(false);
+        setOpenDetail(false);
+      },
+    });
+  }, [activeRow, canDelete, vm]);
+
 
   // Quick booleans for map/photo availability
   const photoAvailable = activeRow ? !!vm.pickPhotoUrl(activeRow) : false;
@@ -427,6 +453,14 @@ export default function KunjunganKalenderContent() {
                   <Button icon={<CloseOutlined />} onClick={() => setEditing(false)}>
                     Cancel
                   </Button>
+                    <Button
+                      danger
+                        icon={<DeleteOutlined />}
+                        disabled={!canDelete}
+                        onClick={confirmDelete}
+                      >
+                        Delete
+                    </Button>
                   <Button type="primary" icon={<SaveOutlined />} onClick={submitEdit} style={{ background: NAVY }}>
                     Save
                   </Button>
@@ -467,6 +501,16 @@ export default function KunjunganKalenderContent() {
                       disabled={!endMapOk}
                     />
                   </Tooltip>
+                  <Tooltip title={canDelete ? "Delete visit" : "Tidak bisa hapus (status selesai)"}>
+                  <Button
+                    size="large"
+                    shape="circle"
+                    icon={<DeleteOutlined />}
+                    danger
+                    disabled={!canDelete}
+                    onClick={confirmDelete}
+                  />
+                </Tooltip>
                   <Tooltip title="Edit visit">
                     <Button size="large" shape="circle" icon={<EditOutlined />} onClick={() => setEditing(true)} />
                   </Tooltip>

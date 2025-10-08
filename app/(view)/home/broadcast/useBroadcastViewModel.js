@@ -1,157 +1,157 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import useSWR, { mutate as globalMutate } from "swr";
-import { fetcher } from "../../../utils/fetcher";
-import { crudService } from "../../../utils/services/crudService";
-import { ApiEndpoints } from "../../../../constrainst/endpoints";
+import { useMemo, useState } from "react";
 
-/** build querystring aman */
-function buildQS(obj) {
-  const p = new URLSearchParams();
-  Object.entries(obj).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && String(v).trim() !== "") {
-      p.set(k, String(v).trim());
-    }
-  });
-  const s = p.toString();
-  return s ? `?${s}` : "";
-}
+/** ===== Dummy data karyawan (avatar & nama) ===== */
+const img = (id) => `https://i.pravatar.cc/100?img=${id}`;
+export const EMPLOYEES = Array.from({ length: 28 }).map((_, i) => ({
+  id: `EMP${i + 1}`,
+  name: [
+    "Ayu","Bima","Cahya","Dewi","Eka","Fajar","Gita","Hendra","Intan","Joko",
+    "Kinan","Laras","Made","Nanda","Oki","Putri","Qori","Rama","Salsa","Tio",
+    "Uti","Vino","Wulan","Xaver","Yoga","Zahra","Rafi","Niko",
+  ][i % 28],
+  avatar: img((i % 70) + 1),
+}));
 
-/** mapping status → tag antd */
-function mapStatus(status) {
-  switch (status) {
-    case "DRAFT":
-      return { color: "default", text: "Konsep" };
-    case "SENDING":
-      return { color: "processing", text: "Mengirim" };
-    case "CANCELED":
-      return { color: "error", text: "Batal" };
-    case "OUT_OF_QUOTA":
-      return { color: "warning", text: "Kuota Habis" };
-    case "DELAYED":
-      return { color: "geekblue", text: "Ditunda" };
-    case "DONE":
-      return { color: "success", text: "Selesai" };
-    default:
-      return { color: "default", text: status || "—" };
-  }
-}
+const pick = (n) => {
+  const shuffled = [...EMPLOYEES].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+};
 
+export const STATUS_COLORS = {
+  DRAFT: { color: "default", text: "Konsep" },
+  SENDING: { color: "processing", text: "Mengirim" },
+  DONE: { color: "success", text: "Selesai" },
+  CANCELED: { color: "error", text: "Batal" },
+  DELAYED: { color: "geekblue", text: "Ditunda" },
+};
+
+const INITIAL_DATA = [
+  {
+    id: "B1",
+    title: "Lomba Tahunan",
+    content: "Lomba olahraga antar divisi. Daftar ke bagian GA.",
+    files: [{ name: "Rundown.pdf" }],
+    recipients: pick(24),
+    creator: { name: "KERJOO", when: "06 Jan 2024" },
+    status: "DRAFT",
+  },
+  {
+    id: "B2",
+    title: "LIBUR AKHIR TAHUN",
+    content: "Cuti bersama 29–31 Des. Operasional terbatas.",
+    files: [],
+    recipients: pick(12),
+    creator: { name: "KERJOO", when: "27 Des 2023" },
+    status: "DONE",
+  },
+  {
+    id: "B3",
+    title: "Meeting Bulanan",
+    content: "Townhall & evaluasi OKR. Agenda di lampiran.",
+    files: [{ name: "Agenda.docx" }],
+    recipients: pick(20),
+    creator: { name: "KERJOO", when: "19 Jan 2023" },
+    status: "CANCELED",
+  },
+];
+
+/** =========================================================
+ *  ViewModel
+ *  - rows: data broadcast
+ *  - q / statusTab: filter
+ *  - filteredRows, counts
+ *  - actions: addBroadcast, sendNow, deleteBroadcast
+ *  - employeeOptions: opsi untuk form penerima
+ ========================================================= */
 export default function useBroadcastViewModel() {
-  // filters
-  const [receiver, setReceiver] = useState(null); // ALL | DIVISI | JABATAN | INDIVIDU | null
-  const [status, setStatus] = useState("ALL"); // tab
+  const [rows, setRows] = useState(INITIAL_DATA);
   const [q, setQ] = useState("");
+  const [statusTab, setStatusTab] = useState("ALL");
 
-  // table
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-
-  // list
-  const listKey = useMemo(() => {
-    const qs = buildQS({
-      page,
-      pageSize,
-      search: q,
-      status: status !== "ALL" ? status : "",
-      target: receiver || "",
-      orderBy: "created_at",
-      sort: "desc",
-    });
-    return `${ApiEndpoints.GetBroadcasts}${qs}`;
-  }, [page, pageSize, q, status, receiver]);
-
-  const { data: listRes, isLoading } = useSWR(listKey, fetcher, {
-    keepPreviousData: true,
-  });
-
-  const rawRows = useMemo(
-    () => (Array.isArray(listRes?.data) ? listRes.data : []),
-    [listRes]
+  // opsi penerima (untuk Select)
+  const employeeOptions = useMemo(
+    () =>
+      EMPLOYEES.map((e) => ({
+        value: e.id,
+        label: e.name,
+        avatar: e.avatar,
+      })),
+    []
   );
 
-  const rows = useMemo(() => {
-    return rawRows.map((b) => {
-      const id = b.id_broadcast || b.id || b.uuid;
-      const title = b.judul || b.title || "(Tanpa judul)";
-      const creator =
-        b.pembuat?.nama_pengguna ||
-        b.pembuat?.name ||
-        b.pembuat ||
-        b.created_by_name ||
-        "—";
+  // filter daftar
+  const filteredRows = useMemo(() => {
+    const byStatus =
+      statusTab === "ALL" ? rows : rows.filter((r) => r.status === statusTab);
+    const s = q.trim().toLowerCase();
+    if (!s) return byStatus;
+    return byStatus.filter(
+      (r) =>
+        r.title.toLowerCase().includes(s) ||
+        r.content.toLowerCase().includes(s)
+    );
+  }, [rows, q, statusTab]);
 
-      const targetType = b.target_type || b.target || b.segment || "ALL";
-      const targetName =
-        b.target_name ||
-        b.nama_target ||
-        b.segment_name ||
-        (targetType === "ALL" ? "Semua karyawan" : "—");
-
-      const targetLabel =
-        targetType === "ALL"
-          ? "Semua karyawan"
-          : `${targetType} — ${targetName}`;
-
-      const status = b.status || "DRAFT";
-
-      return { id, title, creator, targetLabel, status };
-    });
-  }, [rawRows]);
-
-  const total = listRes?.pagination?.total ?? rows.length;
+  // hitung badge tiap status
+  const counts = useMemo(() => {
+    const c = { ALL: rows.length, DRAFT: 0, SENDING: 0, DONE: 0, CANCELED: 0, DELAYED: 0 };
+    rows.forEach((r) => (c[r.status] = (c[r.status] || 0) + 1));
+    return c;
+  }, [rows]);
 
   // actions
-  const changePage = useCallback((p, ps) => {
-    setPage(p);
-    setPageSize(ps);
-  }, []);
+  function addBroadcast({ title, content, files, recipientIds }) {
+    const picked = EMPLOYEES.filter((e) => recipientIds.includes(e.id));
+    const newRow = {
+      id: `B${Math.random().toString(36).slice(2, 7)}`,
+      title,
+      content,
+      files: files || [],
+      recipients: picked,
+      creator: { name: "KERJOO", when: new Date().toLocaleDateString("id-ID") },
+      status: "DRAFT",
+    };
+    setRows((r) => [newRow, ...r]);
+    return newRow;
+  }
 
-  const searchNow = useCallback(() => {
-    globalMutate(listKey);
-  }, [listKey]);
+  function deleteBroadcast(id) {
+    setRows((r) => r.filter((x) => x.id !== id));
+  }
 
-  const [deletingId, setDeletingId] = useState(null);
-  const deleteById = useCallback(
-    async (id) => {
-      try {
-        setDeletingId(id);
-        await crudService.delete(ApiEndpoints.DeleteBroadcast(id));
-        await globalMutate(listKey);
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e?.message || "Gagal" };
-      } finally {
-        setDeletingId(null);
-      }
-    },
-    [listKey]
-  );
+  function sendNow(id) {
+    // simulasi kirim → done
+    setRows((r) => r.map((x) => (x.id === id ? { ...x, status: "SENDING" } : x)));
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        setRows((r) => r.map((x) => (x.id === id ? { ...x, status: "DONE" } : x)));
+        resolve(true);
+      }, 900);
+    });
+  }
 
   return {
-    // filters
-    receiver,
-    setReceiver,
-    status,
-    setStatus,
+    // data & filter
+    rows,
+    filteredRows,
+    counts,
     q,
     setQ,
-    searchNow,
+    statusTab,
+    setStatusTab,
 
-    // table
-    page,
-    pageSize,
-    total,
-    rows,
-    loading: isLoading,
-    changePage,
-
-    // helpers
-    statusToTag: mapStatus,
+    // employees
+    employeeOptions,
+    employees: EMPLOYEES,
 
     // actions
-    deleteById,
-    deletingId,
+    addBroadcast,
+    sendNow,
+    deleteBroadcast,
+
+    // helpers
+    statusToTag: (st) => STATUS_COLORS[st] || { color: "default", text: st },
   };
 }

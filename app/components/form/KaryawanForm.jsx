@@ -19,12 +19,55 @@ import { UploadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import useSWR from "swr";
 import { ApiEndpoints } from "../../../constrainst/endpoints";
-import { crudService } from "../../../app/utils/services/crudService"; 
+import { crudService } from "../../../app/utils/services/crudService";
 
 dayjs.locale("id");
 
 const LABEL_STYLE = { width: 240, fontWeight: 600 };
 const BRAND = "#003A6F";
+
+/* ======== Opsi Select (rapih & konsisten) ======== */
+const OPSI_STATUS_PERKAWINAN = [
+  { value: "Belum Kawin", label: "Belum Kawin" },
+  { value: "Kawin", label: "Kawin" },
+  { value: "Janda", label: "Janda" },
+  { value: "Duda", label: "Duda" },
+];
+
+const OPSI_GOLONGAN_DARAH = [
+  { value: "A", label: "A" },
+  { value: "B", label: "B" },
+  { value: "AB", label: "AB" },
+  { value: "O", label: "O" },
+];
+
+const OPSI_AGAMA = [
+  { value: "Islam", label: "Islam" },
+  { value: "Kristen Protestan", label: "Kristen Protestan" },
+  { value: "Katolik", label: "Katolik" },
+  { value: "Hindu", label: "Hindu" },
+  { value: "Buddha", label: "Buddha" },
+  { value: "Konghucu", label: "Konghucu" },
+];
+
+const OPSI_JENJANG = [
+  { value: "SMA/MA", label: "SMA/MA" },
+  { value: "SMK", label: "SMK" },
+  { value: "Diploma", label: "Diploma" },
+  { value: "Sarjana/S1", label: "Sarjana/S1" },
+  { value: "Magister/S2", label: "Magister/S2" },
+  { value: "Doktor/S3", label: "Doktor/S3" },
+];
+
+const OPSI_STATUS_KERJA = [
+  { value: "Tetap", label: "Tetap" },
+  { value: "Kontrak", label: "Kontrak" },
+  { value: "Harian", label: "Harian" },
+  { value: "Musiman", label: "Musiman" },
+  { value: "Magang", label: "Magang" },
+  { value: "Paruh Waktu", label: "Paruh Waktu" },
+  { value: "Penuh Waktu", label: "Penuh Waktu" },
+];
 
 /* ---------------- helpers ---------------- */
 function toDateOnly(d) {
@@ -33,7 +76,6 @@ function toDateOnly(d) {
 
 /** Append helper: selalu append string (server sering ekspektasi key exist) */
 function append(fd, key, val) {
-  // Konversi undefined/null → '' agar key tetap terkirim
   const v =
     val === undefined || val === null
       ? ""
@@ -120,6 +162,7 @@ export default function KaryawanProfileForm({
         email: detail.email || "",
         kontak: detail.kontak || "",
         agama: detail.agama || undefined,
+        tempat_lahir: detail.tempat_lahir || "", // ← FIX: ikut diisi
         tanggal_lahir: detail.tanggal_lahir ? dayjs(detail.tanggal_lahir) : undefined,
         jenis_kelamin: detail.jenis_kelamin || undefined,
         golongan_darah: detail.golongan_darah || undefined,
@@ -171,6 +214,7 @@ export default function KaryawanProfileForm({
           id_departement: values.id_departement || undefined,
           id_location: values.id_location || undefined,
           tanggal_lahir: toDateOnly(values.tanggal_lahir),
+          tempat_lahir: values.tempat_lahir || undefined, // ← FIX: ikut kirim saat register
         };
         const reg = await crudService.post(ApiEndpoints.CreateUser, registerPayload);
         const newId = reg?.user?.id_user;
@@ -212,6 +256,10 @@ export default function KaryawanProfileForm({
           append(fd, "alamat_domisili_provinsi", values.alamat_domisili_provinsi);
           append(fd, "alamat_domisili_kota", values.alamat_domisili_kota);
 
+          // ← FIX: tempat lahir & tgl lahir ikut
+          append(fd, "tempat_lahir", values.tempat_lahir);
+          append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
+
           // File
           fd.append("file", fileList[0].originFileObj);
 
@@ -243,6 +291,10 @@ export default function KaryawanProfileForm({
             alamat_domisili: values.alamat_domisili ?? null,
             alamat_domisili_provinsi: values.alamat_domisili_provinsi ?? null,
             alamat_domisili_kota: values.alamat_domisili_kota ?? null,
+
+            // ← FIX: tempat & tanggal lahir ikut
+            tempat_lahir: values.tempat_lahir ?? null,
+            tanggal_lahir: toDateOnly(values.tanggal_lahir) ?? null,
           };
           await crudService.put(ApiEndpoints.UpdateUser(newId), putPayload);
         }
@@ -267,6 +319,7 @@ export default function KaryawanProfileForm({
         append(fd, "id_jabatan", values.id_jabatan);
         append(fd, "role", values.role || "KARYAWAN");
         append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
+        append(fd, "tempat_lahir", values.tempat_lahir); // ← FIX
 
         // Detail
         append(fd, "jenis_kelamin", values.jenis_kelamin);
@@ -309,6 +362,7 @@ export default function KaryawanProfileForm({
           id_jabatan: values.id_jabatan ?? null,
           role: values.role ?? "KARYAWAN",
           tanggal_lahir: toDateOnly(values.tanggal_lahir) ?? null,
+          tempat_lahir: values.tempat_lahir ?? null, // ← FIX
 
           jenis_kelamin: values.jenis_kelamin ?? null,
           golongan_darah: values.golongan_darah ?? null,
@@ -579,13 +633,13 @@ export default function KaryawanProfileForm({
                     />
                   </Form.Item>
                   <Form.Item name="golongan_darah" label="Golongan Darah">
-                    <Input placeholder="A/B/AB/O" />
+                    <Select options={OPSI_GOLONGAN_DARAH} allowClear />
                   </Form.Item>
                   <Form.Item name="status_perkawinan" label="Status Perkawinan">
-                    <Input />
+                    <Select options={OPSI_STATUS_PERKAWINAN} allowClear />
                   </Form.Item>
                   <Form.Item name="agama" label="Agama">
-                    <Input />
+                    <Select options={OPSI_AGAMA} allowClear showSearch optionFilterProp="label" />
                   </Form.Item>
                   <Form.Item name="kontak" label="Nomor Telepon">
                     <Input />
@@ -599,7 +653,7 @@ export default function KaryawanProfileForm({
                 <h3 className="text-xl font-semibold mt-6">Pendidikan Terakhir</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <Form.Item name="jenjang_pendidikan" label="Jenjang">
-                    <Input />
+                    <Select options={OPSI_JENJANG} allowClear />
                   </Form.Item>
                   <Form.Item name="jurusan" label="Jurusan">
                     <Input />
@@ -625,7 +679,7 @@ export default function KaryawanProfileForm({
                     <Select options={jabOpts} allowClear showSearch optionFilterProp="label" />
                   </Form.Item>
                   <Form.Item name="status_kerja" label="Status Kerja">
-                    <Input placeholder="Tetap/Kontrak/Magang ..." />
+                    <Select options={OPSI_STATUS_KERJA} allowClear />
                   </Form.Item>
                   <Form.Item name="tanggal_mulai_bekerja" label="Tgl. Mulai Bekerja">
                     <DatePicker className="w-full" format="DD MMM YYYY" />

@@ -352,7 +352,12 @@ export default function DashboardContent() {
 
           {/* ===== Top 5 (BARU) ===== */}
           <div className="col-span-12">
-            <Top5Section leftRows={vm.top5Late} rightRows={vm.top5Discipline} />
+            <Top5Section
+              period={vm.top5Period}
+              setPeriod={vm.setTop5Period}
+              leftRows={vm.top5Late}
+              rightRows={vm.top5Discipline}
+            />
           </div>
 
           {/* ===== Karyawan Cuti (tetap, di bawah) ===== */}

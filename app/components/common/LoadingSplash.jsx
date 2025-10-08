@@ -5,8 +5,8 @@ import Image from "next/image";
 export default function LoadingSplash({
   fullscreen = false,
   label = "Memuat data…",
-  size = 112,               // ubah-ubah jika perlu
-  brand = "#003A6F",        // warna brand
+  size = 112,               
+  brand = "#003A6F",       
 }) {
   return (
     <div
@@ -23,7 +23,7 @@ export default function LoadingSplash({
 
         {/* Logo di tengah */}
         <Image
-          src="/Loading.png"         // simpan logo kamu di /public/logo-cube.png
+          src="/Loading.png"        
           alt="Logo"
           width={Math.round(size * 0.7)}
           height={Math.round(size * 0.7)}

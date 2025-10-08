@@ -5,14 +5,16 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 // TODO: Ganti dengan konfigurasi Firebase proyek Anda
 const firebaseConfig = {
-  apiKey: 'AIzaSyBHaHOsrtZghC2JAeP53-rtg9gUKUmmMcM',
-  authDomain: 'e-hrm-2d3fe.firebaseapp.com',
-  projectId: 'e-hrm-2d3fe',
-  storageBucket: 'e-hrm-2d3fe.firebasestorage.app',
-  messagingSenderId: '584929841793',
-  appId: '1:584929841793:web:1a1cff15646de867067380',
-  measurementId: 'G-K58K7RVTHS',
+  apiKey: "AIzaSyAwMUqqmY_IhBRgHzUVD01wc9HQP7S7CGM",
+  authDomain: "e-hrm-1e3e0.firebaseapp.com",
+  projectId: "e-hrm-1e3e0",
+  storageBucket: "e-hrm-1e3e0.firebasestorage.app",
+  messagingSenderId: "653765384227",
+  appId: "1:653765384227:web:2a01c32629d019d634b996",
+  measurementId: "G-67QZCTNKBW"
 };
+
+
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);

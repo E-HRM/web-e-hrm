@@ -87,20 +87,37 @@ const PERF_DATA_MAP = {
   permit: [{ id: "u10", name: "Putu Diah", division: "Admin", time: "Izin Dokter" }],
 };
 
-const TOP5_LATE = [
+/* ===== Top 5 — dua periode (bulan ini vs bulan lalu) ===== */
+const TOP5_LATE_THIS = [
   { rank: 1, name: "Ni Komang Ayu Tirta Utami", division: "Super Team OSS Bali", count: "2 hari", duration: "3 jam 7 menit 4 detik" },
-  { rank: 2, name: "Yusuf Stefanus", division: "Super Team OSS Bali", count: "1 hari", duration: "5 menit 44 detik" },
-  { rank: 3, name: "I Nyoman Bagus Sudarsana", division: "Super Team OSS Bali", count: "1 hari", duration: "3 menit" },
-  { rank: 4, name: "Dewa Adi", division: "Super Team OSS Bali", count: "1 hari", duration: "2 menit" },
-  { rank: 5, name: "Putri Indah", division: "Super Team OSS Bali", count: "1 hari", duration: "2 menit" },
+  { rank: 2, name: "Yusuf Stefanus",            division: "Super Team OSS Bali", count: "1 hari", duration: "5 menit 44 detik" },
+  { rank: 3, name: "I Nyoman Bagus Sudarsana",  division: "Super Team OSS Bali", count: "1 hari", duration: "3 menit" },
+  { rank: 4, name: "Dewa Adi",                  division: "Super Team OSS Bali", count: "1 hari", duration: "2 menit" },
+  { rank: 5, name: "Putri Indah",               division: "Super Team OSS Bali", count: "1 hari", duration: "2 menit" },
 ];
 
-const TOP5_DISCIPLINE = [
-  { rank: 1, name: "Robby Alan Prayogi", division: "Super Team OSS Bali", score: "100%" },
-  { rank: 2, name: "Ngurah Manik Mahardika", division: "Super Team OSS Bali", score: "98%" },
-  { rank: 3, name: "Mesy Chintiya Sari", division: "Super Team OSS Bali", score: "96%" },
-  { rank: 4, name: "I Kadek Dwi Hendra", division: "Super Team OSS Bali", score: "95%" },
-  { rank: 5, name: "Kimartha Putri", division: "Super Team OSS Bali", score: "94%" },
+const TOP5_LATE_LAST = [
+  { rank: 1, name: "Robby Alan Prayogi",        division: "Super Team OSS Bali", count: "3 hari", duration: "4 jam 20 menit" },
+  { rank: 2, name: "Ngurah Manik Mahardika",    division: "Super Team OSS Bali", count: "2 hari", duration: "50 menit" },
+  { rank: 3, name: "Mesy Chintiya Sari",        division: "Super Team OSS Bali", count: "2 hari", duration: "42 menit" },
+  { rank: 4, name: "I Kadek Dwi Hendra",        division: "Super Team OSS Bali", count: "1 hari", duration: "15 menit" },
+  { rank: 5, name: "Kimartha Putri",            division: "Super Team OSS Bali", count: "1 hari", duration: "10 menit" },
+];
+
+const TOP5_DISC_THIS = [
+  { rank: 1, name: "Robby Alan Prayogi",        division: "Super Team OSS Bali", score: "100%" },
+  { rank: 2, name: "Ngurah Manik Mahardika",    division: "Super Team OSS Bali", score: "98%" },
+  { rank: 3, name: "Mesy Chintiya Sari",        division: "Super Team OSS Bali", score: "96%" },
+  { rank: 4, name: "I Kadek Dwi Hendra",        division: "Super Team OSS Bali", score: "95%" },
+  { rank: 5, name: "Kimartha Putri",            division: "Super Team OSS Bali", score: "94%" },
+];
+
+const TOP5_DISC_LAST = [
+  { rank: 1, name: "Ni Komang Ayu Tirta Utami", division: "Super Team OSS Bali", score: "99%" },
+  { rank: 2, name: "Yusuf Stefanus",            division: "Super Team OSS Bali", score: "97%" },
+  { rank: 3, name: "I Nyoman Bagus Sudarsana",  division: "Super Team OSS Bali", score: "96%" },
+  { rank: 4, name: "Dewa Adi",                  division: "Super Team OSS Bali", score: "94%" },
+  { rank: 5, name: "Putri Indah",               division: "Super Team OSS Bali", score: "93%" },
 ];
 
 export default function useDashboardViewModel() {
@@ -142,12 +159,11 @@ export default function useDashboardViewModel() {
     [division]
   );
 
-  /* ===== Mini Calendar (DINAMIS) ===== */
+  /* ===== Mini Calendar (dinamis dummy) ===== */
   const today = new Date();
   const [calYear, setCalYear] = useState(today.getFullYear());
   const [calMonth, setCalMonth] = useState(today.getMonth()); // 0-11
 
-  // Dummy event: peta hari->warna/tip, tetap dummy tapi mengikuti bulan aktif
   const calendarEvents = useMemo(() => {
     return {
       3:  { color: "bg-emerald-500", tip: "Cuti Tahunan" },
@@ -161,8 +177,7 @@ export default function useDashboardViewModel() {
       21: { color: "bg-fuchsia-500", tip: "Dinas Luar" },
       23: { color: "bg-emerald-500", tip: "Cuti" },
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calYear, calMonth]);
+  }, []);
 
   const prevMonth = () => {
     setCalMonth((m) => {
@@ -205,9 +220,17 @@ export default function useDashboardViewModel() {
     });
   }, [perfDivision, perfQuery, perfRowsRaw]);
 
-  /* ===== Top 5 ===== */
-  const top5Late = TOP5_LATE;
-  const top5Discipline = TOP5_DISCIPLINE;
+  /* ===== Top 5 (SATU FILTER untuk dua kartu) ===== */
+  const [top5Period, setTop5Period] = useState("this"); // "this" | "last"
+
+  const top5Late = useMemo(
+    () => (top5Period === "this" ? TOP5_LATE_THIS : TOP5_LATE_LAST),
+    [top5Period]
+  );
+  const top5Discipline = useMemo(
+    () => (top5Period === "this" ? TOP5_DISC_THIS : TOP5_DISC_LAST),
+    [top5Period]
+  );
 
   return {
     // header
@@ -228,7 +251,7 @@ export default function useDashboardViewModel() {
     leaveList,
     onLeaveCount,
 
-    // calendar (baru)
+    // calendar
     today,
     calYear,
     calMonth,
@@ -238,14 +261,20 @@ export default function useDashboardViewModel() {
 
     // performa
     perfTabs: PERF_TABS,
-    perfDate, setPerfDate,
-    perfDivision, setPerfDivision,
+    perfDate,
+    setPerfDate,
+    perfDivision,
+    setPerfDivision,
     perfDivisionOptions,
-    perfTab, setPerfTab,
-    perfQuery, setPerfQuery,
+    perfTab,
+    setPerfTab,
+    perfQuery,
+    setPerfQuery,
     perfRows,
 
-    // top 5
+    // top 5 (satu filter untuk dua kartu)
+    top5Period,
+    setTop5Period,
     top5Late,
     top5Discipline,
   };

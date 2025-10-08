@@ -205,6 +205,17 @@ export default function useKunjunganKalenderViewModel() {
     [mutate]
   );
 
+  // ==== DELETE ====
+    const deletePlan = useCallback(
+      async (id) => {
+        // pakai endpoint [id] yang sama seperti PUT, method DELETE
+        await crudService.delete(ApiEndpoints.UpdateKunjungan(id));
+        await mutate();
+      },
+      [mutate]
+    );
+
+
   // ==== FOTO & KOORDINAT ====
   const pickPhotoUrl = useCallback(
     (r) => r?.lampiran_kunjungan_url || r?.lampiran_url || r?.foto_url || r?.image_url || r?.photo_url || null,
@@ -258,6 +269,7 @@ export default function useKunjunganKalenderViewModel() {
     setRange,
     createPlansForUsers,
     updatePlan,
+    deletePlan,
 
     // util
     showFromDB,
