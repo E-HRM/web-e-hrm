@@ -144,8 +144,20 @@ export default function UseShiftScheduleViewModel() {
     [deptRes]
   );
 
+  const usersQS = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set("page", "1");
+    p.set("pageSize", "1000");
+    if (deptId) p.set("departementId", String(deptId));
+    if (jabatanId) {
+      p.set("jabatanId", String(jabatanId));
+      p.set("id_jabatan", String(jabatanId)); // kompat backend lama
+    }
+    return p.toString();
+  }, [deptId, jabatanId]);
+
   const { data: usersRes, mutate: mutUsers } = useSWR(
-    `${ApiEndpoints.GetUsers}?page=1&pageSize=1000`,
+    `${ApiEndpoints.GetUsers}?${usersQS}`,
     fetcher
   );
   const users = useMemo(() => {
@@ -411,6 +423,9 @@ export default function UseShiftScheduleViewModel() {
     deptId,
     setDeptId,
     deptOptions,
+    jabatanId,          
+    setJabatanId,       
+    jabatanOptions,     
 
     // repeat
     toggleRepeatSchedule,
