@@ -96,7 +96,7 @@ export default function Top5Section({
 
         {/* Kartu Kanan */}
         <div className="col-span-12 lg:col-span-6 bg-white rounded-2xl shadow-sm p-4">
-          <div className="text-sm font-medium text-slate-800 mb-3">
+          <div className="text-sm font-small text-slate-800 mb-3">
             Top 5 Karyawan Paling Disiplin
           </div>
 

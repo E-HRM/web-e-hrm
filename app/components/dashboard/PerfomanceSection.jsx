@@ -71,7 +71,7 @@ export default function PerformanceSection({
             onClick={() => setTab(t.key)}
             className={`px-4 h-9 rounded-xl text-sm font-medium ${
               tab === t.key
-                ? "bg-indigo-600 text-white"
+                ? "bg-[#003A6F] !text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
