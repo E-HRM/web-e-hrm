@@ -803,8 +803,4 @@ model ShiftStoryPlanner {
   @@index([id_jadwal_story_planner])
   @@index([id_user])
   @@map("shift_story_planer")
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> branch-dewa-adit
