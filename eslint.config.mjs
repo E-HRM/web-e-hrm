@@ -9,9 +9,6 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-<<<<<<< HEAD
-const eslintConfig = [...compat.extends('next/core-web-vitals')];
-=======
 const eslintConfig = [
   ...compat.extends('next/core-web-vitals'),
   {
@@ -27,6 +24,5 @@ const eslintConfig = [
     },
   },
 ];
->>>>>>> branch-dewa-adit
 
 export default eslintConfig;
