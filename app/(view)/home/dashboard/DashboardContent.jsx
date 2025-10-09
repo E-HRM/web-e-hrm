@@ -39,7 +39,7 @@ function MiniCalendar({
   year,
   monthIndex,
   today,
-  eventsByDay, // { [dayNumber]: { color: 'bg-...', tip?: string } }
+  eventsByDay,
   onPrevMonth,
   onNextMonth,
 }) {
@@ -110,11 +110,11 @@ function MiniCalendar({
               >
                 {day}
               </div>
-              {ev?.color && (
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-1 w-14">
-                  <span className={`block h-1 rounded-full ${ev.color}`} />
-                </div>
-              )}
+                {ev?.color && (
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-1 w-14">
+                    <span className={`block h-1 rounded-full ${ev.color}`} />
+                  </div>
+                )}
             </div>
           );
         })}
@@ -126,6 +126,12 @@ function MiniCalendar({
 export default function DashboardContent() {
   const vm = useDashboardViewModel();
   const miniColors = ["#D1D5DB", "#F5A524", "#E7B67E", "#E8C39B", "#EEE2CF"];
+
+  // Pegang nilai aman untuk props Performance
+  const perfTabs = vm.perfTabs || [];
+  const perfTab = vm.perfTab || (perfTabs[0]?.key ?? "late");
+  const perfDivisionOptions = vm.perfDivisionOptions || [{ label: "--Semua Divisi--", value: "" }];
+  const currentPerfRows = vm.currentPerfRows || [];
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -359,20 +365,20 @@ export default function DashboardContent() {
           </div>
         </div>
 
-        {/* ===== Performa Kehadiran (rows kosong bila API belum ada) ===== */}
+        {/* ===== Performa Kehadiran ===== */}
         <div className="col-span-12">
           <PerformanceSection
-            tabs={vm.perfTabs}
-            tab={vm.perfTab}
+            tabs={perfTabs}
+            tab={perfTab}
             setTab={vm.setPerfTab}
             date={vm.perfDate}
             setDate={vm.setPerfDate}
             division={vm.perfDivision}
             setDivision={vm.setPerfDivision}
-            divisionOptions={vm.perfDivisionOptions}
+            divisionOptions={perfDivisionOptions}
             q={vm.perfQuery}
             setQ={vm.setPerfQuery}
-            rows={vm.perfRows}
+            rows={currentPerfRows}
           />
         </div>
 
@@ -386,7 +392,7 @@ export default function DashboardContent() {
           />
         </div>
 
-        {/* ===== Karyawan Cuti (pakai leaveList dari API) ===== */}
+        {/* ===== Karyawan Cuti ===== */}
         <div className="col-span-12 bg-white rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">

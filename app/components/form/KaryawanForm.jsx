@@ -60,15 +60,10 @@ const OPSI_JENJANG = [
 ];
 
 const OPSI_STATUS_KERJA = [
-  { value: "Tetap", label: "Tetap" },
-  { value: "Kontrak", label: "Kontrak" },
-  { value: "Harian", label: "Harian" },
-  { value: "Musiman", label: "Musiman" },
-  { value: "Magang", label: "Magang" },
-  { value: "Paruh Waktu", label: "Paruh Waktu" },
-  { value: "Penuh Waktu", label: "Penuh Waktu" },
+  { value: "AKTIF", label: "AKTIF" },
+  { value: "TIDAK_AKTIF", label: "TIDAK AKTIF" },
+  { value: "CUTI", label: "CUTI" },
 ];
-
 /* ---------------- helpers ---------------- */
 function toDateOnly(d) {
   return d ? dayjs(d).format("YYYY-MM-DD") : undefined;
