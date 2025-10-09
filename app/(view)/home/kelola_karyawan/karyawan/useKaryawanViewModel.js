@@ -1,10 +1,10 @@
 "use client";
 
 import useSWR, { mutate as globalMutate } from "swr";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetcher } from "../../../../utils/fetcher";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
-import { crudService } from "../../../../../app/utils/services/crudService"; // pastikan path sesuai
+import { crudService } from "../../../../../app/utils/services/crudService";
 
 /** Bangun querystring aman */
 function buildQS(obj) {
@@ -29,6 +29,20 @@ function normalizePhotoUrl(url) {
   return url;
 }
 
+/** Debounce value sederhana */
+function useDebounced(value, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  const timeoutRef = useRef(null);
+
+  useEffect(() => {
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timeoutRef.current);
+  }, [value, delay]);
+
+  return debounced;
+}
+
 export default function useKaryawanViewModel() {
   // filter & tabel state
   const [deptId, setDeptId] = useState(null);
@@ -39,6 +53,9 @@ export default function useKaryawanViewModel() {
 
   // state aksi
   const [deletingId, setDeletingId] = useState(null);
+
+  // debounce pencarian
+  const qDebounced = useDebounced(q, 300);
 
   /* ====== master dropdown ====== */
   const deptKey = `${ApiEndpoints.GetDepartement}?page=1&pageSize=500`;
@@ -67,24 +84,27 @@ export default function useKaryawanViewModel() {
 
   /* ====== list users ====== */
   const listKey = useMemo(() => {
+    // Gunakan 'search' agar backend cari di nama/email/kontak.
+    // Sertakan jabatanId + fallback id_jabatan untuk kompatibilitas.
     const qs = buildQS({
       page,
       pageSize,
-      search: q || "",
+      search: qDebounced || "",
       departementId: deptId || "",
       jabatanId: jabatanId || "",
+      id_jabatan: jabatanId || "",
     });
     return `${ApiEndpoints.GetUsers}${qs}`;
-  }, [page, pageSize, q, deptId, jabatanId]);
+  }, [page, pageSize, qDebounced, deptId, jabatanId]);
 
   const { data: listRes, isLoading } = useSWR(listKey, fetcher, {
     keepPreviousData: true,
   });
 
-  // reset ke page 1 saat filter berubah
+  // reset ke page 1 saat filter berubah (pakai qDebounced supaya pas)
   useEffect(() => {
     setPage(1);
-  }, [q, deptId, jabatanId]);
+  }, [qDebounced, deptId, jabatanId]);
 
   // stabilkan rows
   const rawRows = useMemo(
@@ -112,8 +132,7 @@ export default function useKaryawanViewModel() {
       const sisaCuti = u.sisa_cuti ?? u.leave_remaining ?? "—";
       const cutiResetAt = u.cuti_reset_at ?? u.leave_reset_at ?? null;
 
-      // bawa URL foto ke row agar Table bisa render Avatar
-      const fotoRaw = u.foto_profil_user?.trim() || null;
+      const fotoRaw = (u.foto_profil_user && String(u.foto_profil_user).trim()) || null;
       const foto = normalizePhotoUrl(fotoRaw);
 
       return {
@@ -124,8 +143,6 @@ export default function useKaryawanViewModel() {
         departemen,
         sisaCuti,
         cutiResetAt,
-
-        // alias agar komponen kolom Avatar fleksibel
         foto,
         avatarUrl: foto,
         foto_profil_user: foto,
@@ -149,7 +166,6 @@ export default function useKaryawanViewModel() {
     async (id) => {
       try {
         setDeletingId(id);
-        // pakai endpoint delete; fallback ke UpdateUser(id) kalau strukturmu begitu
         const endpoint =
           (ApiEndpoints.DeleteUser && ApiEndpoints.DeleteUser(id)) ||
           (ApiEndpoints.UpdateUser && ApiEndpoints.UpdateUser(id)) ||

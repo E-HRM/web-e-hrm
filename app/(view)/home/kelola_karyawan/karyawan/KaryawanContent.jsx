@@ -14,6 +14,7 @@ import {
   Dropdown,
   Modal,
   message,
+  Typography,
 } from "antd";
 import {
   PlusOutlined,
@@ -22,6 +23,7 @@ import {
   FileTextOutlined,
   DeleteOutlined,
   ExclamationCircleFilled,
+  SearchOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
@@ -30,6 +32,7 @@ import useKaryawanViewModel from "./useKaryawanViewModel";
 
 dayjs.locale("id");
 const BRAND = "#003A6F";
+const { Title } = Typography;
 
 /** Ambil URL foto dari row dengan berbagai kemungkinan nama field */
 function getPhotoUrl(row) {
@@ -222,6 +225,16 @@ export default function KaryawanContent() {
     },
   ];
 
+  // ★ Normalisasi options → string agar pasti cocok dengan querystring
+  const deptOptionsStr = (vm.deptOptions || []).map((o) => ({
+    label: o.label,
+    value: String(o.value),
+  }));
+  const jabatanOptionsStr = (vm.jabatanOptions || []).map((o) => ({
+    label: o.label,
+    value: String(o.value),
+  }));
+
   return (
     <ConfigProvider
       theme={{
@@ -235,113 +248,133 @@ export default function KaryawanContent() {
       }}
     >
       <div className="p-6">
-        {/* Toolbar — ringkas satu baris (wrap hanya saat mobile) */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Input.Search
-            size="small"
-            allowClear
-            placeholder="Cari karyawan..."
-            className="w-[200px]"
-            value={vm.q}
-            onChange={(e) => vm.setQ(e.target.value)}
-            onSearch={(v) => vm.setQ(v)}
-          />
-          <Select
-            size="small"
-            placeholder="Filter Divisi"
-            value={vm.deptId || undefined}
-            onChange={(v) => vm.setDeptId(v || null)}
-            options={[{ value: null, label: "Filter Divisi" }, ...vm.deptOptions]}
-            allowClear
-            className="min-w-[160px]"
-          />
-          <Select
-            size="small"
-            placeholder="Filter Jabatan"
-            value={vm.jabatanId || undefined}
-            onChange={(v) => vm.setJabatanId(v || null)}
-            options={[{ value: null, label: "Filter Jabatan" }, ...vm.jabatanOptions]}
-            allowClear
-            className="min-w-[160px]"
-          />
+        <Title level={2} style={{ marginTop: 0 }}>
+          Karyawan
+        </Title>
 
-          <div className="ml-auto">
+        <Card
+          bordered
+          style={{ borderRadius: 16 }}
+          bodyStyle={{ paddingTop: 16 }}
+          title={
+            <Space wrap>
+              {/* Pencarian — pakai state vm.q */}
+              <Input.Search
+                placeholder="Cari nama/email…"
+                allowClear
+                enterButton={<SearchOutlined />}
+                value={vm.q}
+                onChange={(e) => vm.setQ(e.target.value)}
+                onSearch={(v) => vm.setQ(v ?? "")}
+                style={{ width: 280 }}
+              />
+
+              {/* Filter Divisi */}
+              <Select
+                allowClear
+                showSearch
+                placeholder="Filter Divisi"
+                optionFilterProp="label"
+                value={vm.deptId != null ? String(vm.deptId) : undefined}  // ★ pastikan string
+                onChange={(v) => {
+                  vm.setDeptId(v ?? null); // tanpa reload
+                }}
+                options={deptOptionsStr} // [{value,label}] sudah string
+                style={{ minWidth: 200 }}
+              />
+
+              {/* Filter Jabatan */}
+              <Select
+                allowClear
+                showSearch
+                placeholder="Filter Jabatan"
+                optionFilterProp="label"
+                value={vm.jabatanId != null ? String(vm.jabatanId) : undefined} // ★ pastikan string
+                onChange={(v) => {
+                  vm.setJabatanId(v ?? null); // tanpa reload
+                }}
+                options={jabatanOptionsStr} // [{value,label}] sudah string
+                style={{ minWidth: 200 }}
+              />
+            </Space>
+          }
+          extra={
             <Link href="/home/kelola_karyawan/karyawan/add">
-              <Button size="small" type="primary" icon={<PlusOutlined />}>
-                Tambah
+              <Button type="primary" icon={<PlusOutlined />}>
+                Tambah Karyawan
               </Button>
             </Link>
-          </div>
-        </div>
-
-        {/* Mobile: list kartu; Desktop/Tablet: tabel */}
-        {isMobile ? (
-          <div className="grid grid-cols-1 gap-3">
-            {vm.rows.map((row) => (
-              <Card
-                key={row.id}
-                size="small"
-                style={{ borderRadius: 14 }}
-                bodyStyle={{ padding: 12 }}
-                hoverable
-              >
-                <Link
-                  href={`/home/kelola_karyawan/karyawan/${row.id}`}
-                  className="no-underline"
+          }
+        >
+          {/* Mobile: list kartu; Desktop/Tablet: tabel */}
+          {isMobile ? (
+            <div className="grid grid-cols-1 gap-3">
+              {vm.rows.map((row) => (
+                <Card
+                  key={row.id}
+                  size="small"
+                  style={{ borderRadius: 14 }}
+                  bodyStyle={{ padding: 12 }}
+                  hoverable
                 >
-                  <div className="flex items-center gap-3">
-                    <CircleImg src={getPhotoUrl(row) || "/avatar-placeholder.jpg"} size={48} alt={row?.name} />
-                    <div className="min-w-0">
-                      <div style={{ fontWeight: 700, color: "#0f172a" }} className="truncate">
-                        {row.name}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
-                        {(row.jabatan || "—")}{row.jabatan && " "}
-                        {row.departemen ? `| ${row.departemen}` : row.jabatan ? "" : "—"}
-                      </div>
-                      <div style={{ fontSize: 12, color: "#334155" }} className="truncate">
-                        {row.email}
+                  <Link
+                    href={`/home/kelola_karyawan/karyawan/${row.id}`}
+                    className="no-underline"
+                  >
+                    <div className="flex items-center gap-3">
+                      <CircleImg src={getPhotoUrl(row) || "/avatar-placeholder.jpg"} size={48} alt={row?.name} />
+                      <div className="min-w-0">
+                        <div style={{ fontWeight: 700, color: "#0f172a" }} className="truncate">
+                          {row.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
+                          {(row.jabatan || "—")}{row.jabatan && " "}
+                          {row.departemen ? `| ${row.departemen}` : row.jabatan ? "" : "—"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#334155" }} className="truncate">
+                          {row.email}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
 
-                <div className="flex items-center justify-between mt-2">
-                  <div style={{ fontSize: 12, color: "#64748b" }}>
-                    {row.cutiResetAt
-                      ? `↻ ${dayjs(row.cutiResetAt).format("DD MMM YYYY")}`
-                      : "—"}
+                  <div className="flex items-center justify-between mt-2">
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      {row.cutiResetAt
+                        ? `↻ ${dayjs(row.cutiResetAt).format("DD MMM YYYY")}`
+                        : "—"}
+                    </div>
+                    <Dropdown trigger={["click"]} menu={actionMenu(row)} placement="bottomRight">
+                      <Button
+                        size="small"
+                        icon={<EllipsisOutlined />}
+                        loading={vm.deletingId === row.id}
+                      />
+                    </Dropdown>
                   </div>
-                  <Dropdown trigger={["click"]} menu={actionMenu(row)} placement="bottomRight">
-                    <Button
-                      size="small"
-                      icon={<EllipsisOutlined />}
-                      loading={vm.deletingId === row.id}
-                    />
-                  </Dropdown>
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Table
-            rowKey="id"
-            loading={vm.loading}
-            columns={columns}
-            dataSource={vm.rows}
-            pagination={{
-              current: vm.page,
-              pageSize: vm.pageSize,
-              total: vm.total,
-              showSizeChanger: true,
-              onChange: vm.changePage,
-              size: "small",
-            }}
-            bordered
-            size="middle"
-            scroll={{ x: 720 }}
-          />
-        )}
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <Table
+              rowKey="id"
+              loading={vm.loading}
+              columns={columns}
+              dataSource={vm.rows}
+              pagination={{
+                current: vm.page,
+                pageSize: vm.pageSize,
+                total: vm.total,
+                showSizeChanger: true,
+                onChange: vm.changePage,
+                size: "small",
+              }}
+              bordered
+              size="middle"
+              scroll={{ x: 900 }}
+            />
+          )}
+        </Card>
       </div>
     </ConfigProvider>
   );

@@ -88,6 +88,33 @@ export async function GET(req) {
       }
     }
 
+    const userFilter = {};
+
+    const jabatanParam = searchParams.get('id_jabatan');
+    if (jabatanParam !== null) {
+      const trimmed = jabatanParam.trim();
+      if (trimmed === 'null') {
+        userFilter.id_jabatan = null;
+      } else if (trimmed) {
+        userFilter.id_jabatan = trimmed;
+      }
+    }
+
+    const jabatanSearch = (searchParams.get('searchJabatan') || '').trim();
+    if (jabatanSearch) {
+      userFilter.jabatan = {
+        ...(userFilter.jabatan ?? {}),
+        is: {
+          ...(userFilter.jabatan?.is ?? {}),
+          nama_jabatan: { contains: jabatanSearch, mode: 'insensitive' },
+        },
+      };
+    }
+
+    if (Object.keys(userFilter).length > 0) {
+      where.user = userFilter;
+    }
+
     const status = (searchParams.get('status') || '').trim();
     if (status) {
       const normalized = status.toUpperCase();

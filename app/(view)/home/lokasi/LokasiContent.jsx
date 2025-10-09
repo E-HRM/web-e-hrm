@@ -247,22 +247,6 @@ export default function LokasiContent() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-
-          <InputNumber
-            className="w-full md:w-[140px]"
-            placeholder="Radius min"
-            value={radiusMin === "" ? null : Number(radiusMin)}
-            onChange={(v) => setRadiusMin(v ?? "")}
-            min={0}
-          />
-          <InputNumber
-            className="w-full md:w-[140px]"
-            placeholder="Radius max"
-            value={radiusMax === "" ? null : Number(radiusMax)}
-            onChange={(v) => setRadiusMax(v ?? "")}
-            min={0}
-          />
-
           <Select
             value={orderBy}
             onChange={setOrderBy}
@@ -283,21 +267,6 @@ export default function LokasiContent() {
               { value: "asc", label: "Asc" },
             ]}
           />
-
-          <Space.Compact>
-            <Button icon={<ReloadOutlined />} onClick={fetchList}>
-              Refresh
-            </Button>
-            <Button
-              onClick={() => {
-                setSearch("");
-                setRadiusMin("");
-                setRadiusMax("");
-              }}
-            >
-              Reset
-            </Button>
-          </Space.Compact>
         </div>
       </Card>
 
