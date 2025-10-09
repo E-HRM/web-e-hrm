@@ -22,20 +22,9 @@ import {
 const MENU = [
   { href: "/home/dashboard", label: "Dashboard", icon: ProductOutlined },
   { href: "/home/absensi", match: ["/home/absensi", "/absensi-karyawan"], label: "Absensi Karyawan", icon: CalendarOutlined },
-  { href: "/home/approve_absensi", match: ["/home/approve_absensi"], label: "Aprrove", icon: ScheduleOutlined },
+  // { href: "/home/approve_absensi", match: ["/home/approve_absensi"], label: "Aprrove", icon: ScheduleOutlined },
   { href: "/home/lokasi", match: ["/home/lokasi"], label: "Lokasi", icon: EnvironmentOutlined },
-  {
-    key: "Pola Kerja",
-    href: "/pola",
-    match: ["/pola"],
-    label: "Pola Kerja",
-    icon: FieldTimeOutlined,
-    hasCaret: true,
-    children: [
-      { href: "/home/pola/shift", match: ["/home/pola/shift"], label: "Shift" },
-      { href: "/home/pola/hari_kerja", match: ["/home/pola/hari_kerja"], label: "Hari Kerja" },
-    ],
-  },
+  { href: "/home/pola/shift", match: ["/home/pola/shift"], label: "Pola Kerja", icon: FieldTimeOutlined },
   {
     key: "karyawan",
     href: "/karyawan",
@@ -59,8 +48,8 @@ const MENU = [
     hasCaret: true,
     children: [
       { href: "/home/kunjungan/kunjungan_rekapan", match: ["/home/kunjungan/kunjungan_rekapan"], label: "Review Kunjungan" },
-      { href: "/home/kunjungan/kategori_kunjungan", match: ["/home/kunjungan/kategori_kunjungan"], label: "Kategori Kunjungan" },
-      { href: "/home/kunjungan/kunjungan_kalender", match: ["/home/kunjungan/kunjungan_kalender"], label: "Kalender Kunjung" },
+      { href: "/home/kunjungan/kategori_kunjungan", match: ["/home/kunjungan/kategori_kunjungan"], label: "Kategori" },
+      { href: "/home/kunjungan/kunjungan_kalender", match: ["/home/kunjungan/kunjungan_kalender"], label: "Kalender" },
     ],
   },
   {

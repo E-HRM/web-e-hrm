@@ -4,11 +4,18 @@ import { Input, Select } from "antd";
 
 /** Item kecil untuk setiap karyawan pada Performa Kehadiran */
 function PerfRow({ name, division, time }) {
+  const initials = (name || "")
+    .split(" ")
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
   return (
     <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-none">
       <div className="flex items-center gap-3">
         <div className="h-9 w-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
-          {name.split(" ").map(n => n[0]).slice(0,2).join("").toUpperCase()}
+          {initials}
         </div>
         <div>
           <div className="text-sm font-medium text-slate-800">{name}</div>
@@ -16,7 +23,7 @@ function PerfRow({ name, division, time }) {
         </div>
       </div>
       <span className="text-[11px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-600">
-        {time}
+        {time ?? "—"}
       </span>
     </div>
   );
@@ -28,8 +35,10 @@ export default function PerformanceSection({
   date, setDate,
   division, setDivision, divisionOptions,
   q, setQ,
-  rows,
+  rows, // ← dari VM, bisa kosong ([])
 }) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+
   return (
     <div className="bg-white rounded-2xl shadow-sm p-4">
       <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -72,18 +81,18 @@ export default function PerformanceSection({
       </div>
 
       <div className="mt-3">
-        {rows.length === 0 ? (
+        {safeRows.length === 0 ? (
           <div className="text-sm text-slate-500">Tidak ada data.</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="divide-y divide-slate-100 bg-[#FAFAFB] rounded-xl p-3">
-              {rows.slice(0, Math.ceil(rows.length / 2)).map((r) => (
-                <PerfRow key={r.id} {...r} />
+              {safeRows.slice(0, Math.ceil(safeRows.length / 2)).map((r, idx) => (
+                <PerfRow key={r.id || `${r.userId}-${idx}`} {...r} />
               ))}
             </div>
             <div className="divide-y divide-slate-100 bg-[#FAFAFB] rounded-xl p-3">
-              {rows.slice(Math.ceil(rows.length / 2)).map((r) => (
-                <PerfRow key={r.id} {...r} />
+              {safeRows.slice(Math.ceil(safeRows.length / 2)).map((r, idx) => (
+                <PerfRow key={r.id || `${r.userId}-${idx}-2`} {...r} />
               ))}
             </div>
           </div>

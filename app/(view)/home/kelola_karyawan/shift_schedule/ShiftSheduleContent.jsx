@@ -316,7 +316,17 @@ export default function ShiftScheduleContent() {
             className="min-w-[220px]"
             allowClear
           />
-
+          {/* Filter Jabatan */}
+          <Select
+            allowClear
+            showSearch
+            placeholder="Filter Jabatan"
+            optionFilterProp="label"
+            value={vm.jabatanId || undefined}
+            onChange={(v) => vm.setJabatanId(v ?? null)}
+            options={vm.jabatanOptions}
+            className="min-w-[220px]"
+          />
           {/* Filter Bulan & Tahun */}
           <Select
             className="min-w-[160px]"
@@ -324,12 +334,12 @@ export default function ShiftScheduleContent() {
             onChange={(m) => vm.setMonthYear(vm.currentYear, m)}
             options={vm.monthOptions}
           />
-          <Select
+          {/* <Select
             className="min-w-[120px]"
             value={vm.currentYear}
             onChange={(y) => vm.setMonthYear(y, vm.currentMonthIdx)}
             options={vm.yearOptions}
-          />
+          /> */}
           
           <div className="flex-grow-0 ml-auto flex items-center gap-2">
             {/* Tombol navigasi minggu */}

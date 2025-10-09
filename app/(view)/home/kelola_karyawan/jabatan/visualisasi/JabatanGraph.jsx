@@ -58,11 +58,7 @@ export default function JabatanGraph() {
 
   return (
     <div className="p-6">
-      <div className="mb-4 text-sm">
-        <span className="text-slate-500">Dasbor / Kelola Karyawan / </span>
-        <span className="text-indigo-500 font-medium">Jabatan</span>
-        <span className="text-slate-400"> / Hirarki</span>
-      </div>
+   
 
       <Card
         bordered
