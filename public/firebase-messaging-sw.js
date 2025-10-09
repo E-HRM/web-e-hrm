@@ -1,6 +1,7 @@
-// Scripts for firebase and firebase messaging
-import { initializeApp } from 'firebase/app';
-import { getMessaging, onBackgroundMessage } from 'firebase/messaging/sw';
+/* eslint-disable no-undef */
+// Import a different version of Firebase that is compatible with service workers
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -14,14 +15,14 @@ const firebaseConfig = {
 };
 
 // Initialize the Firebase app in the service worker
-const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
+firebase.initializeApp(firebaseConfig);
+const messaging = firebase.messaging();
 
 /**
  * Handle background messages.
  * This is triggered when the app is in the background or closed.
  */
-onBackgroundMessage(messaging, (payload) => {
+messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
 
   // Customize notification here

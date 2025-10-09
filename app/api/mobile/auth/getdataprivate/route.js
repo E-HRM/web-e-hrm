@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import db from '../../../../../lib/prisma';
 import { verifyAuthToken } from '../../../../../lib/jwt'; // util kamu: signAuthToken/verifyAuthToken
 
+export const dynamic = 'force-dynamic'; // Tambahkan baris ini
+
 export async function GET(req) {
   try {
     const auth = req.headers.get('authorization') || '';
