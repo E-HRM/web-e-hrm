@@ -10,7 +10,10 @@ import { parseDateOnlyToUTC, parseDateTimeToUTC } from '@/helpers/date-helper';
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 
 // === RBAC helpers (DITAMBAHKAN) ===
-const normRole = (r) => String(r || '').trim().toUpperCase();
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
 const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role)); // hanya Operasional yang full manage
 
@@ -201,9 +204,7 @@ export async function POST(req) {
     }
 
     // RBAC: Operasional boleh menetapkan rencana untuk user lain; lainnya pakai dirinya sendiri
-    const targetUserId = canManageAll(actorRole) && !isNullLike(body.id_user)
-      ? String(body.id_user).trim()
-      : actorId;
+    const targetUserId = canManageAll(actorRole) && !isNullLike(body.id_user) ? String(body.id_user).trim() : actorId;
 
     const data = {
       id_user: targetUserId, // <-- perbaikan inti

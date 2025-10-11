@@ -10,7 +10,10 @@ import { parseDateOnlyToUTC, parseDateTimeToUTC } from '@/helpers/date-helper';
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 
 // === RBAC helpers (DITAMBAHKAN) ===
-const normRole = (r) => String(r || '').trim().toUpperCase();
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
 const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role)); // hanya Operasional yang full manage
 
@@ -78,7 +81,9 @@ const kunjunganInclude = {
 
 const coordinateFields = ['start_latitude', 'start_longitude', 'end_latitude', 'end_longitude'];
 
-function hasOwn(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
 function isNullLike(value) {
   if (value === null || value === undefined) return true;
   if (typeof value === 'string') {
@@ -89,7 +94,9 @@ function isNullLike(value) {
   }
   return false;
 }
-function isFile(value) { return typeof File !== 'undefined' && value instanceof File; }
+function isFile(value) {
+  return typeof File !== 'undefined' && value instanceof File;
+}
 
 function findLampiranFile(body) {
   const candidates = [body.lampiran_kunjungan, body.lampiran, body.lampiran_file, body.lampiran_kunjungan_file, body.file];
