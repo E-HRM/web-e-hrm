@@ -5,13 +5,13 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 // TODO: Ganti dengan konfigurasi Firebase proyek Anda
 const firebaseConfig = {
-  apiKey: 'AIzaSyBHaHOsrtZghC2JAeP53-rtg9gUKUmmMcM',
-  authDomain: 'e-hrm-2d3fe.firebaseapp.com',
-  projectId: 'e-hrm-2d3fe',
-  storageBucket: 'e-hrm-2d3fe.firebasestorage.app',
-  messagingSenderId: '584929841793',
-  appId: '1:584929841793:web:1a1cff15646de867067380',
-  measurementId: 'G-K58K7RVTHS',
+  apiKey: 'AIzaSyAwMUqqmY_IhBRgHzUVD01wc9HQP7S7CGM',
+  authDomain: 'e-hrm-1e3e0.firebaseapp.com',
+  projectId: 'e-hrm-1e3e0',
+  storageBucket: 'e-hrm-1e3e0.firebasestorage.app',
+  messagingSenderId: '653765384227',
+  appId: '1:653765384227:web:2a01c32629d019d634b996',
+  measurementId: 'G-67QZCTNKBW',
 };
 
 // Inisialisasi Firebase
@@ -34,7 +34,7 @@ export const requestPermissionAndGetToken = async () => {
       // 2. Dapatkan token FCM
       const currentToken = await getToken(messaging, {
         // TODO: Ganti dengan VAPID key dari Firebase Console Anda
-        vapidKey: 'YOUR_VAPID_KEY_FROM_FIREBASE_CONSOLE',
+        vapidKey: 'BCg1_Slv4qHtjNk-Op4ZNUn6HeYMQR0d_LzN1xTvmv96d3Ra2OgwC_S4eXt9zEbMYuJPNVVVgksAe3Xfmb3C-YA',
       });
 
       if (currentToken) {
