@@ -16,13 +16,21 @@ const firebaseConfig = {
 
 // Inisialisasi Firebase
 const app = initializeApp(firebaseConfig);
-const messaging = getMessaging(app);
+
+// Cek apakah kode berjalan di browser sebelum menginisialisasi messaging
+const messaging = typeof window !== 'undefined' ? getMessaging(app) : null;
 
 /**
  * Meminta izin notifikasi dan mendapatkan token FCM.
  */
 export const requestPermissionAndGetToken = async () => {
-  console.log('Requesting user permission for notifications...');
+  // Pastikan messaging sudah diinisialisasi
+  if (!messaging) {
+    console.log('Firebase Messaging not supported in this environment.');
+    return;
+  }
+
+  // console.log('Requesting user permission for notifications...');
 
   try {
     // 1. Minta izin dari pengguna
@@ -38,7 +46,7 @@ export const requestPermissionAndGetToken = async () => {
       });
 
       if (currentToken) {
-        console.log('FCM Token received:', currentToken);
+        // console.log('FCM Token received:', currentToken);
         // 3. Kirim token ke backend untuk disimpan
         await sendTokenToServer(currentToken);
       } else {
@@ -81,9 +89,12 @@ const sendTokenToServer = async (token) => {
  */
 export const onMessageListener = () =>
   new Promise((resolve) => {
-    onMessage(messaging, (payload) => {
-      console.log('Foreground message received. ', payload);
-      // Di sini Anda bisa menampilkan toast atau notifikasi kustom
-      resolve(payload);
-    });
+    // Pastikan messaging sudah diinisialisasi
+    if (messaging) {
+      onMessage(messaging, (payload) => {
+        console.log('Foreground message received. ', payload);
+        // Di sini Anda bisa menampilkan toast atau notifikasi kustom
+        resolve(payload);
+      });
+    }
   });
