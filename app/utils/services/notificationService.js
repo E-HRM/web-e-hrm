@@ -93,22 +93,31 @@ export async function sendNotification(eventTrigger, userId, dynamicData) {
     }
 
     // 4. Kirim Push Notification menggunakan Firebase Admin SDK
+    // 4. Kirim Push Notification menggunakan Firebase Admin SDK
     const message = {
-      notification: {
+      data: {
+        // <-- Diubah dari 'notification' menjadi 'data'
         title: title,
         body: body,
+        // (Opsional) Sebaiknya sertakan data tambahan lain yang mungkin berguna di klien
+        // seperti eventTrigger atau ID untuk deep linking.
+        // eventTrigger: eventTrigger,
       },
       tokens: fcmTokens,
+      // Konfigurasi Android dan APNS bisa tetap ada untuk mengatur prioritas dan suara,
+      // meskipun notifikasi visualnya dikontrol oleh klien.
       android: {
-        notification: {
-          sound: 'default',
-        },
+        priority: 'high', // <-- Tambahkan prioritas tinggi
       },
       apns: {
         payload: {
           aps: {
-            sound: 'default',
+            'content-available': 1, // <-- Gunakan 'content-available' untuk iOS
           },
+        },
+        headers: {
+          // <-- Tambahkan header prioritas untuk iOS
+          'apns-priority': '10',
         },
       },
     };
