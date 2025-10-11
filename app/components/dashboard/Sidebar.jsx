@@ -54,7 +54,7 @@ const MENU = [
   },
   {
     key: "agenda",
-    href: "/home/agenda-kerja",                   // parent/landing
+    href: "/home/agenda-kerja",                   
     match: ["/home/agenda-kerja", "/agenda-kerja"],
     label: "Time Sheet",
     icon: FileTextOutlined,

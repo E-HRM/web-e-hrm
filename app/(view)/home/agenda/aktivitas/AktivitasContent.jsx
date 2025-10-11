@@ -1,3 +1,4 @@
+// AktivitasContent.jsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -240,19 +241,17 @@ export default function AktivitasContent() {
                       key={d.date}
                       onClick={() => vm.setSelectedDay(active ? "" : d.date)}
                       className={[
-                        "px-3 py-2 rounded-md border",
-                        "text-left whitespace-nowrap",
-                        active ? "border-transparent" : "border-white/10",
+                        "group px-3 py-2 rounded-md border",
+                        "text-left whitespace-nowrap transition-colors",
+                        active
+                          ? "bg-[#003A6F] text-white border-transparent shadow-sm"
+                          : "border-white/10 hover:bg-[#003A6F] hover:text-white hover:border-transparent hover:shadow-sm",
                       ].join(" ")}
-                      style={{
-                        background: active ? BRAND.accent : "transparent",
-                        color: active ? "#0A3848" : "inherit",
-                      }}
                     >
-                      <div className="font-semibold">
+                      <div className={["font-semibold", active ? "text-white" : "", "group-hover:text-white"].join(" ")}>
                         {dayjs(d.date).format("DD MMM YYYY")}
                       </div>
-                      <div className={active ? "" : "opacity-70"}>
+                      <div className={[active ? "text-white" : "opacity-70", "group-hover:text-white"].join(" ")}>
                         {d.count} Pekerjaan
                       </div>
                     </button>

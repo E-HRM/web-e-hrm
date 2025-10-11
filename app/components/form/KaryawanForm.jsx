@@ -621,7 +621,7 @@ export default function KaryawanProfileForm({
                   <Form.Item name="jenis_kelamin" label="Jenis Kelamin">
                     <Select
                       options={[
-                        { value: "LAKI-LAKI", label: "Laki-laki" },
+                        { value: "LAKI_LAKI", label: "Laki-laki" },
                         { value: "PEREMPUAN", label: "Perempuan" },
                       ]}
                       allowClear

@@ -1,3 +1,4 @@
+// AktivitasViewModel.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -42,6 +43,13 @@ export default function useAktivitasTimesheetViewModel() {
     to: DEFAULT_TO.endOf("day").format("YYYY-MM-DD HH:mm:ss"),
   });
   const [selectedDay, setSelectedDay] = useState(""); // YYYY-MM-DD
+
+  // === AUTO SELECT 'HARI INI' setelah memilih karyawan
+  useEffect(() => {
+    if (!filters.user_id) return;
+    const today = dayjs().format("YYYY-MM-DD");
+    setSelectedDay(today);
+  }, [filters.user_id]);
 
   // Users
   const { data: usersRes, isLoading: loadingUsers } = useSWR(
