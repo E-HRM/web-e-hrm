@@ -5,7 +5,10 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
-const normRole = (r) => String(r || '').trim().toUpperCase();
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
 const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role));
 
 async function ensureAuth(req) {
@@ -23,18 +26,24 @@ async function ensureAuth(req) {
 
 function parseHHmm(s) {
   if (!s) return { h: null, m: null, s: null };
-  const m = String(s).trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  const m = String(s)
+    .trim()
+    .match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (!m) return { h: null, m: null, s: null };
   return { h: Number(m[1]), m: Number(m[2]), s: m[3] ? Number(m[3]) : 0 };
 }
 function makeUTC(dateYMD, timeHM) {
   if (!dateYMD) return null;
   const [y, mo, d] = dateYMD.split('-').map(Number);
-  const h = timeHM?.h ?? 0, mi = timeHM?.m ?? 0, se = timeHM?.s ?? 0;
+  const h = timeHM?.h ?? 0,
+    mi = timeHM?.m ?? 0,
+    se = timeHM?.s ?? 0;
   if (!y || !mo || !d) return null;
   return new Date(Date.UTC(y, mo - 1, d, h, mi, se));
 }
-function normText(s) { return String(s || '').trim(); }
+function normText(s) {
+  return String(s || '').trim();
+}
 
 export async function POST(req) {
   const auth = await ensureAuth(req);
@@ -76,10 +85,12 @@ export async function POST(req) {
       const statusRaw = normText(row['Status'] ?? row['status']) || 'diproses';
 
       if (!aktivitas) {
-        errors.push({ row: i + 2, message: 'Aktivitas wajib diisi' }); continue;
+        errors.push({ row: i + 2, message: 'Aktivitas wajib diisi' });
+        continue;
       }
       if (!proyekName) {
-        errors.push({ row: i + 2, message: 'Proyek/Agenda wajib diisi' }); continue;
+        errors.push({ row: i + 2, message: 'Proyek/Agenda wajib diisi' });
+        continue;
       }
 
       // tanggal (YYYY-MM-DD atau Date Excel)
@@ -92,16 +103,20 @@ export async function POST(req) {
       } else {
         const s = normText(tanggalRaw);
         const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!m) { errors.push({ row: i + 2, message: 'Tanggal Proyek harus YYYY-MM-DD atau tanggal Excel' }); continue; }
+        if (!m) {
+          errors.push({ row: i + 2, message: 'Tanggal Proyek harus YYYY-MM-DD atau tanggal Excel' });
+          continue;
+        }
         dateYMD = s;
       }
 
       const startHM = parseHHmm(mulaiRaw);
       const endHM = parseHHmm(selesaiRaw);
-      const startDate = (mulaiRaw && startHM.h != null) ? makeUTC(dateYMD, startHM) : null;
-      const endDate   = (selesaiRaw && endHM.h != null) ? makeUTC(dateYMD, endHM) : null;
+      const startDate = mulaiRaw && startHM.h != null ? makeUTC(dateYMD, startHM) : null;
+      const endDate = selesaiRaw && endHM.h != null ? makeUTC(dateYMD, endHM) : null;
       if (startDate && endDate && endDate < startDate) {
-        errors.push({ row: i + 2, message: 'Selesai tidak boleh sebelum Mulai' }); continue;
+        errors.push({ row: i + 2, message: 'Selesai tidak boleh sebelum Mulai' });
+        continue;
       }
 
       // agenda case-insensitive
@@ -116,17 +131,18 @@ export async function POST(req) {
         });
       }
       if (!agenda) {
-        errors.push({ row: i + 2, message: `Proyek/Agenda '${proyekName}' tidak ditemukan` }); continue;
+        errors.push({ row: i + 2, message: `Proyek/Agenda '${proyekName}' tidak ditemukan` });
+        continue;
       }
 
       toCreate.push({
         id_user: userId,
         id_agenda: agenda.id_agenda,
         deskripsi_kerja: aktivitas,
-        status: ['diproses','ditunda','selesai'].includes(statusRaw.toLowerCase()) ? statusRaw.toLowerCase() : 'diproses',
+        status: ['diproses', 'ditunda', 'selesai'].includes(statusRaw.toLowerCase()) ? statusRaw.toLowerCase() : 'diproses',
         start_date: startDate,
         end_date: endDate,
-        duration_seconds: startDate && endDate ? Math.max(0, Math.floor((endDate - startDate)/1000)) : null,
+        duration_seconds: startDate && endDate ? Math.max(0, Math.floor((endDate - startDate) / 1000)) : null,
       });
     }
 
