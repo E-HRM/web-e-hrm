@@ -23,7 +23,6 @@ import {
 import {
   EditOutlined,
   DeleteOutlined,
-  UndoOutlined,
   PlusOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -46,6 +45,22 @@ export default function AktivitasContent() {
   const [openAddAgenda, setOpenAddAgenda] = useState(false);
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [agendaForm] = Form.useForm();
+
+  // modal ubah aktivitas (hanya ganti proyek)
+  const [openEdit, setOpenEdit] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm] = Form.useForm();
+  const [editingRow, setEditingRow] = useState(null);
+
+  const handleOpenEdit = (row) => {
+    setEditingRow(row);
+    editForm.setFieldsValue({
+      deskripsi_kerja: row.deskripsi_kerja || "",
+      id_agenda: row.id_agenda || row.agenda?.id_agenda || undefined,
+    });
+    setOpenEdit(true);
+  };
+
 
   const columns = useMemo(
     () => [
@@ -73,7 +88,6 @@ export default function AktivitasContent() {
         title: "Waktu",
         key: "waktu",
         render: (_, r) => {
-          // tampilkan jam apa adanya dari DB
           const s = r.start_date ? dayjs.utc(r.start_date).format("HH:mm") : "-";
           const e = r.end_date ? dayjs.utc(r.end_date).format("HH:mm") : "-";
           return `${s} - ${e}`;
@@ -111,12 +125,17 @@ export default function AktivitasContent() {
         align: "right",
         render: (_, r) => (
           <Space>
-            <Tooltip title="Tandai selesai">
-              <Button size="small" icon={<EditOutlined />} onClick={() => vm.quickFinish(r)} />
+            {/* GANTI: sebelumnya 'Tandai selesai' -> sekarang 'Ubah' */}
+            <Tooltip title="Ubah aktivitas">
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => handleOpenEdit(r)}
+              />
             </Tooltip>
-            <Tooltip title="Set Ulang ke Diproses">
-              <Button size="small" icon={<UndoOutlined />} onClick={() => vm.resetToDiproses(r)} />
-            </Tooltip>
+
+            {/* HAPUS tombol 'Mulai ulang' / resetToDiproses */}
+
             <Popconfirm
               title="Hapus pekerjaan?"
               onConfirm={() => vm.remove(r.id_agenda_kerja)}
@@ -140,7 +159,6 @@ export default function AktivitasContent() {
       await vm.createActivity({
         deskripsi_kerja: values.deskripsi_kerja.trim(),
         id_agenda: values.id_agenda,
-        // kirim string lokal polos (tanpa Z)
         start_date: values.start_date
           ? values.start_date.format("YYYY-MM-DD HH:mm:ss")
           : undefined,
@@ -175,6 +193,29 @@ export default function AktivitasContent() {
       setSavingAgenda(false);
     }
   };
+
+  // submit ubah aktivitas (hanya ganti proyek)
+const onSubmitEdit = async () => {
+  try {
+    const { deskripsi_kerja, id_agenda } = await editForm.validateFields();
+    if (!editingRow) return;
+    setSavingEdit(true);
+    await vm.updateActivity(editingRow.id_agenda_kerja, {
+      deskripsi_kerja: deskripsi_kerja.trim(),
+      id_agenda,
+    });
+    setOpenEdit(false);
+    setEditingRow(null);
+    editForm.resetFields();
+    message.success("Aktivitas diperbarui");
+  } catch (e) {
+    if (e?.errorFields) return;
+    message.error(e?.message || "Gagal memperbarui aktivitas");
+  } finally {
+    setSavingEdit(false);
+  }
+};
+
 
   return (
     <div className="p-4">
@@ -262,7 +303,7 @@ export default function AktivitasContent() {
               {/* FILTER BAR KEDUA: Status + Proyek + Cari */}
               <div className="flex flex-wrap gap-3 items-center mt-4">
                 <Select
-                  className="min-w-[200px]"
+                  className="min-w=[200px]"
                   placeholder="-- Filter Status --"
                   allowClear
                   value={vm.filters.status || undefined}
@@ -375,6 +416,47 @@ export default function AktivitasContent() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* MODAL: UBAH AKTIVITAS (deskripsi + pilih proyek) */}
+      <Modal
+        title="Ubah Aktivitas"
+        open={openEdit}
+        onCancel={() => {
+          setOpenEdit(false);
+          setEditingRow(null);
+          editForm.resetFields();
+        }}
+        okText="Simpan"
+        okButtonProps={{ style: { background: BRAND.accent, color: "#fff" } }}
+        confirmLoading={savingEdit}
+        onOk={onSubmitEdit}
+        destroyOnClose
+      >
+        <Form form={editForm} layout="vertical">
+          <Form.Item
+            label="Deskripsi Pekerjaan"
+            name="deskripsi_kerja"
+            rules={[{ required: true, message: "Wajib diisi" }]}
+          >
+            <Input placeholder="Mis. Membuat laporan mingguan" />
+          </Form.Item>
+
+          <Form.Item
+            label="Proyek/Agenda"
+            name="id_agenda"
+            rules={[{ required: true, message: "Pilih proyek/agenda" }]}
+          >
+            <Select
+              placeholder="Pilih Proyek"
+              options={vm.agendaOptions}
+              loading={vm.loadingAgenda}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
 
       {/* MODAL: TAMBAH PROYEK MASTER */}
       <Modal

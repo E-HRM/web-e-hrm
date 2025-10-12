@@ -131,11 +131,10 @@ export default function DashboardContent() {
                     <CartesianGrid vertical={false} stroke="#EFF2F6" strokeDasharray="3 3" />
                     <XAxis dataKey="label" interval={0} axisLine={false} tickLine={false} tickMargin={8} tick={{ fontSize: 11, fill: "#6B7280" }} />
                     <YAxis
-                      domain={[0, 20]}
-                      ticks={[0, 5, 10, 15, 20]}
+                      domain={[0, 10]}
+                      ticks={[0, 5, 10]}
                       allowDecimals={false}
                       label={{
-                        value: "Jumlah",
                         angle: -90,
                         position: "insideLeft",
                         offset: 8,
@@ -242,6 +241,7 @@ export default function DashboardContent() {
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6B7280" }} tickMargin={8} axisLine={false} tickLine={false} />
                 <YAxis
                   label={{ value: "Jumlah", angle: -90, position: "insideLeft", offset: 8, style: { fill: "#9CA3AF", fontSize: 11 } }}
+                  domain={[0, 20]}
                   tick={{ fontSize: 10, fill: "#6B7280" }}
                   axisLine={false}
                   tickLine={false}
