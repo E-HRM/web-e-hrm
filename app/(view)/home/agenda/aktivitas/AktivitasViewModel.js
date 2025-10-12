@@ -1,3 +1,4 @@
+// AktivitasViewModel.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -37,11 +38,17 @@ export default function useAktivitasTimesheetViewModel() {
     id_agenda: "",
     status: "",
     q: "",
-    // kirim ke backend pakai format lokal polos (tanpa Z)
     from: DEFAULT_FROM.startOf("day").format("YYYY-MM-DD HH:mm:ss"),
     to: DEFAULT_TO.endOf("day").format("YYYY-MM-DD HH:mm:ss"),
   });
   const [selectedDay, setSelectedDay] = useState(""); // YYYY-MM-DD
+
+  // === AUTO SELECT 'HARI INI' setelah memilih karyawan
+  useEffect(() => {
+    if (!filters.user_id) return;
+    const today = dayjs().format("YYYY-MM-DD");
+    setSelectedDay(today);
+  }, [filters.user_id]);
 
   // Users
   const { data: usersRes, isLoading: loadingUsers } = useSWR(
@@ -144,6 +151,7 @@ export default function useAktivitasTimesheetViewModel() {
     await mutate();
   };
 
+  // (masih ada jika suatu saat dibutuhkan)
   const quickFinish = async (row) => {
     const put = crudService.put || crudService.patch;
     await put(ApiEndpoints.UpdateAgendaKerja(row.id_agenda_kerja), { status: "selesai" });
@@ -163,7 +171,6 @@ export default function useAktivitasTimesheetViewModel() {
       id_agenda,
       deskripsi_kerja,
       status: "diproses",
-      // kirim string lokal polos (tanpa Z) jika ada
       start_date,
       end_date,
     });
@@ -173,6 +180,13 @@ export default function useAktivitasTimesheetViewModel() {
   const createAgendaMaster = async (nama_agenda) => {
     await crudService.post(ApiEndpoints.CreateAgenda, { nama_agenda });
     await refetchAgenda();
+  };
+
+  // === BARU: update aktivitas (hanya ganti proyek kalau perlu)
+  const updateActivity = async (id_agenda_kerja, payload) => {
+    const put = crudService.put || crudService.patch;
+    await put(ApiEndpoints.UpdateAgendaKerja(id_agenda_kerja), payload);
+    await mutate();
   };
 
   return {
@@ -197,9 +211,10 @@ export default function useAktivitasTimesheetViewModel() {
     // ops
     refresh,
     remove,
-    quickFinish,
-    resetToDiproses,
+    quickFinish,       // tidak dipakai di UI baru, dibiarkan untuk kompatibilitas
+    resetToDiproses,   // tidak dipakai di UI baru
     createActivity,
     createAgendaMaster,
+    updateActivity,    // <- dipakai oleh modal edit
   };
 }

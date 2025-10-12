@@ -26,6 +26,7 @@ export async function PUT(req, { params }) {
   try {
     const { claims, session } = auth;
     const actorId = claims?.sub || claims?.id_user || claims?.userId || claims?.id || session?.user?.id || session?.user?.id_user;
+
     if (!actorId) {
       return NextResponse.json({ message: 'Payload token tidak sesuai' }, { status: 401 });
     }
@@ -38,9 +39,7 @@ export async function PUT(req, { params }) {
     let shouldTouchReadAt = false;
 
     if ('status' in body) {
-      const normalized = String(body.status || '')
-        .trim()
-        .toLowerCase();
+      const normalized = String(body.status || '').trim().toLowerCase();
       if (!DECISION_STATUSES.has(normalized)) {
         return NextResponse.json({ message: "Status hanya boleh 'disetujui' atau 'ditolak'." }, { status: 400 });
       }
@@ -77,13 +76,8 @@ export async function PUT(req, { params }) {
     const now = new Date();
     const data = { ...updates };
 
-    if (shouldTouchActedAt) {
-      data.acted_at = now;
-    }
-
-    if (shouldTouchReadAt) {
-      data.read_at = now;
-    }
+    if (shouldTouchActedAt) data.acted_at = now;
+    if (shouldTouchReadAt) data.read_at = now;
 
     const updated = await db.absensiReportRecipient.update({
       where: { id_absensi_report_recipient: id },
@@ -97,6 +91,10 @@ export async function PUT(req, { params }) {
                 nama_pengguna: true,
                 email: true,
                 role: true,
+                // >>>>>>>>>>>>>>>>>>>> PERBAIKAN: kirim foto & jabatan
+                foto_profil_user: true,
+                jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
+                // <<<<<<<<<<<<<<<<<<<<
                 departement: { select: { id_departement: true, nama_departement: true } },
               },
             },

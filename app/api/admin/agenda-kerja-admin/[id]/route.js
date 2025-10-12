@@ -1,4 +1,4 @@
-// app/api/agenda-kerja/[id]/route.js
+// app/api/admin/agenda-kerja/[id]/route.js
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
@@ -6,20 +6,45 @@ import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateTimeToUTC } from '@/helpers/date-helper';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
-// Autentikasi (JWT/NextAuth)
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
+const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
+const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role));
+
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
     try {
-      verifyAuthToken(auth.slice(7));
-      return true;
+      const payload = verifyAuthToken(auth.slice(7));
+      return {
+        actor: {
+          id: payload?.sub || payload?.id_user || payload?.userId,
+          role: payload?.role,
+          source: 'bearer',
+        },
+      };
     } catch {
       /* fallback ke NextAuth */
     }
   }
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes; // unauthorized
-  return true;
+  return {
+    actor: {
+      id: sessionOrRes?.user?.id || sessionOrRes?.user?.id_user,
+      role: sessionOrRes?.user?.role,
+      source: 'session',
+    },
+  };
+}
+
+function guardOperational(actor) {
+  if (actor?.role !== 'OPERASIONAL') {
+    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL yang dapat mengakses resource ini.' }, { status: 403 });
+  }
+  return null;
 }
 
 const VALID_STATUS = ['diproses', 'ditunda', 'selesai'];
@@ -35,7 +60,7 @@ function formatDateTime(value) {
   try {
     return value.toISOString();
   } catch (err) {
-    console.warn('Gagal memformat tanggal agenda (mobile detail):', err);
+    console.warn('Gagal memformat tanggal agenda (admin detail):', err);
     return '-';
   }
 }
@@ -48,7 +73,7 @@ function formatDateTimeDisplay(value) {
       timeStyle: 'short',
     }).format(value instanceof Date ? value : new Date(value));
   } catch (err) {
-    console.warn('Gagal memformat tanggal agenda (mobile detail) untuk tampilan:', err);
+    console.warn('Gagal memformat tanggal agenda (admin detail) untuk tampilan:', err);
     return '';
   }
 }
@@ -62,10 +87,13 @@ function formatStatusDisplay(status) {
     .join(' ');
 }
 
-// GET /api/agenda-kerja/[id]
-export async function GET(_req, { params }) {
+export async function GET(request, { params }) {
+  const auth = await ensureAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  const forbidden = canSeeAll(auth.actor);
+  if (forbidden) return forbidden;
+
   try {
-    // per skema baru: primary key = id_agenda_kerja
     const agenda = await db.agendaKerja.findFirst({
       where: { id_agenda_kerja: params.id, deleted_at: null },
       include: {
@@ -86,10 +114,11 @@ export async function GET(_req, { params }) {
   }
 }
 
-// PUT /api/agenda-kerja/[id]
 export async function PUT(request, { params }) {
-  const okAuth = await ensureAuth(request);
-  if (okAuth instanceof NextResponse) return okAuth;
+  const auth = await ensureAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  const forbidden = guardOperational(auth.actor);
+  if (forbidden) return forbidden;
 
   try {
     const current = await db.agendaKerja.findUnique({ where: { id_agenda_kerja: params.id } });
@@ -114,7 +143,6 @@ export async function PUT(request, { params }) {
     }
 
     let duration_seconds = body.duration_seconds;
-    // Jika duration tidak dikirim, namun ada perubahan start/end dan keduanya terisi => hitung otomatis
     const willCalcDuration = duration_seconds === undefined && (start_date !== undefined || end_date !== undefined);
 
     const nextStart = start_date !== undefined ? start_date : current.start_date;
@@ -164,35 +192,44 @@ export async function PUT(request, { params }) {
     const agendaTitle = updated.agenda?.nama_agenda || 'Agenda Kerja';
     const friendlyDeadline = formatDateTimeDisplay(updated.end_date);
     const statusDisplay = formatStatusDisplay(updated.status);
-    const mobileTitle = `Agenda Kerja Diperbarui: ${agendaTitle}`;
-    const mobileBody = [`Anda baru saja memperbarui agenda kerja "${agendaTitle}".`, statusDisplay ? `Status agenda sekarang: ${statusDisplay}.` : '', friendlyDeadline ? `Tenggat agenda pada ${friendlyDeadline}.` : '']
+    const adminTitle = `Admin Memperbarui Agenda: ${agendaTitle}`;
+    const adminBody = [`Admin memperbarui agenda kerja "${agendaTitle}" untuk Anda.`, statusDisplay ? `Status terbaru: ${statusDisplay}.` : '', friendlyDeadline ? `Selesaikan sebelum ${friendlyDeadline}.` : '']
       .filter(Boolean)
       .join(' ')
       .trim();
-
     const notificationPayload = {
       nama_karyawan: updated.user?.nama_pengguna || 'Karyawan',
       judul_agenda: agendaTitle,
-      nama_komentator: 'Anda',
+      nama_komentator: 'Panel Admin',
       tanggal_deadline: formatDateTime(updated.end_date),
       tanggal_deadline_display: friendlyDeadline,
       status: updated.status,
       status_display: statusDisplay,
-      pemberi_tugas: 'Aplikasi Mobile',
-      title: mobileTitle,
-      body: mobileBody,
-      overrideTitle: mobileTitle,
-      overrideBody: mobileBody,
+      pemberi_tugas: 'Panel Admin',
+      title: adminTitle,
+      body: adminBody,
+      overrideTitle: adminTitle,
+      overrideBody: adminBody,
+      title: `Agenda Diperbarui: ${agendaTitle}`,
+      body: [`Detail agenda "${agendaTitle}" telah diperbarui oleh Panel Admin.`, statusDisplay ? `Status terbaru: ${statusDisplay}.` : '', friendlyDeadline ? `Deadline: ${friendlyDeadline}.` : ''].filter(Boolean).join(' ').trim(),
       related_table: 'agenda_kerja',
       related_id: updated.id_agenda_kerja,
       deeplink: `/agenda-kerja/${updated.id_agenda_kerja}`,
     };
+    const notificationOptions = {
+      dedupeKey: `AGENDA_COMMENTED:${updated.id_agenda_kerja}`,
+      collapseKey: `AGENDA_${updated.id_agenda_kerja}`,
+      deeplink: `/agenda-kerja/${updated.id_agenda_kerja}`,
+    };
 
-    console.info('[NOTIF] (Mobile) Mengirim notifikasi AGENDA_COMMENTED untuk user %s dengan payload %o', updated.id_user, notificationPayload);
-    await sendNotification('AGENDA_COMMENTED', updated.id_user, notificationPayload);
-    console.info('[NOTIF] (Mobile) Notifikasi AGENDA_COMMENTED selesai diproses untuk user %s', updated.id_user);
-
-    return NextResponse.json({ ok: true, message: 'Agenda kerja berhasil diperbarui.', data: updated });
+    console.info('[NOTIF] (Admin) Mengirim notifikasi AGENDA_COMMENTED untuk user %s dengan payload %o', updated.id_user, notificationPayload);
+    try {
+      await sendNotification('AGENDA_COMMENTED', updated.id_user, notificationPayload, notificationOptions);
+      console.info('[NOTIF] (Admin) Notifikasi AGENDA_COMMENTED selesai diproses untuk user %s', updated.id_user);
+    } catch (notifErr) {
+      console.error('[NOTIF] (Admin) Gagal mengirim notifikasi AGENDA_COMMENTED untuk user %s: %o', updated.id_user, notifErr);
+    }
+    return NextResponse.json({ ok: true, data: updated });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ ok: false, message: 'Gagal mengubah agenda kerja' }, { status: 500 });
@@ -208,10 +245,11 @@ function normalizeKebutuhanInput(input) {
   return { value: trimmed };
 }
 
-// DELETE /api/agenda-kerja/[id]?hard=0|1
 export async function DELETE(request, { params }) {
-  const okAuth = await ensureAuth(request);
-  if (okAuth instanceof NextResponse) return okAuth;
+  const auth = await ensureAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  const forbidden = guardOperational(auth.actor);
+  if (forbidden) return forbidden;
 
   try {
     const current = await db.agendaKerja.findUnique({ where: { id_agenda_kerja: params.id } });

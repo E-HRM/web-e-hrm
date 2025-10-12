@@ -106,23 +106,52 @@ export default function KategoriKunjunganContent() {
         title: "Aksi",
         key: "aksi",
         align: "right",
-        width: 140,
-        render: (_, row) => (
-          <div className="flex gap-2 justify-end">
-            <Tooltip title="Ubah">
-              <Button size="small" icon={<EditOutlined />} onClick={() => onEditOpen(row)} />
-            </Tooltip>
-            <Popconfirm
-              title="Hapus kategori?"
-              description="Soft delete (data tidak benar-benar hilang)."
-              okText="Hapus"
-              cancelText="Batal"
-              onConfirm={() => vm.remove(row.id_kategori_kunjungan)}
-            >
-              <Button size="small" danger icon={<DeleteOutlined />} />
-            </Popconfirm>
-          </div>
-        ),
+        width: 170,
+        render: (_, row) => {
+          const isDeleted = !!row.deleted_at;
+          const willHardDelete = isDeleted || vm.includeDeleted;
+
+          const title = willHardDelete ? "Hapus permanen kategori?" : "Hapus kategori?";
+          const desc = willHardDelete
+            ? "Hard delete: data akan hilang permanen."
+            : "Soft delete: data bisa dihapus permanen dari tampilan 'Tampilkan yang terhapus'.";
+
+          const onConfirmDelete = async () => {
+            try {
+              if (willHardDelete) {
+                await vm.removeHard(row.id_kategori_kunjungan);
+                message.success("Kategori dihapus permanen.");
+              } else {
+                await vm.remove(row.id_kategori_kunjungan);
+                message.success("Kategori dihapus (soft delete).");
+              }
+            } catch (e) {
+              message.error(e?.message || "Gagal menghapus kategori");
+            }
+          };
+
+          return (
+            <div className="flex gap-2 justify-end">
+              <Tooltip title={isDeleted ? "Tidak bisa ubah data yang sudah terhapus" : "Ubah"}>
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => onEditOpen(row)}
+                  disabled={isDeleted}
+                />
+              </Tooltip>
+              <Popconfirm
+                title={title}
+                description={desc}
+                okText="Hapus"
+                cancelText="Batal"
+                onConfirm={onConfirmDelete}
+              >
+                <Button size="small" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            </div>
+          );
+        },
       },
     ],
     [vm]

@@ -1,4 +1,4 @@
-﻿export const runtime = 'nodejs';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -10,13 +10,12 @@ import { sendNotification } from '@/app/utils/services/notificationService';
 
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 
-// === RBAC helpers (DITAMBAHKAN) ===
 const normRole = (r) =>
   String(r || '')
     .trim()
     .toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
-const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role)); // hanya Operasional yang full manage
+const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role));
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -55,6 +54,13 @@ async function ensureAuth(req) {
   };
 }
 
+function guardOperational(actor) {
+  if (actor?.role !== 'OPERASIONAL') {
+    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL yang dapat mengakses resource ini.' }, { status: 403 });
+  }
+  return null;
+}
+
 function isNullLike(value) {
   if (value === null || value === undefined) return true;
   if (typeof value === 'string') {
@@ -64,33 +70,6 @@ function isNullLike(value) {
     if (lowered === 'null' || lowered === 'undefined') return true;
   }
   return false;
-}
-
-function formatDateDisplay(value) {
-  if (!value) return '';
-  try {
-    return new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(value instanceof Date ? value : new Date(value));
-  } catch (err) {
-    console.warn('Gagal memformat tanggal kunjungan (mobile):', err);
-    return '';
-  }
-}
-
-function formatTimeDisplay(value) {
-  if (!value) return '';
-  try {
-    return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(value instanceof Date ? value : new Date(value));
-  } catch (err) {
-    console.warn('Gagal memformat waktu kunjungan (mobile):', err);
-    return '';
-  }
-}
-
-function formatTimeRangeDisplay(start, end) {
-  const startText = formatTimeDisplay(start);
-  const endText = formatTimeDisplay(end);
-  if (startText && endText) return `${startText} - ${endText}`;
-  return startText || endText || '';
 }
 
 const kunjunganInclude = {
@@ -104,6 +83,7 @@ const kunjunganInclude = {
     select: {
       id_user: true,
       nama_pengguna: true,
+      email: true,
     },
   },
   reports: {
@@ -121,12 +101,72 @@ const kunjunganInclude = {
   },
 };
 
+function formatDateDisplay(value) {
+  if (!value) return '';
+  try {
+    return new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(value instanceof Date ? value : new Date(value));
+  } catch (err) {
+    console.warn('Gagal memformat tanggal kunjungan (admin):', err);
+    return '';
+  }
+}
+
+function formatTimeDisplay(value) {
+  if (!value) return '';
+  try {
+    return new Intl.DateTimeFormat('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(value instanceof Date ? value : new Date(value));
+  } catch (err) {
+    console.warn('Gagal memformat waktu kunjungan (admin):', err);
+    return '';
+  }
+}
+
+function formatTimeRangeDisplay(start, end) {
+  const startText = formatTimeDisplay(start);
+  const endText = formatTimeDisplay(end);
+  if (startText && endText) return `${startText} - ${endText}`;
+  return startText || endText || '';
+}
+
+function formatStatusDisplay(status) {
+  if (!status) return '';
+  return String(status)
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function extractVisitPresentation(visit) {
+  const tanggal = visit?.tanggal instanceof Date ? visit.tanggal : visit?.tanggal ? new Date(visit.tanggal) : null;
+  const jamMulai = visit?.jam_mulai instanceof Date ? visit.jam_mulai : visit?.jam_mulai ? new Date(visit.jam_mulai) : null;
+  const jamSelesai = visit?.jam_selesai instanceof Date ? visit.jam_selesai : visit?.jam_selesai ? new Date(visit.jam_selesai) : null;
+  const tanggalDisplay = formatDateDisplay(tanggal);
+  const jamMulaiDisplay = formatTimeDisplay(jamMulai);
+  const jamSelesaiDisplay = formatTimeDisplay(jamSelesai);
+  const timeRangeDisplay = formatTimeRangeDisplay(jamMulai, jamSelesai);
+  return {
+    tanggal,
+    jamMulai,
+    jamSelesai,
+    tanggalDisplay,
+    jamMulaiDisplay,
+    jamSelesaiDisplay,
+    timeRangeDisplay,
+  };
+}
+
 export async function GET(req) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const forbidden = canSeeAll(auth.actor);
+  if (forbidden) return forbidden;
 
   const actorId = auth.actor?.id;
-  const actorRole = auth.actor?.role; // ambil role
+  const actorRole = auth.actor?.role;
 
   if (!actorId) {
     return NextResponse.json({ message: 'Unauthorized.' }, { status: 401 });
@@ -143,7 +183,6 @@ export async function GET(req) {
 
     const filters = [{ deleted_at: null }];
 
-    // RBAC: HR, DIREKTUR, OPERASIONAL bisa lihat semua
     if (!canSeeAll(actorRole)) {
       filters.push({ id_user: actorId });
     }
@@ -157,17 +196,16 @@ export async function GET(req) {
       if (Number.isNaN(tanggal.getTime())) {
         return NextResponse.json({ message: "Parameter 'tanggal' tidak valid." }, { status: 400 });
       }
-      const start = new Date(tanggal); start.setHours(0, 0, 0, 0);
-      const end = new Date(start); end.setDate(end.getDate() + 1);
+      const start = new Date(tanggal);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
       filters.push({ tanggal: { gte: start, lt: end } });
     }
 
     if (searchTerm) {
       filters.push({
-        OR: [
-          { deskripsi: { contains: searchTerm, mode: 'insensitive' } },
-          { hand_over: { contains: searchTerm, mode: 'insensitive' } },
-        ],
+        OR: [{ deskripsi: { contains: searchTerm, mode: 'insensitive' } }, { hand_over: { contains: searchTerm, mode: 'insensitive' } }],
       });
     }
 
@@ -194,7 +232,7 @@ export async function GET(req) {
       },
     });
   } catch (err) {
-    console.error('GET /mobile/kunjungan-klien error:', err);
+    console.error('GET /admin/kunjungan-klien error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }
@@ -202,6 +240,8 @@ export async function GET(req) {
 export async function POST(req) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const forbidden = guardOperational(auth.actor);
+  if (forbidden) return forbidden;
 
   const actorId = auth.actor?.id;
   const actorRole = auth.actor?.role;
@@ -237,11 +277,10 @@ export async function POST(req) {
       return NextResponse.json({ message: "Field 'jam_selesai' tidak valid." }, { status: 400 });
     }
 
-    // RBAC: Operasional boleh menetapkan rencana untuk user lain; lainnya pakai dirinya sendiri
     const targetUserId = canManageAll(actorRole) && !isNullLike(body.id_user) ? String(body.id_user).trim() : actorId;
 
     const data = {
-      id_user: targetUserId, // <-- perbaikan inti
+      id_user: targetUserId,
       id_kategori_kunjungan: String(id_kategori_kunjungan).trim(),
       deskripsi: isNullLike(deskripsi) ? null : String(deskripsi).trim(),
       tanggal: tanggalDate,
@@ -255,56 +294,58 @@ export async function POST(req) {
       include: kunjunganInclude,
     });
 
-    const visitDate = created.tanggal instanceof Date ? created.tanggal : created?.tanggal ? new Date(created.tanggal) : null;
-    const startTime = created.jam_mulai instanceof Date ? created.jam_mulai : created?.jam_mulai ? new Date(created.jam_mulai) : null;
-    const endTime = created.jam_selesai instanceof Date ? created.jam_selesai : created?.jam_selesai ? new Date(created.jam_selesai) : null;
-    const tanggalDisplay = formatDateDisplay(visitDate);
-    const timeRangeDisplay = formatTimeRangeDisplay(startTime, endTime);
+    const visitPresentation = extractVisitPresentation(created);
     const kategoriLabel = created.kategori?.kategori_kunjungan || '';
     const scheduleParts = [];
-    if (tanggalDisplay) scheduleParts.push(tanggalDisplay);
-    if (timeRangeDisplay) scheduleParts.push(`pukul ${timeRangeDisplay}`);
+    if (visitPresentation.tanggalDisplay) scheduleParts.push(visitPresentation.tanggalDisplay);
+    if (visitPresentation.timeRangeDisplay) scheduleParts.push(`pukul ${visitPresentation.timeRangeDisplay}`);
     const scheduleText = scheduleParts.join(' ');
-
-    const mobileTitle = 'Kunjungan Klien Ditambahkan';
-    const mobileBody = [`Anda baru saja menambahkan kunjungan${kategoriLabel ? ` ${kategoriLabel}` : ' klien'}.`, scheduleText ? `Jadwal kunjungan pada ${scheduleText}.` : '', 'Pastikan untuk memperbarui laporan setelah kunjungan.']
-      .filter(Boolean)
+    const adminTitle = 'Admin Menambahkan Jadwal Kunjungan Klien';
+    const adminBody = [`Admin menambahkan kunjungan${kategoriLabel ? ` ${kategoriLabel}` : ' klien'} untuk Anda`, scheduleText ? `pada ${scheduleText}.` : '.', 'Silakan siapkan kebutuhan kunjungan.']
       .join(' ')
+      .replace(/\s+/g, ' ')
+      .replace(/\.\s+Silakan/, '. Silakan')
       .trim();
-
     const notificationPayload = {
       nama_karyawan: created.user?.nama_pengguna || 'Anda',
       kategori_kunjungan: kategoriLabel,
-      tanggal_kunjungan: visitDate ? visitDate.toISOString() : null,
-      tanggal_kunjungan_display: tanggalDisplay,
-      jam_mulai: startTime ? startTime.toISOString() : null,
-      jam_mulai_display: formatTimeDisplay(startTime),
-      jam_selesai: endTime ? endTime.toISOString() : null,
-      jam_selesai_display: formatTimeDisplay(endTime),
-      rentang_waktu_display: timeRangeDisplay,
-      title: mobileTitle,
-      body: mobileBody,
-      overrideTitle: mobileTitle,
-      overrideBody: mobileBody,
+      tanggal_kunjungan: visitPresentation.tanggal ? visitPresentation.tanggal.toISOString() : null,
+      tanggal_kunjungan_display: visitPresentation.tanggalDisplay,
+      jam_mulai: visitPresentation.jamMulai ? visitPresentation.jamMulai.toISOString() : null,
+      jam_mulai_display: visitPresentation.jamMulaiDisplay,
+      jam_selesai: visitPresentation.jamSelesai ? visitPresentation.jamSelesai.toISOString() : null,
+      jam_selesai_display: visitPresentation.jamSelesaiDisplay,
+      rentang_waktu_display: visitPresentation.timeRangeDisplay,
+      status_kunjungan: created.status_kunjungan,
+      status_kunjungan_display: formatStatusDisplay(created.status_kunjungan),
+      title: adminTitle,
+      body: adminBody,
+      overrideTitle: adminTitle,
+      overrideBody: adminBody,
       related_table: 'kunjungan',
       related_id: created.id_kunjungan,
       deeplink: `/kunjungan-klien/${created.id_kunjungan}`,
     };
+    const notificationOptions = {
+      dedupeKey: `NEW_CLIENT_VISIT_ASSIGNED:${created.id_kunjungan}`,
+      collapseKey: `CLIENT_VISIT_${created.id_kunjungan}`,
+      deeplink: `/kunjungan-klien/${created.id_kunjungan}`,
+    };
 
     try {
-      console.info('[NOTIF] (Mobile) Mengirim notifikasi NEW_CLIENT_VISIT_ASSIGNED untuk user %s dengan payload %o', created.id_user, notificationPayload);
-      await sendNotification('NEW_CLIENT_VISIT_ASSIGNED', created.id_user, notificationPayload);
-      console.info('[NOTIF] (Mobile) Notifikasi NEW_CLIENT_VISIT_ASSIGNED selesai diproses untuk user %s', created.id_user);
+      console.info('[NOTIF] (Admin) Mengirim notifikasi NEW_CLIENT_VISIT_ASSIGNED untuk user %s dengan payload %o', created.id_user, notificationPayload);
+      await sendNotification('NEW_CLIENT_VISIT_ASSIGNED', created.id_user, notificationPayload, notificationOptions);
+      console.info('[NOTIF] (Admin) Notifikasi NEW_CLIENT_VISIT_ASSIGNED selesai diproses untuk user %s', created.id_user);
     } catch (notifErr) {
-      console.error('[NOTIF] (Mobile) Gagal mengirim notifikasi NEW_CLIENT_VISIT_ASSIGNED untuk user %s: %o', created.id_user, notifErr);
+      console.error('[NOTIF] (Admin) Gagal mengirim notifikasi NEW_CLIENT_VISIT_ASSIGNED untuk user %s: %o', created.id_user, notifErr);
     }
 
-    return NextResponse.json({ message: 'Anda berhasil menambahkan kunjungan klien.', data: created }, { status: 201 });
+    return NextResponse.json({ message: 'Kunjungan klien dibuat.', data: created }, { status: 201 });
   } catch (err) {
     if (err?.code === 'P2003') {
       return NextResponse.json({ message: 'Kategori kunjungan tidak valid.' }, { status: 400 });
     }
-    console.error('POST /mobile/kunjungan-klien error:', err);
+    console.error('POST /admin/kunjungan-klien error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }

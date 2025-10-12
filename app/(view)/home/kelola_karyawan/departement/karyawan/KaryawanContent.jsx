@@ -159,19 +159,19 @@ export default function KaryawanContent() {
     { title: "Kontak", dataIndex: "kontak", key: "kontak", width: 200, render: (v) => <span className="whitespace-nowrap">{v || "-"}</span> },
     { title: "Tanggal Lahir", dataIndex: "tanggal_lahir", key: "tanggal_lahir", width: 170, render: (v) => (v ? new Date(v).toLocaleDateString() : "-") },
     { title: "Role", dataIndex: "role", key: "role", width: 140, align: "center", render: roleTag },
-    {
-      title: "Opsi",
-      key: "aksi",
-      width: 120,
-      fixed: "right",
-      align: "center",
-      render: (_, row) => (
-        <Space>
-          <Tooltip title="Edit"><Button size="small" shape="circle" icon={<EditOutlined />} onClick={() => openEdit(row)} /></Tooltip>
-          <Tooltip title="Hapus"><Button size="small" danger shape="circle" icon={<DeleteOutlined />} onClick={() => handleDelete(row)} /></Tooltip>
-        </Space>
-      ),
-    },
+    // {
+    //   title: "Opsi",
+    //   key: "aksi",
+    //   width: 120,
+    //   fixed: "right",
+    //   align: "center",
+    //   render: (_, row) => (
+    //     <Space>
+    //       <Tooltip title="Edit"><Button size="small" shape="circle" icon={<EditOutlined />} onClick={() => openEdit(row)} /></Tooltip>
+    //       <Tooltip title="Hapus"><Button size="small" danger shape="circle" icon={<DeleteOutlined />} onClick={() => handleDelete(row)} /></Tooltip>
+    //     </Space>
+    //   ),
+    // },
   ];
 
   return (
@@ -212,9 +212,9 @@ export default function KaryawanContent() {
             onChange={setFilterAgama}
             options={["Islam","Kristen Protestan","Katolik","Hindu","Buddha","Konghucu"].map(v => ({value:v,label:v}))}
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+          {/* <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
             Tambah
-          </Button>
+          </Button> */}
         </div>
       </div>
 

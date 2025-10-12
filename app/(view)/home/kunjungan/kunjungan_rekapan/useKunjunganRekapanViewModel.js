@@ -9,7 +9,7 @@ import { fetcher } from "@/app/utils/fetcher";
 
 dayjs.extend(utc);
 
-/** tampilkan angka jam persis seperti di DB (tanpa pergeseran zona) */
+/** tampilkan waktu persis seperti di DB (tanpa pergeseran zona) */
 export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
   if (!v) return "-";
   const s = String(v);
@@ -31,15 +31,38 @@ export default function useKunjunganRekapanViewModel() {
     to: null,
   });
 
-  /** Users untuk filter */
-  const { data: usersRes } = useSWR(`${ApiEndpoints.GetUsers}?perPage=1000`, fetcher, { revalidateOnFocus: false });
+  /** Users untuk filter & join kolom User */
+  const { data: usersRes } = useSWR(
+    `${ApiEndpoints.GetUsers}?perPage=1000`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
   const userOptions = useMemo(() => {
     const xs = Array.isArray(usersRes?.data) ? usersRes.data : [];
-    return xs.map((u) => ({ value: u.id_user, label: u.nama_pengguna || u.email || u.id_user }));
+    return xs.map((u) => ({
+      value: u.id_user,
+      label: u.nama_pengguna || u.email || u.id_user,
+    }));
+  }, [usersRes]);
+
+  // Peta id_user -> user (stringify id agar aman tipe number/string)
+  const usersById = useMemo(() => {
+    const xs = Array.isArray(usersRes?.data) ? usersRes.data : [];
+    const map = new Map();
+    for (const u of xs) {
+      const key = String(u.id_user ?? u.id ?? u.uuid ?? "");
+      if (key) map.set(key, u);
+    }
+    return map;
   }, [usersRes]);
 
   /** Kategori untuk filter */
-  const { data: katRes } = useSWR(`${ApiEndpoints.GetKategoriKunjungan}?pageSize=1000&orderBy=kategori_kunjungan&sort=asc`, fetcher, { revalidateOnFocus: false });
+  const { data: katRes } = useSWR(
+    `${ApiEndpoints.GetKategoriKunjungan}?pageSize=1000&orderBy=kategori_kunjungan&sort=asc`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
   const kategoriOptions = useMemo(() => {
     const xs = Array.isArray(katRes?.data) ? katRes.data : [];
     return xs.map((k) => ({ value: k.id_kategori_kunjungan, label: k.kategori_kunjungan }));
@@ -62,8 +85,23 @@ export default function useKunjunganRekapanViewModel() {
     return `${ApiEndpoints.GetKunjungan}?${p.toString()}`;
   }, [filters]);
 
-  const { data: listRes, isLoading } = useSWR(listUrl, fetcher, { revalidateOnFocus: false });
-  const rows = useMemo(() => (Array.isArray(listRes?.data) ? listRes.data : []), [listRes]);
+  const { data: listRes, isLoading } = useSWR(
+    listUrl,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+
+  // Suntikkan user ke setiap baris (join di frontend)
+  const rows = useMemo(() => {
+    const xs = Array.isArray(listRes?.data) ? listRes.data : [];
+    return xs.map((r) => {
+      const key = String(r.id_user ?? r.user?.id_user ?? r.user?.id ?? "");
+      const userFromMap = key ? usersById.get(key) : null;
+      // Pakai yang dari map bila ada; fallback ke r.user jika backend kebetulan sudah include
+      const user = userFromMap || r.user || null;
+      return { ...r, user };
+    });
+  }, [listRes, usersById]);
 
   /** Link OSM untuk lihat titik */
   const osmUrl = (lat, lon) =>

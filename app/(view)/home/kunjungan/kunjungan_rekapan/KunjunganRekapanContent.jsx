@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Card,
   Table,
@@ -22,6 +23,44 @@ import useVM, { showFromDB } from "./useKunjunganRekapanViewModel";
 
 const NAVY = "#003A6F";
 
+/* Helpers avatar seperti halaman Karyawan */
+function getPhotoUrl(user) {
+  return (
+    user?.foto_profil_user ||
+    user?.avatarUrl ||
+    user?.foto ||
+    user?.foto_url ||
+    user?.photoUrl ||
+    user?.photo ||
+    user?.avatar ||
+    user?.gambar ||
+    "/avatar-placeholder.jpg"
+  );
+}
+
+function CircleImg({ src, size = 36, alt = "Foto" }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src || "/avatar-placeholder.jpg"}
+      alt={alt}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 999,
+        objectFit: "cover",
+        border: "1px solid #003A6F22",
+        background: "#E6F0FA",
+        display: "inline-block",
+      }}
+      onError={(e) => {
+        e.currentTarget.src = "/avatar-placeholder.jpg";
+        e.currentTarget.onerror = null;
+      }}
+    />
+  );
+}
+
 export default function KunjunganRekapanContent() {
   const vm = useVM();
   const [img, setImg] = useState(null);
@@ -37,6 +76,7 @@ export default function KunjunganRekapanContent() {
       {
         title: "Deskripsi",
         dataIndex: "deskripsi",
+        width: 300,
         key: "desk",
         render: (v) => v || "—",
       },
@@ -50,9 +90,9 @@ export default function KunjunganRekapanContent() {
       {
         title: "Start",
         key: "start",
-        width: 260,
         render: (_, r) => {
-          const t = r.jam_mulai ? showFromDB(r.jam_mulai, "DD MMM YYYY HH:mm") : "-";
+          // HANYA JAM (HH:mm)
+          const t = r.jam_mulai ? showFromDB(r.jam_mulai, "HH:mm") : "-";
           const { lat, lon } = vm.getStartCoord(r);
           const photo = vm.pickPhotoUrl(r);
           return (
@@ -70,12 +110,7 @@ export default function KunjunganRekapanContent() {
               ) : null}
               {photo ? (
                 <Tooltip title="Lihat foto">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<PictureOutlined />}
-                    onClick={() => setImg(photo)}
-                  />
+                  <Button size="small" type="text" icon={<PictureOutlined />} onClick={() => setImg(photo)} />
                 </Tooltip>
               ) : null}
             </Space>
@@ -85,9 +120,9 @@ export default function KunjunganRekapanContent() {
       {
         title: "End",
         key: "end",
-        width: 260,
         render: (_, r) => {
-          const t = r.jam_selesai ? showFromDB(r.jam_selesai, "DD MMM YYYY HH:mm") : "-";
+          // HANYA JAM (HH:mm)
+          const t = r.jam_selesai ? showFromDB(r.jam_selesai, "HH:mm") : "-";
           const { lat, lon } = vm.getEndCoord(r);
           const photo = vm.pickPhotoUrl(r);
           return (
@@ -105,12 +140,7 @@ export default function KunjunganRekapanContent() {
               ) : null}
               {photo ? (
                 <Tooltip title="Lihat foto">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<PictureOutlined />}
-                    onClick={() => setImg(photo)}
-                  />
+                  <Button size="small" type="text" icon={<PictureOutlined />} onClick={() => setImg(photo)} />
                 </Tooltip>
               ) : null}
             </Space>
@@ -133,18 +163,38 @@ export default function KunjunganRekapanContent() {
         },
       },
       {
-        title: "Dibuat",
-        dataIndex: "created_at",
-        key: "created",
-        width: 170,
-        render: (v) => (v ? showFromDB(v) : "-"),
-      },
-      {
         title: "User",
         dataIndex: "user",
         key: "user",
-        width: 220,
-        render: (u) => u?.nama_pengguna || u?.email || "—",
+        width: 360,
+        render: (u) => {
+          if (!u) return "—";
+          const id = u.id_user ?? u.id ?? u.uuid;
+          const href = id ? `/home/kelola_karyawan/karyawan/${id}` : undefined;
+
+          const displayName = u.nama_pengguna ?? u.name ?? u.email ?? "—";
+          const jabatan = u.jabatan?.nama_jabatan ?? u.jabatan?.nama ?? u.jabatan ?? "";
+          const departemen = u.departement?.nama_departement ?? u.departemen?.nama ?? u.departemen ?? "";
+          const subtitle = jabatan && departemen ? `${jabatan} | ${departemen}` : (jabatan || departemen || "—");
+
+          const node = (
+            <div className="flex items-center gap-3 min-w-0">
+              <CircleImg src={getPhotoUrl(u)} alt={displayName} />
+              <div className="min-w-0">
+                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
+                  {displayName}
+                </div>
+                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
+                  {subtitle}
+                </div>
+              </div>
+            </div>
+          );
+
+          return href ? (
+            <Link href={href} className="no-underline">{node}</Link>
+          ) : node;
+        },
       },
     ],
     [vm]
@@ -153,10 +203,7 @@ export default function KunjunganRekapanContent() {
   return (
     <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: NAVY, borderRadius: 12 } }}>
       <div className="p-4">
-        <Card
-          title={<span className="text-lg font-semibold">Rekapan Kunjungan</span>}
-          styles={{ body: { paddingTop: 16 } }}
-        >
+        <Card title={<span className="text-lg font-semibold">Rekapan Kunjungan</span>} styles={{ body: { paddingTop: 16 } }}>
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <Select

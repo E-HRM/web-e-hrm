@@ -19,6 +19,7 @@
     "@fullcalendar/timegrid": "^6.1.19",
     "@prisma/client": "^6.10.1",
     "@supabase/supabase-js": "^2.56.0",
+    "antd": "^5.27.1",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
@@ -35,7 +36,8 @@
     "react-dom": "18.2.0",
     "react-leaflet": "^4.2.1",
     "recharts": "^3.2.1",
-    "swr": "^2.3.6"
+    "swr": "^2.3.6",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

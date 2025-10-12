@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { fetcher } from "../../../utils/fetcher";
 import { ApiEndpoints } from "../../../../constrainst/endpoints";
 
-// array stabil supaya dependency aman
 const EMPTY = Object.freeze([]);
 
 /* -------------------- Helpers -------------------- */
@@ -28,7 +27,7 @@ function normalizePhotoUrl(url) {
   if (typeof window !== "undefined" && url.startsWith("/")) {
     return `${window.location.origin}${url}`;
   }
-  return url;
+  return "/" + String(url).replace(/^\.?\//, "");
 }
 
 function pickCoord(obj) {
@@ -46,8 +45,7 @@ function pickCoord(obj) {
 }
 
 function makeOsmEmbed(lat, lon) {
-  const dx = 0.0025,
-    dy = 0.0025;
+  const dx = 0.0025, dy = 0.0025;
   const bbox = `${(lon - dx).toFixed(6)}%2C${(lat - dy).toFixed(
     6
   )}%2C${(lon + dx).toFixed(6)}%2C${(lat + dy).toFixed(6)}`;
@@ -61,16 +59,11 @@ function flattenRecipient(rec) {
   const a = rec?.absensi ?? {};
   const user = a.user ?? rec.user ?? null;
 
-  // tanggal
   const tanggal = a.tanggal || a.tgl || a.created_at || rec.created_at || null;
 
-  // jam utama
-  const jam_masuk =
-    a.jam_masuk ?? a.jamIn ?? a.checkin_time ?? a.masuk_at ?? null;
-  const jam_pulang =
-    a.jam_pulang ?? a.jamOut ?? a.checkout_time ?? a.pulang_at ?? null;
+  const jam_masuk = a.jam_masuk ?? a.jamIn ?? a.checkin_time ?? a.masuk_at ?? null;
+  const jam_pulang = a.jam_pulang ?? a.jamOut ?? a.checkout_time ?? a.pulang_at ?? null;
 
-  // istirahat (pakai banyak alias biar tahan banting)
   const istirahat_mulai =
     a.jam_istirahat_mulai ??
     a.mulai_istirahat ??
@@ -84,25 +77,36 @@ function flattenRecipient(rec) {
     a.istirahat_out ??
     null;
 
-  // status
-  const status_masuk =
-    a.status_masuk ?? a.status_in ?? a.status_masuk_label ?? null;
-  const status_pulang =
-    a.status_pulang ?? a.status_out ?? a.status_pulang_label ?? null;
+  const status_masuk = a.status_masuk ?? a.status_in ?? a.status_masuk_label ?? null;
+  const status_pulang = a.status_pulang ?? a.status_out ?? a.status_pulang_label ?? null;
 
-  // lokasi & foto (dari include API)
-  const lokasiIn = a.lokasiIn ?? a.lokasi_in ?? a.lokasi_absen_masuk ?? null;
-  const lokasiOut =
-    a.lokasiOut ?? a.lokasi_out ?? a.lokasi_absen_pulang ?? null;
+  const lokasiIn  = a.lokasiIn  ?? a.lokasi_in  ?? a.lokasi_absen_masuk  ?? null;
+  const lokasiOut = a.lokasiOut ?? a.lokasi_out ?? a.lokasi_absen_pulang ?? null;
 
-  const photo_in = normalizePhotoUrl(
-    a.foto_masuk ?? a.photo_in ?? a.bukti_foto_masuk ?? a.attachment_in ?? null
-  );
-  const photo_out = normalizePhotoUrl(
-    a.foto_pulang ??
-      a.photo_out ??
-      a.bukti_foto_pulang ??
-      a.attachment_out ??
+  const photo_in  = normalizePhotoUrl(a.foto_masuk  ?? a.photo_in  ?? a.bukti_foto_masuk  ?? a.attachment_in  ?? null);
+  const photo_out = normalizePhotoUrl(a.foto_pulang ?? a.photo_out ?? a.bukti_foto_pulang ?? a.attachment_out ?? null);
+
+  const departemenRaw = user?.departement ?? user?.departemen ?? user?.department ?? null;
+  const jabatanRaw =
+    user?.jabatan ?? user?.posisi ?? user?.position ?? user?.role_jabatan ?? user?.nama_jabatan ?? null;
+
+  const departement =
+    typeof departemenRaw === "string"
+      ? { nama_departement: departemenRaw }
+      : departemenRaw || null;
+
+  const jabatan =
+    typeof jabatanRaw === "string"
+      ? { nama_jabatan: jabatanRaw }
+      : jabatanRaw || null;
+
+  const fotoUser = normalizePhotoUrl(
+    user?.foto_profil_user ??
+      user?.foto ??
+      user?.avatarUrl ??
+      user?.avatar ??
+      user?.photoUrl ??
+      user?.photo ??
       null
   );
 
@@ -116,30 +120,27 @@ function flattenRecipient(rec) {
 
     user: user
       ? {
-          id_user: user.id_user,
-          nama_pengguna: user.nama_pengguna,
+          id_user: user.id_user ?? user.id ?? user.uuid,
+          nama_pengguna: user.nama_pengguna ?? user.name ?? user.email,
           email: user.email,
           role: user.role,
-          foto_profil_user: user.foto_profil_user ?? user.foto ?? null,
-          departement: user.departement ?? null,
+          foto_profil_user: fotoUser,
+          departement,
+          jabatan,
         }
       : null,
 
     tanggal,
 
-    // jam
     jam_masuk,
     jam_pulang,
 
-    // istirahat
     istirahat_mulai,
     istirahat_selesai,
 
-    // status
     status_masuk,
     status_pulang,
 
-    // lokasi/foto
     lokasiIn: pickCoord(lokasiIn),
     lokasiOut: pickCoord(lokasiOut),
     photo_in,
@@ -148,36 +149,19 @@ function flattenRecipient(rec) {
 }
 
 export default function useAbsensiViewModel() {
-  // filter untuk rekap header (biarkan ada, dipakai kartu statistik)
   const [dateIn, setDateIn] = useState(dayjs());
   const [dateOut, setDateOut] = useState(dayjs());
-  const [filterIn, setFilterIn] = useState({
-    q: "",
-    divisi: undefined,
-    status: undefined,
-  });
-  const [filterOut, setFilterOut] = useState({
-    q: "",
-    divisi: undefined,
-    status: undefined,
-  });
+  const [filterIn, setFilterIn] = useState({ q: "", divisi: undefined, status: undefined });
+  const [filterOut, setFilterOut] = useState({ q: "", divisi: undefined, status: undefined });
 
-  // sumber data sama
-  const url = useMemo(
-    () => ApiEndpoints.GetAbsensiApprovals({ perPage: 200 }),
-    []
-  );
-  const { data: resp, isLoading } = useSWR(url, fetcher, {
-    keepPreviousData: true,
-  });
+  const url = useMemo(() => ApiEndpoints.GetAbsensiApprovals({ perPage: 200 }), []);
+  const { data: resp, isLoading } = useSWR(url, fetcher, { keepPreviousData: true });
 
-  // flatten
   const base = useMemo(() => {
     const list = Array.isArray(resp?.data) ? resp.data : EMPTY;
     return list.map(flattenRecipient);
   }, [resp?.data]);
 
-  // opsi divisi
   const divisiOptions = useMemo(() => {
     const arr = Array.from(
       new Set(
@@ -189,7 +173,6 @@ export default function useAbsensiViewModel() {
     return arr.map((d) => ({ value: d, label: d }));
   }, [base]);
 
-  // rekap lama untuk header (kedatangan)
   const kedatangan = useMemo(
     () =>
       base
@@ -204,7 +187,6 @@ export default function useAbsensiViewModel() {
     [base, dateIn, filterIn.divisi]
   );
 
-  // rekap lama untuk header (kepulangan)
   const kepulangan = useMemo(
     () =>
       base
@@ -219,10 +201,8 @@ export default function useAbsensiViewModel() {
     [base, dateOut, filterOut.divisi]
   );
 
-  // === data lengkap untuk TABEL (semua kolom) ===
   const rowsAll = base;
 
-  // dropdown status (biarkan)
   const statusOptionsIn = [
     { value: "tepat", label: "Tepat Waktu" },
     { value: "terlambat", label: "Terlambat" },
@@ -234,22 +214,16 @@ export default function useAbsensiViewModel() {
     { value: "lembur", label: "Lembur" },
   ];
 
-  // util lokasi untuk modal
   const getStartCoord = (row) => row?.lokasiIn || null;
   const getEndCoord = (row) => row?.lokasiOut || null;
 
   return {
-    // data untuk rekap
     kedatangan,
     kepulangan,
-
-    // data untuk tabel
     rowsAll,
 
-    // loading
     loading: isLoading,
 
-    // filters & setters
     dateIn,
     setDateIn,
     dateOut,
@@ -259,12 +233,10 @@ export default function useAbsensiViewModel() {
     filterOut,
     setFilterOut,
 
-    // dropdown options
     divisiOptions,
     statusOptionsIn,
     statusOptionsOut,
 
-    // util foto & map
     normalizePhotoUrl,
     makeOsmEmbed,
     getStartCoord,

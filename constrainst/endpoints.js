@@ -9,8 +9,10 @@ const API_RESET_PASSWORD_CONFIRM = "/api/mobile/auth/reset-password";
 const API_REGISTER = "/api/mobile/auth/register";
 
 // NEW: Agenda (master aktivitas) & Agenda Kerja (jadwal kerja yang refer ke agenda)
-const API_AGENDA = "/api/mobile/agenda";
-const API_AGENDA_KERJA = "/api/mobile/agenda-kerja";
+const API_AGENDA = "/api/admin/agenda";
+const API_AGENDA_KERJA = "/api/admin/agenda-kerja-admin";
+const API_AGENDA_KERJA_IMPORT = "/api/admin/agenda-kerja-admin/import";
+const API_AGENDA_KERJA_IMPORT_TEMPLATE = "/api/admin/agenda-kerja-admin/import/template";
 
 // === NEW: Jabatan
 const API_JABATAN = "/api/admin/jabatans";
@@ -24,7 +26,7 @@ const API_ABSENSI_RECORDS = "/api/admin/absensi/history"; // GET ?date=YYYY-MM-D
 const API_ABSENSI_APPROVALS = "/api/admin/absensi";       // tanpa trailing slash
 
 // === Kunjungan
-const API_KUNJUNGAN = "/api/mobile/kunjungan-klien";
+const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
 
 // === Kategori Kunjungan (BARU)
 const API_KATEGORI_KUNJUNGAN = "/api/admin/kategori-kunjungan";
@@ -69,7 +71,9 @@ export const ApiEndpoints = {
   GetAgendaKerjaById: (id) => `${API_AGENDA_KERJA}/${id}`,
   UpdateAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,
   DeleteAgendaKerja: (id) => `${API_AGENDA_KERJA}/${id}`,
-
+  ImportAgendaKerja: API_AGENDA_KERJA_IMPORT,
+  ImportAgendaKerjaTemplate: API_AGENDA_KERJA_IMPORT_TEMPLATE,
+  
   // Jabatan
   GetJabatan: API_JABATAN,
   CreateJabatan: API_JABATAN,

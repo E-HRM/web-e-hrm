@@ -1,4 +1,4 @@
-﻿export const runtime = 'nodejs';
+export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -10,13 +10,12 @@ import { sendNotification } from '@/app/utils/services/notificationService';
 
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 
-// === RBAC helpers (DITAMBAHKAN) ===
 const normRole = (r) =>
   String(r || '')
     .trim()
     .toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
-const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role)); // hanya Operasional yang full manage
+const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role));
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -55,6 +54,13 @@ async function ensureAuth(req) {
   };
 }
 
+function guardOperational(actor) {
+  if (actor?.role !== 'OPERASIONAL') {
+    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL yang dapat mengakses resource ini.' }, { status: 403 });
+  }
+  return null;
+}
+
 const kunjunganInclude = {
   kategori: {
     select: {
@@ -87,14 +93,12 @@ const kunjunganInclude = {
   },
 };
 
-const coordinateFields = ['start_latitude', 'start_longitude', 'end_latitude', 'end_longitude'];
-
 function formatDateDisplay(value) {
   if (!value) return '';
   try {
     return new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(value instanceof Date ? value : new Date(value));
   } catch (err) {
-    console.warn('Gagal memformat tanggal kunjungan (mobile detail):', err);
+    console.warn('Gagal memformat tanggal kunjungan (admin detail):', err);
     return '';
   }
 }
@@ -107,7 +111,7 @@ function formatTimeDisplay(value) {
       minute: '2-digit',
     }).format(value instanceof Date ? value : new Date(value));
   } catch (err) {
-    console.warn('Gagal memformat waktu kunjungan (mobile detail):', err);
+    console.warn('Gagal memformat waktu kunjungan (admin detail):', err);
     return '';
   }
 }
@@ -146,6 +150,8 @@ function extractVisitPresentation(visit) {
     timeRangeDisplay,
   };
 }
+
+const coordinateFields = ['start_latitude', 'start_longitude', 'end_latitude', 'end_longitude'];
 
 function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj, key);
@@ -250,6 +256,8 @@ async function parseRequestBody(req) {
 export async function GET(req, { params }) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const forbidden = canSeeAll(auth.actor);
+  if (forbidden) return forbidden;
 
   const actorId = auth.actor?.id;
   const role = auth.actor?.role;
@@ -264,22 +272,23 @@ export async function GET(req, { params }) {
   }
 
   try {
-    const data = await db.kunjungan.findFirst({
-      where: {
-        id_kunjungan: id,
-        deleted_at: null,
-        ...(canSeeAll(role) ? {} : { id_user: actorId }), // HR/Direktur/Operasional boleh lihat semua
-      },
+    const filters = [{ id_kunjungan: id }, { deleted_at: null }];
+    if (!canSeeAll(role)) {
+      filters.push({ id_user: actorId });
+    }
+
+    const kunjungan = await db.kunjungan.findFirst({
+      where: { AND: filters },
       include: kunjunganInclude,
     });
 
-    if (!data) {
-      return NextResponse.json({ message: 'Kunjungan klien tidak ditemukan.' }, { status: 404 });
+    if (!kunjungan) {
+      return NextResponse.json({ message: 'Kunjungan tidak ditemukan.' }, { status: 404 });
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: kunjungan });
   } catch (err) {
-    console.error('GET /mobile/kunjungan-klien/[id] error:', err);
+    console.error('GET /admin/kunjungan-klien/[id] error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }
@@ -287,10 +296,11 @@ export async function GET(req, { params }) {
 export async function PUT(req, { params }) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const forbidden = guardOperational(auth.actor);
+  if (forbidden) return forbidden;
 
   const actorId = auth.actor?.id;
   const role = auth.actor?.role;
-  const canManage = canManageAll(role); // hanya Operasional boleh kelola semua
 
   if (!actorId) {
     return NextResponse.json({ message: 'Unauthorized.' }, { status: 401 });
@@ -301,121 +311,141 @@ export async function PUT(req, { params }) {
     return NextResponse.json({ message: "Parameter 'id' wajib diisi." }, { status: 400 });
   }
 
-  let lampiranUrlValue;
-  let lampiranUploadedFromFile = false;
-
   try {
-    const existing = await db.kunjungan.findFirst({
-      where: {
-        id_kunjungan: id,
-        deleted_at: null,
-        ...(canManage ? {} : { id_user: actorId }),
-      },
-    });
-
-    if (!existing) {
-      return NextResponse.json({ message: 'Kunjungan klien tidak ditemukan.' }, { status: 404 });
+    const existing = await db.kunjungan.findUnique({ where: { id_kunjungan: id } });
+    if (!existing || existing.deleted_at) {
+      return NextResponse.json({ message: 'Kunjungan tidak ditemukan.' }, { status: 404 });
     }
 
-    const { type, body } = await parseRequestBody(req);
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      return NextResponse.json({ message: 'Body tidak valid.' }, { status: 400 });
+    if (!canManageAll(role) && existing.id_user !== actorId) {
+      return NextResponse.json({ message: 'Forbidden.' }, { status: 403 });
     }
 
-    const data = {};
+    const { body, type } = await parseRequestBody(req);
 
-    if (hasOwn(body, 'id_master_data_kunjungan')) {
-      const rawKategori = body.id_master_data_kunjungan;
-      data.id_master_data_kunjungan = isNullLike(rawKategori) ? null : String(rawKategori).trim();
+    const updates = {};
+    const errors = [];
+
+    if (hasOwn(body, 'id_kategori_kunjungan')) {
+      if (isNullLike(body.id_kategori_kunjungan)) {
+        errors.push("Field 'id_kategori_kunjungan' tidak boleh kosong.");
+      } else {
+        updates.id_kategori_kunjungan = String(body.id_kategori_kunjungan).trim();
+      }
+    }
+
+    if (hasOwn(body, 'deskripsi')) {
+      updates.deskripsi = isNullLike(body.deskripsi) ? null : String(body.deskripsi).trim();
+    }
+
+    if (hasOwn(body, 'hand_over')) {
+      updates.hand_over = isNullLike(body.hand_over) ? null : String(body.hand_over).trim();
     }
 
     if (hasOwn(body, 'tanggal')) {
-      const rawTanggal = body.tanggal;
-      if (isNullLike(rawTanggal)) {
-        data.tanggal = null;
+      if (isNullLike(body.tanggal)) {
+        errors.push("Field 'tanggal' tidak boleh kosong.");
       } else {
-        const tanggal = parseDateOnlyToUTC(rawTanggal);
-        if (!tanggal) {
-          return NextResponse.json({ message: "Field 'tanggal' tidak valid." }, { status: 400 });
+        const parsed = parseDateOnlyToUTC(body.tanggal);
+        if (!parsed) {
+          errors.push("Field 'tanggal' tidak valid.");
+        } else {
+          updates.tanggal = parsed;
         }
-        data.tanggal = tanggal;
       }
     }
 
     if (hasOwn(body, 'jam_mulai')) {
       if (isNullLike(body.jam_mulai)) {
-        data.jam_mulai = null;
+        updates.jam_mulai = null;
       } else {
-        const jamMulai = parseDateTimeToUTC(body.jam_mulai);
-        if (!jamMulai) return NextResponse.json({ message: "Field 'jam_mulai' tidak valid." }, { status: 400 });
-        data.jam_mulai = jamMulai;
+        const parsed = parseDateTimeToUTC(body.jam_mulai);
+        if (!parsed) {
+          errors.push("Field 'jam_mulai' tidak valid.");
+        } else {
+          updates.jam_mulai = parsed;
+        }
       }
     }
 
     if (hasOwn(body, 'jam_selesai')) {
       if (isNullLike(body.jam_selesai)) {
-        data.jam_selesai = null;
+        updates.jam_selesai = null;
       } else {
-        const jamSelesai = parseDateTimeToUTC(body.jam_selesai);
-        if (!jamSelesai) return NextResponse.json({ message: "Field 'jam_selesai' tidak valid." }, { status: 400 });
-        data.jam_selesai = jamSelesai;
+        const parsed = parseDateTimeToUTC(body.jam_selesai);
+        if (!parsed) {
+          errors.push("Field 'jam_selesai' tidak valid.");
+        } else {
+          updates.jam_selesai = parsed;
+        }
       }
     }
 
-    if (hasOwn(body, 'deskripsi')) {
-      data.deskripsi = isNullLike(body.deskripsi) ? null : String(body.deskripsi).trim() || null;
-    }
-
-    if (hasOwn(body, 'hand_over')) {
-      data.hand_over = isNullLike(body.hand_over) ? null : String(body.hand_over).trim() || null;
+    if (hasOwn(body, 'status_kunjungan')) {
+      const allowedStatuses = new Set(['diproses', 'berlangsung', 'selesai', 'batal']);
+      const status = String(body.status_kunjungan || '')
+        .trim()
+        .toLowerCase();
+      if (!allowedStatuses.has(status)) {
+        errors.push("Field 'status_kunjungan' tidak valid.");
+      } else {
+        updates.status_kunjungan = status;
+      }
     }
 
     for (const field of coordinateFields) {
-      if (!hasOwn(body, field)) continue;
-      const value = body[field];
-      if (isNullLike(value)) { data[field] = null; continue; }
-      const numberValue = Number(value);
-      if (Number.isNaN(numberValue)) {
-        return NextResponse.json({ message: 'Field ' + field + ' tidak valid.' }, { status: 400 });
+      if (hasOwn(body, field)) {
+        const value = body[field];
+        if (isNullLike(value)) {
+          updates[field] = null;
+        } else {
+          const numberValue = Number(value);
+          if (Number.isFinite(numberValue)) {
+            updates[field] = numberValue;
+          } else {
+            errors.push(`Field '${field}' harus berupa angka.`);
+          }
+        }
       }
-      data[field] = numberValue;
     }
 
-    // Lampiran (form / url)
-    let lampiranProvided = false;
+    if (errors.length) {
+      return NextResponse.json({ message: errors.join(' ') }, { status: 400 });
+    }
+
     if (type === 'form') {
-      const lampiranFile = findLampiranFile(body);
-      if (lampiranFile) {
-        lampiranUrlValue = await uploadLampiranToSupabase(actorId, lampiranFile);
-        lampiranUploadedFromFile = Boolean(lampiranUrlValue);
-        lampiranProvided = true;
+      const file = findLampiranFile(body);
+      if (file) {
+        if (existing.lampiran_kunjungan) {
+          await deleteLampiranFromSupabase(existing.lampiran_kunjungan);
+        }
+        updates.lampiran_kunjungan = await uploadLampiranToSupabase(existing.id_user, file);
+      } else if (hasOwn(body, 'lampiran_kunjungan') && isNullLike(body.lampiran_kunjungan)) {
+        if (existing.lampiran_kunjungan) {
+          await deleteLampiranFromSupabase(existing.lampiran_kunjungan);
+        }
+        updates.lampiran_kunjungan = null;
+      }
+    } else if (hasOwn(body, 'lampiran_kunjungan')) {
+      if (isNullLike(body.lampiran_kunjungan)) {
+        if (existing.lampiran_kunjungan) {
+          await deleteLampiranFromSupabase(existing.lampiran_kunjungan);
+        }
+        updates.lampiran_kunjungan = null;
+      } else if (typeof body.lampiran_kunjungan === 'string') {
+        updates.lampiran_kunjungan = body.lampiran_kunjungan;
       }
     }
-    if (!lampiranProvided && hasOwn(body, 'lampiran_kunjungan_url') && !isFile(body.lampiran_kunjungan_url)) {
-      const rawLampiran = body.lampiran_kunjungan_url;
-      lampiranUrlValue = isNullLike(rawLampiran) ? null : String(rawLampiran).trim();
-      lampiranProvided = true;
-    }
 
-    let oldLampiranToDelete = null;
-    if (lampiranProvided) {
-      data.lampiran_kunjungan_url = lampiranUrlValue ?? null;
-      const current = existing.lampiran_kunjungan_url;
-      if (current && (lampiranUrlValue === null || lampiranUrlValue !== current)) {
-        oldLampiranToDelete = current;
-      }
-    }
-
-    if (Object.keys(data).length === 0) {
-      return NextResponse.json({ message: 'Tidak ada perubahan yang diberikan.' }, { status: 400 });
+    if (!Object.keys(updates).length) {
+      return NextResponse.json({ message: 'Tidak ada perubahan yang diterapkan.' }, { status: 400 });
     }
 
     const updated = await db.kunjungan.update({
       where: { id_kunjungan: id },
-      data,
+      data: updates,
       include: kunjunganInclude,
     });
-
     const visitPresentation = extractVisitPresentation(updated);
     const kategoriLabel = updated.kategori?.kategori_kunjungan || '';
     const statusDisplay = formatStatusDisplay(updated.status_kunjungan);
@@ -423,17 +453,16 @@ export async function PUT(req, { params }) {
     if (visitPresentation.tanggalDisplay) scheduleParts.push(visitPresentation.tanggalDisplay);
     if (visitPresentation.timeRangeDisplay) scheduleParts.push(`pukul ${visitPresentation.timeRangeDisplay}`);
     const scheduleText = scheduleParts.join(' ');
-
-    const mobileTitle = 'Kunjungan Klien Diperbarui';
-    const mobileBody = [
-      `Anda baru saja memperbarui kunjungan${kategoriLabel ? ` ${kategoriLabel}` : ' klien'}.`,
+    const adminTitle = `Admin Memperbarui Kunjungan${kategoriLabel ? ` ${kategoriLabel}` : ''}`.trim();
+    const adminBody = [
+      `Admin memperbarui detail kunjungan${kategoriLabel ? ` ${kategoriLabel}` : ' klien'} Anda.`,
       scheduleText ? `Jadwal kunjungan pada ${scheduleText}.` : '',
       statusDisplay ? `Status kunjungan sekarang: ${statusDisplay}.` : '',
     ]
       .filter(Boolean)
       .join(' ')
+      .replace(/\s+/g, ' ')
       .trim();
-
     const notificationPayload = {
       nama_karyawan: updated.user?.nama_pengguna || 'Anda',
       kategori_kunjungan: kategoriLabel,
@@ -446,11 +475,11 @@ export async function PUT(req, { params }) {
       rentang_waktu_display: visitPresentation.timeRangeDisplay,
       status_kunjungan: updated.status_kunjungan,
       status_kunjungan_display: statusDisplay,
-      pemberi_tugas: 'Aplikasi Mobile',
-      title: mobileTitle,
-      body: mobileBody,
-      overrideTitle: mobileTitle,
-      overrideBody: mobileBody,
+      pemberi_tugas: 'Panel Admin',
+      title: adminTitle,
+      body: adminBody,
+      overrideTitle: adminTitle,
+      overrideBody: adminBody,
       related_table: 'kunjungan',
       related_id: updated.id_kunjungan,
       deeplink: `/kunjungan-klien/${updated.id_kunjungan}`,
@@ -462,30 +491,22 @@ export async function PUT(req, { params }) {
     };
 
     try {
-      console.info('[NOTIF] (Mobile) Mengirim notifikasi CLIENT_VISIT_UPDATED untuk user %s dengan payload %o', updated.id_user, notificationPayload);
+      console.info('[NOTIF] (Admin) Mengirim notifikasi CLIENT_VISIT_UPDATED untuk user %s dengan payload %o', updated.id_user, notificationPayload);
       await sendNotification('CLIENT_VISIT_UPDATED', updated.id_user, notificationPayload, notificationOptions);
-      console.info('[NOTIF] (Mobile) Notifikasi CLIENT_VISIT_UPDATED selesai diproses untuk user %s', updated.id_user);
+      console.info('[NOTIF] (Admin) Notifikasi CLIENT_VISIT_UPDATED selesai diproses untuk user %s', updated.id_user);
     } catch (notifErr) {
-      console.error('[NOTIF] (Mobile) Gagal mengirim notifikasi CLIENT_VISIT_UPDATED untuk user %s: %o', updated.id_user, notifErr);
+      console.error('[NOTIF] (Admin) Gagal mengirim notifikasi CLIENT_VISIT_UPDATED untuk user %s: %o', updated.id_user, notifErr);
     }
 
-    if (oldLampiranToDelete) {
-      await deleteLampiranFromSupabase(oldLampiranToDelete).catch(() => {});
-    }
-
-    return NextResponse.json({ message: 'Kunjungan klien berhasil diperbarui.', data: updated });
+    return NextResponse.json({ message: 'Kunjungan diperbarui.', data: updated });
   } catch (err) {
-    if (lampiranUploadedFromFile && lampiranUrlValue) {
-      await deleteLampiranFromSupabase(lampiranUrlValue).catch(() => {});
-    }
-
     if (err?.status) {
-      return NextResponse.json({ message: err.message || 'Body tidak valid.' }, { status: err.status });
+      return NextResponse.json({ message: err.message }, { status: err.status });
     }
     if (err?.code === 'P2003') {
-      return NextResponse.json({ message: 'Referensi data tidak valid.' }, { status: 400 });
+      return NextResponse.json({ message: 'Referensi kategori kunjungan tidak valid.' }, { status: 400 });
     }
-    console.error('PUT /mobile/kunjungan-klien/[id] error:', err);
+    console.error('PUT /admin/kunjungan-klien/[id] error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }
@@ -493,10 +514,11 @@ export async function PUT(req, { params }) {
 export async function DELETE(req, { params }) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
+  const forbidden = guardOperational(auth.actor);
+  if (forbidden) return forbidden;
 
   const actorId = auth.actor?.id;
   const role = auth.actor?.role;
-  const canManage = canManageAll(role); // hanya Operasional boleh hapus rencana orang lain
 
   if (!actorId) {
     return NextResponse.json({ message: 'Unauthorized.' }, { status: 401 });
@@ -508,33 +530,34 @@ export async function DELETE(req, { params }) {
   }
 
   try {
-    const existing = await db.kunjungan.findFirst({
-      where: {
-        id_kunjungan: id,
-        deleted_at: null,
-        ...(canManage ? {} : { id_user: actorId }),
-      },
-    });
-
-    if (!existing) {
-      return NextResponse.json({ message: 'Kunjungan klien tidak ditemukan.' }, { status: 404 });
+    const existing = await db.kunjungan.findUnique({ where: { id_kunjungan: id } });
+    if (!existing || existing.deleted_at) {
+      return NextResponse.json({ message: 'Kunjungan tidak ditemukan.' }, { status: 404 });
     }
 
-    const now = new Date();
-    await db.$transaction([
-      db.kunjungan.update({
-        where: { id_kunjungan: id },
-        data: { deleted_at: now },
-      }),
-      db.kunjunganReportRecipient.updateMany({
-        where: { id_kunjungan: id, deleted_at: null },
-        data: { deleted_at: now },
-      }),
-    ]);
+    if (!canManageAll(role) && existing.id_user !== actorId) {
+      return NextResponse.json({ message: 'Forbidden.' }, { status: 403 });
+    }
 
-    return NextResponse.json({ message: 'Kunjungan klien dihapus.' });
+    const { searchParams } = new URL(req.url);
+    const hard = (searchParams.get('hard') || '').toLowerCase();
+
+    if (hard === '1' || hard === 'true') {
+      if (existing.lampiran_kunjungan) {
+        await deleteLampiranFromSupabase(existing.lampiran_kunjungan);
+      }
+      await db.kunjungan.delete({ where: { id_kunjungan: id } });
+      return NextResponse.json({ message: 'Kunjungan dihapus permanen.' });
+    }
+
+    await db.kunjungan.update({
+      where: { id_kunjungan: id },
+      data: { deleted_at: new Date() },
+    });
+
+    return NextResponse.json({ message: 'Kunjungan diarsipkan.' });
   } catch (err) {
-    console.error('DELETE /mobile/kunjungan-klien/[id] error:', err);
+    console.error('DELETE /admin/kunjungan-klien/[id] error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }

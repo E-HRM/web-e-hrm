@@ -3,6 +3,15 @@ const prisma = new PrismaClient();
 
 // Daftar template notifikasi default
 const notificationTemplates = [
+  // --- Notifikasi Wajah (BARU) ---
+  {
+    eventTrigger: 'FACE_REGISTRATION_SUCCESS',
+    description: 'Konfirmasi saat karyawan berhasil mendaftarkan wajah',
+    titleTemplate: '✅ Wajah Berhasil Terdaftar',
+    bodyTemplate: 'Halo {nama_karyawan}, wajah Anda telah berhasil terdaftar pada sistem E-HRM. Anda kini dapat menggunakan fitur absensi wajah.',
+    placeholders: '{nama_karyawan}',
+  },
+
   // --- Shift Kerja ---
   {
     eventTrigger: 'NEW_SHIFT_PUBLISHED',
@@ -11,19 +20,35 @@ const notificationTemplates = [
     bodyTemplate: 'Jadwal shift kerja Anda untuk periode {periode_mulai} - {periode_selesai} telah tersedia. Silakan periksa.',
     placeholders: '{nama_karyawan}, {periode_mulai}, {periode_selesai}',
   },
-    {
-      eventTrigger: 'SHIFT_UPDATED',
-      description: 'Info saat ada perubahan pada jadwal shift karyawan',
-      titleTemplate: '🔄 Perubahan Jadwal Shift',
-      bodyTemplate: 'Perhatian, shift Anda pada tanggal {tanggal_shift} diubah menjadi {nama_shift} ({jam_masuk} - {jam_pulang}).',
-      placeholders: '{nama_karyawan}, {tanggal_shift}, {nama_shift}, {jam_masuk}, {jam_pulang}',
-    },
+  {
+    eventTrigger: 'SHIFT_UPDATED',
+    description: 'Info saat ada perubahan pada jadwal shift karyawan',
+    titleTemplate: '🔄 Perubahan Jadwal Shift',
+    bodyTemplate: 'Perhatian, shift Anda pada tanggal {tanggal_shift} diubah menjadi {nama_shift} ({jam_masuk} - {jam_pulang}).',
+    placeholders: '{nama_karyawan}, {tanggal_shift}, {nama_shift}, {jam_masuk}, {jam_pulang}',
+  },
   {
     eventTrigger: 'SHIFT_REMINDER_H1',
     description: 'Pengingat H-1 sebelum jadwal shift karyawan',
     titleTemplate: '📢 Pengingat Shift Besok',
     bodyTemplate: 'Jangan lupa, besok Anda masuk kerja pada shift {nama_shift} pukul {jam_masuk}.',
     placeholders: '{nama_karyawan}, {nama_shift}, {jam_masuk}',
+  },
+
+  // --- Absensi (BARU) ---
+  {
+    eventTrigger: 'SUCCESS_CHECK_IN',
+    description: 'Konfirmasi saat karyawan berhasil melakukan check-in, menyertakan status (tepat/terlambat)',
+    titleTemplate: '✅ Check-in Berhasil',
+    bodyTemplate: 'Absensi masuk Anda telah tercatat pada {jam_masuk} dengan status: {status_absensi}.',
+    placeholders: '{jam_masuk}, {status_absensi}, {nama_karyawan}',
+  },
+  {
+    eventTrigger: 'SUCCESS_CHECK_OUT',
+    description: 'Konfirmasi saat karyawan berhasil melakukan check-out',
+    titleTemplate: '👋 Sampai Jumpa!',
+    bodyTemplate: 'Absensi pulang Anda telah tercatat pada {jam_pulang}. Total durasi kerja Anda: {total_jam_kerja}.',
+    placeholders: '{jam_pulang}, {total_jam_kerja}, {nama_karyawan}',
   },
 
   // --- Agenda Kerja ---
@@ -56,7 +81,30 @@ const notificationTemplates = [
     placeholders: '{nama_karyawan}, {judul_agenda}, {nama_komentator}',
   },
 
-  // --- Istirahat (BARU DITAMBAHKAN) ---
+  // --- Kunjungan Klien (Dipertahankan dari List Awal karena Unik) ---
+  {
+    eventTrigger: 'NEW_CLIENT_VISIT_ASSIGNED',
+    description: 'Notifikasi saat karyawan mendapatkan jadwal kunjungan klien baru',
+    titleTemplate: '🗓️ Kunjungan Klien Baru',
+    bodyTemplate: 'Anda dijadwalkan untuk kunjungan {kategori_kunjungan} pada {tanggal_kunjungan_display} {rentang_waktu_display}. Mohon persiapkan kebutuhan kunjungan.',
+    placeholders: '{nama_karyawan}, {kategori_kunjungan}, {tanggal_kunjungan}, {tanggal_kunjungan_display}, {rentang_waktu_display}',
+  },
+  {
+    eventTrigger: 'CLIENT_VISIT_UPDATED',
+    description: 'Notifikasi saat detail kunjungan klien diperbarui',
+    titleTemplate: 'ℹ️ Pembaruan Kunjungan Klien',
+    bodyTemplate: 'Detail kunjungan {kategori_kunjungan} pada {tanggal_kunjungan_display} telah diperbarui. Status terbaru: {status_kunjungan_display}.',
+    placeholders: '{nama_karyawan}, {kategori_kunjungan}, {tanggal_kunjungan_display}, {status_kunjungan_display}',
+  },
+  {
+    eventTrigger: 'CLIENT_VISIT_REMINDER_END',
+    description: 'Pengingat saat kunjungan klien mendekati waktu selesai',
+    titleTemplate: '⏳ Kunjungan Klien Hampir Selesai',
+    bodyTemplate: 'Kunjungan {kategori_kunjungan} pada {tanggal_kunjungan_display} akan berakhir pada {waktu_selesai_display}. Mohon lengkapi laporan kunjungan.',
+    placeholders: '{nama_karyawan}, {kategori_kunjungan}, {tanggal_kunjungan_display}, {waktu_selesai_display}',
+  },
+
+  // --- Istirahat ---
   {
     eventTrigger: 'SUCCESS_START_BREAK',
     description: 'Konfirmasi saat karyawan memulai istirahat',
