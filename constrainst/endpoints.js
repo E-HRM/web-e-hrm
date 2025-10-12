@@ -10,7 +10,7 @@ const API_REGISTER = "/api/mobile/auth/register";
 
 // NEW: Agenda (master aktivitas) & Agenda Kerja (jadwal kerja yang refer ke agenda)
 const API_AGENDA = "/api/mobile/agenda";
-const API_AGENDA_KERJA = "/api/mobile/agenda-kerja";
+const API_AGENDA_KERJA = "/api/admin/agenda-kerja-admin";
 
 // === NEW: Jabatan
 const API_JABATAN = "/api/admin/jabatans";
@@ -24,7 +24,7 @@ const API_ABSENSI_RECORDS = "/api/admin/absensi/history"; // GET ?date=YYYY-MM-D
 const API_ABSENSI_APPROVALS = "/api/admin/absensi";       // tanpa trailing slash
 
 // === Kunjungan
-const API_KUNJUNGAN = "/api/mobile/kunjungan-klien";
+const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
 
 // === Kategori Kunjungan (BARU)
 const API_KATEGORI_KUNJUNGAN = "/api/admin/kategori-kunjungan";
