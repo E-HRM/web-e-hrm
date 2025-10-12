@@ -1,14 +1,16 @@
-export const runtime = 'nodejs';
-
+// app/api/admin/agenda-kerja/route.js
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import { endOfUTCDay, parseDateTimeToUTC, startOfUTCDay } from '@/helpers/date-helper';
+import { sendNotification } from '@/app/utils/services/notificationService';
 
 const normRole = (r) =>
   String(r || '')
     .trim()
     .toUpperCase();
+const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
 const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role));
 
 async function ensureAuth(req) {
@@ -16,149 +18,334 @@ async function ensureAuth(req) {
   if (auth.startsWith('Bearer ')) {
     try {
       const payload = verifyAuthToken(auth.slice(7));
-      return { actor: { id: payload?.sub || payload?.id_user || payload?.userId, role: payload?.role } };
-    } catch {}
+      return {
+        actor: {
+          id: payload?.sub || payload?.id_user || payload?.userId,
+          role: payload?.role,
+          source: 'bearer',
+        },
+      };
+    } catch {
+      /* fallback ke NextAuth */
+    }
   }
   const sessionOrRes = await authenticateRequest();
-  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
-  return { actor: { id: sessionOrRes?.user?.id || sessionOrRes?.user?.id_user, role: sessionOrRes?.user?.role } };
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes; // unauthorized
+  return {
+    actor: {
+      id: sessionOrRes?.user?.id || sessionOrRes?.user?.id_user,
+      role: sessionOrRes?.user?.role,
+      source: 'session',
+    },
+  };
 }
 
-function parseHHmm(s) {
-  if (!s) return { h: null, m: null, s: null };
-  const m = String(s)
-    .trim()
-    .match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (!m) return { h: null, m: null, s: null };
-  return { h: Number(m[1]), m: Number(m[2]), s: m[3] ? Number(m[3]) : 0 };
-}
-function makeUTC(dateYMD, timeHM) {
-  if (!dateYMD) return null;
-  const [y, mo, d] = dateYMD.split('-').map(Number);
-  const h = timeHM?.h ?? 0,
-    mi = timeHM?.m ?? 0,
-    se = timeHM?.s ?? 0;
-  if (!y || !mo || !d) return null;
-  return new Date(Date.UTC(y, mo - 1, d, h, mi, se));
-}
-function normText(s) {
-  return String(s || '').trim();
-}
-
-export async function POST(req) {
-  const auth = await ensureAuth(req);
-  if (auth instanceof NextResponse) return auth;
-  if (!canManageAll(auth.actor?.role)) {
-    return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+function guardOperational(actor) {
+  if (actor?.role !== 'OPERASIONAL') {
+    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL yang dapat mengakses resource ini.' }, { status: 403 });
   }
+  return null;
+}
+
+function toDateOrNull(v) {
+  if (!v) return null;
+  const parsed = parseDateTimeToUTC(v);
+  return parsed ?? null;
+}
+
+function startOfDay(d) {
+  return startOfUTCDay(d);
+}
+
+function endOfDay(d) {
+  return endOfUTCDay(d);
+}
+
+function overlapRangeFilter(fromSOD, toEOD) {
+  return {
+    AND: [{ OR: [{ start_date: null }, { start_date: { lte: toEOD } }] }, { OR: [{ end_date: null }, { end_date: { gte: fromSOD } }] }],
+  };
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  try {
+    return value.toISOString();
+  } catch (err) {
+    console.warn('Gagal memformat tanggal agenda (admin):', err);
+    return '-';
+  }
+}
+
+function formatDateTimeDisplay(value) {
+  if (!value) return '';
+  try {
+    return new Intl.DateTimeFormat('id-ID', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+    }).format(value instanceof Date ? value : new Date(value));
+  } catch (err) {
+    console.warn('Gagal memformat tanggal agenda untuk tampilan (admin):', err);
+    return '';
+  }
+}
+
+function formatStatusDisplay(status) {
+  if (!status) return '';
+  return String(status)
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+const VALID_STATUS = ['diproses', 'ditunda', 'selesai'];
+
+const MIN_RANGE_DATE = startOfUTCDay('1970-01-01') ?? new Date(Date.UTC(1970, 0, 1));
+const MAX_RANGE_DATE = endOfUTCDay('2999-12-31') ?? new Date(Date.UTC(2999, 11, 31, 23, 59, 59, 999));
+
+export async function GET(request) {
+  const auth = await ensureAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  const forbidden = canSeeAll(auth.actor);
+  if (forbidden) return forbidden;
 
   try {
-    const form = await req.formData();
-    const file = form.get('file');
-    const userId = normText(form.get('user_id'));
-    const createAgendaIfMissing = String(form.get('createAgendaIfMissing') || '') === '1';
+    const { searchParams } = new URL(request.url);
+    const format = (searchParams.get('format') || '').trim().toLowerCase();
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const perPage = Math.min(100, Math.max(1, parseInt(searchParams.get('perPage') || '20', 10)));
 
-    if (!file || typeof file.arrayBuffer !== 'function') {
-      return NextResponse.json({ ok: false, message: 'File tidak ditemukan' }, { status: 400 });
+    const user_id = searchParams.get('user_id') || undefined;
+    const id_agenda = searchParams.get('id_agenda') || undefined;
+    const id_absensi = searchParams.get('id_absensi') || undefined;
+    const status = searchParams.get('status') || undefined;
+
+    const dateEq = searchParams.get('date');
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+
+    const where = { deleted_at: null };
+    const kebutuhan_agenda_raw = searchParams.get('kebutuhan_agenda');
+    if (user_id) where.id_user = user_id;
+    if (id_agenda) where.id_agenda = id_agenda;
+    if (id_absensi) where.id_absensi = id_absensi;
+    if (status && VALID_STATUS.includes(String(status).toLowerCase())) {
+      where.status = String(status).toLowerCase();
     }
-    if (!userId) {
-      return NextResponse.json({ ok: false, message: 'user_id wajib dikirim (target karyawan)' }, { status: 400 });
+    if (kebutuhan_agenda_raw !== null) {
+      const trimmed = String(kebutuhan_agenda_raw || '').trim();
+      where.kebutuhan_agenda = trimmed ? trimmed : null;
     }
 
-    const ab = await file.arrayBuffer();
-    const XLSX = await import('xlsx');
-    const wb = XLSX.read(ab, { type: 'array', cellDates: true });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-
-    const errors = [];
-    const toCreate = [];
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
-      const tanggalRaw = row['Tanggal Proyek'] ?? row['Tanggal'] ?? row['Tanggal Aktivitas'] ?? row['tanggal proyek'] ?? row['tanggal'] ?? row['tanggal aktivitas'];
-      const aktivitas = normText(row['Aktivitas'] ?? row['aktivitas'] ?? row['Deskripsi'] ?? row['deskripsi']);
-      const proyekName = normText(row['Proyek/Agenda'] ?? row['Proyek'] ?? row['Agenda'] ?? row['proyek/agenda'] ?? row['proyek'] ?? row['agenda']);
-      const mulaiRaw = normText(row['Mulai'] ?? row['mulai']);
-      const selesaiRaw = normText(row['Selesai'] ?? row['selesai']);
-      const statusRaw = normText(row['Status'] ?? row['status']) || 'diproses';
-
-      if (!aktivitas) {
-        errors.push({ row: i + 2, message: 'Aktivitas wajib diisi' });
-        continue;
+    const and = [];
+    if (dateEq) {
+      const d = toDateOrNull(dateEq);
+      if (d) and.push(overlapRangeFilter(startOfDay(d), endOfDay(d)));
+    } else if (from || to) {
+      const gte = toDateOrNull(from);
+      const lte = toDateOrNull(to);
+      if (gte || lte) {
+        and.push(overlapRangeFilter(gte ? startOfDay(gte) : MIN_RANGE_DATE, lte ? endOfDay(lte) : MAX_RANGE_DATE));
       }
-      if (!proyekName) {
-        errors.push({ row: i + 2, message: 'Proyek/Agenda wajib diisi' });
-        continue;
-      }
+    }
+    if (and.length) where.AND = and;
 
-      // tanggal (YYYY-MM-DD atau Date Excel)
-      let dateYMD = '';
-      if (tanggalRaw instanceof Date && !Number.isNaN(tanggalRaw.getTime())) {
-        const y = tanggalRaw.getUTCFullYear();
-        const m = String(tanggalRaw.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(tanggalRaw.getUTCDate()).padStart(2, '0');
-        dateYMD = `${y}-${m}-${d}`;
-      } else {
-        const s = normText(tanggalRaw);
-        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!m) {
-          errors.push({ row: i + 2, message: 'Tanggal Proyek harus YYYY-MM-DD atau tanggal Excel' });
-          continue;
-        }
-        dateYMD = s;
-      }
+    const [total, items] = await Promise.all([
+      db.agendaKerja.count({ where }),
+      db.agendaKerja.findMany({
+        where,
+        orderBy: [{ start_date: 'desc' }, { created_at: 'desc' }],
+        skip: (page - 1) * perPage,
+        take: perPage,
+        include: {
+          agenda: { select: { id_agenda: true, nama_agenda: true } },
+          absensi: { select: { id_absensi: true, tanggal: true, jam_masuk: true, jam_pulang: true } },
+          user: { select: { id_user: true, nama_pengguna: true, email: true, role: true } },
+        },
+      }),
+    ]);
+    // === EXPORT EXCEL (opsional): ?format=xlsx
+    if (format === 'xlsx') {
+      const XLSX = await import('xlsx');
 
-      const startHM = parseHHmm(mulaiRaw);
-      const endHM = parseHHmm(selesaiRaw);
-      const startDate = mulaiRaw && startHM.h != null ? makeUTC(dateYMD, startHM) : null;
-      const endDate = selesaiRaw && endHM.h != null ? makeUTC(dateYMD, endHM) : null;
-      if (startDate && endDate && endDate < startDate) {
-        errors.push({ row: i + 2, message: 'Selesai tidak boleh sebelum Mulai' });
-        continue;
-      }
+      const fmtDate = (v) => {
+        if (!v) return '';
+        const d = v instanceof Date ? v : new Date(v);
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+      };
+      const fmtHM = (v) => {
+        if (!v) return '';
+        const d = v instanceof Date ? v : new Date(v);
+        const h = String(d.getUTCHours()).padStart(2, '0');
+        const mi = String(d.getUTCMinutes()).padStart(2, '0');
+        return `${h}:${mi}`;
+      };
 
-      // agenda case-insensitive
-      let agenda = await db.agenda.findFirst({
-        where: { deleted_at: null, nama_agenda: { equals: proyekName, mode: 'insensitive' } },
-        select: { id_agenda: true },
+      const sheetRows = items.map((r) => ({
+        'Tanggal Proyek': fmtDate(r.start_date || r.end_date || r.created_at),
+        Aktivitas: r.deskripsi_kerja || '',
+        'Proyek/Agenda': r.agenda?.nama_agenda || '',
+        Mulai: fmtHM(r.start_date),
+        Selesai: fmtHM(r.end_date),
+        Status: r.status || 'diproses',
+      }));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(sheetRows, {
+        header: ['Tanggal Proyek', 'Aktivitas', 'Proyek/Agenda', 'Mulai', 'Selesai', 'Status'],
       });
-      if (!agenda && createAgendaIfMissing) {
-        agenda = await db.agenda.create({
-          data: { nama_agenda: proyekName },
-          select: { id_agenda: true },
-        });
-      }
-      if (!agenda) {
-        errors.push({ row: i + 2, message: `Proyek/Agenda '${proyekName}' tidak ditemukan` });
-        continue;
-      }
+      XLSX.utils.book_append_sheet(wb, ws, 'Aktivitas');
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-      toCreate.push({
-        id_user: userId,
-        id_agenda: agenda.id_agenda,
-        deskripsi_kerja: aktivitas,
-        status: ['diproses', 'ditunda', 'selesai'].includes(statusRaw.toLowerCase()) ? statusRaw.toLowerCase() : 'diproses',
-        start_date: startDate,
-        end_date: endDate,
-        duration_seconds: startDate && endDate ? Math.max(0, Math.floor((endDate - startDate) / 1000)) : null,
+      const from = searchParams.get('from') || '';
+      const to = searchParams.get('to') || '';
+      const fname = `timesheet-activity-${from.slice(0, 10)}-to-${to.slice(0, 10)}.xlsx`;
+
+      return new Response(buf, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="${fname}"`,
+        },
       });
     }
 
-    if (errors.length) {
-      return NextResponse.json({ ok: false, message: 'Validasi impor gagal', errors, summary: { errors } }, { status: 400 });
-    }
-
-    if (!toCreate.length) {
-      return NextResponse.json({ ok: true, message: 'Tidak ada baris valid untuk dibuat', summary: { created: 0 } });
-    }
-
-    await db.$transaction(toCreate.map((data) => db.agendaKerja.create({ data })));
-
-    return NextResponse.json({ ok: true, message: 'Impor selesai', summary: { created: toCreate.length } });
+    return NextResponse.json({
+      ok: true,
+      data: items,
+      meta: { page, perPage, total, totalPages: Math.ceil(total / perPage) },
+    });
   } catch (err) {
-    console.error('IMPORT agenda-kerja error:', err);
-    return NextResponse.json({ ok: false, message: 'Gagal impor', detail: err?.message }, { status: 500 });
+    console.error(err);
+    return NextResponse.json({ ok: false, message: 'Failed to fetch agenda kerja' }, { status: 500 });
   }
+}
+
+export async function POST(request) {
+  const auth = await ensureAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  const forbidden = guardOperational(auth.actor);
+  if (forbidden) return forbidden;
+
+  try {
+    const body = await request.json();
+
+    const id_user = (body.id_user || '').trim();
+    const id_agenda = (body.id_agenda || '').trim();
+    const deskripsi_kerja = (body.deskripsi_kerja || '').trim();
+
+    if (!id_user) return NextResponse.json({ ok: false, message: 'id_user wajib diisi' }, { status: 400 });
+    if (!id_agenda) return NextResponse.json({ ok: false, message: 'id_agenda wajib diisi' }, { status: 400 });
+    if (!deskripsi_kerja) return NextResponse.json({ ok: false, message: 'deskripsi_kerja wajib diisi' }, { status: 400 });
+
+    const [userExists, agendaExists] = await Promise.all([
+      db.user.findUnique({
+        where: { id_user: id_user },
+        select: { id_user: true },
+      }),
+      db.agenda.findUnique({
+        where: { id_agenda: id_agenda },
+        select: { id_agenda: true },
+      }),
+    ]);
+
+    if (!userExists) {
+      return NextResponse.json({ ok: false, message: 'User dengan ID yang diberikan tidak ditemukan.' }, { status: 404 });
+    }
+
+    if (!agendaExists) {
+      return NextResponse.json({ ok: false, message: 'Agenda dengan ID yang diberikan tidak ditemukan.' }, { status: 404 });
+    }
+
+    const statusValue = String(body.status || 'diproses').toLowerCase();
+    if (!VALID_STATUS.includes(statusValue)) {
+      return NextResponse.json({ ok: false, message: 'status tidak valid' }, { status: 400 });
+    }
+
+    const start_date = toDateOrNull(body.start_date);
+    const end_date = toDateOrNull(body.end_date);
+
+    if (start_date && end_date && end_date < start_date) {
+      return NextResponse.json({ ok: false, message: 'end_date tidak boleh sebelum start_date' }, { status: 400 });
+    }
+
+    let duration_seconds = body.duration_seconds ?? null;
+    if (duration_seconds == null && start_date && end_date) {
+      duration_seconds = Math.max(0, Math.floor((end_date - start_date) / 1000));
+    }
+    const kebutuhanAgenda = normalizeKebutuhanInput(body.kebutuhan_agenda);
+    if (kebutuhanAgenda.error) {
+      return NextResponse.json({ ok: false, message: kebutuhanAgenda.error }, { status: 400 });
+    }
+
+    const data = {
+      id_user,
+      id_agenda,
+      deskripsi_kerja,
+      status: statusValue,
+      start_date,
+      end_date,
+      duration_seconds,
+      id_absensi: body.id_absensi ?? null,
+      ...(kebutuhanAgenda.value !== undefined && { kebutuhan_agenda: kebutuhanAgenda.value }),
+    };
+
+    const created = await db.agendaKerja.create({
+      data,
+      include: {
+        agenda: { select: { id_agenda: true, nama_agenda: true } },
+        absensi: { select: { id_absensi: true, tanggal: true, jam_masuk: true, jam_pulang: true } },
+        user: { select: { id_user: true, nama_pengguna: true, email: true, role: true } },
+      },
+    });
+
+    const agendaTitle = created.agenda?.nama_agenda || 'Agenda Baru';
+    const friendlyDeadline = formatDateTimeDisplay(created.end_date);
+    const adminTitle = `Admin Menambahkan Agenda: ${agendaTitle}`;
+    const adminBody = [`Admin menambahkan agenda kerja "${agendaTitle}" untuk Anda.`, friendlyDeadline ? `Selesaikan sebelum ${friendlyDeadline}.` : ''].filter(Boolean).join(' ').trim();
+
+    const notificationPayload = {
+      nama_karyawan: created.user?.nama_pengguna || 'Karyawan',
+      judul_agenda: agendaTitle,
+      tanggal_deadline: formatDateTime(created.end_date),
+      tanggal_deadline_display: friendlyDeadline,
+      pemberi_tugas: 'Panel Admin',
+      title: adminTitle,
+      body: adminBody,
+      overrideTitle: adminTitle,
+      overrideBody: adminBody,
+      related_table: 'agenda_kerja',
+      related_id: created.id_agenda_kerja,
+      deeplink: `/agenda-kerja/${created.id_agenda_kerja}`,
+    };
+    const notificationOptions = {
+      dedupeKey: `NEW_AGENDA_ASSIGNED:${created.id_agenda_kerja}`,
+      collapseKey: `AGENDA_${created.id_agenda_kerja}`,
+      deeplink: `/agenda-kerja/${created.id_agenda_kerja}`,
+    };
+
+    console.info('[NOTIF] (Admin) Mengirim notifikasi NEW_AGENDA_ASSIGNED untuk user %s dengan payload %o', created.id_user, notificationPayload);
+    try {
+      await sendNotification('NEW_AGENDA_ASSIGNED', created.id_user, notificationPayload, notificationOptions);
+      console.info('[NOTIF] (Admin) Notifikasi NEW_AGENDA_ASSIGNED selesai diproses untuk user %s', created.id_user);
+    } catch (notifErr) {
+      console.error('[NOTIF] (Admin) Gagal mengirim notifikasi NEW_AGENDA_ASSIGNED untuk user %s: %o', created.id_user, notifErr);
+    }
+    return NextResponse.json({ ok: true, data: created }, { status: 201 });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ ok: false, message: 'Gagal membuat agenda kerja' }, { status: 500 });
+  }
+}
+
+function normalizeKebutuhanInput(input) {
+  if (input === undefined) return { value: undefined };
+  if (input === null) return { value: null };
+
+  const trimmed = String(input).trim();
+  if (!trimmed) return { value: null };
+  return { value: trimmed };
 }
