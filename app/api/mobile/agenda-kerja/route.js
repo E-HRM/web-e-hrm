@@ -51,6 +51,19 @@ function formatDateTime(value) {
   }
 }
 
+function formatDateTimeDisplay(value) {
+  if (!value) return '';
+  try {
+    return new Intl.DateTimeFormat('id-ID', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+    }).format(value instanceof Date ? value : new Date(value));
+  } catch (err) {
+    console.warn('Gagal memformat tanggal agenda untuk tampilan (mobile):', err);
+    return '';
+  }
+}
+
 const VALID_STATUS = ['diproses', 'ditunda', 'selesai'];
 
 const MIN_RANGE_DATE = startOfUTCDay('1970-01-01') ?? new Date(Date.UTC(1970, 0, 1));
@@ -206,18 +219,31 @@ export async function POST(request) {
       },
     });
 
+    const agendaTitle = created.agenda?.nama_agenda || 'Agenda Baru';
+    const friendlyDeadline = formatDateTimeDisplay(created.end_date);
+    const mobileTitle = `Agenda Kerja Ditambahkan: ${agendaTitle}`;
+    const mobileBody = [`Anda baru saja menambahkan agenda kerja "${agendaTitle}".`, friendlyDeadline ? `Tenggat agenda pada ${friendlyDeadline}.` : ''].filter(Boolean).join(' ').trim();
+
     const notificationPayload = {
       nama_karyawan: created.user?.nama_pengguna || 'Karyawan',
-      judul_agenda: created.agenda?.nama_agenda || 'Agenda Baru',
+      judul_agenda: agendaTitle,
       tanggal_deadline: formatDateTime(created.end_date),
+      tanggal_deadline_display: friendlyDeadline,
       pemberi_tugas: 'Aplikasi Mobile',
+      title: mobileTitle,
+      body: mobileBody,
+      overrideTitle: mobileTitle,
+      overrideBody: mobileBody,
+      related_table: 'agenda_kerja',
+      related_id: created.id_agenda_kerja,
+      deeplink: `/agenda-kerja/${created.id_agenda_kerja}`,
     };
 
     console.info('[NOTIF] (Mobile) Mengirim notifikasi NEW_AGENDA_ASSIGNED untuk user %s dengan payload %o', created.id_user, notificationPayload);
     await sendNotification('NEW_AGENDA_ASSIGNED', created.id_user, notificationPayload);
     console.info('[NOTIF] (Mobile) Notifikasi NEW_AGENDA_ASSIGNED selesai diproses untuk user %s', created.id_user);
 
-    return NextResponse.json({ ok: true, data: created }, { status: 201 });
+    return NextResponse.json({ ok: true, message: 'Anda berhasil menambahkan agenda kerja.', data: created }, { status: 201 });
   } catch (err) {
     // Blok catch ini sekarang menjadi fallback jika ada error lain
     console.error(err);
@@ -228,7 +254,7 @@ export async function POST(request) {
 function normalizeKebutuhanInput(input) {
   if (input === undefined) return { value: undefined };
   if (input === null) return { value: null };
-  
+
   const trimmed = String(input).trim();
   if (!trimmed) return { value: null };
   return { value: trimmed };
