@@ -168,9 +168,7 @@ function buildTopRankings(attendanceRecords, shiftsByUser) {
   const topDiscipline = allUsers
     .map((item) => ({
       ...item,
-      score: item.attendanceCount > 0
-        ? ((item.attendanceCount - item.lateCount) / item.attendanceCount) * 100
-        : 0,
+      score: item.attendanceCount > 0 ? ((item.attendanceCount - item.lateCount) / item.attendanceCount) * 100 : 0,
     }))
     .sort((a, b) => b.score - a.score || b.attendanceCount - a.attendanceCount)
     .slice(0, 5)

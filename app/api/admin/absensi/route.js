@@ -68,10 +68,8 @@ export async function GET(req) {
                   nama_pengguna: true,
                   email: true,
                   role: true,
-                  // >>>>>>>>>>>>>>>>>>>> PERBAIKAN: kirim foto & jabatan
                   foto_profil_user: true,
                   jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
-                  // <<<<<<<<<<<<<<<<<<<<
                   departement: { select: { id_departement: true, nama_departement: true } },
                 },
               },
