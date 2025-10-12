@@ -112,7 +112,7 @@ export async function GET(request) {
 
   try {
     const { searchParams } = new URL(request.url);
-
+    const format = (searchParams.get('format') || '').trim().toLowerCase();
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const perPage = Math.min(100, Math.max(1, parseInt(searchParams.get('perPage') || '20', 10)));
 
@@ -152,6 +152,7 @@ export async function GET(request) {
     if (and.length) where.AND = and;
 
     const [total, items] = await Promise.all([
+      
       db.agendaKerja.count({ where }),
       db.agendaKerja.findMany({
         where,
@@ -165,6 +166,54 @@ export async function GET(request) {
         },
       }),
     ]);
+        // === EXPORT EXCEL (opsional): ?format=xlsx
+    if (format === 'xlsx') {
+      const XLSX = await import('xlsx');
+
+      const fmtDate = (v) => {
+        if (!v) return '';
+        const d = v instanceof Date ? v : new Date(v);
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${dd}`;
+      };
+      const fmtHM = (v) => {
+        if (!v) return '';
+        const d = v instanceof Date ? v : new Date(v);
+        const h = String(d.getUTCHours()).padStart(2, '0');
+        const mi = String(d.getUTCMinutes()).padStart(2, '0');
+        return `${h}:${mi}`;
+      };
+
+      const sheetRows = items.map((r) => ({
+        'Tanggal Proyek': fmtDate(r.start_date || r.end_date || r.created_at),
+        'Aktivitas': r.deskripsi_kerja || '',
+        'Proyek/Agenda': r.agenda?.nama_agenda || '',
+        'Mulai': fmtHM(r.start_date),
+        'Selesai': fmtHM(r.end_date),
+        'Status': r.status || 'diproses',
+      }));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(sheetRows, {
+        header: ['Tanggal Proyek','Aktivitas','Proyek/Agenda','Mulai','Selesai','Status'],
+      });
+      XLSX.utils.book_append_sheet(wb, ws, 'Aktivitas');
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+      const from = searchParams.get('from') || '';
+      const to = searchParams.get('to') || '';
+      const fname = `timesheet-activity-${from.slice(0,10)}-to-${to.slice(0,10)}.xlsx`;
+
+      return new Response(buf, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="${fname}"`,
+        },
+      });
+    }
+
 
     return NextResponse.json({
       ok: true,
