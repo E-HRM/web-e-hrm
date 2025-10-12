@@ -1,36 +1,42 @@
 /* eslint-disable no-undef */
-// Import a different version of Firebase that is compatible with service workers
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
-
-// Your web app's Firebase configuration
-const firebaseConfig = {
+// File: public/firebase-messaging-sw.js
+/* global importScripts */
+// Import skrip Firebase (gunakan versi compat agar API lama tetap berfungsi)
+importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-app-compat.js');
+importScripts('/firebase-config.js');
+importScripts('https://www.gstatic.com/firebasejs/10.12.3/firebase-messaging-compat.js');
+// Konfigurasi Firebase. Jika tersedia, gunakan yang disuntikkan melalui global
+// self.__FIREBASE_CONFIG__ (misalnya dari file public/firebase-config.js).
+// Jika tidak tersedia, fallback ke nilai default berikut—PASTIKAN diganti
+// dengan konfigurasi proyek Anda sendiri.
+const firebaseConfig = self._FIREBASE_CONFIG_ || {
   apiKey: 'AIzaSyBHaHOsrtZghC2JAeP53-rtg9gUKUmmMcM',
   authDomain: 'e-hrm-2d3fe.firebaseapp.com',
   projectId: 'e-hrm-2d3fe',
   storageBucket: 'e-hrm-2d3fe.firebasestorage.app',
   messagingSenderId: '584929841793',
   appId: '1:584929841793:web:1a1cff15646de867067380',
-  measurementId: 'G-K58K7RVTHS',
+  measurementId: 'G-K58K7RVTHS', //s
 };
-
-// Initialize the Firebase app in the service worker
-firebase.initializeApp(firebaseConfig);
-const messaging = firebase.messaging();
-
-/**
- * Handle background messages.
- * This is triggered when the app is in the background or closed.
- */
-messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
-
-  // Customize notification here
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/favicon.ico', // You can use your app's icon here
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
-});
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+if (!firebase.messaging.isSupported()) {
+  console.warn('[firebase-messaging-sw.js] Firebase Cloud Messaging tidak didukung di environment ini.');
+} else {
+  const messaging = firebase.messaging();
+  // Handler untuk notifikasi yang diterima saat website di background
+  messaging.onBackgroundMessage((payload) => {
+    console.log('[firebase-messaging-sw.js] Received background message ', payload);
+    // const notificationPayload = payload.notification || {};
+    // const dataPayload = payload.data || {};
+    // const notificationTitle = notificationPayload.title || dataPayload.title || 'Notifikasi';
+    // const notificationOptions = {
+    //   body: notificationPayload.body || dataPayload.body || 'Anda memiliki notifikasi baru.',
+    //   icon: notificationPayload.icon || dataPayload.icon || '/favicon.ico',
+    //   image: notificationPayload.image || dataPayload.image,
+    //   data: dataPayload,
+    // };
+    // self.registration.showNotification(notificationTitle, notificationOptions);
+  });
+}

@@ -5,28 +5,24 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 const API = "/api/admin/dashboard";
 
 export default function useDashboardViewModel() {
-  // ===== Filters / UI state =====
-  const [division, setDivision] = useState(""); // filter chart per divisi
+  // filters / state
+  const [division, setDivision] = useState("");
   const [calYear, setCalYear] = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
 
-  // Performa (API menyediakan rows per-tab)
   const [perfDate, setPerfDate] = useState(new Date().toISOString().slice(0, 10));
   const [perfDivision, setPerfDivision] = useState("");
   const [perfTab, setPerfTab] = useState("late");
   const [perfQuery, setPerfQuery] = useState("");
 
-  const [top5Period, setTop5Period] = useState("this"); // this | last
+  const [top5Period, setTop5Period] = useState("this");
 
-  // ===== Data =====
+  // data
   const [loading, setLoading] = useState(false);
-
   const [tanggalTampilan, setTanggalTampilan] = useState("");
   const [totalKaryawan, setTotalKaryawan] = useState(0);
   const [totalDivisi, setTotalDivisi] = useState(0);
-  const [statCards, setStatCards] = useState({
-    lokasi: 0, presensi: 0, admin: 0, polaKerja: 0, izin: 0,
-  });
+  const [statCards, setStatCards] = useState({ lokasi: 0, presensi: 0, admin: 0, polaKerja: 0, izin: 0 });
 
   const [miniBars, setMiniBars] = useState([]);
   const [chartData, setChartData] = useState([]);
@@ -44,7 +40,6 @@ export default function useDashboardViewModel() {
     eventsByDay: {},
   });
 
-  // Performa metadata
   const [perfTabs, setPerfTabs] = useState([]);
   const [perfDivisionOptions, setPerfDivisionOptions] = useState([]);
   const [perfRows, setPerfRows] = useState({ onTime: [], late: [], absent: [], autoOut: [], leave: [], permit: [] });
@@ -53,13 +48,10 @@ export default function useDashboardViewModel() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-
-      // Dashboard (chart + calendar)
       if (division) params.set("divisionId", division);
       params.set("calendarYear", String(calYear));
       params.set("calendarMonth", String(calMonth));
 
-      // Performance block
       if (perfDate) params.set("performanceDate", perfDate);
       if (perfDivision) params.set("performanceDivisionId", perfDivision);
       if (perfQuery?.trim()) params.set("performanceQuery", perfQuery.trim());
@@ -68,37 +60,30 @@ export default function useDashboardViewModel() {
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
 
-      // Header & stats
       setTanggalTampilan(data.tanggalTampilan || "");
       setTotalKaryawan(data.totalKaryawan || 0);
       setTotalDivisi(data.totalDivisi || 0);
       setStatCards(data.statCards || { lokasi: 0, presensi: 0, admin: 0, polaKerja: 0, izin: 0 });
 
-      // Graphs & options
       setMiniBars(Array.isArray(data.miniBars) ? data.miniBars : []);
       setChartData(Array.isArray(data.chartData) ? data.chartData : []);
       setDivisionOptions(Array.isArray(data.divisionOptions) ? data.divisionOptions : []);
 
-      // Leave list
       setOnLeaveCount(data.onLeaveCount ?? 0);
       setLeaveList(Array.isArray(data.leaveList) ? data.leaveList : []);
 
-      // Top 5
       setTop5LateData(data.top5Late || { this: [], last: [] });
       setTop5DisciplineData(data.top5Discipline || { this: [], last: [] });
 
-      // Calendar
       setCalendar({
         year: data?.calendar?.year ?? calYear,
         month: data?.calendar?.month ?? calMonth,
         eventsByDay: data?.calendar?.eventsByDay || {},
       });
 
-      // Performance (tabs, options, date, rows)
       setPerfTabs(Array.isArray(data.perfTabs) ? data.perfTabs : []);
       setPerfDivisionOptions(Array.isArray(data.perfDivisionOptions) ? data.perfDivisionOptions : []);
       if (data.perfDate) {
-        // normalize to YYYY-MM-DD for <input type="date">
         const d = new Date(data.perfDate);
         if (!isNaN(d)) setPerfDate(d.toISOString().slice(0, 10));
       }
@@ -125,7 +110,6 @@ export default function useDashboardViewModel() {
     fetchData();
   }, [fetchData]);
 
-  // Calendar navigation
   const prevMonth = () => {
     setCalMonth((m) => {
       if (m === 0) {
@@ -145,7 +129,6 @@ export default function useDashboardViewModel() {
     });
   };
 
-  // Derivatives
   const top5Late = useMemo(
     () => (top5Period === "this" ? (top5LateData.this || []) : (top5LateData.last || [])),
     [top5Period, top5LateData]
@@ -162,33 +145,23 @@ export default function useDashboardViewModel() {
 
   return {
     loading,
-
-    // Header & stats
     tanggalTampilan,
     totalKaryawan,
     totalDivisi,
     statCards,
-
-    // Mini bars & chart
     miniBars,
     chartData,
     division,
     setDivision,
     divisionOptions,
-
-    // Leave
     onLeaveCount,
     leaveList,
-
-    // Calendar
     today: new Date(),
     calYear,
     calMonth,
     prevMonth,
     nextMonth,
     calendarEvents: calendar.eventsByDay,
-
-    // Performance
     perfTabs,
     perfDate,
     setPerfDate,
@@ -199,9 +172,7 @@ export default function useDashboardViewModel() {
     setPerfTab,
     perfQuery,
     setPerfQuery,
-    currentPerfRows, // ← dipakai di halaman
-
-    // Top 5
+    currentPerfRows,
     top5Period,
     setTop5Period,
     top5Late,

@@ -34,7 +34,7 @@ const INITIAL_DATA = [
     content: "Lomba olahraga antar divisi. Daftar ke bagian GA.",
     files: [{ name: "Rundown.pdf" }],
     recipients: pick(24),
-    creator: { name: "KERJOO", when: "06 Jan 2024" },
+    creator: { name: "E-HRM", when: "06 Jan 2024" },
     status: "DRAFT",
   },
   {
@@ -43,7 +43,7 @@ const INITIAL_DATA = [
     content: "Cuti bersama 29–31 Des. Operasional terbatas.",
     files: [],
     recipients: pick(12),
-    creator: { name: "KERJOO", when: "27 Des 2023" },
+    creator: { name: "E-HRM", when: "27 Des 2023" },
     status: "DONE",
   },
   {
@@ -52,7 +52,7 @@ const INITIAL_DATA = [
     content: "Townhall & evaluasi OKR. Agenda di lampiran.",
     files: [{ name: "Agenda.docx" }],
     recipients: pick(20),
-    creator: { name: "KERJOO", when: "19 Jan 2023" },
+    creator: { name: "E-HRM", when: "19 Jan 2023" },
     status: "CANCELED",
   },
 ];
@@ -110,7 +110,7 @@ export default function useBroadcastViewModel() {
       content,
       files: files || [],
       recipients: picked,
-      creator: { name: "KERJOO", when: new Date().toLocaleDateString("id-ID") },
+      creator: { name: "E-HRM", when: new Date().toLocaleDateString("id-ID") },
       status: "DRAFT",
     };
     setRows((r) => [newRow, ...r]);

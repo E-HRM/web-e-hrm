@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Typography,
-  Select,
   DatePicker,
   Input,
   Table,
@@ -49,7 +49,50 @@ function fmtHHmmss(v) {
   return d.isValid() ? d.format("HH:mm:ss") : "—";
 }
 
-/* ====================== AVATAR ====================== */
+/** Pastikan URL foto absolut+aman untuk dipakai di <img> */
+function resolveUserPhoto(u) {
+  const raw =
+    u?.foto_profil_user ||
+    u?.avatarUrl ||
+    u?.foto ||
+    u?.foto_url ||
+    u?.photoUrl ||
+    u?.photo ||
+    u?.avatar ||
+    u?.gambar ||
+    "";
+
+  if (!raw) return null;
+
+  if (/^https?:\/\//i.test(raw)) {
+    return raw.replace(/^http:\/\//i, "https://");
+  }
+
+  if (String(raw).startsWith("/")) {
+    if (typeof window !== "undefined") return `${window.location.origin}${raw}`;
+    return raw;
+  }
+
+  if (String(raw).startsWith("storage/") || String(raw).startsWith("/storage/")) {
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    return base
+      ? `${base.replace(/\/+$/, "")}/${String(raw).replace(/^\/+/, "")}`
+      : `/${String(raw).replace(/^\/+/, "")}`;
+  }
+
+  return `/${String(raw).replace(/^\.?\//, "")}`;
+}
+
+/** Row key stabil supaya Table tidak “nakal” */
+function rowKeySafe(r) {
+  if (r?.id_absensi) return r.id_absensi;
+  const uid = r?.user?.id_user || r?.user?.id || r?.user?.uuid || "unknown";
+  const tgl = r?.tanggal ? dayjs(r.tanggal).format("YYYY-MM-DD") : "no-date";
+  const jam = r?.jam_masuk || r?.jam_pulang || "no-time";
+  return `${uid}__${tgl}__${jam}`;
+}
+
+/* Opsional Avatar */
 function Avatar({ src, alt, name }) {
   if (src) {
     return (
@@ -63,6 +106,30 @@ function Avatar({ src, alt, name }) {
     >
       {name ? name.charAt(0).toUpperCase() : "U"}
     </AntAvatar>
+  );
+}
+
+/* Foto bulat anti-gepeng */
+function CircleImg({ src, size = 36, alt = "Foto" }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src || "/avatar-placeholder.jpg"}
+      alt={alt}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 999,
+        objectFit: "cover",
+        border: "1px solid #003A6F22",
+        background: "#E6F0FA",
+        display: "inline-block",
+      }}
+      onError={(e) => {
+        e.currentTarget.src = "/avatar-placeholder.jpg";
+        e.currentTarget.onerror = null;
+      }}
+    />
   );
 }
 
@@ -92,7 +159,6 @@ const statusTag = (s) => {
   return <Tag>{s || "-"}</Tag>;
 };
 
-/* kecil untuk sel Masuk/Keluar */
 const tinyStatus = (s) => {
   const key = String(s || "").toLowerCase();
   if (!key) return null;
@@ -122,17 +188,17 @@ function StatsCard({ title, value, icon, color, loading }) {
 /* ====================== TABEL DENGAN MODAL ====================== */
 function AttendanceCard({
   title,
-  rows,                 // gunakan vm.rowsAll
+  rows,
   loading,
-  divisiOptions,        // untuk future filter (nama/divisi bisa ditambah)
-  statusOptions,        // keep compatibility
+  divisiOptions,
+  statusOptions,
   filters,
   setFilters,
   dateLabel,
-  jamColumnTitle,       // tidak dipakai, aman
+  jamColumnTitle,
   stats,
-  headerRight,          // DatePicker
-  selectedDate,         // dateIn/dateOut untuk filter hari
+  headerRight,
+  selectedDate,
 }) {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoSrc, setPhotoSrc] = useState(null);
@@ -142,17 +208,15 @@ function AttendanceCard({
   const [mapEmbedUrl, setMapEmbedUrl] = useState(null);
   const [activeRow, setActiveRow] = useState(null);
 
-  // mini helpers
   const normalizePhotoUrl = (u) => {
     if (!u) return null;
-    if (/^https?:\/\//i.test(u)) return u;
+    if (/^https?:\/\//i.test(u)) return u.replace(/^http:\/\//i, "https://");
     if (typeof window !== "undefined" && u.startsWith("/"))
       return `${window.location.origin}${u}`;
     return u;
   };
   const makeOsmEmbed = (lat, lon) => {
-    const dx = 0.0025,
-      dy = 0.0025;
+    const dx = 0.0025, dy = 0.0025;
     const bbox = `${(lon - dx).toFixed(6)}%2C${(lat - dy).toFixed(
       6
     )}%2C${(lon + dx).toFixed(6)}%2C${(lat + dy).toFixed(6)}`;
@@ -163,7 +227,6 @@ function AttendanceCard({
   const getStartCoord = (row) => row?.lokasiIn || null;
   const getEndCoord = (row) => row?.lokasiOut || null;
 
-  // filter baris sesuai tanggal/nama/divisi/status (opsional)
   const data = useMemo(() => {
     const q = (filters?.q || "").toLowerCase().trim();
     const needDiv = filters?.divisi;
@@ -216,26 +279,58 @@ function AttendanceCard({
   const columns = useMemo(
     () => [
       {
-        title: "Karyawan",
-        dataIndex: ["user", "nama_pengguna"],
-        width: 320,
-        render: (t, r) => (
-          <div className="flex items-center gap-3 min-w-0">
-            <Avatar src={r.user?.foto_profil_user} alt={t} name={t} />
-            <div className="min-w-0">
-              <div className="font-medium text-gray-900 truncate">
-                {t || "—"}
-              </div>
-              <div className="text-xs text-gray-500 truncate">
-                {r.user?.departement?.nama_departement || "—"}
+        title: "Nama",
+        dataIndex: "name",
+        key: "name",
+        width: 360,
+        render: (_, row) => {
+          const u = row?.user || {};
+          const id = u?.id_user ?? u?.id ?? u?.uuid;
+          const href = id ? `/home/kelola_karyawan/karyawan/${id}` : undefined;
+
+          const displayName = u?.nama_pengguna ?? u?.name ?? u?.email ?? "—";
+          const jabatan =
+            u?.jabatan?.nama_jabatan ??
+            u?.jabatan?.nama ??
+            (typeof u?.jabatan === "string" ? u?.jabatan : "") ??
+            "";
+          const departemen =
+            u?.departement?.nama_departement ??
+            u?.departemen?.nama ??
+            (typeof u?.departemen === "string" ? u?.departemen : "") ??
+            "";
+
+          const subtitle =
+            jabatan && departemen
+              ? `${jabatan} | ${departemen}`
+              : (jabatan || departemen || "—");
+
+          const photo = resolveUserPhoto(u) || "/avatar-placeholder.jpg";
+
+          const node = (
+            <div className="flex items-center gap-3 min-w-0">
+              <CircleImg src={photo} alt={displayName} />
+              <div className="min-w-0">
+                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
+                  {displayName}
+                </div>
+                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
+                  {subtitle}
+                </div>
               </div>
             </div>
-          </div>
-        ),
+          );
+
+          return href ? (
+            <Link href={href} className="no-underline">
+              {node}
+            </Link>
+          ) : (
+            node
+          );
+        },
         sorter: (a, b) =>
-          (a.user?.nama_pengguna || "").localeCompare(
-            b.user?.nama_pengguna || ""
-          ),
+          (a.user?.nama_pengguna || "").localeCompare(b.user?.nama_pengguna || ""),
         fixed: "left",
       },
 
@@ -267,7 +362,7 @@ function AttendanceCard({
                   shape="circle"
                   icon={<EnvironmentOutlined />}
                   onClick={() => openMap("start", r)}
-                  disabled={!getStartCoord(r)}
+                  disabled={!r.lokasiIn}
                 />
               </Tooltip>
             </div>
@@ -287,9 +382,7 @@ function AttendanceCard({
           </div>
         ),
         sorter: (a, b) =>
-          String(a.istirahat_mulai || "").localeCompare(
-            String(b.istirahat_mulai || "")
-          ),
+          String(a.istirahat_mulai || "").localeCompare(String(b.istirahat_mulai || "")),
       },
 
       {
@@ -302,9 +395,7 @@ function AttendanceCard({
           </div>
         ),
         sorter: (a, b) =>
-          String(a.istirahat_selesai || "").localeCompare(
-            String(b.istirahat_selesai || "")
-          ),
+          String(a.istirahat_selesai || "").localeCompare(String(b.istirahat_selesai || "")),
       },
 
       {
@@ -335,7 +426,7 @@ function AttendanceCard({
                   shape="circle"
                   icon={<EnvironmentOutlined />}
                   onClick={() => openMap("end", r)}
-                  disabled={!getEndCoord(r)}
+                  disabled={!r.lokasiOut}
                 />
               </Tooltip>
             </div>
@@ -350,7 +441,7 @@ function AttendanceCard({
 
   return (
     <Card className="p-0 rounded-xl shadow-sm border-0 overflow-hidden" bodyStyle={{ padding: 0 }}>
-      {/* Header (biarkan seperti semula) */}
+      {/* Header */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
@@ -361,14 +452,14 @@ function AttendanceCard({
             <div className="mt-1 text-sm text-gray-500">{dateLabel}</div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {headerRight}
-            <Tooltip title="Export data">
-              <Button icon={<DownloadOutlined />} className="rounded-lg flex items-center" type="primary">
-                Export
-              </Button>
-            </Tooltip>
-          </div>
+        <div className="flex items-center gap-2">
+          {headerRight}
+          <Tooltip title="Export data">
+            <Button icon={<DownloadOutlined />} className="rounded-lg" type="primary">
+              Export
+            </Button>
+          </Tooltip>
+        </div>
         </div>
 
         {stats && (
@@ -392,7 +483,7 @@ function AttendanceCard({
         )}
       </div>
 
-      {/* Filter ringkas (cari nama/divisi/status bisa kamu kembangkan) */}
+      {/* Filter ringkas */}
       <div className="px-6 py-4">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 mb-4">
           <Input
@@ -403,11 +494,10 @@ function AttendanceCard({
             onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value }))}
             className="rounded-lg"
           />
-          {/* Siapkan slot untuk Select divisi/status kalau dibutuhkan */}
         </div>
 
         <Table
-          rowKey={(r) => r.id_absensi || `${r.user?.id_user}-${r.tanggal}` || Math.random()}
+          rowKey={rowKeySafe}
           size="middle"
           loading={loading}
           locale={{
@@ -415,7 +505,7 @@ function AttendanceCard({
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Tidak ada data absensi" />
             ),
           }}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1200 }}
           columns={columns}
           dataSource={data}
           pagination={{
@@ -504,7 +594,6 @@ export default function AbsensiContent() {
 
   useEffect(() => {}, []);
 
-  // tetap dipakai untuk rekap/statistik
   const rows = isIn ? vm.kedatangan : vm.kepulangan;
   const filters = isIn ? vm.filterIn : vm.filterOut;
   const setFilters = isIn ? vm.setFilterIn : vm.setFilterOut;
@@ -523,7 +612,6 @@ export default function AbsensiContent() {
     return { total, onTime, late, overtime };
   }, [rows]);
 
-  // tanggal yang dipakai untuk filter tabel
   const tableDate = isIn ? vm.dateIn : vm.dateOut;
 
   return (
@@ -538,19 +626,18 @@ export default function AbsensiContent() {
               Pantau kehadiran dan kepulangan karyawan secara real-time
             </Typography.Text>
           </div>
-
         </div>
 
         <AttendanceCard
           title={isIn ? "Absensi Kedatangan Karyawan" : "Absensi Kepulangan Karyawan"}
-          rows={vm.rowsAll}                // data lengkap untuk tabel (dengan istirahat)
+          rows={vm.rowsAll}
           loading={vm.loading}
           divisiOptions={vm.divisiOptions}
           statusOptions={statusOptions}
           filters={filters}
           setFilters={setFilters}
           dateLabel={dateLabel}
-          jamColumnTitle={jamColumnTitle}  // tidak dipakai
+          jamColumnTitle={jamColumnTitle}
           stats={stats}
           headerRight={
             <DatePicker
@@ -560,7 +647,7 @@ export default function AbsensiContent() {
               allowClear={false}
             />
           }
-          selectedDate={tableDate}         // filter tanggal untuk tabel
+          selectedDate={tableDate}
         />
       </div>
     </div>

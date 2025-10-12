@@ -95,15 +95,6 @@ export default function ShiftContent() {
               onClick={() => vm.onEditOpen(row)}
             />
           </Tooltip>
-          <Tooltip title="Riwayat / Reset">
-            <Button
-              size="small"
-              type="text"
-              className="!h-8 !w-8 !rounded-full !bg-white hover:!bg-slate-100 !text-slate-600 !border !border-slate-300"
-              icon={<ReloadOutlined />}
-              onClick={() => vm.onReset(row)}
-            />
-          </Tooltip>
           <Tooltip title="Hapus">
             <Button
               size="small"

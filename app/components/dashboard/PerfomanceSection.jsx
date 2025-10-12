@@ -1,25 +1,62 @@
 "use client";
 
+import Link from "next/link";
 import { Input, Select } from "antd";
 
-/** Item kecil untuk setiap karyawan pada Performa Kehadiran */
-function PerfRow({ name, division, time }) {
-  const initials = (name || "")
-    .split(" ")
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+const BRAND = "#003A6F";
+
+function getPhotoUrl(row) {
+  return (
+    row?.photo ||
+    row?.foto_profil_user ||
+    row?.avatarUrl ||
+    row?.foto ||
+    row?.foto_url ||
+    row?.photoUrl ||
+    row?.avatar ||
+    row?.gambar ||
+    null
+  );
+}
+
+function CircleImg({ src, size = 36, alt = "Foto" }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src || "/avatar-placeholder.jpg"}
+      alt={alt}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 999,
+        objectFit: "cover",
+        border: `1px solid ${BRAND}22`,
+        background: "#E6F0FA",
+        display: "inline-block",
+      }}
+      onError={(e) => {
+        e.currentTarget.src = "/avatar-placeholder.jpg";
+        e.currentTarget.onerror = null;
+      }}
+    />
+  );
+}
+
+/** Item karyawan */
+function PerfRow({ userId, name, division, jobTitle, photo, time }) {
+  const photoUrl = getPhotoUrl({ photo });
+  const subtitle =
+    jobTitle && division ? `${jobTitle} | ${division}` : (jobTitle || division || "—");
 
   return (
     <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-none">
-      <div className="flex items-center gap-3">
-        <div className="h-9 w-9 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
-          {initials}
-        </div>
-        <div>
-          <div className="text-sm font-medium text-slate-800">{name}</div>
-          <div className="text-xs text-slate-500">{division}</div>
+      <div className="flex items-center gap-3 min-w-0">
+        <CircleImg src={photoUrl} alt={name || "Foto"} />
+        <div className="min-w-0">
+          <Link href={`/home/kelola_karyawan/karyawan/${userId}`} className="no-underline">
+            <div className="text-sm font-medium text-slate-800 truncate">{name}</div>
+          </Link>
+          <div className="text-xs text-slate-500 truncate">{subtitle}</div>
         </div>
       </div>
       <span className="text-[11px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-600">
@@ -35,7 +72,7 @@ export default function PerformanceSection({
   date, setDate,
   division, setDivision, divisionOptions,
   q, setQ,
-  rows, // ← dari VM, bisa kosong ([])
+  rows,
 }) {
   const safeRows = Array.isArray(rows) ? rows : [];
 
@@ -70,9 +107,7 @@ export default function PerformanceSection({
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 h-9 rounded-xl text-sm font-medium ${
-              tab === t.key
-                ? "bg-[#003A6F] !text-white"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              tab === t.key ? "bg-[#003A6F] !text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
             {t.label}

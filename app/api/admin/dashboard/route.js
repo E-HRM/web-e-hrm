@@ -3,29 +3,21 @@ import db from '../../../../lib/prisma';
 import { verifyAuthToken } from '../../../../lib/jwt';
 import { authenticateRequest } from '../../../../app/utils/auth/authUtils';
 
-// --- UTILITIES & HELPERS ---
-
-/**
- * Memastikan permintaan diautentikasi.
- * @param {Request} req - Objek permintaan.
- * @returns {Promise<boolean|NextResponse>} - True jika terautentikasi, atau NextResponse jika gagal.
- */
+// --- AUTH ---
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
     try {
       verifyAuthToken(auth.slice(7));
       return true;
-    } catch (_) {
-      // Fallback ke autentikasi NextAuth
-    }
+    } catch (_) {}
   }
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
   return true;
 }
 
-// Konstanta untuk memetakan hari dan metadata kalender
+// --- CONST & HELPERS ---
 const DAY_LABELS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
 const PERFORMANCE_TABS = [
   { key: 'onTime', label: 'Tepat Waktu' },
@@ -42,26 +34,30 @@ const CALENDAR_TYPE_META = {
 };
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
-// --- FUNGSI LOGIKA BISNIS ---
-
 function toUtcStart(date) {
   const d = new Date(date);
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
-
 function toUtcEnd(date) {
   const end = toUtcStart(date);
   end.setUTCHours(23, 59, 59, 999);
   return end;
 }
-
 function combineDateTime(date, timeValue) {
   if (!date || !timeValue) return null;
   const base = new Date(date);
   const time = new Date(timeValue);
-  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), time.getUTCHours(), time.getUTCMinutes(), time.getUTCSeconds()));
+  return new Date(
+    Date.UTC(
+      base.getUTCFullYear(),
+      base.getUTCMonth(),
+      base.getUTCDate(),
+      time.getUTCHours(),
+      time.getUTCMinutes(),
+      time.getUTCSeconds()
+    )
+  );
 }
-
 function findShiftForDate(shifts, date) {
   if (!Array.isArray(shifts)) return null;
   const target = toUtcStart(date);
@@ -77,7 +73,6 @@ function findShiftForDate(shifts, date) {
   }
   return null;
 }
-
 function formatDurationFromMinutes(totalMinutes) {
   const minutes = Math.max(0, Math.round(totalMinutes || 0));
   if (minutes === 0) return '0 menit';
@@ -88,26 +83,15 @@ function formatDurationFromMinutes(totalMinutes) {
   if (mins > 0) parts.push(`${mins} menit`);
   return parts.join(' ');
 }
-
-/**
- * Memformat objek Date menjadi string waktu HH:mm.
- * @param {Date} date - Objek Date.
- * @returns {string|null} - String waktu atau null.
- */
 function formatTime(date) {
-  if (!(date instanceof Date) || isNaN(date)) return null;
+  if (!(date instanceof Date) || isNaN(date)) return '—';
   return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 }
-
-/**
- * Membangun objek event untuk kalender mini.
- */
 function buildCalendarEvents(leaves, year, monthIndex) {
   const events = {};
   if (!Array.isArray(leaves)) return events;
   const monthStart = new Date(Date.UTC(year, monthIndex, 1));
   const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 0));
-
   for (const leave of leaves) {
     const start = toUtcStart(leave.tanggal_mulai);
     const end = toUtcStart(leave.tanggal_selesai);
@@ -121,10 +105,11 @@ function buildCalendarEvents(leaves, year, monthIndex) {
       }
     }
   }
-
   for (const day in events) {
     const info = events[day];
-    const dominantType = Object.keys(info.counts).reduce((a, b) => (info.counts[a] > info.counts[b] ? a : b));
+    const dominantType = Object.keys(info.counts).reduce((a, b) =>
+      info.counts[a] > info.counts[b] ? a : b
+    );
     const meta = CALENDAR_TYPE_META[dominantType] || { color: 'bg-slate-400' };
     const tipParts = Object.entries(info.counts).map(([type, count]) => {
       const label = CALENDAR_TYPE_META[type]?.label || type;
@@ -135,20 +120,19 @@ function buildCalendarEvents(leaves, year, monthIndex) {
   return events;
 }
 
-/**
- * Membangun data peringkat keterlambatan dan kedisiplinan.
- */
+// === Top 5 builder (ditambah photo & jobTitle) ===
 function buildTopRankings(attendanceRecords, shiftsByUser) {
   const metrics = new Map();
   for (const record of attendanceRecords) {
     const { user } = record;
     if (!user) continue;
-
     if (!metrics.has(user.id_user)) {
       metrics.set(user.id_user, {
         userId: user.id_user,
         name: user.nama_pengguna,
         division: user.departement?.nama_departement || '-',
+        photo: user.foto_profil_user || null,
+        jobTitle: user.jabatan?.nama_jabatan || '',
         lateCount: 0,
         totalLateMinutes: 0,
         attendanceCount: 0,
@@ -157,17 +141,15 @@ function buildTopRankings(attendanceRecords, shiftsByUser) {
     const userMetric = metrics.get(user.id_user);
     userMetric.attendanceCount++;
     const shift = findShiftForDate(shiftsByUser.get(user.id_user) || [], record.tanggal);
-
     if (record.status_masuk === 'terlambat' && shift?.polaKerja) {
       userMetric.lateCount++;
       const scheduledStart = combineDateTime(record.tanggal, shift.polaKerja.jam_mulai);
-      const actualStart = new Date(record.jam_masuk);
-      if (scheduledStart && actualStart > scheduledStart) {
-        userMetric.totalLateMinutes += Math.round((actualStart.getTime() - scheduledStart.getTime()) / 60000);
+      const actualStart = record.jam_masuk ? new Date(record.jam_masuk) : null;
+      if (scheduledStart && actualStart && actualStart > scheduledStart) {
+        userMetric.totalLateMinutes += Math.round((actualStart - scheduledStart) / 60000);
       }
     }
   }
-
   const allUsers = Array.from(metrics.values());
   const topLate = allUsers
     .filter((u) => u.lateCount > 0)
@@ -178,11 +160,18 @@ function buildTopRankings(attendanceRecords, shiftsByUser) {
       userId: item.userId,
       name: item.name,
       division: item.division,
+      photo: item.photo,
+      jobTitle: item.jobTitle,
       count: `${item.lateCount} kali`,
       duration: formatDurationFromMinutes(item.totalLateMinutes),
     }));
   const topDiscipline = allUsers
-    .map((item) => ({ ...item, score: item.attendanceCount > 0 ? ((item.attendanceCount - item.lateCount) / item.attendanceCount) * 100 : 0 }))
+    .map((item) => ({
+      ...item,
+      score: item.attendanceCount > 0
+        ? ((item.attendanceCount - item.lateCount) / item.attendanceCount) * 100
+        : 0,
+    }))
     .sort((a, b) => b.score - a.score || b.attendanceCount - a.attendanceCount)
     .slice(0, 5)
     .map((item, i) => ({
@@ -190,28 +179,29 @@ function buildTopRankings(attendanceRecords, shiftsByUser) {
       userId: item.userId,
       name: item.name,
       division: item.division,
+      photo: item.photo,
+      jobTitle: item.jobTitle,
       score: `${item.score.toFixed(0)}%`,
     }));
   return { topLate, topDiscipline };
 }
 
-/**
- * Membangun data untuk bagian Performa Kehadiran.
- */
+// === Performa rows (ditambah photo & jobTitle) ===
 function buildPerformanceRows({ attendance, leaves, activeUsers, shiftsByUser }) {
   const rows = { onTime: [], late: [], absent: [], autoOut: [], leave: [], permit: [] };
   const attendedUserIds = new Set();
 
-  // Proses absensi
   for (const record of attendance) {
     attendedUserIds.add(record.id_user);
     const user = record.user;
-    const shift = findShiftForDate(shiftsByUser.get(user.id_user) || [], record.tanggal);
+
     const baseRow = {
       id: record.id_absensi,
       userId: user.id_user,
       name: user.nama_pengguna,
       division: user.departement?.nama_departement || '-',
+      photo: user.foto_profil_user || null,
+      jobTitle: user.jabatan?.nama_jabatan || '',
     };
 
     if (record.jam_masuk) {
@@ -227,7 +217,7 @@ function buildPerformanceRows({ attendance, leaves, activeUsers, shiftsByUser })
     }
   }
 
-  // Proses user yang tidak hadir
+  // absent
   for (const user of activeUsers) {
     if (!attendedUserIds.has(user.id_user)) {
       rows.absent.push({
@@ -235,44 +225,44 @@ function buildPerformanceRows({ attendance, leaves, activeUsers, shiftsByUser })
         userId: user.id_user,
         name: user.nama_pengguna,
         division: user.departement?.nama_departement || '-',
+        photo: user.foto_profil_user || null,
+        jobTitle: user.jabatan?.nama_jabatan || '',
         time: '—',
       });
     }
   }
 
-  // Proses cuti dan izin
+  // cuti/izin
   for (const l of leaves) {
     const row = {
       id: l.id_cuti,
       userId: l.id_user,
       name: l.user.nama_pengguna,
       division: l.user.departement?.nama_departement || '-',
+      photo: l.user.foto_profil_user || null,
+      jobTitle: l.user.jabatan?.nama_jabatan || '',
       time: l.alasan || (l.keterangan === 'sakit' ? 'Sakit' : 'Cuti'),
     };
-    if (l.keterangan === 'izin') {
-      rows.permit.push(row);
-    } else {
-      rows.leave.push(row);
-    }
+    if (l.keterangan === 'izin') rows.permit.push(row);
+    else rows.leave.push(row);
   }
   return rows;
 }
 
-/**
- * Menerapkan filter pencarian pada data performa.
- */
 function applySearchFilter(allRows, query) {
   if (!query) return allRows;
   const q = query.toLowerCase();
   const filteredRows = {};
   for (const key in allRows) {
-    filteredRows[key] = allRows[key].filter((row) => row.name.toLowerCase().includes(q) || row.division.toLowerCase().includes(q));
+    filteredRows[key] = allRows[key].filter((row) => {
+      const hay = [row.name, row.division, row.jobTitle].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
   }
   return filteredRows;
 }
 
-// --- API HANDLER ---
-
+// --- HANDLER ---
 export async function GET(req) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
@@ -281,10 +271,10 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const now = new Date();
 
-    // --- Parameter & Rentang Tanggal ---
     const divisionId = searchParams.get('divisionId') || null;
     const calendarYear = parseInt(searchParams.get('calendarYear') || now.getFullYear(), 10);
     const calendarMonth = parseInt(searchParams.get('calendarMonth') || now.getMonth(), 10);
+
     const perfDateStr = searchParams.get('performanceDate');
     const perfDivisionId = searchParams.get('performanceDivisionId') || null;
     const perfQuery = searchParams.get('performanceQuery') || '';
@@ -301,27 +291,20 @@ export async function GET(req) {
     const lastMonthEnd = toUtcEnd(new Date(now.getFullYear(), now.getMonth(), 0));
     const perfDateEnd = toUtcEnd(performanceDate);
 
-    // --- Query Database Paralel ---
     const [
-      // Statistik utama
       totalKaryawan,
       totalDivisi,
       totalLokasi,
       totalPolaKerja,
       totalAdmin,
-      // Data untuk grafik & list
       divisions,
       miniBarRaw,
       chartAttendance,
       leaveToday,
-      // Data untuk peringkat Top 5
       topThisMonthAttendance,
       topLastMonthAttendance,
-      // Data Kalender
       calendarLeaves,
-      // Statistik Izin
       permitStats,
-      // Data untuk Performa Kehadiran
       performanceAttendance,
       performanceLeaves,
       performanceActiveUsers,
@@ -331,41 +314,139 @@ export async function GET(req) {
       db.location.count({ where: { deleted_at: null } }),
       db.polaKerja.count({ where: { deleted_at: null } }),
       db.user.count({ where: { role: { in: ['HR', 'SUPERADMIN', 'DIREKTUR'] }, deleted_at: null } }),
-      db.departement.findMany({ where: { deleted_at: null }, select: { id_departement: true, nama_departement: true }, orderBy: { nama_departement: 'asc' } }),
-      db.user.groupBy({ by: ['id_departement'], where: { status_kerja: 'AKTIF', deleted_at: null }, _count: { id_user: true }, orderBy: { _count: { id_user: 'desc' } }, take: 5 }),
+      db.departement.findMany({
+        where: { deleted_at: null },
+        select: { id_departement: true, nama_departement: true },
+        orderBy: { nama_departement: 'asc' },
+      }),
+      db.user.groupBy({
+        by: ['id_departement'],
+        where: { status_kerja: 'AKTIF', deleted_at: null },
+        _count: { id_user: true },
+        orderBy: { _count: { id_user: 'desc' } },
+        take: 5,
+      }),
+      // data chart (7 hari) -> ambil jam_masuk/jam_pulang saja
       db.absensi.findMany({
-        where: { tanggal: { gte: chartRangeStart, lte: todayEnd }, deleted_at: null, ...(divisionId && { user: { id_departement: divisionId } }) },
+        where: {
+          tanggal: { gte: chartRangeStart, lte: todayEnd },
+          deleted_at: null,
+          ...(divisionId && { user: { id_departement: divisionId } }),
+        },
         select: { id_user: true, tanggal: true, jam_masuk: true, jam_pulang: true },
       }),
-      db.cuti.findMany({ where: { status: 'disetujui', tanggal_mulai: { lte: todayEnd }, tanggal_selesai: { gte: todayStart }, deleted_at: null }, include: { user: { select: { nama_pengguna: true } } } }),
-      db.absensi.findMany({ where: { tanggal: { gte: thisMonthStart, lte: todayEnd }, deleted_at: null }, include: { user: { select: { id_user: true, nama_pengguna: true, departement: { select: { nama_departement: true } } } } } }),
-      db.absensi.findMany({ where: { tanggal: { gte: lastMonthStart, lte: lastMonthEnd }, deleted_at: null }, include: { user: { select: { id_user: true, nama_pengguna: true, departement: { select: { nama_departement: true } } } } } }),
+      // daftar cuti hari ini
       db.cuti.findMany({
-        where: { status: 'disetujui', tanggal_mulai: { lte: calendarRangeEnd }, tanggal_selesai: { gte: calendarRangeStart }, deleted_at: null },
-        select: { tanggal_mulai: true, tanggal_selesai: true, keterangan: true, user: { select: { nama_pengguna: true } } },
+        where: {
+          status: 'disetujui',
+          tanggal_mulai: { lte: todayEnd },
+          tanggal_selesai: { gte: todayStart },
+          deleted_at: null,
+        },
+        include: { user: { select: { nama_pengguna: true } } },
+      }),
+      // top 5 (bulan ini)
+      db.absensi.findMany({
+        where: { tanggal: { gte: thisMonthStart, lte: todayEnd }, deleted_at: null },
+        include: {
+          user: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              foto_profil_user: true,
+              jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
+              departement: { select: { nama_departement: true } },
+            },
+          },
+        },
+      }),
+      // top 5 (bulan lalu)
+      db.absensi.findMany({
+        where: { tanggal: { gte: lastMonthStart, lte: lastMonthEnd }, deleted_at: null },
+        include: {
+          user: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              foto_profil_user: true,
+              jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
+              departement: { select: { nama_departement: true } },
+            },
+          },
+        },
+      }),
+      // kalender (bulan yang dipilih)
+      db.cuti.findMany({
+        where: {
+          status: 'disetujui',
+          tanggal_mulai: { lte: calendarRangeEnd },
+          tanggal_selesai: { gte: calendarRangeStart },
+          deleted_at: null,
+        },
+        select: {
+          tanggal_mulai: true,
+          tanggal_selesai: true,
+          keterangan: true,
+          user: { select: { nama_pengguna: true } },
+        },
       }),
       db.cuti.count({ where: { keterangan: 'izin', status: 'disetujui', deleted_at: null } }),
-      // Queries for Performance Data
+      // Performance data (tanggal terpilih)
       db.absensi.findMany({
-        where: { tanggal: { gte: performanceDate, lte: perfDateEnd }, deleted_at: null, ...(perfDivisionId && { user: { id_departement: perfDivisionId } }) },
-        include: { user: { select: { id_user: true, nama_pengguna: true, departement: { select: { nama_departement: true } } } } },
+        where: {
+          tanggal: { gte: performanceDate, lte: perfDateEnd },
+          deleted_at: null,
+          ...(perfDivisionId && { user: { id_departement: perfDivisionId } }),
+        },
+        include: {
+          user: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              foto_profil_user: true,
+              jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
+              departement: { select: { nama_departement: true } },
+            },
+          },
+        },
       }),
       db.cuti.findMany({
-        where: { status: 'disetujui', tanggal_mulai: { lte: perfDateEnd }, tanggal_selesai: { gte: performanceDate }, deleted_at: null, ...(perfDivisionId && { user: { id_departement: perfDivisionId } }) },
-        include: { user: { select: { id_user: true, nama_pengguna: true, departement: { select: { nama_departement: true } } } } },
+        where: {
+          status: 'disetujui',
+          tanggal_mulai: { lte: perfDateEnd },
+          tanggal_selesai: { gte: performanceDate },
+          deleted_at: null,
+          ...(perfDivisionId && { user: { id_departement: perfDivisionId } }),
+        },
+        include: {
+          user: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              foto_profil_user: true,
+              jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
+              departement: { select: { nama_departement: true } },
+            },
+          },
+        },
       }),
       db.user.findMany({
         where: { status_kerja: 'AKTIF', deleted_at: null, ...(perfDivisionId && { id_departement: perfDivisionId }) },
-        select: { id_user: true, nama_pengguna: true, departement: { select: { nama_departement: true } } },
+        select: {
+          id_user: true,
+          nama_pengguna: true,
+          foto_profil_user: true,
+          jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
+          departement: { select: { nama_departement: true } },
+        },
       }),
     ]);
 
-    // --- Pengolahan Data ---
+    // shift untuk hitung late (Top 5)
     const userIdSet = new Set();
-    [...chartAttendance, ...topThisMonthAttendance, ...topLastMonthAttendance, ...performanceAttendance.map((p) => p.user)].forEach((rec) => {
+    [...topThisMonthAttendance, ...topLastMonthAttendance, ...performanceAttendance.map((p) => p.user)].forEach((rec) => {
       if (rec?.id_user) userIdSet.add(rec.id_user);
     });
-
     const shiftRecords =
       userIdSet.size > 0
         ? await db.shiftKerja.findMany({
@@ -374,40 +455,43 @@ export async function GET(req) {
             orderBy: { tanggal_mulai: 'desc' },
           })
         : [];
-
     const shiftsByUser = new Map();
-    shiftRecords.forEach((shift) => {
-      if (!shiftsByUser.has(shift.id_user)) shiftsByUser.set(shift.id_user, []);
-      shiftsByUser.get(shift.id_user).push(shift);
+    shiftRecords.forEach((s) => {
+      if (!shiftsByUser.has(s.id_user)) shiftsByUser.set(s.id_user, []);
+      shiftsByUser.get(s.id_user).push(s);
     });
 
+    // mini bars per divisi
     const departementNameMap = new Map(divisions.map((d) => [d.id_departement, d.nama_departement]));
-    const miniBars = miniBarRaw.map((item) => ({ label: departementNameMap.get(item.id_departement) || 'Lainnya', value: item._count.id_user }));
+    const miniBars = miniBarRaw.map((item) => ({
+      label: departementNameMap.get(item.id_departement) || 'Lainnya',
+      value: item._count.id_user,
+    }));
 
+    // === CHART: Akumulasi Kehadiran (count, bukan menit) ===
     const chartDayBuckets = new Map();
     for (let i = 0; i < 7; i++) {
       const date = new Date(chartRangeStart.getTime() + i * ONE_DAY_MS);
-      chartDayBuckets.set(date.toISOString().slice(0, 10), { name: DAY_LABELS[date.getUTCDay()], Kedatangan: 0, Kepulangan: 0 });
+      chartDayBuckets.set(date.toISOString().slice(0, 10), {
+        name: DAY_LABELS[date.getUTCDay()],
+        Kedatangan: 0,
+        Kepulangan: 0,
+      });
     }
     for (const record of chartAttendance) {
       const key = record.tanggal.toISOString().slice(0, 10);
-      if (chartDayBuckets.has(key)) {
-        const bucket = chartDayBuckets.get(key);
-        const shift = findShiftForDate(shiftsByUser.get(record.id_user) || [], record.tanggal);
-        if (shift?.polaKerja) {
-          const scheduledStart = combineDateTime(record.tanggal, shift.polaKerja.jam_mulai);
-          const scheduledEnd = combineDateTime(record.tanggal, shift.polaKerja.jam_selesai);
-          if (scheduledStart && record.jam_masuk > scheduledStart) bucket.Kedatangan += Math.round((record.jam_masuk.getTime() - scheduledStart.getTime()) / 60000);
-          if (scheduledEnd && record.jam_pulang && record.jam_pulang < scheduledEnd) bucket.Kepulangan += Math.round((scheduledEnd.getTime() - record.jam_pulang.getTime()) / 60000);
-        }
-      }
+      if (!chartDayBuckets.has(key)) continue;
+      const bucket = chartDayBuckets.get(key);
+      if (record.jam_masuk) bucket.Kedatangan += 1;
+      if (record.jam_pulang) bucket.Kepulangan += 1;
     }
     const chartData = Array.from(chartDayBuckets.values());
 
+    // Top 5
     const top5ThisMonth = buildTopRankings(topThisMonthAttendance, shiftsByUser);
     const top5LastMonth = buildTopRankings(topLastMonthAttendance, shiftsByUser);
 
-    // Proses data performa
+    // Performance rows
     const perfRowsAll = buildPerformanceRows({
       attendance: performanceAttendance,
       leaves: performanceLeaves,
@@ -416,32 +500,31 @@ export async function GET(req) {
     });
     const perfRows = applySearchFilter(perfRowsAll, perfQuery);
 
-    // --- Membangun Respons Akhir ---
+    // response
     const divisionOptions = divisions.map((d) => ({ label: d.nama_departement, value: d.id_departement }));
 
     return NextResponse.json({
-      // Data Header & Statistik
       tanggalTampilan: now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
       totalKaryawan,
       totalDivisi,
-      statCards: { lokasi: totalLokasi, presensi: await db.absensi.count({ where: { deleted_at: null } }), admin: totalAdmin, polaKerja: totalPolaKerja, izin: permitStats },
-      // Grafik Mini & Utama
+      statCards: {
+        lokasi: totalLokasi,
+        presensi: await db.absensi.count({ where: { deleted_at: null } }),
+        admin: totalAdmin,
+        polaKerja: totalPolaKerja,
+        izin: permitStats,
+      },
       miniBars,
       chartData,
-      // Daftar Karyawan Cuti
       onLeaveCount: leaveToday.length,
       leaveList: leaveToday.map((l) => ({ name: l.user.nama_pengguna })),
-      // Filter Divisi
       divisionOptions,
-      // Peringkat Top 5
       top5Late: { this: top5ThisMonth.topLate, last: top5LastMonth.topLate },
       top5Discipline: { this: top5ThisMonth.topDiscipline, last: top5LastMonth.topDiscipline },
-      // Kalender
       calendar: { year: calendarYear, month: calendarMonth, eventsByDay: buildCalendarEvents(calendarLeaves, calendarYear, calendarMonth) },
-      // Data untuk Performa Kehadiran
       perfTabs: PERFORMANCE_TABS,
       perfDivisionOptions: [{ label: '--Semua Divisi--', value: '' }, ...divisionOptions],
-      perfDate: performanceDate.toISOString(), // Mengembalikan tanggal yang digunakan
+      perfDate: performanceDate.toISOString(),
       perfRows,
     });
   } catch (err) {

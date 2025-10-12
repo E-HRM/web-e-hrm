@@ -23,7 +23,7 @@ import useVM, { showFromDB } from "./useKunjunganRekapanViewModel";
 
 const NAVY = "#003A6F";
 
-/* ——— helper foto ala karyawan ——— */
+/* Helpers avatar seperti halaman Karyawan */
 function getPhotoUrl(user) {
   return (
     user?.foto_profil_user ||
@@ -40,7 +40,7 @@ function getPhotoUrl(user) {
 
 function CircleImg({ src, size = 36, alt = "Foto" }) {
   return (
-    /* eslint-disable-next-line @next/next/no-img-element */
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src || "/avatar-placeholder.jpg"}
       alt={alt}
@@ -76,6 +76,7 @@ export default function KunjunganRekapanContent() {
       {
         title: "Deskripsi",
         dataIndex: "deskripsi",
+        width: 300,
         key: "desk",
         render: (v) => v || "—",
       },
@@ -89,9 +90,9 @@ export default function KunjunganRekapanContent() {
       {
         title: "Start",
         key: "start",
-        width: 260,
         render: (_, r) => {
-          const t = r.jam_mulai ? showFromDB(r.jam_mulai, "DD MMM YYYY HH:mm") : "-";
+          // HANYA JAM (HH:mm)
+          const t = r.jam_mulai ? showFromDB(r.jam_mulai, "HH:mm") : "-";
           const { lat, lon } = vm.getStartCoord(r);
           const photo = vm.pickPhotoUrl(r);
           return (
@@ -119,9 +120,9 @@ export default function KunjunganRekapanContent() {
       {
         title: "End",
         key: "end",
-        width: 260,
         render: (_, r) => {
-          const t = r.jam_selesai ? showFromDB(r.jam_selesai, "DD MMM YYYY HH:mm") : "-";
+          // HANYA JAM (HH:mm)
+          const t = r.jam_selesai ? showFromDB(r.jam_selesai, "HH:mm") : "-";
           const { lat, lon } = vm.getEndCoord(r);
           const photo = vm.pickPhotoUrl(r);
           return (
@@ -162,31 +163,19 @@ export default function KunjunganRekapanContent() {
         },
       },
       {
-        title: "Dibuat",
-        dataIndex: "created_at",
-        key: "created",
-        width: 170,
-        render: (v) => (v ? showFromDB(v) : "-"),
-      },
-
-      /* ——— Kolom User ala Karyawan (avatar + link + subtitle) ——— */
-      {
         title: "User",
         dataIndex: "user",
         key: "user",
         width: 360,
         render: (u) => {
           if (!u) return "—";
-
           const id = u.id_user ?? u.id ?? u.uuid;
           const href = id ? `/home/kelola_karyawan/karyawan/${id}` : undefined;
 
-          // nama utama & subjudul
           const displayName = u.nama_pengguna ?? u.name ?? u.email ?? "—";
           const jabatan = u.jabatan?.nama_jabatan ?? u.jabatan?.nama ?? u.jabatan ?? "";
           const departemen = u.departement?.nama_departement ?? u.departemen?.nama ?? u.departemen ?? "";
-          const subtitle =
-            jabatan && departemen ? `${jabatan} | ${departemen}` : jabatan || departemen || "—";
+          const subtitle = jabatan && departemen ? `${jabatan} | ${departemen}` : (jabatan || departemen || "—");
 
           const node = (
             <div className="flex items-center gap-3 min-w-0">
@@ -203,12 +192,8 @@ export default function KunjunganRekapanContent() {
           );
 
           return href ? (
-            <Link href={href} className="no-underline">
-              {node}
-            </Link>
-          ) : (
-            node
-          );
+            <Link href={href} className="no-underline">{node}</Link>
+          ) : node;
         },
       },
     ],
