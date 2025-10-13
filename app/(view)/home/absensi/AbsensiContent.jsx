@@ -282,7 +282,7 @@ function AttendanceCard({
         title: "Nama",
         dataIndex: "name",
         key: "name",
-        width: 360,
+        width: 300,
         render: (_, row) => {
           const u = row?.user || {};
           const id = u?.id_user ?? u?.id ?? u?.uuid;
@@ -337,7 +337,7 @@ function AttendanceCard({
       {
         title: "Presensi Masuk",
         dataIndex: "jam_masuk",
-        width: 280,
+        width: 240,
         render: (_, r) => (
           <div className="flex items-center justify-between gap-2">
             <div>

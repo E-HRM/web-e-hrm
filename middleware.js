@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
 // Hanya role ini yang boleh masuk area /home
-const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL"]);
+const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL", "SUPERADMIN"]);
 
 // Prefix yang boleh untuk OPERASIONAL
 const OPS_PREFIX_ALLOW = [

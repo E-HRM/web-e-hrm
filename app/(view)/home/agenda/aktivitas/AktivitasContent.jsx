@@ -70,6 +70,29 @@ export default function AktivitasContent() {
     setOpenEdit(true);
   };
 
+  // === DOWNLOAD TEMPLATE TANPA BUKA TAB ===
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch(ApiEndpoints.ImportAgendaKerjaTemplate, {
+        method: "GET",
+      });
+      if (!res.ok) throw new Error("Gagal mengunduh template");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      // nama file fallback; header Content-Disposition dari server juga akan dipakai browser
+      a.download = "format-import-timesheet.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      message.error(e?.message || "Gagal mengunduh template");
+    }
+  };
+
   const handleExport = () => {
     if (!vm.filters.user_id) return;
     const p = new URLSearchParams();
@@ -563,13 +586,11 @@ export default function AktivitasContent() {
                   Untuk melakukan impor data timesheet, pastikan file sesuai
                   format yang ditentukan.{" "}
                   <a
-                    className="text-blue-600 underline"
-                    onClick={() =>
-                      window.open(
-                        ApiEndpoints.ImportAgendaKerjaTemplate,
-                        "_blank"
-                      )
-                    }
+                    className="text-blue-600 underline cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDownloadTemplate(); // ⬅️ TANPA NEW TAB
+                    }}
                   >
                     Download format impor excel di sini
                   </a>
