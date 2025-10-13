@@ -1,3 +1,4 @@
+// useAbsensiViewModel.jsx
 "use client";
 
 import useSWR from "swr";
@@ -44,14 +45,32 @@ function pickCoord(obj) {
   return null;
 }
 
-function makeOsmEmbed(lat, lon) {
-  const dx = 0.0025, dy = 0.0025;
-  const bbox = `${(lon - dx).toFixed(6)}%2C${(lat - dy).toFixed(
-    6
-  )}%2C${(lon + dx).toFixed(6)}%2C${(lat + dy).toFixed(6)}`;
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat.toFixed(
-    6
-  )}%2C${lon.toFixed(6)}`;
+function toMinutes(hhmm) {
+  if (!hhmm) return null;
+  if (typeof hhmm === "string") {
+    const m = hhmm.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (m) return Number(m[1]) * 60 + Number(m[2]);
+  }
+  const d = dayjs(hhmm);
+  return d.isValid() ? d.hour() * 60 + d.minute() : null;
+}
+
+function minStartMaxEnd(istirahatArr) {
+  if (!Array.isArray(istirahatArr) || istirahatArr.length === 0) return { start: null, end: null };
+  let min = null, max = null;
+  for (const it of istirahatArr) {
+    const s = it.start_istirahat ?? it.start ?? it.mulai ?? null;
+    const e = it.end_istirahat ?? it.end ?? it.selesai ?? null;
+    if (s) {
+      const ds = dayjs(s);
+      if (ds.isValid() && (!min || ds.isBefore(min))) min = ds;
+    }
+    if (e) {
+      const de = dayjs(e);
+      if (de.isValid() && (!max || de.isAfter(max))) max = de;
+    }
+  }
+  return { start: min?.toISOString() ?? null, end: max?.toISOString() ?? null };
 }
 
 /** Ratakan objek penerima + absensi nested */
@@ -64,21 +83,53 @@ function flattenRecipient(rec) {
   const jam_masuk = a.jam_masuk ?? a.jamIn ?? a.checkin_time ?? a.masuk_at ?? null;
   const jam_pulang = a.jam_pulang ?? a.jamOut ?? a.checkout_time ?? a.pulang_at ?? null;
 
-  const istirahat_mulai =
+  // Ambil array istirahat dari API (absensi.istirahat)
+  const istirahat_list = Array.isArray(a.istirahat) ? a.istirahat : [];
+  // Fallback field lama (single)
+  const istirahat_mulai_raw =
     a.jam_istirahat_mulai ??
     a.mulai_istirahat ??
     a.break_start ??
     a.istirahat_in ??
     null;
-  const istirahat_selesai =
+  const istirahat_selesai_raw =
     a.jam_istirahat_selesai ??
     a.selesai_istirahat ??
     a.break_end ??
     a.istirahat_out ??
     null;
 
-  const status_masuk = a.status_masuk ?? a.status_in ?? a.status_masuk_label ?? null;
+  // Jika single kosong, rangkum dari list
+  const { start: istirahat_mulai_list, end: istirahat_selesai_list } = minStartMaxEnd(istirahat_list);
+  const istirahat_mulai = istirahat_mulai_raw || istirahat_mulai_list || null;
+  const istirahat_selesai = istirahat_selesai_raw || istirahat_selesai_list || null;
+
+  // Status dari backend (jika ada)
+  const status_masuk_server = a.status_masuk ?? a.status_in ?? a.status_masuk_label ?? null;
   const status_pulang = a.status_pulang ?? a.status_out ?? a.status_pulang_label ?? null;
+
+  // Fallback kalkulasi "terlambat/tepat" jika server tidak kirim/keliru.
+  // Ambil jam batas dari shift kalau ada; jika tidak, default 09:00
+  const batasMasuk =
+    a?.shift?.jam_mulai ??
+    a?.jam_shift_mulai ??
+    a?.jam_masuk_batas ??
+    "09:00";
+
+  const menitMasuk = toMinutes(jam_masuk);
+  const menitBatas = toMinutes(batasMasuk);
+  let status_masuk = status_masuk_server;
+
+  // Jika server tidak kirim atau mengirim "tepat" padahal lewat batas → override jadi "terlambat"
+  if (menitMasuk != null && menitBatas != null) {
+    const isLate = menitMasuk > menitBatas;
+    const lbl = String(status_masuk_server || "").toLowerCase();
+    const isSpecial = /izin|sakit/.test(lbl);
+    if (!isSpecial) {
+      if (!status_masuk_server) status_masuk = isLate ? "terlambat" : "tepat";
+      else if (/tepat/.test(lbl) && isLate) status_masuk = "terlambat";
+    }
+  }
 
   const lokasiIn  = a.lokasiIn  ?? a.lokasi_in  ?? a.lokasi_absen_masuk  ?? null;
   const lokasiOut = a.lokasiOut ?? a.lokasi_out ?? a.lokasi_absen_pulang ?? null;
@@ -135,8 +186,10 @@ function flattenRecipient(rec) {
     jam_masuk,
     jam_pulang,
 
+    // istirahat (sudah dirangkum + raw list)
     istirahat_mulai,
     istirahat_selesai,
+    istirahat_list,
 
     status_masuk,
     status_pulang,
@@ -238,7 +291,6 @@ export default function useAbsensiViewModel() {
     statusOptionsOut,
 
     normalizePhotoUrl,
-    makeOsmEmbed,
     getStartCoord,
     getEndCoord,
   };
