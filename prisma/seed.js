@@ -127,6 +127,7 @@ const notificationTemplates = [
     placeholders: '{nama_karyawan}, {maks_jam_istirahat}',
   },
 ];
+
 async function main() {
   console.log(`Mulai proses seeding...`);
 
