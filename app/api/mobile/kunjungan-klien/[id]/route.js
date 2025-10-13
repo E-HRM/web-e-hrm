@@ -15,8 +15,8 @@ const normRole = (r) =>
   String(r || '')
     .trim()
     .toUpperCase();
-const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
-const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role)); // hanya Operasional yang full manage
+const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR','SUPERADMIN'].includes(normRole(role));
+const canManageAll = (role) => ['OPERASIONAL','SUPERADMIN'].includes(normRole(role)); // hanya Operasional yang full manage
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';

@@ -7,7 +7,7 @@ import { endOfUTCDay, parseDateTimeToUTC, startOfUTCDay } from '@/helpers/date-h
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const normRole = (r) => String(r || '').trim().toUpperCase();
-const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
+const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR', 'SUPERADMIN'].includes(normRole(role));
 const canManageAll = (role) => ['OPERASIONAL', 'SUPERADMIN', ].includes(normRole(role));
 
 async function ensureAuth(req) {
@@ -23,9 +23,11 @@ async function ensureAuth(req) {
   return { actor: { id: sessionOrRes?.user?.id || sessionOrRes?.user?.id_user, role: sessionOrRes?.user?.role, source: 'session' } };
 }
 
+// === FIXED: izinkan OPERASIONAL **dan** SUPERADMIN
 function guardOperational(actor) {
-  if (actor?.role !== 'OPERASIONAL') {
-    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL yang dapat mengakses resource ini.' }, { status: 403 });
+  const role = String(actor?.role || '').trim().toUpperCase();
+  if (role !== 'OPERASIONAL' && role !== 'SUPERADMIN') {
+    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL/SUPERADMIN yang dapat mengakses resource ini.' }, { status: 403 });
   }
   return null;
 }
@@ -59,8 +61,6 @@ const MAX_RANGE_DATE = endOfUTCDay('2999-12-31') ?? new Date(Date.UTC(2999,11,31
 export async function GET(request) {
   const auth = await ensureAuth(request);
   if (auth instanceof NextResponse) return auth;
-  const forbidden = canSeeAll(auth.actor);
-  if (forbidden) return forbidden;
 
   try {
     const { searchParams } = new URL(request.url);

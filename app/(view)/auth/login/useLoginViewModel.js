@@ -9,10 +9,11 @@ import { signIn, signOut } from "next-auth/react";
 const DASHBOARD_BY_ROLE = {
   HR: "/home/dashboard",
   DIREKTUR: "/home/dashboard",
+  SUPERADMIN: "/home/dashboard",
   OPERASIONAL: "/home/dashboard2",
 };
 
-const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL"]);
+const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL", "SUPERADMIN"]);
 
 export default function useLoginViewModel() {
   const router = useRouter();

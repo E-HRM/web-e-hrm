@@ -27,12 +27,12 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
 
     // roles=HR,DIREKTUR,OPERASIONAL (default HR+DIREKTUR)
-    const rawRoles = (searchParams.get('roles') || 'HR,DIREKTUR,OPERASIONAL')
+    const rawRoles = (searchParams.get('roles') || 'HR,DIREKTUR,OPERASIONAL,SUPERADMIN')
       .split(',')
       .map((r) => r.trim())
       .filter(Boolean);
 
-    const allowed = ['HR', 'DIREKTUR', 'OPERASIONAL'];
+    const allowed = ['HR', 'DIREKTUR', 'OPERASIONAL', 'SUPERADMIN'];
     let roles = rawRoles.filter((r) => allowed.includes(r));
     if (roles.length === 0) roles = ['HR', 'DIREKTUR'];
 
