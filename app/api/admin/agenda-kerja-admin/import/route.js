@@ -1,3 +1,4 @@
+// app/api/admin/agenda-kerja-admin/import/route.js
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
@@ -5,8 +6,11 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
-const normRole = (r) => String(r || '').trim().toUpperCase();
-const canManageAll = (role) => ['OPERASIONAL','SUPERADMIN'].includes(normRole(role));
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
+const canManageAll = (role) => ['OPERASIONAL', 'SUPERADMIN'].includes(normRole(role));
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -71,18 +75,11 @@ export async function POST(req) {
       const row = rows[i];
 
       // Tiga kolom utama
-      const tanggalRaw =
-        row['Tanggal Proyek'] ?? row['Tanggal'] ?? row['Tanggal Aktivitas'] ??
-        row['tanggal proyek'] ?? row['tanggal'] ?? row['tanggal aktivitas'];
+      const tanggalRaw = row['Tanggal Proyek'] ?? row['Tanggal'] ?? row['Tanggal Aktivitas'] ?? row['tanggal proyek'] ?? row['tanggal'] ?? row['tanggal aktivitas'];
 
-      const aktivitas =
-        normText(row['Aktivitas'] ?? row['aktivitas'] ?? row['Deskripsi'] ?? row['deskripsi']);
+      const aktivitas = normText(row['Aktivitas'] ?? row['aktivitas'] ?? row['Deskripsi'] ?? row['deskripsi']);
 
-      const proyekName =
-        normText(
-          row['Proyek/Agenda'] ?? row['Proyek'] ?? row['Agenda'] ??
-          row['proyek/agenda'] ?? row['proyek'] ?? row['agenda']
-        );
+      const proyekName = normText(row['Proyek/Agenda'] ?? row['Proyek'] ?? row['Agenda'] ?? row['proyek/agenda'] ?? row['proyek'] ?? row['agenda']);
 
       // Kolom opsional (tetap didukung bila ada)
       const mulaiRaw = normText(row['Mulai'] ?? row['mulai']);
@@ -119,7 +116,7 @@ export async function POST(req) {
       const startHM = parseHHmm(mulaiRaw);
       const endHM = parseHHmm(selesaiRaw);
       let startDate = mulaiRaw && startHM.h != null ? makeUTC(dateYMD, startHM) : null;
-      let endDate   = selesaiRaw && endHM.h != null ? makeUTC(dateYMD, endHM) : null;
+      let endDate = selesaiRaw && endHM.h != null ? makeUTC(dateYMD, endHM) : null;
 
       // Kebijakan: kalau dua-duanya kosong, set sentinel 00:00:00 (bukan null)
       if (!startDate && !endDate) {
@@ -155,8 +152,7 @@ export async function POST(req) {
         continue;
       }
 
-      const duration =
-        startDate && endDate ? Math.max(0, Math.floor((endDate - startDate) / 1000)) : 0;
+      const duration = startDate && endDate ? Math.max(0, Math.floor((endDate - startDate) / 1000)) : 0;
 
       toCreate.push({
         id_user: userId,

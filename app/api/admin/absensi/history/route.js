@@ -6,7 +6,9 @@ import { verifyAuthToken } from '@/lib/jwt';
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
-    try { return { claims: verifyAuthToken(auth.slice(7)) }; } catch {}
+    try {
+      return { claims: verifyAuthToken(auth.slice(7)) };
+    } catch {}
   }
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
@@ -20,7 +22,7 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const from = (searchParams.get('from') || '').trim(); // 'YYYY-MM-DD'
-    const to   = (searchParams.get('to')   || '').trim(); // 'YYYY-MM-DD'
+    const to = (searchParams.get('to') || '').trim(); // 'YYYY-MM-DD'
     const userId = (searchParams.get('userId') || '').trim(); // optional
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const perPage = Math.min(5000, Math.max(1, parseInt(searchParams.get('perPage') || '1000', 10)));
@@ -28,12 +30,14 @@ export async function GET(req) {
     const where = {
       deleted_at: null,
       ...(userId ? { id_user: userId } : {}),
-      ...(from || to ? {
-        tanggal: {
-          ...(from && { gte: new Date(from) }),
-          ...(to   && { lte: new Date(to) }),
-        }
-      } : {}),
+      ...(from || to
+        ? {
+            tanggal: {
+              ...(from && { gte: new Date(from) }),
+              ...(to && { lte: new Date(to) }),
+            },
+          }
+        : {}),
     };
 
     const [total, items] = await Promise.all([
@@ -71,7 +75,7 @@ export async function GET(req) {
               updated_at: true,
             },
           },
-          lokasiIn:  { select: { id_location: true, nama_kantor: true, latitude: true, longitude: true, radius: true } },
+          lokasiIn: { select: { id_location: true, nama_kantor: true, latitude: true, longitude: true, radius: true } },
           lokasiOut: { select: { id_location: true, nama_kantor: true, latitude: true, longitude: true, radius: true } },
         },
       }),
