@@ -135,7 +135,7 @@ export default function KaryawanContent() {
 
   const roleTag = (val) => {
     const key = String(val || "").toLowerCase();
-    const map = { direktur: "magenta", admin: "gold", hr: "green", operasional: "blue", karyawan: "geekblue" };
+    const map = { direktur: "magenta", admin: "gold", hr: "green", operasional: "blue", karyawan: "geekblue", superadmin: "red",  };
     return <Tag color={map[key] || "default"}>{String(val || "-").toUpperCase()}</Tag>;
   };
 
@@ -202,7 +202,7 @@ export default function KaryawanContent() {
             className="w-[150px]"
             value={filterRole}
             onChange={setFilterRole}
-            options={["KARYAWAN","HR","OPERASIONAL","DIREKTUR","ADMIN"].map(v => ({value:v, label:v}))}
+            options={["KARYAWAN","HR","OPERASIONAL","DIREKTUR","ADMIN", "SUPERADMIN"].map(v => ({value:v, label:v}))}
           />
           <Select
             allowClear
@@ -366,6 +366,7 @@ export default function KaryawanContent() {
                   { value: "OPERASIONAL", label: "OPERASIONAL" },
                   { value: "DIREKTUR", label: "DIREKTUR" },
                   { value: "ADMIN", label: "ADMIN" },
+                  { value: "SUPERADMIN", label: "SUPERADMIN" },
                 ]}
               />
             </Form.Item>

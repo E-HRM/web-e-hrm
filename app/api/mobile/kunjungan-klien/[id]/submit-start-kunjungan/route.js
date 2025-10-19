@@ -1,4 +1,4 @@
-﻿// ... (semua import dan fungsi helper tetap sama)
+﻿// ... (semua import dan fungsi helper tetap sama di atas sini)
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import db from '@/lib/prisma';
@@ -10,7 +10,6 @@ import { sendStartKunjunganMessage, sendStartKunjunganImage } from '@/app/utils/
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 
 // (Salin semua fungsi helper: ensureAuth, hasOwn, isFile, findLampiranFile, getSupabase, sanitizePathPart, uploadLampiranToSupabase, parseRequestBody)
-
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
@@ -142,7 +141,6 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ message: 'Body tidak valid.' }, { status: 400 });
     }
 
-    // ... (validasi field & logika data lainnya tetap sama)
     const unknownFields = Object.keys(body).filter((key) => !allowedFields.has(key));
     if (unknownFields.length > 0) {
       return NextResponse.json({ message: `Field ${unknownFields.join(', ')} tidak diizinkan.` }, { status: 400 });
@@ -150,6 +148,13 @@ export async function PUT(req, { params }) {
 
     const existing = await db.kunjungan.findFirst({
       where: { id_kunjungan: id, id_user: actorId, deleted_at: null },
+      include: {
+        user: {
+          select: {
+            nama_pengguna: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
@@ -208,17 +213,21 @@ export async function PUT(req, { params }) {
 
     // --- PERUBAHAN UTAMA DI SINI ---
 
-    // Kirim notifikasi di latar belakang tanpa menunggu (fire and forget)
+    // Siapkan variabel dasar untuk notifikasi
     const deskripsi = (existing.deskripsi || '').trim() || 'Tidak ada deskripsi.';
+    const namaPengguna = (existing.user?.nama_pengguna || '').trim() || 'Tidak diketahui';
     const lampiranUrl = updated.lampiran_kunjungan_url ?? data.lampiran_kunjungan_url ?? null;
 
+    // Kirim notifikasi di latar belakang dengan format pesan yang berbeda
     if (lampiranUrl) {
-      const caption = `${deskripsi}`;
-      // Hapus 'await' dan tambahkan .catch() untuk menangani error di latar belakang
+      // Jika ada gambar, buat caption yang ringkas.
+      // Format: Baris 1 adalah nama, Baris 2 adalah deskripsi.
+      const caption = `${namaPengguna}\n${deskripsi}`;
       sendStartKunjunganImage(lampiranUrl, caption).catch((err) => console.error('Gagal kirim notif gambar di latar belakang:', err));
     } else {
-      const textMessage = `Check-in kunjungan dimulai.\n\nDeskripsi: ${deskripsi}\n(Tanpa lampiran)`;
-      // Hapus 'await' dan tambahkan .catch()
+      // Jika tidak ada gambar, kirim pesan teks biasa.
+      // Format: Nama, deskripsi, dan keterangan tanpa lampiran.
+      const textMessage = `${namaPengguna}\nDeskripsi: ${deskripsi}\n(Tanpa lampiran)`;
       sendStartKunjunganMessage(textMessage).catch((err) => console.error('Gagal kirim notif teks di latar belakang:', err));
     }
 
@@ -227,7 +236,6 @@ export async function PUT(req, { params }) {
     // --- PERUBAHAN SELESAI ---
   } catch (err) {
     console.error('PUT /mobile/kunjungan-klien/[id]/submit-start-kunjungan error:', err);
-    // Kita cek apakah error berasal dari validasi file kita
     if (err.message.includes('Tipe file tidak valid')) {
       return NextResponse.json({ message: err.message }, { status: 400 });
     }

@@ -70,7 +70,7 @@ const MENU = [
 ];
 
 /** ===== RBAC Sidebar ===== */
-const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL"]);
+const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL", "SUPERADMIN"]);
 
 // Remap satu item "Dashboard" → href per role (ikon & label tetap)
 function roleAwareDashboard(menu, role) {

@@ -77,10 +77,13 @@ function CircleImg({ src, size = 48, alt = "Foto" }) {
     </span>
   );
 }
-
+// Tanggal sudah lewat? (bandingkan lokal, mulai dari pukul 00:00 hari ini)
+function isPastDate(dateStr) {
+  return dayjs(dateStr).isBefore(dayjs().startOf("day"), "day");
+}
 // --- Komponen Cell Jadwal ---
 
-function Cell({ cell, polaMap, onAssign, onDelete }) {
+function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
   const value = cell
     ? cell.status === "LIBUR"
       ? "LIBUR"
@@ -95,21 +98,36 @@ function Cell({ cell, polaMap, onAssign, onDelete }) {
     return arr;
   }, [polaMap]);
 
+  const safeAssign = (val) => {
+    if (disabled) return;
+    onAssign(cell.userId, cell.date, val);
+  };
+  const safeDelete = () => {
+    if (disabled) return;
+    onDelete(cell.userId, cell.date);
+  };
+
   return (
     <div className="p-2">
-      <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-        <div className="text-xs mb-1 text-slate-500">Pilih jadwal</div>
+      <div
+        className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
+        style={disabled ? { opacity: 0.6, pointerEvents: "none" } : undefined}
+      >
+        <div className="text-xs mb-1 text-slate-500">
+          {disabled ? "Jadwal (riwayat)" : "Pilih jadwal"}
+        </div>
         <Select
           className="w-full"
           placeholder="— Pilih jadwal —"
           value={value}
           options={options}
-          onChange={(val) => onAssign(cell.userId, cell.date, val)}
+          onChange={safeAssign}
           allowClear
-          onClear={() => onDelete(cell.userId, cell.date)}
-          dropdownMatchSelectWidth={320}
+          onClear={safeDelete}
+          popupMatchSelectWidth={320}
           showSearch
           optionFilterProp="label"
+          disabled={disabled}
         />
         <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
           <div>
@@ -122,14 +140,14 @@ function Cell({ cell, polaMap, onAssign, onDelete }) {
                 })()
               : "Belum diatur"}
           </div>
-          {cell?.rawId && (
+          {cell?.rawId && !disabled && (
             <Tooltip title="Hapus jadwal tanggal ini">
               <Button
                 size="small"
                 type="text"
                 danger
                 icon={<DeleteOutlined />}
-                onClick={() => onDelete(cell.userId, cell.date)}
+                onClick={safeDelete}
               />
             </Tooltip>
           )}
@@ -155,22 +173,25 @@ export default function ShiftScheduleContent() {
     ),
     dataIndex: d.key,
     key: d.key,
-    width: 280, 
+    width: 280,
     render: (_, record) => {
       const cell = vm.getCell(record.id, d.dateStr) || {
         userId: record.id,
         date: d.dateStr,
       };
+      const disabled = isPastDate(d.dateStr); // ⬅️ di sini
       return (
         <Cell
           cell={cell}
           polaMap={vm.polaMap}
           onAssign={vm.assignCell}
           onDelete={vm.deleteCell}
+          disabled={disabled}
         />
       );
     },
   }));
+
 
   // 2. Definisikan Kolom Nama (sticky & linkable)
   const nameColumn = {

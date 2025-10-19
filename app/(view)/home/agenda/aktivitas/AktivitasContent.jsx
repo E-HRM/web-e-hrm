@@ -37,6 +37,18 @@ dayjs.extend(utc);
 
 const BRAND = { accent: "#003A6F" };
 
+function formatDuration(sec = 0) {
+  if (!sec || sec < 1) return "0 detik";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const parts = [];
+  if (h) parts.push(`${h} jam`);
+  if (m) parts.push(`${m} menit`);
+  if (s) parts.push(`${s} detik`);
+  return parts.join(" ");
+}
+
 export default function AktivitasContent() {
   const vm = useAktivitasTimesheetViewModel();
 
@@ -50,7 +62,7 @@ export default function AktivitasContent() {
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [agendaForm] = Form.useForm();
 
-  // modal ubah aktivitas (hanya ganti proyek)
+  // modal ubah aktivitas (hanya ganti proyek/deskripsi)
   const [openEdit, setOpenEdit] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm] = Form.useForm();
@@ -70,6 +82,25 @@ export default function AktivitasContent() {
     setOpenEdit(true);
   };
 
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch(ApiEndpoints.ImportAgendaKerjaTemplate, { method: "GET" });
+      if (!res.ok) throw new Error("Gagal mengunduh template");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "format-import-timesheet.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      message.error(e?.message || "Gagal mengunduh template");
+    }
+  };
+
   const handleExport = () => {
     if (!vm.filters.user_id) return;
     const p = new URLSearchParams();
@@ -79,7 +110,7 @@ export default function AktivitasContent() {
     if (vm.filters.from) p.set("from", vm.filters.from);
     if (vm.filters.to) p.set("to", vm.filters.to);
     p.set("perPage", "1000");
-    p.set("format", "xlsx"); // trigger export
+    p.set("format", "xlsx");
     window.location.href = `${ApiEndpoints.GetAgendaKerja}?${p.toString()}`;
   };
 
@@ -108,9 +139,19 @@ export default function AktivitasContent() {
         title: "Waktu",
         key: "waktu",
         render: (_, r) => {
-          const s = r.start_date ? dayjs.utc(r.start_date).format("HH:mm") : "-";
-          const e = r.end_date ? dayjs.utc(r.end_date).format("HH:mm") : "-";
-          return `${s} - ${e}`;
+          const s = r.start_date ? dayjs.utc(r.start_date) : null;
+          const e = r.end_date ? dayjs.utc(r.end_date) : null;
+
+          if (!s && !e) return "Belum diisi"; // data lama null/null (fallback)
+
+          const isSentinel =
+            s && e &&
+            s.format("HH:mm:ss") === "00:00:00" &&
+            e.format("HH:mm:ss") === "00:00:00";
+
+          if (isSentinel) return "Belum diisi";
+          if (s && e && s.isSame(e)) return s.format("HH:mm");
+          return `${s ? s.format("HH:mm") : "-"} - ${e ? e.format("HH:mm") : "-"}`;
         },
       },
       {
@@ -146,11 +187,7 @@ export default function AktivitasContent() {
         render: (_, r) => (
           <Space>
             <Tooltip title="Ubah aktivitas">
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => handleOpenEdit(r)}
-              />
+              <Button size="small" icon={<EditOutlined />} onClick={() => handleOpenEdit(r)} />
             </Tooltip>
             <Popconfirm
               title="Hapus pekerjaan?"
@@ -167,7 +204,7 @@ export default function AktivitasContent() {
     [vm]
   );
 
-  // submit tambah aktivitas
+  // submit tambah pekerjaan — TANPA waktu
   const onSubmitAdd = async () => {
     try {
       const values = await addForm.validateFields();
@@ -175,12 +212,7 @@ export default function AktivitasContent() {
       await vm.createActivity({
         deskripsi_kerja: values.deskripsi_kerja.trim(),
         id_agenda: values.id_agenda,
-        start_date: values.start_date
-          ? values.start_date.format("YYYY-MM-DD HH:mm:ss")
-          : undefined,
-        end_date: values.end_date
-          ? values.end_date.format("YYYY-MM-DD HH:mm:ss")
-          : undefined,
+        // waktu akan diisi ViewModel sebagai sentinel 00:00:00 di tanggal aktif
       });
       setOpenAdd(false);
       addForm.resetFields();
@@ -210,7 +242,7 @@ export default function AktivitasContent() {
     }
   };
 
-  // submit ubah aktivitas (deskripsi + proyek)
+  // submit ubah aktivitas
   const onSubmitEdit = async () => {
     try {
       const { deskripsi_kerja, id_agenda } = await editForm.validateFields();
@@ -239,11 +271,7 @@ export default function AktivitasContent() {
         title={<span className="text-lg font-semibold">Aktivitas</span>}
         extra={
           <Space>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-              disabled={!vm.filters.user_id}
-            >
+            <Button icon={<DownloadOutlined />} onClick={handleExport} disabled={!vm.filters.user_id}>
               Export Excel
             </Button>
             <Button
@@ -278,11 +306,7 @@ export default function AktivitasContent() {
             optionFilterProp="label"
           />
           <DatePicker
-            value={
-              vm.filters.from
-                ? dayjs(vm.filters.from, "YYYY-MM-DD HH:mm:ss")
-                : null
-            }
+            value={vm.filters.from ? dayjs(vm.filters.from, "YYYY-MM-DD HH:mm:ss") : null}
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
@@ -293,11 +317,7 @@ export default function AktivitasContent() {
           />
           <span className="opacity-60">-</span>
           <DatePicker
-            value={
-              vm.filters.to
-                ? dayjs(vm.filters.to, "YYYY-MM-DD HH:mm:ss")
-                : null
-            }
+            value={vm.filters.to ? dayjs(vm.filters.to, "YYYY-MM-DD HH:mm:ss") : null}
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
@@ -329,21 +349,10 @@ export default function AktivitasContent() {
                           : "border-white/10 hover:bg-[#003A6F] hover:text-white hover:border-transparent hover:shadow-sm",
                       ].join(" ")}
                     >
-                      <div
-                        className={[
-                          "font-semibold",
-                          active ? "text-white" : "",
-                          "group-hover:text-white",
-                        ].join(" ")}
-                      >
+                      <div className={["font-semibold", active ? "text-white" : "", "group-hover:text-white"].join(" ")}>
                         {dayjs(d.date).format("DD MMM YYYY")}
                       </div>
-                      <div
-                        className={[
-                          active ? "text-white" : "opacity-70",
-                          "group-hover:text-white",
-                        ].join(" ")}
-                      >
+                      <div className={[active ? "text-white" : "opacity-70", "group-hover:text-white"].join(" ")}>
                         {d.count} Pekerjaan
                       </div>
                     </button>
@@ -357,9 +366,7 @@ export default function AktivitasContent() {
                   placeholder="-- Filter Status --"
                   allowClear
                   value={vm.filters.status || undefined}
-                  onChange={(v) =>
-                    vm.setFilters((s) => ({ ...s, status: v || "" }))
-                  }
+                  onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
                   options={[
                     { value: "diproses", label: "Diproses" },
                     { value: "ditunda", label: "Ditunda" },
@@ -371,9 +378,7 @@ export default function AktivitasContent() {
                   placeholder="Filter Proyek"
                   allowClear
                   value={vm.filters.id_agenda || undefined}
-                  onChange={(v) =>
-                    vm.setFilters((s) => ({ ...s, id_agenda: v || "" }))
-                  }
+                  onChange={(v) => vm.setFilters((s) => ({ ...s, id_agenda: v || "" }))}
                   options={vm.agendaOptions}
                   showSearch
                   optionFilterProp="label"
@@ -382,9 +387,7 @@ export default function AktivitasContent() {
                   className="w-[240px]"
                   placeholder="Cari"
                   value={vm.filters.q}
-                  onChange={(e) =>
-                    vm.setFilters((s) => ({ ...s, q: e.target.value }))
-                  }
+                  onChange={(e) => vm.setFilters((s) => ({ ...s, q: e.target.value }))}
                 />
               </div>
 
@@ -392,28 +395,17 @@ export default function AktivitasContent() {
                 {vm.filteredRows.length === 0 ? (
                   <Empty description="Tidak ada pekerjaan pada rentang/tanggal ini" />
                 ) : (
-                  <Table
-                    rowKey="id_agenda_kerja"
-                    columns={columns}
-                    dataSource={vm.filteredRows}
-                    pagination={false}
-                    size="middle"
-                  />
+                  <Table rowKey="id_agenda_kerja" columns={columns} dataSource={vm.filteredRows} pagination={false} size="middle" />
                 )}
               </div>
             </>
           )
         ) : (
-          <Alert
-            className="mt-2"
-            type="info"
-            message="Silakan pilih karyawan terlebih dahulu"
-            showIcon
-          />
+          <Alert className="mt-2" type="info" message="Silakan pilih karyawan terlebih dahulu" showIcon />
         )}
       </Card>
 
-      {/* MODAL: TAMBAH PEKERJAAN */}
+      {/* MODAL: TAMBAH PEKERJAAN (tanpa jam) */}
       <Modal
         title="Tambah Pekerjaan"
         open={openAdd}
@@ -448,21 +440,13 @@ export default function AktivitasContent() {
                   optionFilterProp="label"
                 />
               </Form.Item>
-              <Button
-                onClick={() => setOpenAddAgenda(true)}
-                style={{ background: BRAND.accent, color: "#FFFFFF" }}
-              >
+              <Button onClick={() => setOpenAddAgenda(true)} style={{ background: BRAND.accent, color: "#FFFFFF" }}>
                 Tambah Proyek
               </Button>
             </Space.Compact>
           </Form.Item>
 
-          <Form.Item label="Mulai" name="start_date">
-            <DatePicker showTime className="w-full" />
-          </Form.Item>
-          <Form.Item label="Selesai" name="end_date">
-            <DatePicker showTime className="w-full" />
-          </Form.Item>
+          {/* Tidak ada field waktu di sini */}
         </Form>
       </Modal>
 
@@ -528,7 +512,7 @@ export default function AktivitasContent() {
             const fd = new FormData();
             fd.append("file", fileImport);
             fd.append("user_id", vm.filters.user_id);
-            fd.append("createAgendaIfMissing", "1"); // opsional
+            fd.append("createAgendaIfMissing", "1");
             const res = await fetch(ApiEndpoints.ImportAgendaKerja, {
               method: "POST",
               body: fd,
@@ -537,9 +521,7 @@ export default function AktivitasContent() {
             if (!res.ok || json?.ok === false) {
               throw new Error(json?.message || "Gagal impor");
             }
-            message.success(
-              `Impor selesai: ${json?.summary?.created || 0} baris dibuat`
-            );
+            message.success(`Impor selesai: ${json?.summary?.created || 0} baris dibuat`);
             setOpenImport(false);
             setFileImport(null);
             vm.refresh();
@@ -560,28 +542,20 @@ export default function AktivitasContent() {
             <div>
               <ul className="list-disc pl-5 space-y-1">
                 <li>
-                  Untuk melakukan impor data timesheet, pastikan file sesuai
-                  format yang ditentukan.{" "}
+                  Gunakan template 3 kolom: <b>Tanggal Proyek</b>, <b>Aktivitas</b>, <b>Proyek/Agenda</b>.{" "}
                   <a
-                    className="text-blue-600 underline"
-                    onClick={() =>
-                      window.open(
-                        ApiEndpoints.ImportAgendaKerjaTemplate,
-                        "_blank"
-                      )
-                    }
+                    className="text-blue-600 underline cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleDownloadTemplate();
+                    }}
                   >
                     Download format impor excel di sini
                   </a>
                   .
                 </li>
-                <li>
-                  Aksi impor hanya akan dijalankan jika semua data sudah benar.
-                </li>
-                <li>
-                  Jika ada data yang perlu diperbaiki, sistem akan menampilkan
-                  informasinya setelah klik tombol proses.
-                </li>
+                <li>Kolom jam (Mulai/Selesai) tidak wajib; jika kosong, sistem set 00:00:00.</li>
+                <li>Aksi impor hanya dijalankan bila data valid.</li>
               </ul>
             </div>
           }
@@ -602,13 +576,11 @@ export default function AktivitasContent() {
                 return Upload.LIST_IGNORE;
               }
               setFileImport(file);
-              return false; // jangan auto-upload
+              return false; // manual upload
             }}
             onRemove={() => setFileImport(null)}
           >
-            <Button style={{ background: BRAND.accent, color: "#fff" }}>
-              Pilih File
-            </Button>
+            <Button style={{ background: BRAND.accent, color: "#fff" }}>Pilih File</Button>
           </Upload>
           <div>{fileImport?.name || "Belum ada file"}</div>
         </Space>
@@ -638,16 +610,4 @@ export default function AktivitasContent() {
       </Modal>
     </div>
   );
-}
-
-function formatDuration(sec = 0) {
-  if (!sec || sec < 1) return "0 detik";
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  const parts = [];
-  if (h) parts.push(`${h} jam`);
-  if (m) parts.push(`${m} menit`);
-  if (s) parts.push(`${s} detik`);
-  return parts.join(" ");
 }

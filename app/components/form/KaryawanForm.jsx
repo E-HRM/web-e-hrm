@@ -695,6 +695,7 @@ export default function KaryawanProfileForm({
                         { value: "HR", label: "HR" },
                         { value: "OPERASIONAL", label: "Operasional" },
                         { value: "DIREKTUR", label: "Direktur" },
+                        { value: "SUPERADMIN", label: "Super-admin" },
                       ]}
                     />
                   </Form.Item>

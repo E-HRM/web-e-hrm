@@ -103,6 +103,20 @@ const notificationTemplates = [
     bodyTemplate: 'Kunjungan {kategori_kunjungan} pada {tanggal_kunjungan_display} akan berakhir pada {waktu_selesai_display}. Mohon lengkapi laporan kunjungan.',
     placeholders: '{nama_karyawan}, {kategori_kunjungan}, {tanggal_kunjungan_display}, {waktu_selesai_display}',
   },
+  {
+    eventTrigger: 'CLIENT_VISIT_CANCELLED',
+    description: 'Notifikasi saat kunjungan klien dibatalkan atau diarsipkan',
+    titleTemplate: '❌ Kunjungan Klien Dibatalkan',
+    bodyTemplate: 'Kunjungan {kategori_kunjungan} pada {tanggal_kunjungan_display} telah dibatalkan. Silakan hubungi admin bila membutuhkan informasi lanjutan.',
+    placeholders: '{nama_karyawan}, {kategori_kunjungan}, {tanggal_kunjungan_display}',
+  },
+  {
+    eventTrigger: 'CLIENT_VISIT_DELETED',
+    description: 'Notifikasi saat kunjungan klien dihapus permanen',
+    titleTemplate: '🗑️ Kunjungan Klien Dihapus',
+    bodyTemplate: 'Kunjungan {kategori_kunjungan} pada {tanggal_kunjungan_display} telah dihapus oleh admin.',
+    placeholders: '{nama_karyawan}, {kategori_kunjungan}, {tanggal_kunjungan_display}',
+  },
 
   // --- Istirahat ---
   {
@@ -127,6 +141,7 @@ const notificationTemplates = [
     placeholders: '{nama_karyawan}, {maks_jam_istirahat}',
   },
 ];
+
 async function main() {
   console.log(`Mulai proses seeding...`);
 

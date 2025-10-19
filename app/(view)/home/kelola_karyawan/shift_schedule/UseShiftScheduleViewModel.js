@@ -77,6 +77,15 @@ function hhmmFromDb(v) {
   const d = dayjs(v);
   return d.isValid() ? d.format("HH:mm") : "";
 }
+// Akhiri di MINGGU yang mengandung tanggal tertentu (biar minggu lintas bulan tetap ke-cover)
+function endOfWeekInclusive(d) {
+  const m = dayjs(d);
+  const shiftToSunday = (7 - m.day()) % 7; // day(): 0=Minggu ... 6=Sabtu
+  return m.add(shiftToSunday, "day").endOf("day").toDate();
+}
+function isPastDate(dateStr) {
+  return dayjs(dateStr).isBefore(dayjs().startOf("day"), "day");
+}
 
 export default function UseShiftScheduleViewModel() {
   const { notification, modal } = AntdApp.useApp();
@@ -290,6 +299,7 @@ export default function UseShiftScheduleViewModel() {
   /* ===== assign / delete ===== */
   const assignCell = useCallback(
     async (userId, dateStr, value) => {
+      if (isPastDate(dateStr)) return; // cegah edit tanggal lampau
       const existing = getCell(userId, dateStr);
       const payload = assignPayload(userId, dateStr, value);
       if (existing?.rawId) {
@@ -304,6 +314,7 @@ export default function UseShiftScheduleViewModel() {
 
   const deleteCell = useCallback(
     async (userId, dateStr) => {
+      if (isPastDate(dateStr)) return; // cegah hapus tanggal lampau
       const existing = getCell(userId, dateStr);
       if (!existing?.rawId) return;
       await crudService.delete(ApiEndpoints.DeleteShiftKerja(existing.rawId));
@@ -317,7 +328,10 @@ export default function UseShiftScheduleViewModel() {
     async (userId) => {
       const sourceWeek = days.map((d) => getCell(userId, d.dateStr) || null);
       const rangeStart = dayjs(weekStart).add(1, "week").startOf("day").toDate();
-      const rangeEnd = dayjs(weekStart).endOf("month").toDate(); // akhir bulan
+      // akhir MINGGU yang mengandung akhir bulan
+      const monthEnd = dayjs(weekStart).endOf("month");
+      const rangeEnd = endOfWeekInclusive(monthEnd);
+
 
       let curStart = dayjs(rangeStart);
       while (curStart.isBefore(rangeEnd) || curStart.isSame(rangeEnd, "day")) {
@@ -364,7 +378,9 @@ export default function UseShiftScheduleViewModel() {
   const clearRepetition = useCallback(
     async (userId) => {
       const rangeStart = dayjs(weekStart).add(1, "week").startOf("day").toDate();
-      const rangeEnd = dayjs(weekStart).endOf("month").toDate(); // akhir bulan
+      const monthEnd = dayjs(weekStart).endOf("month");
+      const rangeEnd = endOfWeekInclusive(monthEnd);
+
 
       const targetMap = await loadShiftMapForRange(rangeStart, rangeEnd);
       const toDelete = [];

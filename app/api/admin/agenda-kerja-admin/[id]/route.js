@@ -10,8 +10,8 @@ const normRole = (r) =>
   String(r || '')
     .trim()
     .toUpperCase();
-const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR'].includes(normRole(role));
-const canManageAll = (role) => ['OPERASIONAL'].includes(normRole(role));
+const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR','SUPERADMIN'].includes(normRole(role));
+const canManageAll = (role) => ['OPERASIONAL', 'SUPERADMIN'].includes(normRole(role));
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -40,9 +40,11 @@ async function ensureAuth(req) {
   };
 }
 
+// === FIXED: izinkan OPERASIONAL **dan** SUPERADMIN
 function guardOperational(actor) {
-  if (actor?.role !== 'OPERASIONAL') {
-    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL yang dapat mengakses resource ini.' }, { status: 403 });
+  const role = String(actor?.role || '').trim().toUpperCase();
+  if (role !== 'OPERASIONAL' && role !== 'SUPERADMIN') {
+    return NextResponse.json({ message: 'Forbidden: hanya role OPERASIONAL/SUPERADMIN yang dapat mengakses resource ini.' }, { status: 403 });
   }
   return null;
 }
@@ -90,8 +92,6 @@ function formatStatusDisplay(status) {
 export async function GET(request, { params }) {
   const auth = await ensureAuth(request);
   if (auth instanceof NextResponse) return auth;
-  const forbidden = canSeeAll(auth.actor);
-  if (forbidden) return forbidden;
 
   try {
     const agenda = await db.agendaKerja.findFirst({
@@ -119,6 +119,9 @@ export async function PUT(request, { params }) {
   if (auth instanceof NextResponse) return auth;
   const forbidden = guardOperational(auth.actor);
   if (forbidden) return forbidden;
+
+  const actorId = auth.actor?.id;
+  const actorPromise = actorId ? db.user.findUnique({ where: { id_user: String(actorId) }, select: { nama_pengguna: true } }) : null;
 
   try {
     const current = await db.agendaKerja.findUnique({ where: { id_agenda_kerja: params.id } });
@@ -189,25 +192,29 @@ export async function PUT(request, { params }) {
       },
     });
 
+    const actorUser = actorPromise ? await actorPromise : null;
+    const actorName = (actorUser?.nama_pengguna || '').trim() || 'Pengguna';
     const agendaTitle = updated.agenda?.nama_agenda || 'Agenda Kerja';
     const friendlyDeadline = formatDateTimeDisplay(updated.end_date);
     const statusDisplay = formatStatusDisplay(updated.status);
-    const adminTitle = `Admin Memperbarui Agenda: ${agendaTitle}`;
-    const adminBody = [`Admin memperbarui agenda kerja "${agendaTitle}" untuk Anda.`, statusDisplay ? `Status terbaru: ${statusDisplay}.` : '', friendlyDeadline ? `Selesaikan sebelum ${friendlyDeadline}.` : '']
+    const adminTitle = `${actorName} Memperbarui Agenda: ${agendaTitle}`;
+    const adminBody = [`${actorName} memperbarui agenda kerja "${agendaTitle}" untuk Anda.`, statusDisplay ? `Status terbaru: ${statusDisplay}.` : '', friendlyDeadline ? `Selesaikan sebelum ${friendlyDeadline}.` : '']
       .filter(Boolean)
       .join(' ')
       .trim();
+    const assigneeTitle = `Agenda Diperbarui: ${agendaTitle}`;
+    const assigneeBody = [`Detail agenda "${agendaTitle}" telah diperbarui oleh ${actorName}.`, statusDisplay ? `Status terbaru: ${statusDisplay}.` : '', friendlyDeadline ? `Deadline: ${friendlyDeadline}.` : ''];
     const notificationPayload = {
       nama_karyawan: updated.user?.nama_pengguna || 'Karyawan',
       judul_agenda: agendaTitle,
-      nama_komentator: 'Panel Admin',
+      nama_komentator: actorName,
       tanggal_deadline: formatDateTime(updated.end_date),
       tanggal_deadline_display: friendlyDeadline,
       status: updated.status,
       status_display: statusDisplay,
-      pemberi_tugas: 'Panel Admin',
-      title: adminTitle,
-      body: adminBody,
+      pemberi_tugas: actorName,
+      title: assigneeTitle,
+      body: assigneeBody,
       overrideTitle: adminTitle,
       overrideBody: adminBody,
       title: `Agenda Diperbarui: ${agendaTitle}`,
