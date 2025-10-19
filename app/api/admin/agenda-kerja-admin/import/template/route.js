@@ -1,4 +1,3 @@
-// app/api/admin/agenda-kerja-admin/import/template/route.js
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
@@ -6,15 +5,13 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   const XLSX = await import('xlsx');
 
-  const headers = ['Tanggal Proyek', 'Aktivitas', 'Proyek/Agenda', 'Mulai', 'Selesai', 'Status'];
+  // Hanya 3 kolom: Tanggal Proyek, Aktivitas, Proyek/Agenda
+  const headers = ['Tanggal Proyek', 'Aktivitas', 'Proyek/Agenda'];
   const sample = [
     {
       'Tanggal Proyek': '2025-01-01',
-      Aktivitas: 'Contoh pekerjaan',
+      'Aktivitas': 'Contoh pekerjaan',
       'Proyek/Agenda': 'E-HRM',
-      Mulai: '08:00',
-      Selesai: '17:00',
-      Status: 'diproses',
     },
   ];
 

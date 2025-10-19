@@ -18,10 +18,10 @@ const EMPTY_ROWS = Object.freeze([]);
 const EMPTY_AGENDA = Object.freeze([]);
 const EMPTY_USERS = Object.freeze([]);
 
-// === helper overlap sehari (tanpa transform zona waktu)
+// overlap sehari (UTC literal)
 function overlapsDay(row, ymd) {
-  const s = row.start_date ? dayjs.utc(row.start_date) : null; // treat as literal
-  const e = row.end_date ? dayjs.utc(row.end_date) : null;     // treat as literal
+  const s = row.start_date ? dayjs.utc(row.start_date) : null;
+  const e = row.end_date ? dayjs.utc(row.end_date) : null;
 
   const sod = dayjs.utc(`${ymd} 00:00:00`, "YYYY-MM-DD HH:mm:ss");
   const eod = dayjs.utc(`${ymd} 23:59:59`, "YYYY-MM-DD HH:mm:ss");
@@ -43,7 +43,7 @@ export default function useAktivitasTimesheetViewModel() {
   });
   const [selectedDay, setSelectedDay] = useState(""); // YYYY-MM-DD
 
-  // === AUTO SELECT 'HARI INI' setelah memilih karyawan
+  // Auto pilih hari ini saat pilih karyawan
   useEffect(() => {
     if (!filters.user_id) return;
     const today = dayjs().format("YYYY-MM-DD");
@@ -69,7 +69,7 @@ export default function useAktivitasTimesheetViewModel() {
     [usersList]
   );
 
-  // Agenda master (Proyek)
+  // Agenda master
   const {
     data: agendaRes,
     isLoading: loadingAgenda,
@@ -86,7 +86,7 @@ export default function useAktivitasTimesheetViewModel() {
     [agendaMaster]
   );
 
-  // URL list aktivitas (harus ada user_id)
+  // URL list aktivitas
   const listUrl = useMemo(() => {
     if (!filters.user_id) return null;
     const p = new URLSearchParams();
@@ -99,7 +99,7 @@ export default function useAktivitasTimesheetViewModel() {
     return `${ApiEndpoints.GetAgendaKerja}?${p.toString()}`;
   }, [filters.user_id, filters.id_agenda, filters.status, filters.from, filters.to]);
 
-  // Fetch agenda-kerja
+  // Fetch
   const { data, isLoading, mutate } = useSWR(listUrl, fetcher, {
     revalidateOnFocus: false,
   });
@@ -108,7 +108,7 @@ export default function useAktivitasTimesheetViewModel() {
     [data]
   );
 
-  // Strip tanggal (jumlah pekerjaan per hari)
+  // Strip tanggal
   const dayBuckets = useMemo(() => {
     const start = dayjs(filters.from || DEFAULT_FROM);
     const end = dayjs(filters.to || DEFAULT_TO);
@@ -121,7 +121,7 @@ export default function useAktivitasTimesheetViewModel() {
     return list;
   }, [filters.from, filters.to, rows]);
 
-  // Tabel: filter client-side (selectedDay + q), sort terbaru
+  // Filter tabel
   const filteredRows = useMemo(() => {
     let xs = rows;
     if (selectedDay) xs = xs.filter((r) => overlapsDay(r, selectedDay));
@@ -142,16 +142,22 @@ export default function useAktivitasTimesheetViewModel() {
       });
   }, [rows, selectedDay, filters.q]);
 
+  // Helper tanggal aktif
+  const getActiveYMD = () => {
+    if (selectedDay) return selectedDay;
+    if (filters.from) return dayjs(filters.from, "YYYY-MM-DD HH:mm:ss").format("YYYY-MM-DD");
+    return dayjs().format("YYYY-MM-DD");
+  };
+
   // Actions
   const refresh = () => mutate();
 
   const remove = async (id, { hard = false } = {}) => {
     const url = ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : "");
-    await crudService.del(url);
+    await crudService.delete(url);
     await mutate();
   };
 
-  // (masih ada jika suatu saat dibutuhkan)
   const quickFinish = async (row) => {
     const put = crudService.put || crudService.patch;
     await put(ApiEndpoints.UpdateAgendaKerja(row.id_agenda_kerja), { status: "selesai" });
@@ -164,15 +170,17 @@ export default function useAktivitasTimesheetViewModel() {
     await mutate();
   };
 
-  const createActivity = async ({ deskripsi_kerja, id_agenda, start_date, end_date }) => {
+  // === Inti: create tanpa input jam — sentinel 00:00:00 di tanggal aktif
+  const createActivity = async ({ deskripsi_kerja, id_agenda }) => {
     if (!filters.user_id) throw new Error("Pilih karyawan dulu");
+    const ymd = getActiveYMD();
     await crudService.post(ApiEndpoints.CreateAgendaKerja, {
       id_user: filters.user_id,
       id_agenda,
       deskripsi_kerja,
       status: "diproses",
-      start_date,
-      end_date,
+      start_date: `${ymd} 00:00:00`,
+      end_date: `${ymd} 00:00:00`,
     });
     await mutate();
   };
@@ -182,7 +190,6 @@ export default function useAktivitasTimesheetViewModel() {
     await refetchAgenda();
   };
 
-  // === BARU: update aktivitas (hanya ganti proyek kalau perlu)
   const updateActivity = async (id_agenda_kerja, payload) => {
     const put = crudService.put || crudService.patch;
     await put(ApiEndpoints.UpdateAgendaKerja(id_agenda_kerja), payload);
@@ -211,10 +218,10 @@ export default function useAktivitasTimesheetViewModel() {
     // ops
     refresh,
     remove,
-    quickFinish,       // tidak dipakai di UI baru, dibiarkan untuk kompatibilitas
-    resetToDiproses,   // tidak dipakai di UI baru
+    quickFinish,
+    resetToDiproses,
     createActivity,
     createAgendaMaster,
-    updateActivity,    // <- dipakai oleh modal edit
+    updateActivity,
   };
 }

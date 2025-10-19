@@ -35,6 +35,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import useAbsensiViewModel from "./useAbsensiViewModel";
+import ExportExcelModal from "../../../components/modal/ExportExcelModal"; 
 
 /* -------------------- Helpers tampilan -------------------- */
 function fmtHHmmss(v) {
@@ -199,6 +200,7 @@ function AttendanceCard({
   stats,
   headerRight,
   selectedDate,
+  onOpenExport, // <— tambahan kecil: dipakai oleh tombol Export
 }) {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoSrc, setPhotoSrc] = useState(null);
@@ -452,14 +454,19 @@ function AttendanceCard({
             <div className="mt-1 text-sm text-gray-500">{dateLabel}</div>
           </div>
 
-        <div className="flex items-center gap-2">
-          {headerRight}
-          <Tooltip title="Export data">
-            <Button icon={<DownloadOutlined />} className="rounded-lg" type="primary">
-              Export
-            </Button>
-          </Tooltip>
-        </div>
+          <div className="flex items-center gap-2">
+            {headerRight}
+            <Tooltip title="Export data">
+              <Button
+                icon={<DownloadOutlined />}
+                className="rounded-lg"
+                type="primary"
+                onClick={onOpenExport} // <— buka modal export
+              >
+                Export
+              </Button>
+            </Tooltip>
+          </div>
         </div>
 
         {stats && (
@@ -591,6 +598,7 @@ export default function AbsensiContent() {
 
   const [mode, setMode] = useState("in");
   const isIn = mode === "in";
+  const [exportOpen, setExportOpen] = useState(false); // <— state modal export
 
   useEffect(() => {}, []);
 
@@ -648,6 +656,16 @@ export default function AbsensiContent() {
             />
           }
           selectedDate={tableDate}
+          onOpenExport={() => setExportOpen(true)} // <— buka modal export
+        />
+
+        {/* Modal Export (tanpa ubah API & VM) */}
+        <ExportExcelModal
+          open={exportOpen}
+          onClose={() => setExportOpen(false)}
+          rowsAll={vm.rowsAll}
+          employeeOptions={vm.employeeOptions}   // NEW
+          lokasiOptions={vm.lokasiOptions}       // NEW
         />
       </div>
     </div>

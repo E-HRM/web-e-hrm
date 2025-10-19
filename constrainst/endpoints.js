@@ -22,8 +22,8 @@ const API_POLA_KERJA = "/api/admin/pola-kerja";
 const API_SHIFT_KERJA = "/api/admin/shift-kerja";
 
 // === NEW: Absensi (records harian) & Approvals (persetujuan kehadiran)
-const API_ABSENSI_RECORDS = "/api/admin/absensi/history"; // GET ?date=YYYY-MM-DD&type=in|out&divisi=&status=&q=
-const API_ABSENSI_APPROVALS = "/api/admin/absensi";       // tanpa trailing slash
+const API_ABSENSI_RECORDS = "/api/admin/absensi/history";
+const API_ABSENSI_APPROVALS = "/api/admin/absensi";       
 
 // === Kunjungan
 const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
