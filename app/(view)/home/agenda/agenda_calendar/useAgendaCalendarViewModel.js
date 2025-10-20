@@ -47,11 +47,9 @@ const mapServerToFC = (row) => {
   const status =
     row.status || row.status_agenda || row.status_kerja || "diproses";
 
-  const title =
-    row.deskripsi_kerja || row.nama_agenda || row.title || "Agenda";
+  const title = row.deskripsi_kerja || row.nama_agenda || row.title || "Agenda";
 
-  const startRaw =
-    row.start_date || row.tanggal_mulai || row.start || row.mulai;
+  const startRaw = row.start_date || row.tanggal_mulai || row.start || row.mulai;
   const endRaw =
     row.end_date || row.tanggal_selesai || row.end || row.selesai || startRaw;
 
@@ -63,10 +61,9 @@ const mapServerToFC = (row) => {
   else if (status === "ditunda") backgroundColor = "#f59e0b";
 
   return {
-    // PASTIKAN id = id_agenda_kerja agar DELETE/PUT tepat
     id: row.id_agenda_kerja || row.id || row._id,
     title,
-    start, // string lokal agar FC tak geser TZ
+    start,
     end,
     backgroundColor,
     borderColor: backgroundColor,
@@ -92,39 +89,76 @@ export default function useAgendaCalendarViewModel() {
 
   const qs = useMemo(() => {
     const p = new URLSearchParams();
-    p.set("start", dayjs(range.start).format("YYYY-MM-DD"));
-    p.set("end", dayjs(range.end).format("YYYY-MM-DD"));
+    p.set("from", dayjs(range.start).format("YYYY-MM-DD")); // sesuai API
+    p.set("to", dayjs(range.end).format("YYYY-MM-DD"));     // sesuai API
+    p.set("perPage", "100"); // server default 20 (maks 100)
     return p.toString();
   }, [range]);
 
-  /* ===== Master Users ===== */
-  const { data: usersRes } = useSWR(
-    `${ApiEndpoints.GetUsers}?perPage=1000`,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+  /* ===== Master Users: fetch semua halaman ===== */
+  const fetchAllUsers = useCallback(async () => {
+    const perPage = 100;
+    let page = 1;
+    let all = [];
+
+    while (true) {
+      const url = `${ApiEndpoints.GetUsers}?page=${page}&perPage=${perPage}&orderBy=nama_pengguna&sort=asc`;
+      const json = await fetcher(url);
+
+      const items = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.items)
+        ? json.items
+        : [];
+
+      all.push(...items);
+
+      const totalPages =
+        json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
+
+      if (totalPages) {
+        if (page >= totalPages) break;
+        page += 1;
+      } else {
+        if (items.length < perPage) break;
+        page += 1;
+      }
+    }
+
+    return all;
+  }, []);
+
+  const { data: usersAll } = useSWR("users:allpages", fetchAllUsers, {
+    revalidateOnFocus: false,
+  });
 
   const usersList = useMemo(
-    () => (Array.isArray(usersRes?.data) ? usersRes.data : []),
-    [usersRes]
-  );
-
-  const userOptions = useMemo(
-    () =>
-      usersList.map((u) => ({
-        value: u.id_user,
-        label: u.nama_pengguna || u.email || u.id_user,
-      })),
-    [usersList]
+    () => (Array.isArray(usersAll) ? usersAll : []),
+    [usersAll]
   );
 
   const userMap = useMemo(() => {
     const m = new Map();
-    for (const u of usersList) m.set(u.id_user, u);
+    for (const u of usersList) {
+      const key = String(u?.id_user ?? u?.id ?? u?.uuid ?? "");
+      if (key) m.set(key, u);
+    }
     return m;
   }, [usersList]);
 
-  const getUserById = useCallback((id) => userMap.get(id) || null, [userMap]);
+  const userOptions = useMemo(
+    () =>
+      usersList.map((u) => ({
+        value: String(u.id_user),
+        label: u.nama_pengguna || u.email || String(u.id_user),
+      })),
+    [usersList]
+  );
+
+  const getUserById = useCallback(
+    (id) => userMap.get(String(id)) || null,
+    [userMap]
+  );
 
   const getPhotoUrl = useCallback((u) => {
     if (!u) return null;
@@ -234,12 +268,10 @@ export default function useAgendaCalendarViewModel() {
     [mutate]
   );
 
-  // ==== DELETE diperbaiki ====
   const deleteEvent = useCallback(
     async (id, { hard = false } = {}) => {
-      // Pakai endpoint by id_agenda_kerja, optional hard delete
       const url = ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : "");
-      const delFn = crudService.del || crudService.delete; // fallback
+      const delFn = crudService.del || crudService.delete;
       await delFn(url);
       await mutate();
     },
