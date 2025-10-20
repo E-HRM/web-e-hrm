@@ -76,7 +76,7 @@ function CircleImg({ src, size = 44, alt = "Avatar" }) {
 const parseForPicker = (v) => {
   if (!v) return null;
   const s = String(v);
-  return (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)) ? dayjs.utc(s) : dayjs(s);
+  return s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s) ? dayjs.utc(s) : dayjs(s);
 };
 
 export default function KunjunganKalenderContent() {
@@ -102,39 +102,52 @@ export default function KunjunganKalenderContent() {
   const [mapWhich, setMapWhich] = useState("start"); // start | end
 
   // Calendar handlers
-  const onDateClick = useCallback((arg) => {
-    formCreate.resetFields();
-    formCreate.setFieldsValue({ tanggal: dayjs(arg.date) });
-    setOpenCreate(true);
-  }, [formCreate]);
+  const onDateClick = useCallback(
+    (arg) => {
+      formCreate.resetFields();
+      formCreate.setFieldsValue({ tanggal: dayjs(arg.date) });
+      setOpenCreate(true);
+    },
+    [formCreate]
+  );
 
-  const handleDatesSet = useCallback((info) => {
-    vm.setRange({ start: info.start, end: info.end });
-  }, [vm]);
+  const handleDatesSet = useCallback(
+    (info) => {
+      vm.setRange({ start: info.start, end: info.end });
+    },
+    [vm]
+  );
 
-  const onEventClick = useCallback((clickInfo) => {
-    const r = clickInfo.event?.extendedProps?.raw || null;
-    if (!r) return;
-    setActiveRow(r);
-    setEditing(false);
+  const onEventClick = useCallback(
+    (clickInfo) => {
+      const r = clickInfo.event?.extendedProps?.raw || null;
+      if (!r) return;
+      setActiveRow(r);
+      setEditing(false);
 
-    // Prefill form edit
-    formEdit.resetFields();
-    const dateVal =
-      r.tanggal ? dayjs(r.tanggal) :
-      r.jam_mulai ? parseForPicker(r.jam_mulai) :
-      r.jam_selesai ? parseForPicker(r.jam_selesai) : null;
+      // Prefill form edit
+      formEdit.resetFields();
+      const dateVal = r.tanggal
+        ? dayjs(r.tanggal)
+        : r.jam_mulai
+        ? parseForPicker(r.jam_mulai)
+        : r.jam_selesai
+        ? parseForPicker(r.jam_selesai)
+        : null;
 
-    formEdit.setFieldsValue({
-      id_kategori_kunjungan: r.id_kategori_kunjungan || r?.kategori?.id_kategori_kunjungan || undefined,
-      tanggal: dateVal ? dayjs(dateVal) : null,
-      jam_mulai: r.jam_mulai ? parseForPicker(r.jam_mulai) : null,
-      jam_selesai: r.jam_selesai ? parseForPicker(r.jam_selesai) : null,
-      deskripsi: r.deskripsi || "",
-    });
+      formEdit.setFieldsValue({
+        id_kategori_kunjungan:
+          r.id_kategori_kunjungan || r?.kategori?.id_kategori_kunjungan || undefined,
+        tanggal: dateVal ? dayjs(dateVal) : null,
+        jam_mulai: r.jam_mulai ? parseForPicker(r.jam_mulai) : null,
+        jam_selesai: r.jam_selesai ? parseForPicker(r.jam_selesai) : null,
+        deskripsi: r.deskripsi || "",
+      });
 
-    setOpenDetail(true);
-  }, [formEdit]);
+      setOpenDetail(true);
+    },
+    [formEdit]
+  );
 
   const submitCreate = useCallback(async () => {
     try {
@@ -185,43 +198,20 @@ export default function KunjunganKalenderContent() {
     };
   }, [activeRow, vm]);
 
-  const statusToTag = (st) => {
-    const s = (st || "").toLowerCase();
-    if (s === "selesai") return { color: "success", text: "Selesai" };
-    if (s === "berlangsung") return { color: "warning", text: "Berlangsung" }; // yellow
-    return { color: "processing", text: "Diproses" }; // blue
+  // Status → kelas chip (sama seperti agenda kerja)
+  const statusClass = (st) => {
+    const s = String(st || "").toLowerCase();
+    if (s === "selesai") return "fc-chip fc-chip--done";
+    if (s === "ditunda" || s === "berlangsung") return "fc-chip fc-chip--hold";
+    return "fc-chip fc-chip--proc";
   };
-
-    // Boleh dihapus jika selesai -> tidak boleh
-  const canDelete = activeRow
-    ? (activeRow.status_kunjungan || "").toLowerCase() !== "selesai"
-    : false;
-
-  const confirmDelete = useCallback(() => {
-    if (!activeRow || !canDelete) return;
-    Modal.confirm({
-      title: "Hapus kunjungan?",
-      icon: <ExclamationCircleFilled />,
-      okText: "Hapus",
-      okButtonProps: { danger: true },
-      cancelText: "Batal",
-      onOk: async () => {
-        await vm.deletePlan(activeRow.id_kunjungan);
-        message.success("Kunjungan dihapus.");
-        // tutup modal & reset state
-        setEditing(false);
-        setOpenDetail(false);
-      },
-    });
-  }, [activeRow, canDelete, vm]);
-
 
   // Quick booleans for map/photo availability
   const photoAvailable = activeRow ? !!vm.pickPhotoUrl(activeRow) : false;
   const startCoord = activeRow ? vm.getStartCoord(activeRow) : { lat: null, lon: null };
-  const endCoord   = activeRow ? vm.getEndCoord(activeRow)   : { lat: null, lon: null };
+  const endCoord = activeRow ? vm.getEndCoord(activeRow) : { lat: null, lon: null };
   const startMapOk = !!vm.makeOsmEmbed(startCoord.lat, startCoord.lon);
-  const endMapOk   = !!vm.makeOsmEmbed(endCoord.lat, endCoord.lon);
+  const endMapOk = !!vm.makeOsmEmbed(endCoord.lat, endCoord.lon);
 
   // Open photo/map
   const openPhotoModal = useCallback(() => {
@@ -231,25 +221,42 @@ export default function KunjunganKalenderContent() {
     setPhotoOpen(!!photo);
   }, [activeRow, vm]);
 
-  const openMapModal = useCallback((which = "start") => {
-    if (!activeRow) return;
-    const { lat, lon } = which === "end" ? endCoord : startCoord;
-    const url = vm.makeOsmEmbed(lat, lon);
-    if (!url) return;
-    setMapWhich(which);
-    setMapEmbedUrl(url);
-    setMapOpen(true);
-  }, [activeRow, startCoord, endCoord, vm]);
+  const openMapModal = useCallback(
+    (which = "start") => {
+      if (!activeRow) return;
+      const { lat, lon } = which === "end" ? endCoord : startCoord;
+      const url = vm.makeOsmEmbed(lat, lon);
+      if (!url) return;
+      setMapWhich(which);
+      setMapEmbedUrl(url);
+      setMapOpen(true);
+    },
+    [activeRow, startCoord, endCoord, vm]
+  );
+
+  // Render Event – match agenda kerja: judul ellipsis + chip status, background via event prop
+  const renderEventContent = (info) => {
+    const r = info.event.extendedProps?.raw;
+    const timePrefix = info.timeText ? `${info.timeText} ` : "";
+    return (
+      <div className="fc-event-custom">
+        <span className="fc-title-ellipsis" title={info.event.title}>
+          {timePrefix}
+          {info.event.title}
+        </span>
+        {r?.status_kunjungan ? (
+          <span className={statusClass(r.status_kunjungan)}>{r.status_kunjungan}</span>
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <ConfigProvider
       theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: NAVY, borderRadius: 12 } }}
     >
       <div className="p-4">
-        <Card
-          title={<span className="text-lg font-semibold">Visit Calendar</span>}
-          styles={{ body: { paddingTop: 16 } }}
-        >
+        <Card title={<span className="text-lg font-semibold">Visit Calendar</span>} styles={{ body: { paddingTop: 16 } }}>
           <FullCalendar
             height="auto"
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -259,6 +266,9 @@ export default function KunjunganKalenderContent() {
               center: "title",
               right: "dayGridMonth,timeGridWeek,timeGridDay,listWeek",
             }}
+            locale="id"
+            timeZone="local"
+            dayMaxEventRows={3}
             selectable
             selectMirror
             datesSet={handleDatesSet}
@@ -266,22 +276,7 @@ export default function KunjunganKalenderContent() {
             eventClick={onEventClick}
             events={vm.events}
             eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
-            eventContent={(info) => {
-              const r = info.event.extendedProps?.raw;
-              const s = r?.jam_mulai ? showFromDB(r.jam_mulai, "HH:mm") : "";
-              const e = r?.jam_selesai ? showFromDB(r.jam_selesai, "HH:mm") : "";
-              const map = statusToTag(r?.status_kunjungan);
-              return (
-                <div style={{ lineHeight: 1.15 }}>
-                  <div>{s && e ? `${s}–${e} ` : ""}{info.event.title}</div>
-                  {r?.status_kunjungan ? (
-                    <Tag style={{ marginTop: 2 }} color={map.color}>
-                      {map.text}
-                    </Tag>
-                  ) : null}
-                </div>
-              );
-            }}
+            eventContent={renderEventContent}
           />
         </Card>
       </div>
@@ -309,6 +304,9 @@ export default function KunjunganKalenderContent() {
               options={vm.userOptions}
               showSearch
               optionFilterProp="label"
+              listHeight={400}
+              virtual
+              loading={!vm.userOptions?.length}
             />
           </Form.Item>
 
@@ -345,7 +343,7 @@ export default function KunjunganKalenderContent() {
         </Form>
       </Modal>
 
-      {/* Detail Modal (layout seperti screenshot) */}
+      {/* Detail Modal */}
       <Modal
         title={
           <div className="flex items-center gap-2">
@@ -354,7 +352,10 @@ export default function KunjunganKalenderContent() {
           </div>
         }
         open={openDetail}
-        onCancel={() => { setOpenDetail(false); setEditing(false); }}
+        onCancel={() => {
+          setOpenDetail(false);
+          setEditing(false);
+        }}
         destroyOnClose
         width={760}
         maskClosable={false}
@@ -363,7 +364,7 @@ export default function KunjunganKalenderContent() {
       >
         {!activeRow ? null : (
           <>
-            {/* Header: foto + nama + sub + chips */}
+            {/* Header */}
             <div className="flex items-start gap-3">
               <CircleImg src={userInfo?.photo} alt={userInfo?.name} size={48} />
               <div className="min-w-0">
@@ -372,24 +373,24 @@ export default function KunjunganKalenderContent() {
                     <Link href={userInfo.link} className="no-underline" style={{ color: "#0f172a" }}>
                       {userInfo?.name}
                     </Link>
-                  ) : userInfo?.name}
+                  ) : (
+                    userInfo?.name
+                  )}
                 </div>
                 <div style={{ color: "#64748b", marginTop: 2 }} className="truncate">
                   {userInfo?.sub || "—"}
                 </div>
 
-                {/* Chips row */}
+                {/* Chips */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {/* status */}
                   {activeRow?.status_kunjungan ? (
-                    <Tag color={statusToTag(activeRow.status_kunjungan).color} style={{ borderRadius: 999 }}>
-                      {statusToTag(activeRow.status_kunjungan).text}
-                    </Tag>
+                    <span className={statusClass(activeRow.status_kunjungan)}>
+                      {activeRow.status_kunjungan}
+                    </span>
                   ) : null}
 
-                  {/* kategori */}
                   {activeRow?.kategori?.kategori_kunjungan ? (
-                    <Tag style={{ borderRadius: 999 }}>{activeRow.kategori.kategori_kunjungan}</Tag>
+                    <span className="fc-chip">{activeRow.kategori.kategori_kunjungan}</span>
                   ) : null}
 
                   {/* time pill */}
@@ -453,15 +454,34 @@ export default function KunjunganKalenderContent() {
                   <Button icon={<CloseOutlined />} onClick={() => setEditing(false)}>
                     Cancel
                   </Button>
-                    <Button
-                      danger
-                        icon={<DeleteOutlined />}
-                        disabled={!canDelete}
-                        onClick={confirmDelete}
-                      >
-                        Delete
-                    </Button>
-                  <Button type="primary" icon={<SaveOutlined />} onClick={submitEdit} style={{ background: NAVY }}>
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    disabled={(activeRow.status_kunjungan || "").toLowerCase() === "selesai"}
+                    onClick={() => {
+                      Modal.confirm({
+                        title: "Hapus kunjungan?",
+                        icon: <ExclamationCircleFilled />,
+                        okText: "Hapus",
+                        okButtonProps: { danger: true },
+                        cancelText: "Batal",
+                        onOk: async () => {
+                          await vm.deletePlan(activeRow.id_kunjungan);
+                          message.success("Kunjungan dihapus.");
+                          setEditing(false);
+                          setOpenDetail(false);
+                        },
+                      });
+                    }}
+                  >
+                    Delete
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<SaveOutlined />}
+                    onClick={submitEdit}
+                    style={{ background: NAVY }}
+                  >
                     Save
                   </Button>
                 </div>
@@ -501,16 +521,36 @@ export default function KunjunganKalenderContent() {
                       disabled={!endMapOk}
                     />
                   </Tooltip>
-                  <Tooltip title={canDelete ? "Delete visit" : "Tidak bisa hapus (status selesai)"}>
-                  <Button
-                    size="large"
-                    shape="circle"
-                    icon={<DeleteOutlined />}
-                    danger
-                    disabled={!canDelete}
-                    onClick={confirmDelete}
-                  />
-                </Tooltip>
+                  <Tooltip
+                    title={
+                      (activeRow.status_kunjungan || "").toLowerCase() === "selesai"
+                        ? "Tidak bisa hapus (status selesai)"
+                        : "Delete visit"
+                    }
+                  >
+                    <Button
+                      size="large"
+                      shape="circle"
+                      icon={<DeleteOutlined />}
+                      danger
+                      disabled={(activeRow.status_kunjungan || "").toLowerCase() === "selesai"}
+                      onClick={() => {
+                        Modal.confirm({
+                          title: "Hapus kunjungan?",
+                          icon: <ExclamationCircleFilled />,
+                          okText: "Hapus",
+                          okButtonProps: { danger: true },
+                          cancelText: "Batal",
+                          onOk: async () => {
+                            await vm.deletePlan(activeRow.id_kunjungan);
+                            message.success("Kunjungan dihapus.");
+                            setEditing(false);
+                            setOpenDetail(false);
+                          },
+                        });
+                      }}
+                    />
+                  </Tooltip>
                   <Tooltip title="Edit visit">
                     <Button size="large" shape="circle" icon={<EditOutlined />} onClick={() => setEditing(true)} />
                   </Tooltip>
@@ -521,7 +561,7 @@ export default function KunjunganKalenderContent() {
         )}
       </Modal>
 
-      {/* Photo Modal — kecil + preview; zIndex di atas detail */}
+      {/* Photo Modal */}
       <Modal
         title="Attachment"
         open={photoOpen}
@@ -544,7 +584,7 @@ export default function KunjunganKalenderContent() {
         )}
       </Modal>
 
-      {/* Map Modal — OSM embed; bisa pilih Start/End; zIndex tertinggi */}
+      {/* Map Modal */}
       <Modal
         title="Location"
         open={mapOpen}
@@ -571,7 +611,15 @@ export default function KunjunganKalenderContent() {
           />
         </div>
         {mapEmbedUrl ? (
-          <div style={{ width: "100%", height: 420, borderRadius: 12, overflow: "hidden", border: "1px solid #e5e7eb" }}>
+          <div
+            style={{
+              width: "100%",
+              height: 420,
+              borderRadius: 12,
+              overflow: "hidden",
+              border: "1px solid #e5e7eb",
+            }}
+          >
             <iframe
               src={mapEmbedUrl}
               style={{ width: "100%", height: "100%", border: 0 }}
@@ -583,6 +631,61 @@ export default function KunjunganKalenderContent() {
           <div style={{ opacity: 0.6 }}>No coordinates</div>
         )}
       </Modal>
+
+      {/* Gaya global – sama seperti Agenda Kerja */}
+      <style jsx global>{`
+        .fc .fc-daygrid-event {
+          padding: 2px 6px;
+        }
+        .fc-event-custom {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 0;
+        }
+        /* Judul 2 baris clamp */
+        .fc-title-ellipsis {
+          min-width: 0;
+          max-width: 100%;
+          overflow: hidden;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          white-space: normal;
+          line-height: 1.15;
+        }
+        .fc-chip {
+          display: inline-block;
+          padding: 1px 6px;
+          border-radius: 999px;
+          font-size: 10px;
+          line-height: 16px;
+          border: 1px solid transparent;
+          flex: 0 0 auto;
+          background: #f3f4f6;
+          color: #334155;
+          border-color: #e5e7eb;
+        }
+        .fc-chip--proc {
+          background: #ebf2ff;
+          color: #1d4ed8;
+          border-color: #dbeafe;
+        }
+        .fc-chip--hold {
+          background: #fff7e6;
+          color: #b45309;
+          border-color: #fde68a;
+        }
+        .fc-chip--done {
+          background: #eaf7ec;
+          color: #15803d;
+          border-color: #bbf7d0;
+        }
+        /* Hilangkan underline link event bawaan */
+        .fc .fc-daygrid-event a {
+          text-decoration: none;
+        }
+      `}</style>
     </ConfigProvider>
   );
 }

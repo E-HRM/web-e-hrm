@@ -12,7 +12,6 @@ import {
   DatePicker,
   Select,
   Space,
-  Tag,
   Tooltip,
   Divider,
 } from "antd";
@@ -83,14 +82,14 @@ export default function AgendaCalendarContent() {
 
   /* ----- helpers ----- */
   const statusColor = (st) =>
-    st === "selesai" ? "success" : st === "ditunda" ? "warning" : "processing";
+    st === "selesai" ? "fc-chip fc-chip--done" : st === "ditunda" ? "fc-chip fc-chip--hold" : "fc-chip fc-chip--proc";
 
   const openCreate = (startStr, endStr) => {
     setEditId(null);
     form.setFieldsValue({
       title: "",
       status: "diproses",
-      users: [],                 // multi user
+      users: [],
       id_agenda: null,
       start: dayjs(startStr),
       end: dayjs(endStr),
@@ -103,7 +102,7 @@ export default function AgendaCalendarContent() {
     form.setFieldsValue({
       title: fcEvent.title,
       status: fcEvent.extendedProps?.status || "diproses",
-      users: [fcEvent.extendedProps?.id_user].filter(Boolean), // tampilkan user terkait (disabled)
+      users: [fcEvent.extendedProps?.id_user].filter(Boolean),
       id_agenda: fcEvent.extendedProps?.id_agenda || null,
       start: dayjs(fcEvent.start),
       end: dayjs(fcEvent.end || fcEvent.start),
@@ -125,7 +124,6 @@ export default function AgendaCalendarContent() {
         await vm.updateEvent(editId, payload);
         notification.success({ message: "Agenda diperbarui" });
       } else {
-        // create banyak user
         if (!Array.isArray(v.users) || v.users.length === 0) {
           notification.warning({ message: "Pilih setidaknya satu karyawan" });
           return;
@@ -149,7 +147,6 @@ export default function AgendaCalendarContent() {
       cancelText: "Batal",
       onOk: async () => {
         try {
-          // soft delete (tanpa ?hard=1). Jika ingin hard, gunakan: await vm.deleteEvent(id, { hard: true })
           await vm.deleteEvent(id);
           notification.success({ message: "Agenda dihapus" });
           setDetailOpen(false);
@@ -183,22 +180,17 @@ export default function AgendaCalendarContent() {
     }
   };
 
-  /* ===== Render event ===== */
+  /* ===== Render event dengan ellipsis & chip kecil ===== */
   const renderEventContent = (info) => {
-    const status = info.event.extendedProps?.status;
-    const color =
-      status === "selesai" ? "green" : status === "ditunda" ? "orange" : "blue";
+    const st = info.event.extendedProps?.status;
+    const time = info.timeText ? `${info.timeText} ` : "";
     return (
-      <div className="fc-event-custom" style={{ lineHeight: 1.15 }}>
-        <div>
-          {info.timeText ? `${info.timeText} ` : ""}
+      <div className="fc-event-custom">
+        <span className="fc-title-ellipsis" title={info.event.title}>
+          {time}
           {info.event.title}
-        </div>
-        {status ? (
-          <Tag color={color} style={{ marginTop: 2 }}>
-            {status}
-          </Tag>
-        ) : null}
+        </span>
+        {st ? <span className={statusColor(st)}>{st}</span> : null}
       </div>
     );
   };
@@ -216,10 +208,7 @@ export default function AgendaCalendarContent() {
     const name =
       user?.nama_pengguna || user?.name || user?.email || raw.id_user || "—";
     const photo = vm.getPhotoUrl(user) || "/avatar-placeholder.jpg";
-    const sub =
-      vm.getJabatanName(user) ||
-      vm.getDepartemenName(user) ||
-      "—";
+    const sub = vm.getJabatanName(user) || vm.getDepartemenName(user) || "—";
     const link = user?.id_user ? `/home/kelola_karyawan/karyawan/${user.id_user}` : null;
 
     return { user, name, photo, sub, link };
@@ -245,6 +234,7 @@ export default function AgendaCalendarContent() {
           selectMirror
           editable
           eventResizableFromStart
+          eventTimeFormat={{ hour: "2-digit", minute: "2-digit", hour12: false }}
           select={(sel) => openCreate(sel.startStr, sel.endStr)}
           eventClick={openDetail}
           eventDrop={commitMoveResize}
@@ -272,17 +262,12 @@ export default function AgendaCalendarContent() {
       >
         {!detailEvent ? null : (
           <>
-            {/* Header user */}
             <div className="flex items-start gap-3">
               <CircleImg src={detailUser?.photo} alt={detailUser?.name} size={48} />
               <div className="min-w-0">
                 <div style={{ fontWeight: 700, fontSize: 16 }} className="truncate">
                   {detailUser?.link ? (
-                    <Link
-                      href={detailUser.link}
-                      className="no-underline"
-                      style={{ color: "#0f172a" }}
-                    >
+                    <Link href={detailUser.link} className="no-underline" style={{ color: "#0f172a" }}>
                       {detailUser?.name}
                     </Link>
                   ) : (
@@ -293,26 +278,17 @@ export default function AgendaCalendarContent() {
                   {detailUser?.sub || "—"}
                 </div>
 
-                {/* Chips */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {/* status */}
                   {detailEvent.extendedProps?.status ? (
-                    <Tag
-                      color={statusColor(detailEvent.extendedProps.status)}
-                      style={{ borderRadius: 999 }}
-                    >
+                    <span className={statusColor(detailEvent.extendedProps.status)}>
                       {detailEvent.extendedProps.status}
-                    </Tag>
+                    </span>
                   ) : null}
 
-                  {/* proyek */}
                   {detailEvent.extendedProps?.agenda?.nama_agenda ? (
-                    <Tag style={{ borderRadius: 999 }}>
-                      {detailEvent.extendedProps.agenda.nama_agenda}
-                    </Tag>
+                    <span className="fc-chip">{detailEvent.extendedProps.agenda.nama_agenda}</span>
                   ) : null}
 
-                  {/* time pill */}
                   <div
                     style={{
                       display: "inline-flex",
@@ -329,8 +305,7 @@ export default function AgendaCalendarContent() {
                     <ClockCircleOutlined />
                     <span>
                       {vm.showFromDB(
-                        detailEvent.extendedProps?.raw?.start_date ||
-                          detailEvent.start,
+                        detailEvent.extendedProps?.raw?.start_date || detailEvent.start,
                         "DD MMM YYYY HH:mm"
                       )}{" "}
                       -{" "}
@@ -348,12 +323,10 @@ export default function AgendaCalendarContent() {
 
             <Divider style={{ margin: "14px 0 12px" }} />
 
-            {/* Deskripsi */}
             <div style={{ fontSize: 14, color: "#0f172a", whiteSpace: "pre-wrap" }}>
               {detailEvent.extendedProps?.deskripsi || "—"}
             </div>
 
-            {/* Actions */}
             <div className="flex justify-end gap-2 mt-12">
               <Tooltip title="Edit">
                 <Button
@@ -410,6 +383,9 @@ export default function AgendaCalendarContent() {
                 options={vm.userOptions}
                 showSearch
                 optionFilterProp="label"
+                listHeight={400}
+                virtual
+                loading={!vm.userOptions?.length}
               />
             </Form.Item>
           )}
@@ -430,7 +406,6 @@ export default function AgendaCalendarContent() {
             />
           </Form.Item>
 
-          {/* Proyek/Agenda + tambah cepat */}
           <Form.Item label="Proyek/Agenda" required>
             <Space.Compact className="w-full">
               <Form.Item
@@ -496,6 +471,55 @@ export default function AgendaCalendarContent() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Gaya global khusus FullCalendar (ellipsis + chip) */}
+      <style jsx global>{`
+        .fc .fc-daygrid-event { padding: 2px 6px; }
+        .fc-event-custom{
+          display:flex;
+          align-items:center;
+          gap:6px;
+          min-width:0;
+        }
+        .fc-title-ellipsis{
+          display:inline-block;
+          min-width:0;
+          max-width:100%;
+          overflow:hidden;
+          white-space:nowrap;
+          text-overflow:ellipsis;
+          line-height:1.15;
+        }
+        .fc-chip{
+          display:inline-block;
+          padding:1px 6px;
+          border-radius:999px;
+          font-size:10px;
+          line-height:16px;
+          border:1px solid transparent;
+          flex:0 0 auto;
+          background:#f3f4f6;
+          color:#334155;
+          border-color:#e5e7eb;
+        }
+        .fc-chip--proc{ background:#EBF2FF; color:#1d4ed8; border-color:#dbeafe; }
+        .fc-chip--hold{ background:#FFF7E6; color:#b45309; border-color:#fde68a; }
+        .fc-chip--done{ background:#EAF7EC; color:#15803d; border-color:#bbf7d0; }
+
+        /* Hilangkan underline link event bawaan */
+        .fc .fc-daygrid-event a{ text-decoration:none; }
+
+        /* Opsional: clamp 2 baris (ganti title satu baris di atas) */
+        /* 
+        .fc-title-ellipsis{
+          display:-webkit-box;
+          -webkit-line-clamp:2;
+          -webkit-box-orient:vertical;
+          overflow:hidden;
+          white-space:normal;
+        }
+        */
+      `}</style>
     </div>
   );
 }

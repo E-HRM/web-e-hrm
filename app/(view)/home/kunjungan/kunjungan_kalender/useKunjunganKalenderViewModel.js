@@ -24,20 +24,25 @@ export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
 const toNaiveForFC = (v) => {
   if (!v) return null;
   const s = String(v);
-  if (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s)) return dayjs.utc(s).format("YYYY-MM-DDTHH:mm:ss");
+  if (s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s))
+    return dayjs.utc(s).format("YYYY-MM-DDTHH:mm:ss");
   return dayjs(s).format("YYYY-MM-DDTHH:mm:ss");
 };
 
 /** Format kirim ke API (tanpa offset). */
 const asLocalPlain = (d) => (d ? dayjs(d).format("YYYY-MM-DD HH:mm:ss") : null);
-const asDateOnly   = (d) => (d ? dayjs(d).format("YYYY-MM-DD") : null);
+const asDateOnly = (d) => (d ? dayjs(d).format("YYYY-MM-DD") : null);
 
 /** Gabungkan tanggal (date-only) + jam (time-only). */
 const combineLocalDateTime = (dateOnly, timeOnly) => {
   if (!dateOnly || !timeOnly) return null;
   const d = dayjs(dateOnly);
   const t = dayjs(timeOnly);
-  return d.hour(t.hour()).minute(t.minute()).second(t.second() || 0).millisecond(0);
+  return d
+    .hour(t.hour())
+    .minute(t.minute())
+    .second(t.second() || 0)
+    .millisecond(0);
 };
 
 /** Safe number (number/string → number; selain itu → null). */
@@ -48,24 +53,69 @@ const toNum = (v) => {
 };
 
 // opsional: default kategori saat create
-const DEFAULT_KATEGORI_ID = process.env.NEXT_PUBLIC_KUNJUNGAN_DEFAULT_KATEGORI_ID || null;
+const DEFAULT_KATEGORI_ID =
+  process.env.NEXT_PUBLIC_KUNJUNGAN_DEFAULT_KATEGORI_ID || null;
 
 export default function useKunjunganKalenderViewModel() {
-  // ==== USERS ====
-  const { data: usersRes } = useSWR(`${ApiEndpoints.GetUsers}?perPage=1000`, fetcher, { revalidateOnFocus: false });
-  const userOptions = useMemo(() => {
-    const xs = Array.isArray(usersRes?.data) ? usersRes.data : [];
-    return xs.map((u) => ({ value: u.id_user, label: u.nama_pengguna || u.email || u.id_user }));
-  }, [usersRes]);
+  /* ==== USERS: ambil semua halaman (tidak mentok 10) ==== */
+  const fetchAllUsers = useCallback(async () => {
+    const perPage = 100;
+    let page = 1;
+    let all = [];
+
+    while (true) {
+      const url = `${ApiEndpoints.GetUsers}?page=${page}&perPage=${perPage}&orderBy=nama_pengguna&sort=asc`;
+      const json = await fetcher(url);
+
+      const items = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.items)
+        ? json.items
+        : [];
+      all.push(...items);
+
+      const totalPages =
+        json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
+
+      if (totalPages) {
+        if (page >= totalPages) break;
+        page += 1;
+      } else {
+        if (items.length < perPage) break;
+        page += 1;
+      }
+    }
+    return all;
+  }, []);
+
+  const { data: usersAll } = useSWR("kunjungan:users:allpages", fetchAllUsers, {
+    revalidateOnFocus: false,
+  });
+
+  const usersList = useMemo(
+    () => (Array.isArray(usersAll) ? usersAll : []),
+    [usersAll]
+  );
+
+  const userOptions = useMemo(
+    () =>
+      usersList.map((u) => ({
+        value: String(u.id_user),
+        label: u.nama_pengguna || u.email || String(u.id_user),
+      })),
+    [usersList]
+  );
 
   const userMap = useMemo(() => {
     const m = new Map();
-    const xs = Array.isArray(usersRes?.data) ? usersRes.data : [];
-    xs.forEach((u) => m.set(u.id_user, u));
+    for (const u of usersList) {
+      const key = String(u?.id_user ?? u?.id ?? u?.uuid ?? "");
+      if (key) m.set(key, u);
+    }
     return m;
-  }, [usersRes]);
+  }, [usersList]);
 
-  const getUserById = useCallback((id) => userMap.get(id) || null, [userMap]);
+  const getUserById = useCallback((id) => userMap.get(String(id)) || null, [userMap]);
 
   const getJabatanName = useCallback((u) => {
     if (!u) return null;
@@ -98,55 +148,75 @@ export default function useKunjunganKalenderViewModel() {
     );
   }, []);
 
-  // ==== KATEGORI ====
-  const { data: katRes } = useSWR(`${ApiEndpoints.GetKategoriKunjungan}?perPage=1000`, fetcher, { revalidateOnFocus: false });
+  /* ==== KATEGORI ==== */
+  const { data: katRes } = useSWR(
+    `${ApiEndpoints.GetKategoriKunjungan}?perPage=1000`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
   const kategoriOptions = useMemo(() => {
     const xs = Array.isArray(katRes?.data) ? katRes.data : [];
-    return xs.map((k) => ({ value: k.id_kategori_kunjungan, label: k.kategori_kunjungan }));
+    return xs.map((k) => ({
+      value: k.id_kategori_kunjungan,
+      label: k.kategori_kunjungan,
+    }));
   }, [katRes]);
   const kategoriRequired = !DEFAULT_KATEGORI_ID;
 
-  // ==== RANGE KALENDER ====
+  /* ==== RANGE KALENDER ==== */
   const [viewRange, setViewRange] = useState({ start: null, end: null });
   const setRange = useCallback((r) => {
     if (!r) return;
     setViewRange((prev) => {
       const prevStart = prev?.start ? dayjs(prev.start).startOf("day").valueOf() : null;
-      const prevEnd   = prev?.end   ? dayjs(prev.end).endOf("day").valueOf()   : null;
-      const nextStart = r?.start    ? dayjs(r.start).startOf("day").valueOf()  : null;
-      const nextEnd   = r?.end      ? dayjs(r.end).endOf("day").valueOf()      : null;
+      const prevEnd = prev?.end ? dayjs(prev.end).endOf("day").valueOf() : null;
+      const nextStart = r?.start ? dayjs(r.start).startOf("day").valueOf() : null;
+      const nextEnd = r?.end ? dayjs(r.end).endOf("day").valueOf() : null;
       if (prevStart === nextStart && prevEnd === nextEnd) return prev;
       return { start: r.start, end: r.end };
     });
   }, []);
 
-  // ==== LIST KUNJUNGAN ====
+  /* ==== LIST KUNJUNGAN ==== */
   const listUrl = useMemo(() => {
     if (!viewRange.start || !viewRange.end) return null;
     // FullCalendar end EXCLUSIVE → -1 hari
     const start = dayjs(viewRange.start).startOf("day");
-    const end   = dayjs(viewRange.end).startOf("day").subtract(1, "day").endOf("day");
+    const end = dayjs(viewRange.end).startOf("day").subtract(1, "day").endOf("day");
 
     const p = new URLSearchParams();
     p.set("startDate", start.format("YYYY-MM-DD HH:mm:ss"));
-    p.set("endDate",   end.format("YYYY-MM-DD HH:mm:ss"));
+    p.set("endDate", end.format("YYYY-MM-DD HH:mm:ss"));
     p.set("pageSize", "1000");
     p.set("orderBy", "tanggal");
     p.set("sort", "desc");
     return `${ApiEndpoints.GetKunjungan}?${p.toString()}`;
   }, [viewRange.start, viewRange.end]);
 
-  const { data: listRes, isLoading, mutate } = useSWR(listUrl, fetcher, { revalidateOnFocus: false });
-  const rows = useMemo(() => (Array.isArray(listRes?.data) ? listRes.data : []), [listRes]);
+  const { data: listRes, isLoading, mutate } = useSWR(listUrl, fetcher, {
+    revalidateOnFocus: false,
+  });
+  const rows = useMemo(
+    () => (Array.isArray(listRes?.data) ? listRes.data : []),
+    [listRes]
+  );
 
-  // ==== EVENTS ====
+  /* ==== EVENTS: samakan dengan agenda (warna by status) ==== */
   const events = useMemo(() => {
     return rows.map((r) => {
+      // start / end
       const hasTime = r.jam_mulai || r.jam_selesai;
-      let start = null, end = null;
+      let start = null,
+        end = null;
       if (r.jam_mulai) start = toNaiveForFC(r.jam_mulai);
       else if (r.tanggal) start = dayjs(r.tanggal).format("YYYY-MM-DD");
       if (r.jam_selesai) end = toNaiveForFC(r.jam_selesai);
+
+      // background by status
+      const st = String(r.status_kunjungan || "").toLowerCase();
+      let backgroundColor = "#3b82f6"; // diproses
+      if (st === "selesai") backgroundColor = "#22c55e";
+      else if (st === "ditunda" || st === "berlangsung") backgroundColor = "#f59e0b";
 
       return {
         id: r.id_kunjungan,
@@ -154,22 +224,28 @@ export default function useKunjunganKalenderViewModel() {
         start,
         end,
         allDay: !hasTime,
+        backgroundColor,
+        borderColor: backgroundColor,
         extendedProps: { status: r.status_kunjungan, raw: r },
       };
     });
   }, [rows]);
 
-  // ==== CREATE ====
+  /* ==== CREATE ==== */
   const createPlansForUsers = useCallback(
     async ({ userIds = [], tanggal, jam_mulai, jam_selesai, deskripsi, kategoriId }) => {
       const base = dayjs(tanggal || new Date());
       const start = jam_mulai ? combineLocalDateTime(base, jam_mulai) : null;
-      const end   = jam_selesai ? combineLocalDateTime(base, jam_selesai) : null;
+      const end = jam_selesai ? combineLocalDateTime(base, jam_selesai) : null;
 
       for (const uid of userIds) {
         const payload = {
           id_user: uid,
-          ...(kategoriId ? { id_kategori_kunjungan: kategoriId } : (DEFAULT_KATEGORI_ID ? { id_kategori_kunjungan: DEFAULT_KATEGORI_ID } : {})),
+          ...(kategoriId
+            ? { id_kategori_kunjungan: kategoriId }
+            : DEFAULT_KATEGORI_ID
+            ? { id_kategori_kunjungan: DEFAULT_KATEGORI_ID }
+            : {}),
           tanggal: asDateOnly(base),
           jam_mulai: start ? asLocalPlain(start) : null,
           jam_selesai: end ? asLocalPlain(end) : null,
@@ -183,12 +259,18 @@ export default function useKunjunganKalenderViewModel() {
     [mutate]
   );
 
-  // ==== UPDATE ====
+  /* ==== UPDATE ==== */
   const updatePlan = useCallback(
     async (id, { tanggal, jam_mulai, jam_selesai, deskripsi, id_kategori_kunjungan, status_kunjungan }) => {
       const base = tanggal ? dayjs(tanggal) : null;
-      const start = base && jam_mulai ? combineLocalDateTime(base, jam_mulai) : (jam_mulai ? dayjs(jam_mulai) : null);
-      const end   = base && jam_selesai ? combineLocalDateTime(base, jam_selesai) : (jam_selesai ? dayjs(jam_selesai) : null);
+      const start =
+        base && jam_mulai ? combineLocalDateTime(base, jam_mulai) : jam_mulai ? dayjs(jam_mulai) : null;
+      const end =
+        base && jam_selesai
+          ? combineLocalDateTime(base, jam_selesai)
+          : jam_selesai
+          ? dayjs(jam_selesai)
+          : null;
 
       const payload = {
         ...(tanggal ? { tanggal: asDateOnly(base) } : {}),
@@ -205,42 +287,58 @@ export default function useKunjunganKalenderViewModel() {
     [mutate]
   );
 
-  // ==== DELETE ====
-    const deletePlan = useCallback(
-      async (id) => {
-        // pakai endpoint [id] yang sama seperti PUT, method DELETE
-        await crudService.delete(ApiEndpoints.UpdateKunjungan(id));
-        await mutate();
-      },
-      [mutate]
-    );
+  /* ==== DELETE ==== */
+  const deletePlan = useCallback(
+    async (id) => {
+      await crudService.delete(ApiEndpoints.UpdateKunjungan(id));
+      await mutate();
+    },
+    [mutate]
+  );
 
-
-  // ==== FOTO & KOORDINAT ====
+  /* ==== FOTO & KOORDINAT ==== */
   const pickPhotoUrl = useCallback(
-    (r) => r?.lampiran_kunjungan_url || r?.lampiran_url || r?.foto_url || r?.image_url || r?.photo_url || null,
+    (r) =>
+      r?.lampiran_kunjungan_url ||
+      r?.lampiran_url ||
+      r?.foto_url ||
+      r?.image_url ||
+      r?.photo_url ||
+      null,
     []
   );
 
-  const getStartCoord = useCallback((r) => ({
-    lat: toNum(r?.start_latitude ?? r?.latitude_start ?? null),
-    lon: toNum(r?.start_longitude ?? r?.longitude_start ?? null),
-  }), []);
-  const getEndCoord = useCallback((r) => ({
-    lat: toNum(r?.end_latitude ?? r?.latitude_end ?? null),
-    lon: toNum(r?.end_longitude ?? r?.longitude_end ?? null),
-  }), []);
+  const getStartCoord = useCallback(
+    (r) => ({
+      lat: toNum(r?.start_latitude ?? r?.latitude_start ?? null),
+      lon: toNum(r?.start_longitude ?? r?.longitude_start ?? null),
+    }),
+    []
+  );
+  const getEndCoord = useCallback(
+    (r) => ({
+      lat: toNum(r?.end_latitude ?? r?.latitude_end ?? null),
+      lon: toNum(r?.end_longitude ?? r?.longitude_end ?? null),
+    }),
+    []
+  );
 
   /** Buat URL embed OSM, null jika invalid. */
   const makeOsmEmbed = useCallback((lat, lon) => {
-    const la = toNum(lat), lo = toNum(lon);
+    const la = toNum(lat),
+      lo = toNum(lon);
     if (la == null || lo == null) return null;
-    const dx = 0.002, dy = 0.002;
-    const bbox = `${(lo - dx).toFixed(6)},${(la - dy).toFixed(6)},${(lo + dx).toFixed(6)},${(la + dy).toFixed(6)}`;
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(la)},${encodeURIComponent(lo)}`;
+    const dx = 0.002,
+      dy = 0.002;
+    const bbox = `${(lo - dx).toFixed(6)},${(la - dy).toFixed(6)},${(lo + dx).toFixed(
+      6
+    )},${(la + dy).toFixed(6)}`;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(
+      bbox
+    )}&layer=mapnik&marker=${encodeURIComponent(la)},${encodeURIComponent(lo)}`;
   }, []);
 
-  /** Format periode untuk pill jam seperti contoh screenshot. */
+  /** Format periode untuk pill jam seperti contoh agenda. */
   const formatPeriod = useCallback((r) => {
     const s = r?.jam_mulai ? showFromDB(r.jam_mulai, "DD MMM YYYY HH:mm") : null;
     const e = r?.jam_selesai ? showFromDB(r.jam_selesai, "DD MMM YYYY HH:mm") : null;
