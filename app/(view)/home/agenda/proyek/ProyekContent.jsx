@@ -1,21 +1,27 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
-  Card, Table, Input, Button, Modal, Form, Popconfirm, Tooltip, message,
-  Select, Tag, DatePicker, Alert
+  Card,
+  Table,
+  Input,
+  Button,
+  Modal,
+  Form,
+  Popconfirm,
+  Tooltip,
+  message,
+  Select,
+  Tag,
+  DatePicker,
+  Alert,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import customParseFormat from "dayjs/plugin/customParseFormat";
-import utc from "dayjs/plugin/utc";
 import useSWR from "swr";
 import { fetcher } from "../../../../utils/fetcher";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import useProyekViewModel from "./ProyekViewModel";
-
-dayjs.extend(customParseFormat);
-dayjs.extend(utc);
 
 const BRAND = { accent: "#003A6F" };
 
@@ -35,6 +41,11 @@ export default function ProyekContent() {
   // modal activity list
   const [openList, setOpenList] = useState(false);
   const [listProject, setListProject] = useState(null); // {id_agenda, nama_agenda}
+
+  // modal anggota lainnya
+  const [openMembers, setOpenMembers] = useState(false);
+  const [membersProjectName, setMembersProjectName] = useState("");
+  const [membersList, setMembersList] = useState([]);
 
   const onAddSubmit = async () => {
     try {
@@ -80,6 +91,12 @@ export default function ProyekContent() {
     setOpenList(true);
   };
 
+  const openMembersModal = (row, allNames, showFrom = 3) => {
+    setMembersProjectName(row.nama_agenda);
+    setMembersList(allNames.slice(showFrom)); // sisanya
+    setOpenMembers(true);
+  };
+
   const columns = useMemo(
     () => [
       {
@@ -96,12 +113,21 @@ export default function ProyekContent() {
         title: "Anggota",
         key: "anggota",
         render: (_, row) => {
-          const names = vm.membersNames(row.id_agenda);
-          if (names.length === 0) return "—";
+          const names = vm.membersNames(row.id_agenda); // hanya user aktif
+          if (!names.length) return "—";
+
+          const top = names.slice(0, 3);
+          const more = names.length - top.length;
+
           return (
             <div className="whitespace-pre-wrap">
-              {names.slice(0, 3).map((n, i) => `${i + 1}. ${n}`).join("\n")}
-              {names.length > 3 ? `\n+${names.length - 3} lainnya` : ""}
+              {top.map((n, i) => `${i + 1}. ${n}`).join("\n")}
+              {more > 0 ? (
+                <>
+                  {"\n"}
+                  <a onClick={() => openMembersModal(row, names)}>{`+${more} lainnya`}</a>
+                </>
+              ) : null}
             </div>
           );
         },
@@ -191,11 +217,7 @@ export default function ProyekContent() {
         destroyOnClose
       >
         <Form form={addForm} layout="vertical">
-          <Form.Item
-            name="nama_agenda"
-            label="Nama"
-            rules={[{ required: true, message: "Wajib diisi" }]}
-          >
+          <Form.Item name="nama_agenda" label="Nama" rules={[{ required: true, message: "Wajib diisi" }]}>
             <Input placeholder="Mis. The Day OSS EXPO" />
           </Form.Item>
         </Form>
@@ -213,17 +235,33 @@ export default function ProyekContent() {
         destroyOnClose
       >
         <Form form={editForm} layout="vertical">
-          <Form.Item
-            name="nama_agenda"
-            label="Nama"
-            rules={[{ required: true, message: "Wajib diisi" }]}
-          >
+          <Form.Item name="nama_agenda" label="Nama" rules={[{ required: true, message: "Wajib diisi" }]}>
             <Input />
           </Form.Item>
         </Form>
       </Modal>
 
+      {/* Modal Aktivitas Proyek */}
       <ActivitiesModal open={openList} onClose={() => setOpenList(false)} project={listProject} />
+
+      {/* Modal Anggota Lainnya */}
+      <Modal
+        title={`Anggota Proyek: ${membersProjectName || "-"}`}
+        open={openMembers}
+        onCancel={() => setOpenMembers(false)}
+        footer={<Button onClick={() => setOpenMembers(false)} style={{ background: "#F4F4F5" }}>Tutup</Button>}
+        destroyOnClose
+      >
+        {membersList.length ? (
+          <div className="space-y-1">
+            {membersList.map((n, i) => (
+              <div key={i}>{`${i + 4}. ${n}`}</div>
+            ))}
+          </div>
+        ) : (
+          <div className="opacity-60">Tidak ada data.</div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -236,14 +274,10 @@ function ActivitiesModal({ open, onClose, project }) {
   const [division, setDivision] = useState("");
   const [q, setQ] = useState("");
 
-  // Tampilkan waktu PERSIS seperti di DB (tanpa konversi zona waktu)
   const showDB = (v) => (v ? dayjs.utc(v).format("DD MMM YYYY HH:mm") : "-");
 
-  // Kirim filter range sebagai lokal polos "YYYY-MM-DD HH:mm:ss" (tanpa Z/offset)
   const fmtLocal = (d, edge /* 'start'|'end' */) =>
-    d
-      ? dayjs(d)[edge === "end" ? "endOf" : "startOf"]("day").format("YYYY-MM-DD HH:mm:ss")
-      : null;
+    d ? dayjs(d)[edge === "end" ? "endOf" : "startOf"]("day").format("YYYY-MM-DD HH:mm:ss") : null;
 
   const qs = useMemo(() => {
     if (!project?.id_agenda) return null;
@@ -330,7 +364,7 @@ function ActivitiesModal({ open, onClose, project }) {
         ),
       },
     ],
-    [] // kolom statis
+    []
   );
 
   return (
@@ -347,11 +381,26 @@ function ActivitiesModal({ open, onClose, project }) {
         <DatePicker placeholder="Tanggal Mulai" value={from ? dayjs(from) : null} onChange={(d) => setFrom(d ? d.toDate() : null)} />
         <span className="opacity-60">-</span>
         <DatePicker placeholder="Tanggal Selesai" value={to ? dayjs(to) : null} onChange={(d) => setTo(d ? d.toDate() : null)} />
-        <Select className="min-w-[160px]" placeholder="--Filter Divisi--" allowClear options={divisionOptions}
-                value={division || undefined} onChange={(v) => setDivision(v || "")} />
-        <Select className="min-w-[160px]" placeholder="--Filter Status--" allowClear value={status || undefined}
-                onChange={(v) => setStatus(v || "")}
-                options={[{ value: "diproses", label: "Diproses" }, { value: "ditunda", label: "Ditunda" }, { value: "selesai", label: "Selesai" }]} />
+        <Select
+          className="min-w-[160px]"
+          placeholder="--Filter Divisi--"
+          allowClear
+          options={divisionOptions}
+          value={division || undefined}
+          onChange={(v) => setDivision(v || "")}
+        />
+        <Select
+          className="min-w-[160px]"
+          placeholder="--Filter Status--"
+          allowClear
+          value={status || undefined}
+          onChange={(v) => setStatus(v || "")}
+          options={[
+            { value: "diproses", label: "Diproses" },
+            { value: "ditunda", label: "Ditunda" },
+            { value: "selesai", label: "Selesai" },
+          ]}
+        />
         <Input.Search className="w-[140px]" placeholder="Cari" value={q} onChange={(e) => setQ(e.target.value)} allowClear />
       </div>
 
