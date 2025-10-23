@@ -25,6 +25,7 @@ enum AtasanRole {
   HR
   OPERASIONAL
   DIREKTUR
+  SUPERADMIN
 }
 
 enum CutiType {

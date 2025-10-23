@@ -64,9 +64,40 @@ const OPSI_STATUS_KERJA = [
   { value: "TIDAK_AKTIF", label: "TIDAK AKTIF" },
   { value: "CUTI", label: "CUTI" },
 ];
+
 /* ---------------- helpers ---------------- */
+const DASH = "—";
+
+// Untuk tampilan (Descriptions, teks biasa)
+function displayOrDash(v) {
+  if (v === 0) return 0; // angka 0 dianggap valid
+  if (v == null) return DASH; // null/undefined
+  const s = String(v).trim();
+  return (!s || s.toLowerCase() === "null" || s.toLowerCase() === "undefined") ? DASH : s;
+}
+
+// Untuk nilai form (supaya field kosong, bukan "null"/"-")
+function nz(v) {
+  if (v == null) return undefined;
+  const s = String(v).trim();
+  if (!s || s.toLowerCase() === "null" || s.toLowerCase() === "undefined") return undefined;
+  return v;
+}
+
 function toDateOnly(d) {
   return d ? dayjs(d).format("YYYY-MM-DD") : undefined;
+}
+
+// Gabung alamat aman (hindari "— —")
+function joinAlamat(base, kota, prov) {
+  const b = displayOrDash(base);
+  const k = displayOrDash(kota);
+  const p = displayOrDash(prov);
+  if (b === DASH) {
+    const segs = [k, p].filter((x) => x !== DASH);
+    return segs.length ? segs.join(", ") : DASH;
+  }
+  return b + (k !== DASH ? ` — ${k}` : "") + (p !== DASH ? `, ${p}` : "");
 }
 
 /** Append helper: selalu append string (server sering ekspektasi key exist) */
@@ -153,40 +184,38 @@ export default function KaryawanProfileForm({
   useEffect(() => {
     if (detail && (mode === "edit" || mode === "view")) {
       form.setFieldsValue({
-        nama_pengguna: detail.nama_pengguna || "",
-        email: detail.email || "",
-        kontak: detail.kontak || "",
-        agama: detail.agama || undefined,
-        tempat_lahir: detail.tempat_lahir || "", // ← FIX: ikut diisi
+        nama_pengguna: nz(detail.nama_pengguna),
+        email: nz(detail.email),
+        kontak: nz(detail.kontak),
+        agama: nz(detail.agama),
+        tempat_lahir: nz(detail.tempat_lahir),
         tanggal_lahir: detail.tanggal_lahir ? dayjs(detail.tanggal_lahir) : undefined,
-        jenis_kelamin: detail.jenis_kelamin || undefined,
-        golongan_darah: detail.golongan_darah || undefined,
-        status_perkawinan: detail.status_perkawinan || undefined,
-        zona_waktu: detail.zona_waktu || undefined,
+        jenis_kelamin: nz(detail.jenis_kelamin),
+        golongan_darah: nz(detail.golongan_darah),
+        status_perkawinan: nz(detail.status_perkawinan),
+        zona_waktu: nz(detail.zona_waktu),
 
-        jenjang_pendidikan: detail.jenjang_pendidikan || undefined,
-        jurusan: detail.jurusan || undefined,
-        nama_institusi_pendidikan: detail.nama_institusi_pendidikan || undefined,
-        tahun_lulus: detail.tahun_lulus || undefined,
+        jenjang_pendidikan: nz(detail.jenjang_pendidikan),
+        jurusan: nz(detail.jurusan),
+        nama_institusi_pendidikan: nz(detail.nama_institusi_pendidikan),
+        tahun_lulus: nz(detail.tahun_lulus),
 
-        nomor_induk_karyawan: detail.nomor_induk_karyawan || undefined,
-        id_departement: detail.id_departement || undefined,
-        id_jabatan: detail.id_jabatan || undefined,
-        status_kerja: detail.status_kerja || undefined,
-        tanggal_mulai_bekerja: detail.tanggal_mulai_bekerja
-          ? dayjs(detail.tanggal_mulai_bekerja)
-          : undefined,
-        id_location: detail.id_location || undefined,
-        jenis_bank: detail.jenis_bank || undefined,
-        nomor_rekening: detail.nomor_rekening || undefined,
-        role: detail.role || "KARYAWAN",
+        nomor_induk_karyawan: nz(detail.nomor_induk_karyawan),
+        id_departement: nz(detail.id_departement),
+        id_jabatan: nz(detail.id_jabatan),
+        status_kerja: nz(detail.status_kerja),
+        tanggal_mulai_bekerja: detail.tanggal_mulai_bekerja ? dayjs(detail.tanggal_mulai_bekerja) : undefined,
+        id_location: nz(detail.id_location),
+        jenis_bank: nz(detail.jenis_bank),
+        nomor_rekening: nz(detail.nomor_rekening),
+        role: nz(detail.role) || "KARYAWAN",
 
-        alamat_ktp: detail.alamat_ktp || "",
-        alamat_ktp_provinsi: detail.alamat_ktp_provinsi || "",
-        alamat_ktp_kota: detail.alamat_ktp_kota || "",
-        alamat_domisili: detail.alamat_domisili || "",
-        alamat_domisili_provinsi: detail.alamat_domisili_provinsi || "",
-        alamat_domisili_kota: detail.alamat_domisili_kota || "",
+        alamat_ktp: nz(detail.alamat_ktp),
+        alamat_ktp_provinsi: nz(detail.alamat_ktp_provinsi),
+        alamat_ktp_kota: nz(detail.alamat_ktp_kota),
+        alamat_domisili: nz(detail.alamat_domisili),
+        alamat_domisili_provinsi: nz(detail.alamat_domisili_provinsi),
+        alamat_domisili_kota: nz(detail.alamat_domisili_kota),
       });
     }
   }, [detail, form, mode]);
@@ -209,12 +238,11 @@ export default function KaryawanProfileForm({
           id_departement: values.id_departement || undefined,
           id_location: values.id_location || undefined,
           tanggal_lahir: toDateOnly(values.tanggal_lahir),
-          tempat_lahir: values.tempat_lahir || undefined, // ← FIX: ikut kirim saat register
+          tempat_lahir: values.tempat_lahir || undefined, // ikut kirim saat register
         };
         const reg = await crudService.post(ApiEndpoints.CreateUser, registerPayload);
         const newId = reg?.user?.id_user;
 
-        // Kalau API belum mengembalikan objek user lengkap
         if (!newId) {
           message.success(reg?.message || "Registrasi berhasil.");
           onSuccess?.();
@@ -251,7 +279,7 @@ export default function KaryawanProfileForm({
           append(fd, "alamat_domisili_provinsi", values.alamat_domisili_provinsi);
           append(fd, "alamat_domisili_kota", values.alamat_domisili_kota);
 
-          // ← FIX: tempat lahir & tgl lahir ikut
+          // tempat & tgl lahir ikut
           append(fd, "tempat_lahir", values.tempat_lahir);
           append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
 
@@ -287,7 +315,7 @@ export default function KaryawanProfileForm({
             alamat_domisili_provinsi: values.alamat_domisili_provinsi ?? null,
             alamat_domisili_kota: values.alamat_domisili_kota ?? null,
 
-            // ← FIX: tempat & tanggal lahir ikut
+            // tempat & tanggal lahir ikut
             tempat_lahir: values.tempat_lahir ?? null,
             tanggal_lahir: toDateOnly(values.tanggal_lahir) ?? null,
           };
@@ -314,7 +342,7 @@ export default function KaryawanProfileForm({
         append(fd, "id_jabatan", values.id_jabatan);
         append(fd, "role", values.role || "KARYAWAN");
         append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
-        append(fd, "tempat_lahir", values.tempat_lahir); // ← FIX
+        append(fd, "tempat_lahir", values.tempat_lahir);
 
         // Detail
         append(fd, "jenis_kelamin", values.jenis_kelamin);
@@ -357,7 +385,7 @@ export default function KaryawanProfileForm({
           id_jabatan: values.id_jabatan ?? null,
           role: values.role ?? "KARYAWAN",
           tanggal_lahir: toDateOnly(values.tanggal_lahir) ?? null,
-          tempat_lahir: values.tempat_lahir ?? null, // ← FIX
+          tempat_lahir: values.tempat_lahir ?? null,
 
           jenis_kelamin: values.jenis_kelamin ?? null,
           golongan_darah: values.golongan_darah ?? null,
@@ -447,13 +475,13 @@ export default function KaryawanProfileForm({
               {readOnly ? (
                 <>
                   <div className="font-semibold text-lg">
-                    {detail?.nama_pengguna || "-"}
+                    {displayOrDash(detail?.nama_pengguna)}
                   </div>
                   <div className="text-sm text-slate-600">
-                    {detail?.jabatan?.nama_jabatan || "—"}
+                    {displayOrDash(detail?.jabatan?.nama_jabatan)}
                   </div>
                   <div className="text-sm text-slate-600">
-                    {detail?.departement?.nama_departement || detail?.divisi || "—"}
+                    {displayOrDash(detail?.departement?.nama_departement ?? detail?.divisi)}
                   </div>
                 </>
               ) : (
@@ -468,7 +496,7 @@ export default function KaryawanProfileForm({
                     label="Nama*"
                     rules={[{ required: true, message: "Nama wajib diisi" }]}
                   >
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
 
                   <Form.Item
@@ -479,7 +507,7 @@ export default function KaryawanProfileForm({
                       { type: "email", message: "Format email tidak valid" },
                     ]}
                   >
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
 
                   {mode === "add" && (
@@ -488,7 +516,7 @@ export default function KaryawanProfileForm({
                       label="Password*"
                       rules={[{ required: true, message: "Password wajib diisi" }]}
                     >
-                      <Input.Password />
+                      <Input.Password placeholder={DASH} />
                     </Form.Item>
                   )}
 
@@ -511,93 +539,97 @@ export default function KaryawanProfileForm({
               <div className="space-y-8">
                 <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
                   <Descriptions.Item label="Tempat Lahir">
-                    {detail?.tempat_lahir || "—"}
+                    {displayOrDash(detail?.tempat_lahir)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Tanggal Lahir">
-                    {detail?.tanggal_lahir
+                    {displayOrDash(detail?.tanggal_lahir) !== DASH
                       ? dayjs(detail.tanggal_lahir).format("DD MMM YYYY")
-                      : "—"}
+                      : DASH}
                   </Descriptions.Item>
                   <Descriptions.Item label="Jenis Kelamin">
-                    {detail?.jenis_kelamin || "—"}
+                    {displayOrDash(detail?.jenis_kelamin)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Golongan Darah">
-                    {detail?.golongan_darah || "—"}
+                    {displayOrDash(detail?.golongan_darah)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Status Perkawinan">
-                    {detail?.status_perkawinan || "—"}
+                    {displayOrDash(detail?.status_perkawinan)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Agama">
-                    {detail?.agama || "—"}
+                    {displayOrDash(detail?.agama)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Nomor Telepon">
-                    {detail?.kontak || "—"}
+                    {displayOrDash(detail?.kontak)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Zona Waktu">
-                    {detail?.zona_waktu || "—"}
+                    {displayOrDash(detail?.zona_waktu)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Email">
-                    {detail?.email || "—"}
+                    {displayOrDash(detail?.email)}
                   </Descriptions.Item>
                 </Descriptions>
 
                 <h3 className="text-xl font-semibold">Pendidikan Terakhir</h3>
                 <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
                   <Descriptions.Item label="Jenjang">
-                    {detail?.jenjang_pendidikan || "—"}
+                    {displayOrDash(detail?.jenjang_pendidikan)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Jurusan">
-                    {detail?.jurusan || "—"}
+                    {displayOrDash(detail?.jurusan)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Nama Institusi Pendidikan">
-                    {detail?.nama_institusi_pendidikan || "—"}
+                    {displayOrDash(detail?.nama_institusi_pendidikan)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Tahun Lulus">
-                    {detail?.tahun_lulus || "—"}
+                    {displayOrDash(detail?.tahun_lulus)}
                   </Descriptions.Item>
                 </Descriptions>
 
                 <h3 className="text-xl font-semibold">Kepegawaian</h3>
                 <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
                   <Descriptions.Item label="Nomor Induk Karyawan">
-                    {detail?.nomor_induk_karyawan || "—"}
+                    {displayOrDash(detail?.nomor_induk_karyawan)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Divisi">
-                    {detail?.departement?.nama_departement || detail?.divisi || "—"}
+                    {displayOrDash(detail?.departement?.nama_departement ?? detail?.divisi)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Jabatan">
-                    {detail?.jabatan?.nama_jabatan || "—"}
+                    {displayOrDash(detail?.jabatan?.nama_jabatan)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Status Kerja">
-                    {detail?.status_kerja || "—"}
+                    {displayOrDash(detail?.status_kerja)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Tgl. Mulai Bekerja">
-                    {detail?.tanggal_mulai_bekerja
+                    {displayOrDash(detail?.tanggal_mulai_bekerja) !== DASH
                       ? dayjs(detail.tanggal_mulai_bekerja).format("DD MMM YYYY")
-                      : "—"}
+                      : DASH}
                   </Descriptions.Item>
                   <Descriptions.Item label="Lokasi Kantor">
-                    {detail?.kantor?.nama_kantor || "—"}
+                    {displayOrDash(detail?.kantor?.nama_kantor)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Jenis Bank">
-                    {detail?.jenis_bank || "—"}
+                    {displayOrDash(detail?.jenis_bank)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Nomor Rekening">
-                    {detail?.nomor_rekening || "—"}
+                    {displayOrDash(detail?.nomor_rekening)}
                   </Descriptions.Item>
                 </Descriptions>
 
                 <h3 className="text-xl font-semibold">Alamat</h3>
                 <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
                   <Descriptions.Item label="Alamat KTP">
-                    {(detail?.alamat_ktp || "—") +
-                      (detail?.alamat_ktp_kota ? ` — ${detail.alamat_ktp_kota}` : "") +
-                      (detail?.alamat_ktp_provinsi ? `, ${detail.alamat_ktp_provinsi}` : "")}
+                    {joinAlamat(
+                      detail?.alamat_ktp,
+                      detail?.alamat_ktp_kota,
+                      detail?.alamat_ktp_provinsi
+                    )}
                   </Descriptions.Item>
                   <Descriptions.Item label="Alamat Domisili">
-                    {(detail?.alamat_domisili || "—") +
-                      (detail?.alamat_domisili_kota ? ` — ${detail.alamat_domisili_kota}` : "") +
-                      (detail?.alamat_domisili_provinsi ? `, ${detail.alamat_domisili_provinsi}` : "")}
+                    {joinAlamat(
+                      detail?.alamat_domisili,
+                      detail?.alamat_domisili_kota,
+                      detail?.alamat_domisili_provinsi
+                    )}
                   </Descriptions.Item>
                 </Descriptions>
               </div>
@@ -613,10 +645,10 @@ export default function KaryawanProfileForm({
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <Form.Item name="tempat_lahir" label="Tempat Lahir">
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="tanggal_lahir" label="Tanggal Lahir">
-                    <DatePicker className="w-full" format="DD MMM YYYY" />
+                    <DatePicker className="w-full" format="DD MMM YYYY" placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="jenis_kelamin" label="Jenis Kelamin">
                     <Select
@@ -625,19 +657,20 @@ export default function KaryawanProfileForm({
                         { value: "PEREMPUAN", label: "Perempuan" },
                       ]}
                       allowClear
+                      placeholder={DASH}
                     />
                   </Form.Item>
                   <Form.Item name="golongan_darah" label="Golongan Darah">
-                    <Select options={OPSI_GOLONGAN_DARAH} allowClear />
+                    <Select options={OPSI_GOLONGAN_DARAH} allowClear placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="status_perkawinan" label="Status Perkawinan">
-                    <Select options={OPSI_STATUS_PERKAWINAN} allowClear />
+                    <Select options={OPSI_STATUS_PERKAWINAN} allowClear placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="agama" label="Agama">
-                    <Select options={OPSI_AGAMA} allowClear showSearch optionFilterProp="label" />
+                    <Select options={OPSI_AGAMA} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="kontak" label="Nomor Telepon">
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="zona_waktu" label="Zona Waktu">
                     <Input placeholder="mis. WIB / WITA / WIT / UTC+7" />
@@ -648,16 +681,16 @@ export default function KaryawanProfileForm({
                 <h3 className="text-xl font-semibold mt-6">Pendidikan Terakhir</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <Form.Item name="jenjang_pendidikan" label="Jenjang">
-                    <Select options={OPSI_JENJANG} allowClear />
+                    <Select options={OPSI_JENJANG} allowClear placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="jurusan" label="Jurusan">
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="nama_institusi_pendidikan" label="Nama Institusi Pendidikan">
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="tahun_lulus" label="Tahun Lulus">
-                    <Input type="number" />
+                    <Input type="number" placeholder={DASH} />
                   </Form.Item>
                 </div>
 
@@ -665,28 +698,28 @@ export default function KaryawanProfileForm({
                 <h3 className="text-xl font-semibold mt-6">Kepegawaian</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <Form.Item name="nomor_induk_karyawan" label="Nomor Induk Karyawan">
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="id_departement" label="Divisi">
-                    <Select options={deptOpts} allowClear showSearch optionFilterProp="label" />
+                    <Select options={deptOpts} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="id_jabatan" label="Jabatan">
-                    <Select options={jabOpts} allowClear showSearch optionFilterProp="label" />
+                    <Select options={jabOpts} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="status_kerja" label="Status Kerja">
-                    <Select options={OPSI_STATUS_KERJA} allowClear />
+                    <Select options={OPSI_STATUS_KERJA} allowClear placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="tanggal_mulai_bekerja" label="Tgl. Mulai Bekerja">
-                    <DatePicker className="w-full" format="DD MMM YYYY" />
+                    <DatePicker className="w-full" format="DD MMM YYYY" placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="id_location" label="Lokasi Kantor">
-                    <Select options={locOpts} allowClear showSearch optionFilterProp="label" />
+                    <Select options={locOpts} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="jenis_bank" label="Jenis Bank">
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="nomor_rekening" label="Nomor Rekening">
-                    <Input />
+                    <Input placeholder={DASH} />
                   </Form.Item>
                   <Form.Item name="role" label="Role">
                     <Select
@@ -697,6 +730,7 @@ export default function KaryawanProfileForm({
                         { value: "DIREKTUR", label: "Direktur" },
                         { value: "SUPERADMIN", label: "Super-admin" },
                       ]}
+                      placeholder={DASH}
                     />
                   </Form.Item>
                 </div>
@@ -705,26 +739,26 @@ export default function KaryawanProfileForm({
                 <h3 className="text-xl font-semibold mt-6">Alamat</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <Form.Item name="alamat_ktp" label="Alamat KTP">
-                    <Input.TextArea rows={2} />
+                    <Input.TextArea rows={2} placeholder={DASH} />
                   </Form.Item>
                   <div className="grid grid-cols-2 gap-4">
                     <Form.Item name="alamat_ktp_provinsi" label="Provinsi (KTP)">
-                      <Input />
+                      <Input placeholder={DASH} />
                     </Form.Item>
                     <Form.Item name="alamat_ktp_kota" label="Kota (KTP)">
-                      <Input />
+                      <Input placeholder={DASH} />
                     </Form.Item>
                   </div>
 
                   <Form.Item name="alamat_domisili" label="Alamat Domisili">
-                    <Input.TextArea rows={2} />
+                    <Input.TextArea rows={2} placeholder={DASH} />
                   </Form.Item>
                   <div className="grid grid-cols-2 gap-4">
                     <Form.Item name="alamat_domisili_provinsi" label="Provinsi (Domisili)">
-                      <Input />
+                      <Input placeholder={DASH} />
                     </Form.Item>
                     <Form.Item name="alamat_domisili_kota" label="Kota (Domisili)">
-                      <Input />
+                      <Input placeholder={DASH} />
                     </Form.Item>
                   </div>
                 </div>
