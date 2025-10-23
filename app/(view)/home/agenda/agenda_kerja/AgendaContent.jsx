@@ -7,7 +7,10 @@ import {
 } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";          // ⬅️ tambahkan
 import useAgendaViewModel from "./AgendaViewModel";
+
+dayjs.extend(utc);                            // ⬅️ aktifkan
 
 const BRAND = { accent: "#003A6F" };
 
@@ -53,8 +56,9 @@ export default function AgendaContent() {
       title: "Waktu",
       key: "waktu",
       render: (_, r) => {
-        const s = r.start_date ? dayjs(r.start_date).format("DD/MM HH:mm") : "-";
-        const e = r.end_date ? dayjs(r.end_date).format("DD/MM HH:mm") : "-";
+        // ⬅️ tampilkan angka jam persis dari DB (tanpa konversi TZ)
+        const s = r.start_date ? dayjs.utc(r.start_date).format("DD/MM HH:mm") : "-";
+        const e = r.end_date ? dayjs.utc(r.end_date).format("DD/MM HH:mm") : "-";
         return `${s} - ${e}`;
       },
     },
@@ -150,16 +154,31 @@ export default function AgendaContent() {
             options={vm.userOptions}
             showSearch
             optionFilterProp="label"
+            listHeight={400}
+            virtual
           />
+
           <DatePicker
-            value={vm.filters.from ? dayjs(vm.filters.from) : null}
-            onChange={(d) => vm.setFilters((s) => ({ ...s, from: d ? d.startOf("day").toISOString() : "" }))}
+            value={vm.filters.from ? dayjs(vm.filters.from, "YYYY-MM-DD HH:mm:ss") : null}
+            onChange={(d) =>
+              vm.setFilters((s) => ({
+                ...s,
+                // ⬅️ pakai string polos, bukan ISO
+                from: d ? d.startOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
+              }))
+            }
             format="DD/MM/YYYY"
           />
           <span className="opacity-60">-</span>
           <DatePicker
-            value={vm.filters.to ? dayjs(vm.filters.to) : null}
-            onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.endOf("day").toISOString() : "" }))}
+            value={vm.filters.to ? dayjs(vm.filters.to, "YYYY-MM-DD HH:mm:ss") : null}
+            onChange={(d) =>
+              vm.setFilters((s) => ({
+                ...s,
+                // ⬅️ pakai string polos, bukan ISO
+                to: d ? d.endOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
+              }))
+            }
             format="DD/MM/YYYY"
           />
           <Select

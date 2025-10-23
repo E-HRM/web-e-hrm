@@ -195,24 +195,34 @@ export default function AgendaCalendarContent() {
     );
   };
 
-  /* ===== user header untuk Detail ===== */
-  const detailUser = useMemo(() => {
-    if (!detailEvent) return null;
-    const raw = detailEvent.extendedProps?.raw || {};
-    const user =
-      detailEvent.extendedProps?.user ||
-      vm.getUserById(detailEvent.extendedProps?.id_user) ||
-      raw.user ||
-      null;
+/* ===== user header untuk Detail ===== */
+const detailUser = useMemo(() => {
+  if (!detailEvent) return null;
+  const raw = detailEvent.extendedProps?.raw || {};
 
-    const name =
-      user?.nama_pengguna || user?.name || user?.email || raw.id_user || "—";
-    const photo = vm.getPhotoUrl(user) || "/avatar-placeholder.jpg";
-    const sub = vm.getJabatanName(user) || vm.getDepartemenName(user) || "—";
-    const link = user?.id_user ? `/home/kelola_karyawan/karyawan/${user.id_user}` : null;
+  // Ambil id_user seandainya sumbernya beda-beda
+  const id =
+    detailEvent.extendedProps?.id_user ??
+    raw?.id_user ??
+    raw?.user?.id_user ??
+    null;
 
-    return { user, name, photo, sub, link };
-  }, [detailEvent, vm]);
+  // 1) PRIORITAS: user lengkap dari master (punya foto)
+  const fromMap = id ? vm.getUserById(id) : null;
+
+  // 2) FALLBACK: user tipis dari event (biasanya tanpa foto)
+  const fallback = detailEvent.extendedProps?.user || raw?.user || null;
+
+  // Merge: field dari fromMap menimpa fallback (biar foto ikut)
+  const user = fromMap ? { ...fallback, ...fromMap } : fallback;
+
+  const name = user?.nama_pengguna || user?.name || user?.email || id || "—";
+  const photo = vm.getPhotoUrl(user) || "/avatar-placeholder.jpg";
+  const sub = vm.getJabatanName(user) || vm.getDepartemenName(user) || "—";
+  const link = user?.id_user ? `/home/kelola_karyawan/karyawan/${user.id_user}` : null;
+
+  return { user, name, photo, sub, link };
+}, [detailEvent, vm]);
 
   return (
     <div className="p-4">
@@ -435,10 +445,6 @@ export default function AgendaCalendarContent() {
           </Form.Item>
           <Form.Item label="Selesai" name="end">
             <DatePicker showTime className="w-full" />
-          </Form.Item>
-
-          <Form.Item label="Deskripsi (opsional)" name="deskripsi">
-            <Input.TextArea rows={3} placeholder="Catatan..." />
           </Form.Item>
         </Form>
       </Modal>

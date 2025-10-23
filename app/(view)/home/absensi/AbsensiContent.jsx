@@ -349,15 +349,6 @@ function AttendanceCard({
               <div className="mt-1">{tinyStatus(r.status_masuk)}</div>
             </div>
             <div className="flex items-center gap-1">
-              <Tooltip title="Lihat foto masuk">
-                <Button
-                  size="middle"
-                  shape="circle"
-                  icon={<PictureOutlined />}
-                  onClick={() => openPhoto("in", r)}
-                  disabled={!r.photo_in}
-                />
-              </Tooltip>
               <Tooltip title="Lihat lokasi masuk">
                 <Button
                   size="middle"
@@ -413,15 +404,6 @@ function AttendanceCard({
               <div className="mt-1">{tinyStatus(r.status_pulang)}</div>
             </div>
             <div className="flex items-center gap-1">
-              <Tooltip title="Lihat foto pulang">
-                <Button
-                  size="middle"
-                  shape="circle"
-                  icon={<PictureOutlined />}
-                  onClick={() => openPhoto("out", r)}
-                  disabled={!r.photo_out}
-                />
-              </Tooltip>
               <Tooltip title="Lihat lokasi pulang">
                 <Button
                   size="middle"
