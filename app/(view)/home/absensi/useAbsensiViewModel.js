@@ -85,22 +85,11 @@ function flatten(rec) {
   const istirahat_mulai = istirahat_mulai_raw || istirahat_mulai_list || null;
   const istirahat_selesai = istirahat_selesai_raw || istirahat_selesai_list || null;
 
-  const status_masuk_server = a.status_masuk ?? a.status_in ?? a.status_masuk_label ?? null;
-  const status_pulang = a.status_pulang ?? a.status_out ?? a.status_pulang_label ?? null;
-
-  const batasMasuk = a?.shift?.jam_mulai ?? a?.jam_shift_mulai ?? a?.jam_masuk_batas ?? "09:00";
-  const menitMasuk = toMinutes(jam_masuk);
-  const menitBatas = toMinutes(batasMasuk);
-  let status_masuk = status_masuk_server;
-  if (menitMasuk != null && menitBatas != null) {
-    const isLate = menitMasuk > menitBatas;
-    const lbl = String(status_masuk_server || "").toLowerCase();
-    const isSpecial = /izin|sakit/.test(lbl);
-    if (!isSpecial) {
-      if (!status_masuk_server) status_masuk = isLate ? "terlambat" : "tepat";
-      else if (/tepat/.test(lbl) && isLate) status_masuk = "terlambat";
-    }
-  }
+  // ⬇️ HANYA pakai nilai dari database, TIDAK dihitung ulang
+  const status_masuk =
+    a.status_masuk ?? a.status_in ?? a.status_masuk_label ?? a.status ?? null;
+  const status_pulang =
+    a.status_pulang ?? a.status_out ?? a.status_pulang_label ?? null;
 
   const lokasiIn  = a.lokasiIn  ?? a.lokasi_in  ?? a.lokasi_absen_masuk  ?? null;
   const lokasiOut = a.lokasiOut ?? a.lokasi_out ?? a.lokasi_absen_pulang ?? null;
@@ -140,14 +129,15 @@ function flatten(rec) {
     istirahat_mulai,
     istirahat_selesai,
     istirahat_list,
-    status_masuk,
-    status_pulang,
+    status_masuk,   
+    status_pulang,  
     lokasiIn: pickCoord(lokasiIn),
     lokasiOut: pickCoord(lokasiOut),
     photo_in,
     photo_out,
   };
 }
+
 
 export default function useAbsensiViewModel() {
   const [dateIn, setDateIn] = useState(dayjs());
