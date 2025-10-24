@@ -1,3 +1,4 @@
+// app/home/.../KunjunganRekapanContent.jsx (atau path kamu)
 "use client";
 
 import { useMemo, useState } from "react";
@@ -23,7 +24,7 @@ import useVM, { showFromDB } from "./useKunjunganRekapanViewModel";
 
 const NAVY = "#003A6F";
 
-/* Helpers avatar seperti halaman Karyawan */
+/* Helpers avatar */
 function getPhotoUrl(user) {
   return (
     user?.foto_profil_user ||
@@ -91,7 +92,6 @@ export default function KunjunganRekapanContent() {
         title: "Start",
         key: "start",
         render: (_, r) => {
-          // HANYA JAM (HH:mm)
           const t = r.jam_mulai ? showFromDB(r.jam_mulai, "HH:mm") : "-";
           const { lat, lon } = vm.getStartCoord(r);
           const photo = vm.pickPhotoUrl(r);
@@ -121,7 +121,6 @@ export default function KunjunganRekapanContent() {
         title: "End",
         key: "end",
         render: (_, r) => {
-          // HANYA JAM (HH:mm)
           const t = r.jam_selesai ? showFromDB(r.jam_selesai, "HH:mm") : "-";
           const { lat, lon } = vm.getEndCoord(r);
           const photo = vm.pickPhotoUrl(r);
@@ -173,8 +172,34 @@ export default function KunjunganRekapanContent() {
           const href = id ? `/home/kelola_karyawan/karyawan/${id}` : undefined;
 
           const displayName = u.nama_pengguna ?? u.name ?? u.email ?? "—";
-          const jabatan = u.jabatan?.nama_jabatan ?? u.jabatan?.nama ?? u.jabatan ?? "";
-          const departemen = u.departement?.nama_departement ?? u.departemen?.nama ?? u.departemen ?? "";
+
+          // ⬇️ fallback jabatan & departemen diperluas
+          const jabatan =
+            u.jabatan?.nama_jabatan ??
+            u.jabatan?.nama ??
+            u.jabatan?.title ??
+            (typeof u.jabatan === "string" ? u.jabatan : "") ??
+            "";
+
+          const departemen =
+            u.departemen?.nama_departemen ??
+            u.departemen?.nama ??
+            u.departemen?.title ??
+            u.departement?.nama_departement ??
+            u.departement?.nama ??
+            u.departement?.title ??
+            u.department?.name ??
+            u.department?.nama ??
+            u.department?.title ??
+            u.divisi?.nama_divisi ??
+            u.divisi?.nama ??
+            u.divisi?.title ??
+            (typeof u.departemen === "string" ? u.departemen : "") ??
+            (typeof u.departement === "string" ? u.departement : "") ??
+            (typeof u.department === "string" ? u.department : "") ??
+            (typeof u.divisi === "string" ? u.divisi : "") ??
+            "";
+
           const subtitle = jabatan && departemen ? `${jabatan} | ${departemen}` : (jabatan || departemen || "—");
 
           const node = (
@@ -244,14 +269,14 @@ export default function KunjunganRekapanContent() {
             <DatePicker
               placeholder="Dari"
               value={vm.filters.from ? dayjs(vm.filters.from) : null}
-              onChange={(d) => vm.setFilters((s) => ({ ...s, from: d ? d.toDate() : null }))}
+              onChange={(d) => vm.setFilters((s) => ({ ...s, from: d ? d.toDate() : null })) }
               format="DD/MM/YYYY"
             />
             <span className="opacity-60">-</span>
             <DatePicker
               placeholder="Sampai"
               value={vm.filters.to ? dayjs(vm.filters.to) : null}
-              onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.toDate() : null }))}
+              onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.toDate() : null })) }
               format="DD/MM/YYYY"
             />
 

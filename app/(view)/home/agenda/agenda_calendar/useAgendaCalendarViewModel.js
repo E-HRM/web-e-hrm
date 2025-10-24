@@ -41,6 +41,35 @@ export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
   return dayjs(local).format(fmt);
 };
 
+/* ===== Urgensi normalizer (DB -> label + level) ===== */
+const normalizeUrgency = (v) => {
+  const s = (v || "").toString().trim().toUpperCase();
+  switch (s) {
+    case "PENTING MENDESAK":
+      return { label: "PENTING MENDESAK", level: 1 };
+    case "TIDAK PENTING TAPI MENDESAK":
+    case "TIDAK PENTING, TAPI MENDESAK":
+      return { label: "TIDAK PENTING TAPI MENDESAK", level: 2 };
+    case "PENTING TAK MENDESAK":
+    case "PENTING TIDAK MENDESAK":
+      return { label: "PENTING TAK MENDESAK", level: 3 };
+    case "TIDAK PENTING TIDAK MENDESAK":
+      return { label: "TIDAK PENTING TIDAK MENDESAK", level: 4 };
+    default:
+      return s ? { label: s, level: 4 } : null;
+  }
+};
+
+/* Ambil nilai “kebutuhan_agenda” dari berbagai kemungkinan lokasi */
+const extractUrgencyRaw = (row) =>
+  row?.kebutuhan_agenda ??
+  row?.kebutuhan ??
+  row?.urgensi ??
+  row?.prioritas ??
+  row?.agenda?.kebutuhan_agenda ??
+  row?.agenda_kerja?.kebutuhan_agenda ??
+  null;
+
 /* ============== Map Server -> FullCalendar ============== */
 
 const mapServerToFC = (row) => {
@@ -56,7 +85,10 @@ const mapServerToFC = (row) => {
   const start = toLocalWallTime(startRaw);
   const end = toLocalWallTime(endRaw);
 
-  let backgroundColor = "#3b82f6"; // diproses
+  // urgensi langsung dari DB (lebih robust)
+  const urgency = normalizeUrgency(extractUrgencyRaw(row));
+
+  let backgroundColor = "#3b82f6"; // status default diproses
   if (status === "selesai") backgroundColor = "#22c55e";
   else if (status === "ditunda") backgroundColor = "#f59e0b";
 
@@ -74,9 +106,33 @@ const mapServerToFC = (row) => {
       id_agenda: row.id_agenda || row.agenda?.id_agenda || null,
       id_user: row.id_user || row.user?.id_user || null,
       user: row.user || null,
-      raw: row,
+      urgency,        // <= kirim ke UI (bila tersedia)
+      raw: row,       // penting: dipakai untuk riwayat & fallback urgensi
     },
   };
+};
+
+/* ====== Signature helper: identitas “serupa” (judul + proyek + jam) ====== */
+const signatureFromRow = (row) => {
+  const title = (row?.deskripsi_kerja || "").trim();
+  const id_agenda = String(row?.id_agenda || row?.agenda?.id_agenda || "");
+  const start = toLocalWallTime(row?.start_date || row?.mulai);
+  const end = toLocalWallTime(row?.end_date || row?.selesai || row?.start_date || row?.mulai);
+  return `${id_agenda}|${title}|${start}|${end}`;
+};
+
+const signatureFromEventLike = (evLike) => {
+  const title = (evLike.title || evLike.deskripsi_kerja || "").trim();
+  const id_agenda = String(
+    evLike.id_agenda ??
+      evLike.extendedProps?.id_agenda ??
+      evLike.raw?.id_agenda ??
+      evLike.raw?.agenda?.id_agenda ??
+      ""
+  );
+  const start = toLocalWallTime(evLike.start || evLike.raw?.start_date);
+  const end = toLocalWallTime(evLike.end || evLike.raw?.end_date || evLike.start || evLike.raw?.start_date);
+  return `${id_agenda}|${title}|${start}|${end}`;
 };
 
 export default function useAgendaCalendarViewModel() {
@@ -278,6 +334,73 @@ export default function useAgendaCalendarViewModel() {
     [mutate]
   );
 
+  /* ===== Bulk tools: cari & hapus “serupa” (judul+proyek+jam sama) ===== */
+
+  /** Ambil semua agenda_kerja dalam rentang start..end dan filter yang sig-nya sama */
+  const findSimilarEventsByEvent = useCallback(async (fcEvent) => {
+    if (!fcEvent) return { targets: [] };
+
+    const raw = fcEvent.extendedProps?.raw || {};
+    const id_agenda =
+      fcEvent.extendedProps?.id_agenda ||
+      raw?.id_agenda ||
+      raw?.agenda?.id_agenda ||
+      null;
+
+    const start = toLocalWallTime(raw.start_date || fcEvent.start);
+    const end = toLocalWallTime(raw.end_date || fcEvent.end || fcEvent.start);
+
+    // rentang pencarian (per hari agar hemat payload)
+    const p = new URLSearchParams();
+    p.set("from", dayjs(start).format("YYYY-MM-DD"));
+    p.set("to", dayjs(end).format("YYYY-MM-DD"));
+    if (id_agenda) p.set("id_agenda", String(id_agenda));
+    p.set("perPage", "1000");
+
+    const url = `${ApiEndpoints.GetAgendaKerja}?${p.toString()}`;
+    const json = await fetcher(url);
+    const items = Array.isArray(json?.data) ? json.data : [];
+
+    const wantSig = signatureFromEventLike({
+      title: fcEvent.title,
+      id_agenda,
+      start,
+      end,
+      raw,
+      extendedProps: fcEvent.extendedProps,
+    });
+
+    const targets = items.filter((row) => signatureFromRow(row) === wantSig);
+    return { targets };
+  }, []);
+
+  /** Hapus by list of IDs (soft-delete by default) */
+  const bulkDeleteByIds = useCallback(
+    async (ids = [], { hard = false } = {}) => {
+      if (!Array.isArray(ids) || ids.length === 0) return 0;
+      const delFn = crudService.del || crudService.delete;
+      await Promise.all(
+        ids.map((id) =>
+          delFn(ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : ""))
+        )
+      );
+      await mutate();
+      return ids.length;
+    },
+    [mutate]
+  );
+
+  /** One-shot: temukan yang serupa lalu hapus semuanya */
+  const bulkDeleteSimilarByEvent = useCallback(
+    async (fcEvent, { hard = false } = {}) => {
+      const { targets } = await findSimilarEventsByEvent(fcEvent);
+      const ids = targets.map((t) => t.id_agenda_kerja || t.id);
+      const n = await bulkDeleteByIds(ids, { hard });
+      return { count: n };
+    },
+    [findSimilarEventsByEvent, bulkDeleteByIds]
+  );
+
   return {
     // data
     events,
@@ -296,6 +419,11 @@ export default function useAgendaCalendarViewModel() {
     updateEvent,
     deleteEvent,
     createAgendaMaster,
+
+    // bulk helpers
+    findSimilarEventsByEvent,
+    bulkDeleteByIds,
+    bulkDeleteSimilarByEvent,
 
     // util
     showFromDB,

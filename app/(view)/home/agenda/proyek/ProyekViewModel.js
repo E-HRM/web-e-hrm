@@ -20,14 +20,12 @@ export default function useProyekViewModel() {
   const [filterUserId, setFilterUserId] = useState("");
 
   /* ================= Users (aktif saja) ================= */
-  // pakai includeDeleted=0 supaya API sudah memfilter, sekaligus handle pagination besar
   const { data: usersRes } = useSWR(
     `${ApiEndpoints.GetUsers}?page=1&pageSize=1000&includeDeleted=0&orderBy=nama_pengguna&sort=asc`,
     fetcher,
     { revalidateOnFocus: false }
   );
 
-  // fallback: kalau API tetap mengirim field deleted_at, filter lagi di client
   const usersRaw = useMemo(
     () => (Array.isArray(usersRes?.data) ? usersRes.data : EMPTY),
     [usersRes]
@@ -82,7 +80,6 @@ export default function useProyekViewModel() {
   );
 
   /* ================= Aktivitas (untuk anggota proyek) ================= */
-  // ambil cukup besar; anggota dihimpun dari user pada item agenda_kerja
   const { data: aktRes } = useSWR(
     `${ApiEndpoints.GetAgendaKerja}?perPage=1000`,
     fetcher,
@@ -100,7 +97,7 @@ export default function useProyekViewModel() {
       const agendaId = r?.id_agenda;
       const uid = r?.user?.id_user;
       if (!agendaId || !uid) continue;
-      if (!activeUserIdSet.has(uid)) continue; // skip user yang sudah soft-delete
+      if (!activeUserIdSet.has(uid)) continue; // skip user soft-delete
       if (!map.has(agendaId)) map.set(agendaId, new Set());
       map.get(agendaId).add(uid);
     }

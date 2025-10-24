@@ -18,10 +18,13 @@ import {
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import useSWR from "swr";
 import { fetcher } from "../../../../utils/fetcher";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import useProyekViewModel from "./ProyekViewModel";
+
+dayjs.extend(utc);
 
 const BRAND = { accent: "#003A6F" };
 
@@ -267,11 +270,32 @@ export default function ProyekContent() {
 }
 
 /* ======================= Modal List Aktivitas ======================= */
+
+// Map label → warna Tag (normalisasi supaya konsisten)
+function normalizeUrgency(v) {
+  const s = (v || "").toString().trim().toUpperCase();
+  switch (s) {
+    case "PENTING MENDESAK":
+      return { label: "PENTING MENDESAK", color: "red" };
+    case "TIDAK PENTING TAPI MENDESAK":
+    case "TIDAK PENTING, TAPI MENDESAK":
+      return { label: "TIDAK PENTING TAPI MENDESAK", color: "magenta" };
+    case "PENTING TAK MENDESAK":
+    case "PENTING TIDAK MENDESAK":
+      return { label: "PENTING TAK MENDESAK", color: "orange" };
+    case "TIDAK PENTING TIDAK MENDESAK":
+      return { label: "TIDAK PENTING TIDAK MENDESAK", color: "default" };
+    default:
+      return s ? { label: s, color: "default" } : null;
+  }
+}
+
 function ActivitiesModal({ open, onClose, project }) {
   const [from, setFrom] = useState(null);
   const [to, setTo] = useState(null);
   const [status, setStatus] = useState("");
   const [division, setDivision] = useState("");
+  const [urgency, setUrgency] = useState(""); // filter urgensi
   const [q, setQ] = useState("");
 
   const showDB = (v) => (v ? dayjs.utc(v).format("DD MMM YYYY HH:mm") : "-");
@@ -295,44 +319,89 @@ function ActivitiesModal({ open, onClose, project }) {
   const { data, isLoading } = useSWR(open && qs ? qs : null, fetcher, { revalidateOnFocus: false });
   const rows = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data]);
 
+  // opsi filter division dan urgensi dibangun dari data yang ada
   const divisionOptions = useMemo(() => {
     const s = new Set();
     rows.forEach((r) => r.user?.role && s.add(r.user.role));
     return Array.from(s).map((v) => ({ value: v, label: v }));
   }, [rows]);
 
+  const urgencyOptions = useMemo(() => {
+    const s = new Map();
+    rows.forEach((r) => {
+      const u = normalizeUrgency(r?.kebutuhan_agenda);
+      if (u) s.set(u.label, u.color);
+    });
+    return Array.from(s.entries()).map(([label, color]) => ({
+      value: label,
+      label,
+      color,
+    }));
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     let xs = rows;
     if (division) xs = xs.filter((r) => (r.user?.role || "") === division);
+    if (urgency) {
+      xs = xs.filter((r) => {
+        const u = normalizeUrgency(r?.kebutuhan_agenda);
+        return u?.label === urgency;
+      });
+    }
     const qq = q.trim().toLowerCase();
     if (qq) {
       xs = xs.filter(
         (r) =>
           (r.deskripsi_kerja || "").toLowerCase().includes(qq) ||
-          (r.user?.nama_pengguna || r.user?.email || "").toLowerCase().includes(qq)
+          (r.user?.nama_pengguna || r.user?.email || "").toLowerCase().includes(qq) ||
+          (r.kebutuhan_agenda || "").toLowerCase().includes(qq)
       );
     }
     return xs;
-  }, [rows, division, q]);
+  }, [rows, division, urgency, q]);
 
+  // === Column widths + wrapping rules ===
   const columns = useMemo(
     () => [
       {
         title: "Pekerjaan",
         dataIndex: "deskripsi_kerja",
         key: "pek",
-        render: (v) => <a className="underline">{v}</a>,
+        width: 280,
+        onCell: () => ({
+          style: {
+            maxWidth: 280,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          },
+        }),
+        // HAPUS underline:
+        render: (v) => <span className="block leading-5">{v || "-"}</span>,
       },
       {
         title: "Diproses Oleh",
         key: "oleh",
+        width: 150,
+        onCell: () => ({
+          style: {
+            maxWidth: 220,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          },
+        }),
         render: (_, r) => r.user?.nama_pengguna || r.user?.email || "—",
       },
       {
         title: "Diproses Pada",
         key: "pada",
+        width: 150,
+        onCell: () => ({
+          style: { whiteSpace: "pre", maxWidth: 220, overflowWrap: "anywhere" },
+        }),
         render: (_, r) => (
-          <div className="whitespace-pre">
+          <div className="whitespace-pre leading-5">
             {`${showDB(r.start_date)}\n${showDB(r.end_date)}`}
           </div>
         ),
@@ -341,12 +410,14 @@ function ActivitiesModal({ open, onClose, project }) {
         title: "Durasi",
         dataIndex: "duration_seconds",
         key: "dur",
+        width: 80,
         render: (s) => formatDuration(s),
       },
       {
         title: "Status",
         dataIndex: "status",
         key: "status",
+        width: 80,
         render: (st) => {
           const c = st === "selesai" ? "success" : st === "ditunda" ? "warning" : "processing";
           const t = st === "selesai" ? "Selesai" : st === "ditunda" ? "Ditunda" : "Diproses";
@@ -354,14 +425,23 @@ function ActivitiesModal({ open, onClose, project }) {
         },
       },
       {
-        title: "Pembuat",
-        key: "pb",
-        render: (_, r) => (
-          <div className="flex flex-col">
-            <span>{r.user?.nama_pengguna || r.user?.email || "—"}</span>
-            <span className="opacity-60 text-xs">{showDB(r.created_at)}</span>
-          </div>
-        ),
+        title: "Urgensi",
+        dataIndex: "kebutuhan_agenda",
+        key: "urgensi",
+        width: 200,
+        onCell: () => ({
+          style: {
+            maxWidth: 200,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          },
+        }),
+        render: (v) => {
+          const u = normalizeUrgency(v);
+          if (!u) return <Tag style={{ fontStyle: "italic" }}>Belum diisi</Tag>;
+          return <Tag color={u.color}>{u.label}</Tag>;
+        },
       },
     ],
     []
@@ -375,6 +455,9 @@ function ActivitiesModal({ open, onClose, project }) {
       footer={<Button onClick={onClose} style={{ background: "#F4F4F5" }}>Tutup</Button>}
       width={1000}
       destroyOnClose
+      styles={{
+        body: { maxHeight: 640, overflowY: "auto" }, // scroll vertikal, no horizontal overflow
+      }}
     >
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -401,6 +484,17 @@ function ActivitiesModal({ open, onClose, project }) {
             { value: "selesai", label: "Selesai" },
           ]}
         />
+        {/* Filter Urgensi */}
+        <Select
+          className="min-w-[200px]"
+          placeholder="--Filter Urgensi--"
+          allowClear
+          value={urgency || undefined}
+          onChange={(v) => setUrgency(v || "")}
+          options={urgencyOptions}
+          optionFilterProp="label"
+          showSearch
+        />
         <Input.Search className="w-[140px]" placeholder="Cari" value={q} onChange={(e) => setQ(e.target.value)} allowClear />
       </div>
 
@@ -413,9 +507,25 @@ function ActivitiesModal({ open, onClose, project }) {
           dataSource={filteredRows}
           pagination={{ pageSize: 10 }}
           size="middle"
-          footer={() => <div className="font-semibold">Menampilkan {filteredRows.length} dari {rows.length} total data</div>}
+          className="activities-table"
+          tableLayout="fixed"   // biar wrap, bukan melebar
         />
       )}
+
+      {/* CSS khusus untuk tabel aktivitas di modal ini */}
+      <style jsx global>{`
+        .activities-table .ant-table-cell {
+          white-space: normal;           
+          word-break: break-word;
+        }
+        .activities-table .ant-table {
+          overflow-x: hidden !important; 
+        }
+      `}</style>
+
+      <div className="mt-2 text-sm font-semibold">
+        Menampilkan {filteredRows.length} dari {rows.length} total data
+      </div>
     </Modal>
   );
 }

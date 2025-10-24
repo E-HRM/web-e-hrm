@@ -1,3 +1,4 @@
+// AgendaContent.tsx / .js
 "use client";
 
 import { useMemo, useState } from "react";
@@ -7,10 +8,10 @@ import {
 } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";          // ⬅️ tambahkan
+import utc from "dayjs/plugin/utc";
 import useAgendaViewModel from "./AgendaViewModel";
 
-dayjs.extend(utc);                            // ⬅️ aktifkan
+dayjs.extend(utc);
 
 const BRAND = { accent: "#003A6F" };
 
@@ -50,29 +51,60 @@ export default function AgendaContent() {
     }
   };
 
+  /* =======================
+     TABEL ANAK (per karyawan)
+     - “Aktivitas” punya maxWidth + wrap
+     - tableLayout="fixed" agar wrap stabil
+  ======================== */
   const activityColumns = [
-    { title: "Aktivitas", dataIndex: "deskripsi_kerja", key: "desk" },
+    {
+      title: "Aktivitas",
+      dataIndex: "deskripsi_kerja",
+      key: "desk",
+      width: 420,
+      render: (text) => (
+        <div
+          style={{
+            maxWidth: 420,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+          }}
+        >
+          <span className="font-medium">{text || "—"}</span>
+        </div>
+      ),
+    },
     {
       title: "Waktu",
       key: "waktu",
+      width: 170,
       render: (_, r) => {
-        // ⬅️ tampilkan angka jam persis dari DB (tanpa konversi TZ)
+        // tampilkan angka jam persis dari DB (tanpa konversi TZ)
         const s = r.start_date ? dayjs.utc(r.start_date).format("DD/MM HH:mm") : "-";
         const e = r.end_date ? dayjs.utc(r.end_date).format("DD/MM HH:mm") : "-";
         return `${s} - ${e}`;
       },
     },
-    { title: "Durasi", dataIndex: "duration_seconds", key: "dur", render: (s) => formatDuration(s) },
+    {
+      title: "Durasi",
+      dataIndex: "duration_seconds",
+      key: "dur",
+      width: 140,
+      render: (s) => formatDuration(s),
+    },
     {
       title: "Proyek",
       dataIndex: ["agenda", "nama_agenda"],
       key: "agenda",
+      width: 100,
       render: (v) => v || "—",
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
+      width: 100,
       render: (st) => {
         const c = st === "selesai" ? "success" : st === "ditunda" ? "warning" : "processing";
         return <Tag color={c}>{st[0].toUpperCase() + st.slice(1)}</Tag>;
@@ -82,6 +114,7 @@ export default function AgendaContent() {
       title: "Aksi",
       key: "aksi",
       align: "right",
+      width: 120,
       render: (_, r) => (
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEditRow(r)} />
@@ -111,11 +144,13 @@ export default function AgendaContent() {
         dataIndex: "count",
         key: "count",
         align: "center",
+        width: 120,
       },
       {
         title: "Total Durasi",
         dataIndex: "duration",
         key: "duration",
+        width: 180,
         render: (sec) => formatDuration(sec),
       },
     ],
@@ -126,11 +161,6 @@ export default function AgendaContent() {
     <div className="p-4">
       <Card
         title={<span className="text-lg font-semibold">Agenda Kerja (Semua Karyawan)</span>}
-        extra={
-          <Button style={{ background: BRAND.accent, color: "#fff" }} onClick={vm.refresh}>
-            Refresh
-          </Button>
-        }
       >
         <div className="flex flex-wrap gap-3 items-center mb-4">
           <Select
@@ -163,7 +193,7 @@ export default function AgendaContent() {
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
-                // ⬅️ pakai string polos, bukan ISO
+                // pakai string polos, bukan ISO
                 from: d ? d.startOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
               }))
             }
@@ -175,7 +205,7 @@ export default function AgendaContent() {
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
-                // ⬅️ pakai string polos, bukan ISO
+                // pakai string polos, bukan ISO
                 to: d ? d.endOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
               }))
             }
@@ -220,6 +250,7 @@ export default function AgendaContent() {
                   dataSource={userRow.rows}
                   pagination={false}
                   size="small"
+                  tableLayout="fixed"           // ⬅️ penting agar wrapping stabil
                 />
               ),
             }}

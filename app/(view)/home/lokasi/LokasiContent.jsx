@@ -17,13 +17,11 @@ import {
 } from "antd";
 import {
   SearchOutlined,
-  ReloadOutlined,
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
   EnvironmentOutlined,
   AimOutlined,
-  CompassOutlined,
 } from "@ant-design/icons";
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
@@ -56,7 +54,6 @@ export default function LokasiContent() {
     sort,
     setSort,
     // actions
-    fetchList,
     addLocation,
     updateLocation,
     deleteLocation,
@@ -66,21 +63,18 @@ export default function LokasiContent() {
   const [openAdd, setOpenAdd] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addForm] = Form.useForm();
+  const [addMapOpenVersion, setAddMapOpenVersion] = useState(0);
 
   // Modal edit
   const [openEdit, setOpenEdit] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm] = Form.useForm();
   const [currentRow, setCurrentRow] = useState(null);
-
-  // Modal delete
-  const [openDelete, setOpenDelete] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [editMapOpenVersion, setEditMapOpenVersion] = useState(0);
 
   // quick stats
   const totalLokasi = rows?.length || 0;
 
-  // badge radius (warna by kategori)
   const radiusBadge = (v) => {
     if (v == null) return <Tag>—</Tag>;
     const val = Number(v);
@@ -105,7 +99,6 @@ export default function LokasiContent() {
           </div>
         ),
       },
-      // Tetap: kolom 'Lokasi' berupa link OSM (tanpa tampilkan angka lat/lng)
       {
         title: "Lokasi",
         key: "lokasi",
@@ -116,12 +109,10 @@ export default function LokasiContent() {
             return (
               <span className="text-xs text-slate-500">Belum ditentukan</span>
             );
-
           const lat = Number(r.latitude);
           const lng = Number(r.longitude);
           const zoom = 17;
           const mapHref = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=${zoom}/${lat}/${lng}`;
-
           return (
             <a
               href={mapHref}
@@ -212,14 +203,16 @@ export default function LokasiContent() {
     [editForm]
   );
 
+  // Modal delete
+  const [openDelete, setOpenDelete] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   return (
     <div className="px-4 md:px-6 lg:px-8 py-5 space-y-4">
       {/* ======= PAGE HEADER ======= */}
       <div className="page-header flex flex-col md:flex-row md:items-center md:justify-between gap-2">
         <div>
-          <Title level={3} className="!m-0">
-            Lokasi Kantor
-          </Title>
+          <Title level={3} className="!m-0">Lokasi Kantor</Title>
           <p className="page-header__desc mt-1">
             Kelola titik absen & radius geofence untuk setiap kantor.
           </p>
@@ -247,6 +240,20 @@ export default function LokasiContent() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <div className="flex items-center gap-2">
+            <InputNumber
+              placeholder="Radius min"
+              value={radiusMin}
+              onChange={setRadiusMin}
+              min={0}
+            />
+            <InputNumber
+              placeholder="Radius max"
+              value={radiusMax}
+              onChange={setRadiusMax}
+              min={0}
+            />
+          </div>
           <Select
             value={orderBy}
             onChange={setOrderBy}
@@ -319,6 +326,9 @@ export default function LokasiContent() {
         footer={null}
         title={<div className="text-lg font-semibold">Tambah Lokasi</div>}
         destroyOnClose
+        afterOpenChange={(opened) => {
+          if (opened) setAddMapOpenVersion((v) => v + 1);
+        }}
       >
         <Form
           form={addForm}
@@ -363,19 +373,7 @@ export default function LokasiContent() {
                 },
               ]}
             >
-              <InputNumber
-                className="w-full"
-                step={0.000001}
-                min={-90}
-                max={90}
-                placeholder="-90 .. 90"
-                onChange={(lat) => {
-                  const lng = addForm.getFieldValue("longitude");
-                  const radius = addForm.getFieldValue("radius");
-                  // trigger sinkron ke map
-                  addForm.setFieldsValue({ latitude: lat });
-                }}
-              />
+              <InputNumber className="w-full" step={0.000001} min={-90} max={90} placeholder="-90 .. 90" />
             </Form.Item>
 
             <Form.Item
@@ -391,17 +389,7 @@ export default function LokasiContent() {
                 },
               ]}
             >
-              <InputNumber
-                className="w-full"
-                step={0.000001}
-                min={-180}
-                max={180}
-                placeholder="-180 .. 180"
-                onChange={(lng) => {
-                  const lat = addForm.getFieldValue("latitude");
-                  addForm.setFieldsValue({ longitude: lng });
-                }}
-              />
+              <InputNumber className="w-full" step={0.000001} min={-180} max={180} placeholder="-180 .. 180" />
             </Form.Item>
           </div>
 
@@ -421,10 +409,12 @@ export default function LokasiContent() {
                 <div className="mb-3">
                   <LocationPicker
                     value={{ lat, lng, radius }}
+                    visible={openAdd}
+                    openVersion={addMapOpenVersion}
                     onChange={({ lat, lng, radius }) => {
                       addForm.setFieldsValue({
-                        latitude: Number(lat.toFixed(6)),
-                        longitude: Number(lng.toFixed(6)),
+                        latitude: Number(Number(lat).toFixed(6)),
+                        longitude: Number(Number(lng).toFixed(6)),
                         ...(typeof radius === "number" ? { radius } : {}),
                       });
                     }}
@@ -435,11 +425,7 @@ export default function LokasiContent() {
           </Form.Item>
 
           <Form.Item label="Radius (meter)" name="radius">
-            <InputNumber
-              className="w-full"
-              placeholder="Opsional, contoh: 50"
-              min={0}
-            />
+            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />
           </Form.Item>
 
           <Button
@@ -465,6 +451,9 @@ export default function LokasiContent() {
         footer={null}
         title={<div className="text-lg font-semibold">Edit Lokasi</div>}
         destroyOnClose
+        afterOpenChange={(opened) => {
+          if (opened) setEditMapOpenVersion((v) => v + 1);
+        }}
       >
         <Form
           form={editForm}
@@ -510,17 +499,7 @@ export default function LokasiContent() {
                 },
               ]}
             >
-              <InputNumber
-                className="w-full"
-                step={0.000001}
-                min={-90}
-                max={90}
-                placeholder="-90 .. 90"
-                onChange={(lat) => {
-                  const lng = editForm.getFieldValue("longitude");
-                  editForm.setFieldsValue({ latitude: lat });
-                }}
-              />
+              <InputNumber className="w-full" step={0.000001} min={-90} max={90} placeholder="-90 .. 90" />
             </Form.Item>
 
             <Form.Item
@@ -536,17 +515,7 @@ export default function LokasiContent() {
                 },
               ]}
             >
-              <InputNumber
-                className="w-full"
-                step={0.000001}
-                min={-180}
-                max={180}
-                placeholder="-180 .. 180"
-                onChange={(lng) => {
-                  const lat = editForm.getFieldValue("latitude");
-                  editForm.setFieldsValue({ longitude: lng });
-                }}
-              />
+              <InputNumber className="w-full" step={0.000001} min={-180} max={180} placeholder="-180 .. 180" />
             </Form.Item>
           </div>
 
@@ -566,10 +535,12 @@ export default function LokasiContent() {
                 <div className="mb-3">
                   <LocationPicker
                     value={{ lat, lng, radius }}
+                    visible={openEdit}
+                    openVersion={editMapOpenVersion}
                     onChange={({ lat, lng, radius }) => {
                       editForm.setFieldsValue({
-                        latitude: Number(lat.toFixed(6)),
-                        longitude: Number(lng.toFixed(6)),
+                        latitude: Number(Number(lat).toFixed(6)),
+                        longitude: Number(Number(lng).toFixed(6)),
                         ...(typeof radius === "number" ? { radius } : {}),
                       });
                     }}
@@ -580,11 +551,7 @@ export default function LokasiContent() {
           </Form.Item>
 
           <Form.Item label="Radius (meter)" name="radius">
-            <InputNumber
-              className="w-full"
-              placeholder="Opsional, contoh: 50"
-              min={0}
-            />
+            <InputNumber className="w-full" placeholder="Opsional, contoh: 50" min={0} />
           </Form.Item>
 
           <Button
@@ -607,17 +574,13 @@ export default function LokasiContent() {
           setCurrentRow(null);
         }}
         footer={null}
-        title={
-          <div className="text-lg font-semibold text-red-600">
-            Konfirmasi Hapus
-          </div>
-        }
+        title={<div className="text-lg font-semibold text-red-600">Konfirmasi Hapus</div>}
         destroyOnClose
       >
         <p className="text-gray-600 mb-4">
           Yakin ingin menghapus lokasi{" "}
-          <span className="font-semibold">{currentRow?.nama_kantor}</span>?
-          Tindakan ini akan melakukan <i>soft delete</i>.
+          <span className="font-semibold">{currentRow?.nama_kantor}</span>? Tindakan ini akan
+          melakukan <i>soft delete</i>.
         </p>
 
         <div className="flex gap-2">

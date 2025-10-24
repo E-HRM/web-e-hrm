@@ -121,4 +121,5 @@ export const ApiEndpoints = {
   GetKategoriKunjunganById: (id) => `${API_KATEGORI_KUNJUNGAN}/${id}`,
   UpdateKategoriKunjungan: (id) => `${API_KATEGORI_KUNJUNGAN}/${id}`,
   DeleteKategoriKunjungan: (id) => `${API_KATEGORI_KUNJUNGAN}/${id}`,
+  RestoreKategoriKunjungan: (id) => `${API_KATEGORI_KUNJUNGAN}/${id}/restore`,
 };

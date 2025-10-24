@@ -14,6 +14,7 @@ import {
   Space,
   Tooltip,
   Divider,
+  Dropdown,            // <-- ADD
 } from "antd";
 import {
   ProfileOutlined,
@@ -21,12 +22,17 @@ import {
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
+  EllipsisOutlined,     // <-- ADD
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
 import useVM from "./useAgendaCalendarViewModel";
 
 dayjs.locale("id");
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
 import interactionPlugin from "@fullcalendar/interaction";
@@ -62,6 +68,30 @@ function CircleImg({ src, size = 44, alt = "Avatar" }) {
   );
 }
 
+/* ===== Formatter KHUSUS Riwayat (tidak mengubah waktu lain) ===== */
+const AUDIT_TZ = dayjs.tz.guess(); // ganti ke "Asia/Jakarta" bila perlu
+function formatAuditLocal(v, fmt = "DD MMM YYYY HH:mm:ss") {
+  if (!v) return "—";
+  const s = String(v).trim();
+  const hasTZ = /Z|[+-]\d{2}:\d{2}$/.test(s);
+  const m = hasTZ ? dayjs(s).tz(AUDIT_TZ) : dayjs.utc(s).tz(AUDIT_TZ);
+  return m.isValid() ? m.format(fmt) : "—";
+}
+
+/* ===== NORMALIZER URGENSI (fallback kalau VM belum kirim) ===== */
+function normalizeUrgencyLocal(v) {
+  const s = (v || "").toString().trim().toUpperCase();
+  switch (s) {
+    case "PENTING MENDESAK": return { label: "PENTING MENDESAK", level: 1 };
+    case "TIDAK PENTING TAPI MENDESAK":
+    case "TIDAK PENTING, TAPI MENDESAK": return { label: "TIDAK PENTING TAPI MENDESAK", level: 2 };
+    case "PENTING TAK MENDESAK":
+    case "PENTING TIDAK MENDESAK": return { label: "PENTING TAK MENDESAK", level: 3 };
+    case "TIDAK PENTING TIDAK MENDESAK": return { label: "TIDAK PENTING TIDAK MENDESAK", level: 4 };
+    default: return s ? { label: s, level: 4 } : null;
+  }
+}
+
 export default function AgendaCalendarContent() {
   const { notification } = AntdApp.useApp();
   const calRef = useRef(null);
@@ -79,6 +109,9 @@ export default function AgendaCalendarContent() {
   /* ===== Detail Modal ===== */
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState(null);
+
+  /* ===== Riwayat Modal ===== */
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   /* ----- helpers ----- */
   const statusColor = (st) =>
@@ -139,12 +172,15 @@ export default function AgendaCalendarContent() {
     }
   };
 
+  // Single delete -> pastikan di atas modal detail
   const confirmDelete = (id) => {
     Modal.confirm({
       title: "Hapus agenda ini?",
       okText: "Hapus",
       okButtonProps: { danger: true },
       cancelText: "Batal",
+      zIndex: 11150,                // <-- di atas modal detail (11000)
+      getContainer: () => document.body,
       onOk: async () => {
         try {
           await vm.deleteEvent(id);
@@ -158,9 +194,47 @@ export default function AgendaCalendarContent() {
     });
   };
 
+  // Hapus serentak (judul+proyek+jam sama) -> konfirm di atas modal detail
+  const confirmBulkDeleteSimilar = async () => {
+    if (!detailEvent) return;
+    try {
+      const { targets } = await vm.findSimilarEventsByEvent(detailEvent);
+      const n = targets.length;
+      if (!n) {
+        notification.info({ message: "Tidak ada agenda serupa ditemukan." });
+        return;
+      }
+      Modal.confirm({
+        title: `Hapus ${n} agenda serupa untuk semua karyawan?`,
+        content: "Semua item dengan Proyek, Judul, dan jam Mulai/Selesai yang sama akan dihapus.",
+        okText: "Hapus Semua",
+        okButtonProps: { danger: true },
+        cancelText: "Batal",
+        zIndex: 11150,              // <-- di atas modal detail (11000) & riwayat (11100)
+        getContainer: () => document.body,
+        onOk: async () => {
+          try {
+            const ids = targets.map((t) => t.id_agenda_kerja || t.id);
+            await vm.bulkDeleteByIds(ids);
+            notification.success({ message: `Terhapus ${n} agenda` });
+            setDetailOpen(false);
+          } catch (e) {
+            const msg = e?.response?.data?.message || e?.message || "Gagal hapus massal";
+            notification.error({ message: msg });
+          }
+        },
+      });
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.message || "Gagal mencari agenda serupa";
+      notification.error({ message: msg });
+    }
+  };
+
   const openDetail = (arg) => {
     setDetailEvent(arg.event);
     setDetailOpen(true);
+    // Tutup popover "+X more" agar tidak menutupi modal
+    document.querySelectorAll(".fc-popover").forEach((el) => el.remove());
   };
 
   const commitMoveResize = async ({ event }) => {
@@ -195,34 +269,75 @@ export default function AgendaCalendarContent() {
     );
   };
 
-/* ===== user header untuk Detail ===== */
-const detailUser = useMemo(() => {
-  if (!detailEvent) return null;
-  const raw = detailEvent.extendedProps?.raw || {};
+  /* ===== user header untuk Detail ===== */
+  const detailUser = useMemo(() => {
+    if (!detailEvent) return null;
+    const raw = detailEvent.extendedProps?.raw || {};
 
-  // Ambil id_user seandainya sumbernya beda-beda
-  const id =
-    detailEvent.extendedProps?.id_user ??
-    raw?.id_user ??
-    raw?.user?.id_user ??
-    null;
+    const id =
+      detailEvent.extendedProps?.id_user ??
+      raw?.id_user ??
+      raw?.user?.id_user ??
+      null;
 
-  // 1) PRIORITAS: user lengkap dari master (punya foto)
-  const fromMap = id ? vm.getUserById(id) : null;
+    const fromMap = id ? vm.getUserById(id) : null;
+    const fallback = detailEvent.extendedProps?.user || raw?.user || null;
+    const user = fromMap ? { ...fallback, ...fromMap } : fallback;
 
-  // 2) FALLBACK: user tipis dari event (biasanya tanpa foto)
-  const fallback = detailEvent.extendedProps?.user || raw?.user || null;
+    const name = user?.nama_pengguna || user?.name || user?.email || id || "—";
+    const photo = vm.getPhotoUrl(user) || "/avatar-placeholder.jpg";
+    const sub = vm.getJabatanName(user) || vm.getDepartemenName(user) || "—";
+    const link = user?.id_user ? `/home/kelola_karyawan/karyawan/${user.id_user}` : null;
 
-  // Merge: field dari fromMap menimpa fallback (biar foto ikut)
-  const user = fromMap ? { ...fallback, ...fromMap } : fallback;
+    return { user, name, photo, sub, link };
+  }, [detailEvent, vm]);
 
-  const name = user?.nama_pengguna || user?.name || user?.email || id || "—";
-  const photo = vm.getPhotoUrl(user) || "/avatar-placeholder.jpg";
-  const sub = vm.getJabatanName(user) || vm.getDepartemenName(user) || "—";
-  const link = user?.id_user ? `/home/kelola_karyawan/karyawan/${user.id_user}` : null;
+  /* ===== audit created/updated (KHUSUS Riwayat) ===== */
+  const audit = useMemo(() => {
+    const raw = detailEvent?.extendedProps?.raw || {};
+       const created =
+      raw.created_at ?? raw.createdAt ?? raw.created ?? raw.tanggal_dibuat ?? null;
+    const updated =
+      raw.updated_at ?? raw.updatedAt ?? raw.updated ?? raw.tanggal_diubah ?? null;
 
-  return { user, name, photo, sub, link };
-}, [detailEvent, vm]);
+    return {
+      createdText: formatAuditLocal(created, "DD MMM YYYY HH:mm"),
+      updatedText: formatAuditLocal(updated, "DD MMM YYYY HH:mm"),
+    };
+  }, [detailEvent]);
+
+  /* ===== URGENSI: pastikan selalu terhitung (fallback dari raw) ===== */
+  const urgencyChip = useMemo(() => {
+    if (!detailEvent) return null;
+    const fromProps = detailEvent.extendedProps?.urgency || null;
+    if (fromProps?.label) return fromProps;
+
+    const raw = detailEvent.extendedProps?.raw || {};
+    const rawVal =
+      raw.kebutuhan_agenda ??
+      raw.kebutuhan ??
+      raw.urgensi ??
+      raw.prioritas ??
+      raw.agenda?.kebutuhan_agenda ??
+      raw.agenda_kerja?.kebutuhan_agenda ??
+      null;
+
+    return normalizeUrgencyLocal(rawVal);
+  }, [detailEvent]);
+
+  // === Menu titik-tiga (More)
+  const onMoreMenuClick = ({ key }) => {
+    if (key === "history") setHistoryOpen(true);
+    if (key === "bulk-delete") confirmBulkDeleteSimilar();
+  };
+  const moreMenu = {
+    items: [
+      { key: "history", label: "Lihat Riwayat", icon: <ClockCircleOutlined /> },
+      { type: "divider" },
+      { key: "bulk-delete", label: "Hapus Serentak", icon: <DeleteOutlined />, danger: true },
+    ],
+    onClick: onMoreMenuClick,
+  };
 
   return (
     <div className="p-4">
@@ -269,6 +384,7 @@ const detailUser = useMemo(() => {
         width={760}
         destroyOnClose
         maskClosable={false}
+        zIndex={11000}
       >
         {!detailEvent ? null : (
           <>
@@ -292,6 +408,13 @@ const detailUser = useMemo(() => {
                   {detailEvent.extendedProps?.status ? (
                     <span className={statusColor(detailEvent.extendedProps.status)}>
                       {detailEvent.extendedProps.status}
+                    </span>
+                  ) : null}
+
+                  {/* Chip urgensi di sebelah kanan status */}
+                  {urgencyChip?.label ? (
+                    <span className={`fc-chip fc-chip--urg-${urgencyChip.level}`}>
+                      {urgencyChip.label}
                     </span>
                   ) : null}
 
@@ -338,6 +461,7 @@ const detailUser = useMemo(() => {
             </div>
 
             <div className="flex justify-end gap-2 mt-12">
+              {/* Edit */}
               <Tooltip title="Edit">
                 <Button
                   size="large"
@@ -349,7 +473,9 @@ const detailUser = useMemo(() => {
                   }}
                 />
               </Tooltip>
-              <Tooltip title="Hapus">
+
+              {/* Hapus satu */}
+              <Tooltip title="Hapus satu ini">
                 <Button
                   size="large"
                   danger
@@ -358,9 +484,37 @@ const detailUser = useMemo(() => {
                   onClick={() => confirmDelete(detailEvent.id)}
                 />
               </Tooltip>
+
+              {/* More (history + bulk delete) — diletakkan setelah tong sampah */}
+              <Dropdown menu={moreMenu} placement="bottomRight" trigger={["click"]}>
+                <Button size="large" shape="circle" icon={<EllipsisOutlined />} />
+              </Dropdown>
             </div>
           </>
         )}
+      </Modal>
+
+      {/* Modal Riwayat */}
+      <Modal
+        title="Riwayat Agenda"
+        open={historyOpen}
+        onCancel={() => setHistoryOpen(false)}
+        footer={null}
+        width={480}
+        destroyOnClose
+        maskClosable
+        zIndex={11100}
+      >
+        <div style={{ display: "grid", rowGap: 8, fontSize: 14 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ width: 120, color: "#64748b" }}>Dibuat</div>
+            <div style={{ color: "#0f172a" }}>{audit.createdText}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ width: 120, color: "#64748b" }}>Diubah</div>
+            <div style={{ color: "#0f172a" }}>{audit.updatedText}</div>
+          </div>
+        </div>
       </Modal>
 
       {/* Form Create/Edit */}
@@ -374,7 +528,7 @@ const detailUser = useMemo(() => {
       >
         <Form form={form} layout="vertical">
           <Form.Item
-            label="Judul"
+            label="Nama Aktivitas"
             name="title"
             rules={[{ required: true, message: "Judul wajib diisi" }]}
           >
@@ -449,82 +603,27 @@ const detailUser = useMemo(() => {
         </Form>
       </Modal>
 
-      {/* Modal Tambah Proyek/Agenda */}
-      <Modal
-        title="Tambah Proyek/Agenda"
-        open={agendaOpen}
-        onCancel={() => setAgendaOpen(false)}
-        onOk={async () => {
-          const { nama } = await agendaForm.validateFields();
-          const id = await vm.createAgendaMaster(nama.trim());
-          if (id) {
-            form.setFieldsValue({ id_agenda: id });
-          }
-          setAgendaOpen(false);
-          agendaForm.resetFields();
-          notification.success({ message: "Proyek/Agenda dibuat" });
-        }}
-        okText="Simpan"
-        destroyOnClose
-      >
-        <Form form={agendaForm} layout="vertical">
-          <Form.Item
-            label="Nama Proyek/Agenda"
-            name="nama"
-            rules={[{ required: true, message: "Wajib diisi" }]}
-          >
-            <Input placeholder="Mis. Pengembangan HRIS" />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* Gaya global khusus FullCalendar (ellipsis + chip) */}
+      {/* Gaya global khusus FullCalendar (ellipsis + chip + urgensi) */}
       <style jsx global>{`
         .fc .fc-daygrid-event { padding: 2px 6px; }
-        .fc-event-custom{
-          display:flex;
-          align-items:center;
-          gap:6px;
-          min-width:0;
-        }
+        .fc-event-custom{ display:flex; align-items:center; gap:6px; min-width:0; }
         .fc-title-ellipsis{
-          display:inline-block;
-          min-width:0;
-          max-width:100%;
-          overflow:hidden;
-          white-space:nowrap;
-          text-overflow:ellipsis;
-          line-height:1.15;
+          display:inline-block; min-width:0; max-width:100%;
+          overflow:hidden; white-space:nowrap; text-overflow:ellipsis; line-height:1.15;
         }
         .fc-chip{
-          display:inline-block;
-          padding:1px 6px;
-          border-radius:999px;
-          font-size:10px;
-          line-height:16px;
-          border:1px solid transparent;
-          flex:0 0 auto;
-          background:#f3f4f6;
-          color:#334155;
-          border-color:#e5e7eb;
+          display:inline-block; padding:1px 6px; border-radius:999px;
+          font-size:10px; line-height:16px; border:1px solid transparent;
+          flex:0 0 auto; background:#f3f4f6; color:#334155; border-color:#e5e7eb;
         }
         .fc-chip--proc{ background:#EBF2FF; color:#1d4ed8; border-color:#dbeafe; }
         .fc-chip--hold{ background:#FFF7E6; color:#b45309; border-color:#fde68a; }
         .fc-chip--done{ background:#EAF7EC; color:#15803d; border-color:#bbf7d0; }
-
-        /* Hilangkan underline link event bawaan */
+        .fc-chip--urg-1{ background:#fee2e2; color:#b91c1c; border-color:#fecaca; }
+        .fc-chip--urg-2{ background:#fce7f3; color:#9d174d; border-color:#fbcfe8; }
+        .fc-chip--urg-3{ background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
+        .fc-chip--urg-4{ background:#f1f5f9; color:#334155; border-color:#e2e8f0; }
         .fc .fc-daygrid-event a{ text-decoration:none; }
-
-        /* Opsional: clamp 2 baris (ganti title satu baris di atas) */
-        /* 
-        .fc-title-ellipsis{
-          display:-webkit-box;
-          -webkit-line-clamp:2;
-          -webkit-box-orient:vertical;
-          overflow:hidden;
-          white-space:normal;
-        }
-        */
       `}</style>
     </div>
   );
