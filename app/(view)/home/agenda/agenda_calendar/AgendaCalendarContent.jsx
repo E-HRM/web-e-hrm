@@ -527,13 +527,37 @@ export default function AgendaCalendarContent() {
         destroyOnClose
       >
         <Form form={form} layout="vertical">
+                    <Form.Item label="Proyek/Agenda" required>
+            <Space.Compact className="w-full">
+              <Form.Item
+                name="id_agenda"
+                noStyle
+                rules={[{ required: true, message: "Pilih proyek/agenda" }]}
+              >
+                <Select
+                  placeholder="Pilih Proyek"
+                  options={vm.agendaOptions}
+                  showSearch
+                  optionFilterProp="label"
+                />
+              </Form.Item>
+              <Button icon={<PlusOutlined />} onClick={() => setAgendaOpen(true)}>
+                Tambah Proyek
+              </Button>
+            </Space.Compact>
+          </Form.Item>
+
           <Form.Item
             label="Nama Aktivitas"
             name="title"
             rules={[{ required: true, message: "Judul wajib diisi" }]}
           >
-            <Input placeholder="Contoh: Meeting Sprint, Kunjungan Client" />
+            <Input.TextArea
+              placeholder="Contoh: Meeting Sprint, Kunjungan Client"
+              autoSize={{ minRows: 3, maxRows: 6 }}
+            />
           </Form.Item>
+
 
           {!editId && (
             <Form.Item
@@ -568,26 +592,6 @@ export default function AgendaCalendarContent() {
                 { value: "selesai", label: "Selesai" },
               ]}
             />
-          </Form.Item>
-
-          <Form.Item label="Proyek/Agenda" required>
-            <Space.Compact className="w-full">
-              <Form.Item
-                name="id_agenda"
-                noStyle
-                rules={[{ required: true, message: "Pilih proyek/agenda" }]}
-              >
-                <Select
-                  placeholder="Pilih Proyek"
-                  options={vm.agendaOptions}
-                  showSearch
-                  optionFilterProp="label"
-                />
-              </Form.Item>
-              <Button icon={<PlusOutlined />} onClick={() => setAgendaOpen(true)}>
-                Tambah Proyek
-              </Button>
-            </Space.Compact>
           </Form.Item>
 
           <Form.Item

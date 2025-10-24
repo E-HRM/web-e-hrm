@@ -319,7 +319,7 @@ export default function ViewLayout({ children }) {
             />
 
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-              <NotificationBell />
+              {/* <NotificationBell /> */}
               <span className="hidden md:inline text-sm text-gray-600">Admin</span>
               <div className="relative w-8 h-8">
                 <Image
