@@ -85,7 +85,6 @@ const mapServerToFC = (row) => {
   const start = toLocalWallTime(startRaw);
   const end = toLocalWallTime(endRaw);
 
-  // urgensi langsung dari DB (lebih robust)
   const urgency = normalizeUrgency(extractUrgencyRaw(row));
 
   let backgroundColor = "#3b82f6"; // status default diproses
@@ -106,8 +105,8 @@ const mapServerToFC = (row) => {
       id_agenda: row.id_agenda || row.agenda?.id_agenda || null,
       id_user: row.id_user || row.user?.id_user || null,
       user: row.user || null,
-      urgency,        // <= kirim ke UI (bila tersedia)
-      raw: row,       // penting: dipakai untuk riwayat & fallback urgensi
+      urgency,
+      raw: row,
     },
   };
 };
@@ -145,9 +144,9 @@ export default function useAgendaCalendarViewModel() {
 
   const qs = useMemo(() => {
     const p = new URLSearchParams();
-    p.set("from", dayjs(range.start).format("YYYY-MM-DD")); // sesuai API
-    p.set("to", dayjs(range.end).format("YYYY-MM-DD"));     // sesuai API
-    p.set("perPage", "100"); // server default 20 (maks 100)
+    p.set("from", dayjs(range.start).format("YYYY-MM-DD"));
+    p.set("to", dayjs(range.end).format("YYYY-MM-DD"));
+    p.set("perPage", "100");
     return p.toString();
   }, [range]);
 
@@ -336,7 +335,6 @@ export default function useAgendaCalendarViewModel() {
 
   /* ===== Bulk tools: cari & hapus “serupa” (judul+proyek+jam sama) ===== */
 
-  /** Ambil semua agenda_kerja dalam rentang start..end dan filter yang sig-nya sama */
   const findSimilarEventsByEvent = useCallback(async (fcEvent) => {
     if (!fcEvent) return { targets: [] };
 
@@ -350,7 +348,7 @@ export default function useAgendaCalendarViewModel() {
     const start = toLocalWallTime(raw.start_date || fcEvent.start);
     const end = toLocalWallTime(raw.end_date || fcEvent.end || fcEvent.start);
 
-    // rentang pencarian (per hari agar hemat payload)
+    // rentang pencarian (per hari)
     const p = new URLSearchParams();
     p.set("from", dayjs(start).format("YYYY-MM-DD"));
     p.set("to", dayjs(end).format("YYYY-MM-DD"));
@@ -374,7 +372,6 @@ export default function useAgendaCalendarViewModel() {
     return { targets };
   }, []);
 
-  /** Hapus by list of IDs (soft-delete by default) */
   const bulkDeleteByIds = useCallback(
     async (ids = [], { hard = false } = {}) => {
       if (!Array.isArray(ids) || ids.length === 0) return 0;
@@ -390,7 +387,6 @@ export default function useAgendaCalendarViewModel() {
     [mutate]
   );
 
-  /** One-shot: temukan yang serupa lalu hapus semuanya */
   const bulkDeleteSimilarByEvent = useCallback(
     async (fcEvent, { hard = false } = {}) => {
       const { targets } = await findSimilarEventsByEvent(fcEvent);

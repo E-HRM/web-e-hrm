@@ -14,7 +14,7 @@ import {
   Space,
   Tooltip,
   Divider,
-  Dropdown,            // <-- ADD
+  Dropdown,
 } from "antd";
 import {
   ProfileOutlined,
@@ -22,7 +22,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
-  EllipsisOutlined,     // <-- ADD
+  EllipsisOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
@@ -172,14 +172,13 @@ export default function AgendaCalendarContent() {
     }
   };
 
-  // Single delete -> pastikan di atas modal detail
   const confirmDelete = (id) => {
     Modal.confirm({
       title: "Hapus agenda ini?",
       okText: "Hapus",
       okButtonProps: { danger: true },
       cancelText: "Batal",
-      zIndex: 11150,                // <-- di atas modal detail (11000)
+      zIndex: 11150,
       getContainer: () => document.body,
       onOk: async () => {
         try {
@@ -194,7 +193,6 @@ export default function AgendaCalendarContent() {
     });
   };
 
-  // Hapus serentak (judul+proyek+jam sama) -> konfirm di atas modal detail
   const confirmBulkDeleteSimilar = async () => {
     if (!detailEvent) return;
     try {
@@ -210,7 +208,7 @@ export default function AgendaCalendarContent() {
         okText: "Hapus Semua",
         okButtonProps: { danger: true },
         cancelText: "Batal",
-        zIndex: 11150,              // <-- di atas modal detail (11000) & riwayat (11100)
+        zIndex: 11150,
         getContainer: () => document.body,
         onOk: async () => {
           try {
@@ -233,7 +231,7 @@ export default function AgendaCalendarContent() {
   const openDetail = (arg) => {
     setDetailEvent(arg.event);
     setDetailOpen(true);
-    // Tutup popover "+X more" agar tidak menutupi modal
+    // tutup popover "+X more" agar tak nutupi modal
     document.querySelectorAll(".fc-popover").forEach((el) => el.remove());
   };
 
@@ -254,7 +252,7 @@ export default function AgendaCalendarContent() {
     }
   };
 
-  /* ===== Render event dengan ellipsis & chip kecil ===== */
+  /* ===== Render event: di grid 1 baris, di popover 2 baris (di-override via CSS) ===== */
   const renderEventContent = (info) => {
     const st = info.event.extendedProps?.status;
     const time = info.timeText ? `${info.timeText} ` : "";
@@ -295,7 +293,7 @@ export default function AgendaCalendarContent() {
   /* ===== audit created/updated (KHUSUS Riwayat) ===== */
   const audit = useMemo(() => {
     const raw = detailEvent?.extendedProps?.raw || {};
-       const created =
+    const created =
       raw.created_at ?? raw.createdAt ?? raw.created ?? raw.tanggal_dibuat ?? null;
     const updated =
       raw.updated_at ?? raw.updatedAt ?? raw.updated ?? raw.tanggal_diubah ?? null;
@@ -385,6 +383,9 @@ export default function AgendaCalendarContent() {
         destroyOnClose
         maskClosable={false}
         zIndex={11000}
+        styles={{
+          body: { maxHeight: "72vh", overflowY: "auto" }, // scroll di dalam modal
+        }}
       >
         {!detailEvent ? null : (
           <>
@@ -411,7 +412,6 @@ export default function AgendaCalendarContent() {
                     </span>
                   ) : null}
 
-                  {/* Chip urgensi di sebelah kanan status */}
                   {urgencyChip?.label ? (
                     <span className={`fc-chip fc-chip--urg-${urgencyChip.level}`}>
                       {urgencyChip.label}
@@ -419,20 +419,19 @@ export default function AgendaCalendarContent() {
                   ) : null}
 
                   {detailEvent.extendedProps?.agenda?.nama_agenda ? (
-                    <span className="fc-chip">{detailEvent.extendedProps.agenda.nama_agenda}</span>
+                    <span className="fc-chip fc-chip--clip1">
+                      {detailEvent.extendedProps.agenda.nama_agenda}
+                    </span>
                   ) : null}
 
                   <div
+                    className="fc-chip"
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 8,
                       padding: "6px 10px",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: 999,
                       fontSize: 12,
-                      color: "#334155",
-                      background: "#fafafa",
                     }}
                   >
                     <ClockCircleOutlined />
@@ -456,11 +455,18 @@ export default function AgendaCalendarContent() {
 
             <Divider style={{ margin: "14px 0 12px" }} />
 
-            <div style={{ fontSize: 14, color: "#0f172a", whiteSpace: "pre-wrap" }}>
+            <div
+              style={{
+                fontSize: 14,
+                color: "#0f172a",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
               {detailEvent.extendedProps?.deskripsi || "—"}
             </div>
 
-            <div className="flex justify-end gap-2 mt-12">
+            <div className="flex justify-end gap-2 mt-10">
               {/* Edit */}
               <Tooltip title="Edit">
                 <Button
@@ -485,7 +491,7 @@ export default function AgendaCalendarContent() {
                 />
               </Tooltip>
 
-              {/* More (history + bulk delete) — diletakkan setelah tong sampah */}
+              {/* More (history + bulk delete) */}
               <Dropdown menu={moreMenu} placement="bottomRight" trigger={["click"]}>
                 <Button size="large" shape="circle" icon={<EllipsisOutlined />} />
               </Dropdown>
@@ -504,6 +510,7 @@ export default function AgendaCalendarContent() {
         destroyOnClose
         maskClosable
         zIndex={11100}
+        styles={{ body: { maxHeight: "60vh", overflowY: "auto" } }}
       >
         <div style={{ display: "grid", rowGap: 8, fontSize: 14 }}>
           <div style={{ display: "flex", gap: 8 }}>
@@ -525,9 +532,10 @@ export default function AgendaCalendarContent() {
         onOk={handleSubmitForm}
         okText={editId ? "Simpan" : "Buat"}
         destroyOnClose
+        styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
       >
         <Form form={form} layout="vertical">
-                    <Form.Item label="Proyek/Agenda" required>
+          <Form.Item label="Proyek/Agenda" required>
             <Space.Compact className="w-full">
               <Form.Item
                 name="id_agenda"
@@ -557,7 +565,6 @@ export default function AgendaCalendarContent() {
               autoSize={{ minRows: 3, maxRows: 6 }}
             />
           </Form.Item>
-
 
           {!editId && (
             <Form.Item
@@ -607,18 +614,43 @@ export default function AgendaCalendarContent() {
         </Form>
       </Modal>
 
-      {/* Gaya global khusus FullCalendar (ellipsis + chip + urgensi) */}
+      {/* Gaya global khusus FullCalendar (ellipsis + chip + urgensi + popover clamp) */}
       <style jsx global>{`
+        /* Event di grid: 1 baris ellipsis */
         .fc .fc-daygrid-event { padding: 2px 6px; }
         .fc-event-custom{ display:flex; align-items:center; gap:6px; min-width:0; }
         .fc-title-ellipsis{
           display:inline-block; min-width:0; max-width:100%;
           overflow:hidden; white-space:nowrap; text-overflow:ellipsis; line-height:1.15;
         }
+
+        /* POPUP "+ more": dua baris clamp + scroll internal */
+        .fc-more-popover {
+          max-width: min(90vw, 560px);
+        }
+        .fc-more-popover .fc-popover-body {
+          max-height: 60vh;
+          overflow: auto;
+          padding-right: 4px;
+        }
+        .fc-more-popover .fc-event-custom {
+          align-items: flex-start;
+        }
+        .fc-more-popover .fc-title-ellipsis{
+          white-space: normal !important;
+          display: -webkit-box !important;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          line-height: 1.25;
+        }
+
+        /* Chip styles */
         .fc-chip{
           display:inline-block; padding:1px 6px; border-radius:999px;
           font-size:10px; line-height:16px; border:1px solid transparent;
           flex:0 0 auto; background:#f3f4f6; color:#334155; border-color:#e5e7eb;
+          max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
         .fc-chip--proc{ background:#EBF2FF; color:#1d4ed8; border-color:#dbeafe; }
         .fc-chip--hold{ background:#FFF7E6; color:#b45309; border-color:#fde68a; }
@@ -627,6 +659,8 @@ export default function AgendaCalendarContent() {
         .fc-chip--urg-2{ background:#fce7f3; color:#9d174d; border-color:#fbcfe8; }
         .fc-chip--urg-3{ background:#fff7ed; color:#9a3412; border-color:#fed7aa; }
         .fc-chip--urg-4{ background:#f1f5f9; color:#334155; border-color:#e2e8f0; }
+
+        /* Link event default: hilangkan underline */
         .fc .fc-daygrid-event a{ text-decoration:none; }
       `}</style>
     </div>
