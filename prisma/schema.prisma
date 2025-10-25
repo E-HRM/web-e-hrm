@@ -105,7 +105,7 @@ enum AgendaStatus {
 }
 
 enum StatusKunjungan {
-  teragenda
+  diproses
   berlangsung
   selesai
 }
@@ -274,7 +274,7 @@ model Kunjungan {
   end_latitude             Decimal?  @db.Decimal(10, 6)
   end_longitude            Decimal?  @db.Decimal(10, 6)
   lampiran_kunjungan_url   String?   @db.LongText
-  status_kunjungan         StatusKunjungan @default(teragenda)
+  status_kunjungan         StatusKunjungan @default(diproses)
   duration                 Int?
   hand_over                String?   @db.LongText
 

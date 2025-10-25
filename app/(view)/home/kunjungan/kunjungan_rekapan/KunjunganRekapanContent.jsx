@@ -1,4 +1,5 @@
-// app/home/.../KunjunganRekapanContent.jsx (atau path kamu)
+// KunjunganRekapanContent.jsx
+// (SUDAH menampilkan label "Teragenda" untuk value 'diproses'; hanya kirim utuh)
 "use client";
 
 import { useMemo, useState } from "react";
@@ -24,7 +25,6 @@ import useVM, { showFromDB } from "./useKunjunganRekapanViewModel";
 
 const NAVY = "#003A6F";
 
-/* Helpers avatar */
 function getPhotoUrl(user) {
   return (
     user?.foto_profil_user ||
@@ -46,13 +46,8 @@ function CircleImg({ src, size = 36, alt = "Foto" }) {
       src={src || "/avatar-placeholder.jpg"}
       alt={alt}
       style={{
-        width: size,
-        height: size,
-        borderRadius: 999,
-        objectFit: "cover",
-        border: "1px solid #003A6F22",
-        background: "#E6F0FA",
-        display: "inline-block",
+        width: size, height: size, borderRadius: 999, objectFit: "cover",
+        border: "1px solid #003A6F22", background: "#E6F0FA", display: "inline-block",
       }}
       onError={(e) => {
         e.currentTarget.src = "/avatar-placeholder.jpg";
@@ -68,26 +63,9 @@ export default function KunjunganRekapanContent() {
 
   const columns = useMemo(
     () => [
-      {
-        title: "Kategori",
-        key: "kategori",
-        width: 180,
-        render: (_, r) => r.kategori?.kategori_kunjungan || "—",
-      },
-      {
-        title: "Deskripsi",
-        dataIndex: "deskripsi",
-        width: 300,
-        key: "desk",
-        render: (v) => v || "—",
-      },
-      {
-        title: "Tanggal",
-        dataIndex: "tanggal",
-        key: "tgl",
-        width: 150,
-        render: (v) => (v ? showFromDB(v, "DD MMM YYYY") : "-"),
-      },
+      { title: "Kategori", key: "kategori", width: 180, render: (_, r) => r.kategori?.kategori_kunjungan || "—" },
+      { title: "Deskripsi", dataIndex: "deskripsi", width: 300, key: "desk", render: (v) => v || "—" },
+      { title: "Tanggal", dataIndex: "tanggal", key: "tgl", width: 150, render: (v) => (v ? showFromDB(v, "DD MMM YYYY") : "-") },
       {
         title: "Start",
         key: "start",
@@ -100,12 +78,7 @@ export default function KunjunganRekapanContent() {
               <span>{t}</span>
               {lat != null && lon != null ? (
                 <Tooltip title="Lihat lokasi (OpenStreetMap)">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<EnvironmentOutlined />}
-                    onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")}
-                  />
+                  <Button size="small" type="text" icon={<EnvironmentOutlined />} onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")} />
                 </Tooltip>
               ) : null}
               {photo ? (
@@ -129,12 +102,7 @@ export default function KunjunganRekapanContent() {
               <span>{t}</span>
               {lat != null && lon != null ? (
                 <Tooltip title="Lihat lokasi (OpenStreetMap)">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<EnvironmentOutlined />}
-                    onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")}
-                  />
+                  <Button size="small" type="text" icon={<EnvironmentOutlined />} onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")} />
                 </Tooltip>
               ) : null}
               {photo ? (
@@ -157,7 +125,7 @@ export default function KunjunganRekapanContent() {
               ? { color: "success", text: "Selesai" }
               : st === "berlangsung"
               ? { color: "warning", text: "Berlangsung" }
-              : { color: "processing", text: "Diproses" };
+              : { color: "processing", text: "Teragenda" }; // diproses → Teragenda
           return <Tag color={m.color}>{m.text}</Tag>;
         },
       },
@@ -170,16 +138,13 @@ export default function KunjunganRekapanContent() {
           if (!u) return "—";
           const id = u.id_user ?? u.id ?? u.uuid;
           const href = id ? `/home/kelola_karyawan/karyawan/${id}` : undefined;
-
           const displayName = u.nama_pengguna ?? u.name ?? u.email ?? "—";
 
-          // ⬇️ fallback jabatan & departemen diperluas
           const jabatan =
             u.jabatan?.nama_jabatan ??
             u.jabatan?.nama ??
             u.jabatan?.title ??
-            (typeof u.jabatan === "string" ? u.jabatan : "") ??
-            "";
+            (typeof u.jabatan === "string" ? u.jabatan : "") ?? "";
 
           const departemen =
             u.departemen?.nama_departemen ??
@@ -197,8 +162,7 @@ export default function KunjunganRekapanContent() {
             (typeof u.departemen === "string" ? u.departemen : "") ??
             (typeof u.departement === "string" ? u.departement : "") ??
             (typeof u.department === "string" ? u.department : "") ??
-            (typeof u.divisi === "string" ? u.divisi : "") ??
-            "";
+            (typeof u.divisi === "string" ? u.divisi : "") ?? "";
 
           const subtitle = jabatan && departemen ? `${jabatan} | ${departemen}` : (jabatan || departemen || "—");
 
@@ -206,19 +170,12 @@ export default function KunjunganRekapanContent() {
             <div className="flex items-center gap-3 min-w-0">
               <CircleImg src={getPhotoUrl(u)} alt={displayName} />
               <div className="min-w-0">
-                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
-                  {displayName}
-                </div>
-                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
-                  {subtitle}
-                </div>
+                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">{displayName}</div>
+                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">{subtitle}</div>
               </div>
             </div>
           );
-
-          return href ? (
-            <Link href={href} className="no-underline">{node}</Link>
-          ) : node;
+          return href ? <Link href={href} className="no-underline">{node}</Link> : node;
         },
       },
     ],
@@ -260,7 +217,7 @@ export default function KunjunganRekapanContent() {
               value={vm.filters.status || undefined}
               onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
               options={[
-                { value: "diproses", label: "Diproses" },
+                { value: "diproses", label: "Teragenda" },   // value tetap diproses
                 { value: "berlangsung", label: "Berlangsung" },
                 { value: "selesai", label: "Selesai" },
               ]}
