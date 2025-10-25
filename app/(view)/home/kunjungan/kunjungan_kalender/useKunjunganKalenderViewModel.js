@@ -201,6 +201,15 @@ export default function useKunjunganKalenderViewModel() {
     [listRes]
   );
 
+  /* ==== Label tampilan status (value DB tetap) ==== */
+  const displayStatusLabel = useCallback((st) => {
+    const s = String(st || "").toLowerCase();
+    if (s === "diproses") return "Teragenda";
+    if (s === "berlangsung") return "Berlangsung";
+    if (s === "selesai") return "Selesai";
+    return st || "-";
+  }, []);
+
   /* ==== EVENTS: samakan dengan agenda (warna by status) ==== */
   const events = useMemo(() => {
     return rows.map((r) => {
@@ -214,7 +223,7 @@ export default function useKunjunganKalenderViewModel() {
 
       // background by status
       const st = String(r.status_kunjungan || "").toLowerCase();
-      let backgroundColor = "#3b82f6"; // diproses
+      let backgroundColor = "#3b82f6"; // diproses → Teragenda
       if (st === "selesai") backgroundColor = "#22c55e";
       else if (st === "ditunda" || st === "berlangsung") backgroundColor = "#f59e0b";
 
@@ -249,7 +258,7 @@ export default function useKunjunganKalenderViewModel() {
           tanggal: asDateOnly(base),
           jam_mulai: start ? asLocalPlain(start) : null,
           jam_selesai: end ? asLocalPlain(end) : null,
-          status_kunjungan: "diproses",
+          status_kunjungan: "diproses", // value DB tetap
           deskripsi: deskripsi?.trim() || null,
         };
         await crudService.post(ApiEndpoints.CreateKunjungan, payload);
@@ -376,5 +385,6 @@ export default function useKunjunganKalenderViewModel() {
     getStartCoord,
     getEndCoord,
     makeOsmEmbed,
+    displayStatusLabel, // ⬅️ dipakai UI
   };
 }

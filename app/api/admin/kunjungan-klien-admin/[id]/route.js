@@ -5,10 +5,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
-const normRole = (r) =>
-  String(r || '')
-    .trim()
-    .toUpperCase();
+const normRole = (r) => String(r || '').trim().toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR', 'SUPERADMIN'].includes(normRole(role));
 const canManageAll = (role) => ['OPERASIONAL', 'SUPERADMIN'].includes(normRole(role));
 
@@ -51,7 +48,7 @@ const kunjunganInclude = {
       id_departement: true,
       id_jabatan: true,
       departement: { select: { id_departement: true, nama_departement: true } },
-      jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
+      jabatan:     { select: { id_jabatan: true,     nama_jabatan: true     } },
     },
   },
   reports: {
@@ -72,18 +69,6 @@ const kunjunganInclude = {
   },
 };
 
-const STATUS_NORMALIZATION_MAP = new Map([
-  ['teragenda', 'teragenda'],
-  ['diproses', 'teragenda'],
-  ['berlangsung', 'berlangsung'],
-  ['selesai', 'selesai'],
-]);
-
-function normalizeStatusInput(value) {
-  if (value == null) return '';
-  const normalized = STATUS_NORMALIZATION_MAP.get(String(value).trim().toLowerCase());
-  return normalized ?? '';
-}
 export async function GET(req, { params }) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
@@ -164,11 +149,10 @@ export async function PUT(req, { params }) {
     }
 
     if ('status_kunjungan' in body) {
-      const normalizedStatus = normalizeStatusInput(body.status_kunjungan);
-      if (!normalizedStatus) {
-        return NextResponse.json({ message: "Field 'status_kunjungan' tidak valid." }, { status: 400 });
-      }
-      updates.status_kunjungan = normalizedStatus;
+      const val = String(body.status_kunjungan || '').trim().toLowerCase();
+      const allowed = new Set(['diproses', 'berlangsung', 'selesai', 'batal']);
+      if (!allowed.has(val)) return NextResponse.json({ message: "Field 'status_kunjungan' tidak valid." }, { status: 400 });
+      updates.status_kunjungan = val;
     }
 
     if (!Object.keys(updates).length) {
