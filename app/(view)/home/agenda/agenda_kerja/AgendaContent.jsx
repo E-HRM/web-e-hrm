@@ -1,4 +1,4 @@
-// AgendaContent.tsx / .js
+// AgendaContent.jsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -53,8 +53,6 @@ export default function AgendaContent() {
 
   /* =======================
      TABEL ANAK (per karyawan)
-     - “Aktivitas” punya maxWidth + wrap
-     - tableLayout="fixed" agar wrap stabil
   ======================== */
   const activityColumns = [
     {
@@ -80,7 +78,6 @@ export default function AgendaContent() {
       key: "waktu",
       width: 170,
       render: (_, r) => {
-        // tampilkan angka jam persis dari DB (tanpa konversi TZ)
         const s = r.start_date ? dayjs.utc(r.start_date).format("DD/MM HH:mm") : "-";
         const e = r.end_date ? dayjs.utc(r.end_date).format("DD/MM HH:mm") : "-";
         return `${s} - ${e}`;
@@ -104,10 +101,16 @@ export default function AgendaContent() {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 100,
-      render: (st) => {
-        const c = st === "selesai" ? "success" : st === "ditunda" ? "warning" : "processing";
-        return <Tag color={c}>{st[0].toUpperCase() + st.slice(1)}</Tag>;
+      width: 120,
+      render: (st = "") => {
+        const map = {
+          selesai: { color: "success", label: "Selesai" },
+          ditunda: { color: "warning", label: "Ditunda" },
+          diproses: { color: "processing", label: "Diproses" },
+          teragenda: { color: "default", label: "Teragenda" },
+        };
+        const m = map[st] || { color: "default", label: st ? st[0].toUpperCase() + st.slice(1) : "—" };
+        return <Tag color={m.color}>{m.label}</Tag>;
       },
     },
     {
@@ -159,9 +162,7 @@ export default function AgendaContent() {
 
   return (
     <div className="p-4">
-      <Card
-        title={<span className="text-lg font-semibold">Agenda Kerja (Semua Karyawan)</span>}
-      >
+      <Card title={<span className="text-lg font-semibold">Agenda Kerja (Semua Karyawan)</span>}>
         <div className="flex flex-wrap gap-3 items-center mb-4">
           <Select
             className="min-w-[220px]"
@@ -193,7 +194,6 @@ export default function AgendaContent() {
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
-                // pakai string polos, bukan ISO
                 from: d ? d.startOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
               }))
             }
@@ -205,7 +205,6 @@ export default function AgendaContent() {
             onChange={(d) =>
               vm.setFilters((s) => ({
                 ...s,
-                // pakai string polos, bukan ISO
                 to: d ? d.endOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
               }))
             }
@@ -218,6 +217,7 @@ export default function AgendaContent() {
             value={vm.filters.status || undefined}
             onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
             options={[
+              { value: "teragenda", label: "Teragenda" },
               { value: "diproses", label: "Diproses" },
               { value: "ditunda", label: "Ditunda" },
               { value: "selesai", label: "Selesai" },
@@ -250,7 +250,7 @@ export default function AgendaContent() {
                   dataSource={userRow.rows}
                   pagination={false}
                   size="small"
-                  tableLayout="fixed"           // ⬅️ penting agar wrapping stabil
+                  tableLayout="fixed"
                 />
               ),
             }}
@@ -275,6 +275,7 @@ export default function AgendaContent() {
           <Form.Item name="status" label="Status" rules={[{ required: true }]}>
             <Select
               options={[
+                { value: "teragenda", label: "Teragenda" },
                 { value: "diproses", label: "Diproses" },
                 { value: "ditunda", label: "Ditunda" },
                 { value: "selesai", label: "Selesai" },

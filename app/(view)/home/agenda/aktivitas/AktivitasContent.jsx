@@ -1,3 +1,4 @@
+// AktivitasContent.jsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -70,23 +71,19 @@ function normalizeUrgency(v) {
 export default function AktivitasContent() {
   const vm = useAktivitasTimesheetViewModel();
 
-  // modal tambah aktivitas
   const [openAdd, setOpenAdd] = useState(false);
   const [savingAdd, setSavingAdd] = useState(false);
   const [addForm] = Form.useForm();
 
-  // modal tambah proyek master
   const [openAddAgenda, setOpenAddAgenda] = useState(false);
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [agendaForm] = Form.useForm();
 
-  // modal ubah aktivitas
   const [openEdit, setOpenEdit] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm] = Form.useForm();
   const [editingRow, setEditingRow] = useState(null);
 
-  // modal impor
   const [openImport, setOpenImport] = useState(false);
   const [importing, setImporting] = useState(false);
   const [fileImport, setFileImport] = useState(null);
@@ -141,7 +138,6 @@ export default function AktivitasContent() {
         width: 420,
         render: (v, r) => (
           <div className="flex flex-col" style={{ maxWidth: 400 }}>
-            {/* UBAHAN: hilangkan truncate, pakai wrap ke bawah */}
             <span
               className="font-medium"
               style={{
@@ -197,14 +193,15 @@ export default function AktivitasContent() {
         title: "Status",
         dataIndex: "status",
         key: "status",
-        width: 100,
-        render: (st) => {
-          const m =
-            st === "selesai"
-              ? { color: "success", text: "Selesai" }
-              : st === "ditunda"
-              ? { color: "warning", text: "Ditunda" }
-              : { color: "processing", text: "Diproses" };
+        width: 120,
+        render: (st = "") => {
+          const map = {
+            selesai: { color: "success", text: "Selesai" },
+            ditunda: { color: "warning", text: "Ditunda" },
+            diproses: { color: "processing", text: "Diproses" },
+            teragenda: { color: "default", text: "Teragenda" },
+          };
+          const m = map[st] || { color: "default", text: st ? st[0].toUpperCase() + st.slice(1) : "—" };
           return <Tag color={m.color}>{m.text}</Tag>;
         },
       },
@@ -252,7 +249,6 @@ export default function AktivitasContent() {
     [vm]
   );
 
-  // submit tambah pekerjaan — TANPA waktu
   const onSubmitAdd = async () => {
     try {
       const values = await addForm.validateFields();
@@ -272,7 +268,6 @@ export default function AktivitasContent() {
     }
   };
 
-  // submit tambah proyek master
   const onSubmitAgenda = async () => {
     try {
       const { nama_agenda } = await agendaForm.validateFields();
@@ -289,7 +284,6 @@ export default function AktivitasContent() {
     }
   };
 
-  // submit ubah aktivitas
   const onSubmitEdit = async () => {
     try {
       const { deskripsi_kerja, id_agenda } = await editForm.validateFields();
@@ -417,6 +411,7 @@ export default function AktivitasContent() {
                   value={vm.filters.status || undefined}
                   onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
                   options={[
+                    { value: "teragenda", label: "Teragenda" },
                     { value: "diproses", label: "Diproses" },
                     { value: "ditunda", label: "Ditunda" },
                     { value: "selesai", label: "Selesai" },

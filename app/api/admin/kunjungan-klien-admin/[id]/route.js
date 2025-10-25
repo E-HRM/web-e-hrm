@@ -5,10 +5,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
-const normRole = (r) =>
-  String(r || '')
-    .trim()
-    .toUpperCase();
+const normRole = (r) => String(r || '').trim().toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR', 'SUPERADMIN'].includes(normRole(role));
 const canManageAll = (role) => ['OPERASIONAL', 'SUPERADMIN'].includes(normRole(role));
 
@@ -37,7 +34,36 @@ function isNullLike(v) {
   return false;
 }
 
-/** ⬇️ include YANG VALID sesuai schema */
+function parseFlexibleDateTime(input) {
+  if (!input) return null;
+  const s = String(input).trim();
+  if (/[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(s)) {
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (m) {
+    const [, y, M, d, H = '00', i = '00', sec = '00'] = m;
+    return new Date(
+      Date.UTC(Number(y), Number(M) - 1, Number(d), Number(H), Number(i), Number(sec))
+    );
+  }
+  const d2 = new Date(s);
+  return Number.isNaN(d2.getTime()) ? null : d2;
+}
+function parseDateOnlyToUTC(input) {
+  if (!input) return null;
+  const s = String(input).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    const [, y, M, d] = m;
+    return new Date(Date.UTC(Number(y), Number(M) - 1, Number(d)));
+  }
+  const d2 = new Date(s);
+  if (Number.isNaN(d2.getTime())) return null;
+  return new Date(Date.UTC(d2.getUTCFullYear(), d2.getUTCMonth(), d2.getUTCDate()));
+}
+
 const kunjunganInclude = {
   kategori: { select: { id_kategori_kunjungan: true, kategori_kunjungan: true } },
   user: {
@@ -84,6 +110,7 @@ function normalizeStatusInput(value) {
   const normalized = STATUS_NORMALIZATION_MAP.get(String(value).trim().toLowerCase());
   return normalized ?? '';
 }
+
 export async function GET(req, { params }) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
@@ -141,24 +168,24 @@ export async function PUT(req, { params }) {
       if (isNullLike(body.tanggal)) {
         return NextResponse.json({ message: "Field 'tanggal' tidak boleh kosong." }, { status: 400 });
       }
-      const tgl = new Date(String(body.tanggal));
-      if (Number.isNaN(tgl.getTime())) return NextResponse.json({ message: "Field 'tanggal' tidak valid." }, { status: 400 });
+      const tgl = parseDateOnlyToUTC(String(body.tanggal));
+      if (!tgl) return NextResponse.json({ message: "Field 'tanggal' tidak valid." }, { status: 400 });
       updates.tanggal = tgl;
     }
 
     if ('jam_mulai' in body) {
       if (isNullLike(body.jam_mulai)) updates.jam_mulai = null;
       else {
-        const jm = new Date(String(body.jam_mulai));
-        if (Number.isNaN(jm.getTime())) return NextResponse.json({ message: "Field 'jam_mulai' tidak valid." }, { status: 400 });
+        const jm = parseFlexibleDateTime(String(body.jam_mulai));
+        if (!jm) return NextResponse.json({ message: "Field 'jam_mulai' tidak valid." }, { status: 400 });
         updates.jam_mulai = jm;
       }
     }
     if ('jam_selesai' in body) {
       if (isNullLike(body.jam_selesai)) updates.jam_selesai = null;
       else {
-        const js = new Date(String(body.jam_selesai));
-        if (Number.isNaN(js.getTime())) return NextResponse.json({ message: "Field 'jam_selesai' tidak valid." }, { status: 400 });
+        const js = parseFlexibleDateTime(String(body.jam_selesai));
+        if (!js) return NextResponse.json({ message: "Field 'jam_selesai' tidak valid." }, { status: 400 });
         updates.jam_selesai = js;
       }
     }
