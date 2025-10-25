@@ -6,11 +6,11 @@ import Image from "next/image";
 import Link from "next/link";
 import useSWR from "swr";
 
-import Sidebar from "../../components/dashboard/Sidebar";
-import AppHeader from "../../components/dashboard/AppHeader"; // <— impor header baru
+import Sidebar from "@/app/components/dashboard/Sidebar";
+import AppHeader from "@/app/components/dashboard/Appheader"; 
 import useLogoutViewModel from "../auth/logout/useLogoutViewModel";
 
-const { Sider, Content, Footer } = Layout; // <— tidak ada Header di sini
+const { Sider, Content, Footer } = Layout;
 const { useBreakpoint } = Grid;
 
 const LS_COLLAPSED_KEY = "oss.sider.collapsed";
