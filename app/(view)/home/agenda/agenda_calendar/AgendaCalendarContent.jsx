@@ -104,7 +104,7 @@ export default function AgendaCalendarContent() {
 
   /* ===== Modal Tambah Proyek (opsional) ===== */
   const [agendaOpen, setAgendaOpen] = useState(false);
-  const [agendaForm] = Form.useForm();
+  const [agendaForm] = Form.useForm(); // (disiapkan bila dipakai)
 
   /* ===== Detail Modal ===== */
   const [detailOpen, setDetailOpen] = useState(false);
@@ -127,7 +127,7 @@ export default function AgendaCalendarContent() {
     setEditId(null);
     form.setFieldsValue({
       title: "",
-      status: "teragenda", // default abu-abu
+      status: "teragenda", // default
       users: [],
       id_agenda: null,
       start: dayjs(startStr),
@@ -236,26 +236,18 @@ export default function AgendaCalendarContent() {
 
   /* === BUKA DETAIL TANPA MENUTUP POPOVER "+X more" === */
   const openDetail = (arg) => {
-    // cegah klik event di popover dianggap "klik luar"
     arg.jsEvent?.preventDefault?.();
     arg.jsEvent?.stopPropagation?.();
-
     setDetailEvent(arg.event);
     setDetailOpen(true);
-    // tidak menghapus .fc-popover
   };
 
   /* ====== Guard: tahan FullCalendar menutup popover saat modal detail terbuka ====== */
   useEffect(() => {
     if (!detailOpen) return;
-
-    const guard = (e) => {
-      e.stopPropagation();
-    };
-
+    const guard = (e) => { e.stopPropagation(); };
     document.addEventListener("mousedown", guard, true);
     document.addEventListener("touchstart", guard, true);
-
     return () => {
       document.removeEventListener("mousedown", guard, true);
       document.removeEventListener("touchstart", guard, true);
@@ -289,7 +281,6 @@ export default function AgendaCalendarContent() {
       info.event.title ||
       "-";
 
-    // ambil nama user dari props atau map user
     const uid = info.event.extendedProps?.id_user;
     const userFromMap = uid ? vm.getUserById(uid) : null;
     const userName =
@@ -299,10 +290,7 @@ export default function AgendaCalendarContent() {
       info.event.extendedProps?.user?.email ||
       "";
 
-    // "HH:mm" → "HH.mm"
     const jam = info.timeText ? info.timeText.replace(":", ".") : "";
-
-    // primary text: jam, project, nama (nama bisa dipotong ellipsis oleh CSS)
     const titleText = [jam, projectName, userName].filter(Boolean).join(" · ");
 
     return (
@@ -470,16 +458,8 @@ export default function AgendaCalendarContent() {
                     </span>
                   ) : null}
 
-                  <div
-                    className="fc-chip"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                      padding: "6px 10px",
-                      fontSize: 12,
-                    }}
-                  >
+                  {/* CHIP TANGGAL-JAM: melebar sesuai konten */}
+                  <div className="fc-chip--time">
                     <ClockCircleOutlined />
                     <span>
                       {vm.showFromDB(
@@ -683,7 +663,7 @@ export default function AgendaCalendarContent() {
           line-height: 1.25;
         }
 
-        /* Chip styles */
+        /* Chip base (untuk status/label pendek) */
         .fc-chip{
           display:inline-block; padding:1px 6px; border-radius:999px;
           font-size:10px; line-height:16px; border:1px solid transparent;
@@ -694,6 +674,19 @@ export default function AgendaCalendarContent() {
         .fc-chip--hold{ background:#FFF7E6; color:#b45309; border-color:#fde68a; }
         .fc-chip--done{ background:#EAF7EC; color:#15803d; border-color:#bbf7d0; }
         .fc-chip--plan{ background:#f3f4f6; color:#374151; border-color:#e5e7eb; }
+
+        /* Chip agenda name (opsional clip) */
+        .fc-chip--clip1{ max-width: 280px; }
+
+        /* Chip khusus waktu: melebar sesuai konten, background ikut memanjang */
+        .fc-chip--time{
+          display:inline-flex; align-items:center; gap:8px;
+          padding:6px 10px; font-size:12px; line-height:20px;
+          border-radius:999px; background:#f3f4f6; color:#334155; border:1px solid #e5e7eb;
+          width:max-content; max-width:none;
+          white-space:nowrap; overflow:visible; text-overflow:clip;
+          flex:0 0 auto; flex-shrink:0;
+        }
 
         /* Link event default: hilangkan underline */
         .fc .fc-daygrid-event a{ text-decoration:none; }
