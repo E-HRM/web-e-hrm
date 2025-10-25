@@ -52,7 +52,7 @@ export async function POST(request) {
     const candidates = await db.kunjungan.findMany({
       where: {
         deleted_at: null,
-        status_kunjungan: { in: ['diproses', 'berlangsung'] },
+        status_kunjungan: { in: ['teragenda', 'berlangsung'] },
         jam_selesai: {
           not: null,
           gte: now,

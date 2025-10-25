@@ -74,7 +74,7 @@ export async function GET(req) {
 
     const where = {
       id_user: actorId,
-      status_kunjungan: 'diproses', // Filter utama: status 'diproses'
+      status_kunjungan: 'teragenda',
       deleted_at: null,
     };
 
