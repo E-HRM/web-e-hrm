@@ -73,10 +73,17 @@ const extractUrgencyRaw = (row) =>
 /* ============== Map Server -> FullCalendar ============== */
 
 const mapServerToFC = (row) => {
+  // status default → teragenda
   const status =
-    row.status || row.status_agenda || row.status_kerja || "diproses";
+    row.status || row.status_agenda || row.status_kerja || "teragenda";
 
-  const title = row.deskripsi_kerja || row.nama_agenda || row.title || "Agenda";
+  // TAMPILKAN PROYEK sebagai judul event (bukan deskripsi aktivitas)
+  const title =
+    row.agenda?.nama_agenda ||
+    row.nama_agenda ||
+    row.deskripsi_kerja ||
+    row.title ||
+    "Agenda";
 
   const startRaw = row.start_date || row.tanggal_mulai || row.start || row.mulai;
   const endRaw =
@@ -87,13 +94,15 @@ const mapServerToFC = (row) => {
 
   const urgency = normalizeUrgency(extractUrgencyRaw(row));
 
-  let backgroundColor = "#3b82f6"; // status default diproses
+  // warna berdasarkan status
+  let backgroundColor = "#9ca3af"; // teragenda (abu-abu)
   if (status === "selesai") backgroundColor = "#22c55e";
   else if (status === "ditunda") backgroundColor = "#f59e0b";
+  else if (status === "diproses") backgroundColor = "#3b82f6";
 
   return {
     id: row.id_agenda_kerja || row.id || row._id,
-    title,
+    title,          // judul = nama proyek
     start,
     end,
     backgroundColor,
@@ -101,7 +110,7 @@ const mapServerToFC = (row) => {
     extendedProps: {
       status,
       deskripsi: row.deskripsi_kerja || row.deskripsi || "",
-      agenda: row.agenda || null,
+      agenda: row.agenda || (row.nama_agenda ? { nama_agenda: row.nama_agenda, id_agenda: row.id_agenda } : null),
       id_agenda: row.id_agenda || row.agenda?.id_agenda || null,
       id_user: row.id_user || row.user?.id_user || null,
       user: row.user || null,
@@ -289,9 +298,9 @@ export default function useAgendaCalendarViewModel() {
 
   /* ===== CRUD ===== */
 
-  // CREATE untuk banyak user (1 event per user)
+  // CREATE untuk banyak user (1 event per user) → status default teragenda
   const createEvents = useCallback(
-    async ({ title, start, end, status = "diproses", userIds = [], id_agenda }) => {
+    async ({ title, start, end, status = "teragenda", userIds = [], id_agenda }) => {
       for (const uid of userIds) {
         const payload = {
           id_user: uid,
@@ -314,7 +323,7 @@ export default function useAgendaCalendarViewModel() {
         deskripsi_kerja: title,
         start_date: serializeLocalWallTime(start),
         end_date: serializeLocalWallTime(end || start),
-        status: status || "diproses",
+        status: status || "teragenda",
         ...(id_agenda ? { id_agenda } : {}),
       };
       await crudService.put(ApiEndpoints.UpdateAgendaKerja(id), payload);
