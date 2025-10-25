@@ -16,13 +16,8 @@ enum Role {
   OPERASIONAL
   DIREKTUR
   SUPERADMIN // Ditambahkan
-<<<<<<< HEAD
-  SUBADMIN   // Ditambahkan
-  SUPERVISI  
-=======
   SUBADMIN // Ditambahkan
   SUPERVISI // Ditambahkan
->>>>>>> 0bd5b59a4d1d3de561a60d47f83c5c77c9e54917
 }
 
 enum AtasanRole {
@@ -723,8 +718,6 @@ model ShiftStoryPlanner {
   @@index([id_user])
   @@map("shift_story_planer")
 }
-<<<<<<< HEAD
-=======
 
 model KategoriSakit {
   id_kategori_sakit String    @id @default(uuid()) @db.Char(36)
@@ -1023,4 +1016,3 @@ model HandoverTukarHari {
   @@index([id_user_tagged])
   @@map("handover_tukar_hari")
 }
->>>>>>> 0bd5b59a4d1d3de561a60d47f83c5c77c9e54917
