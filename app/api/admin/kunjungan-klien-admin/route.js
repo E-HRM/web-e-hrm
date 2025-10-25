@@ -5,7 +5,10 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
-const normRole = (r) => String(r || '').trim().toUpperCase();
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR', 'SUPERADMIN'].includes(normRole(role));
 const canManageAll = (role) => ['OPERASIONAL', 'SUPERADMIN'].includes(normRole(role));
 
@@ -44,14 +47,14 @@ const kunjunganInclude = {
       id_user: true,
       nama_pengguna: true,
       email: true,
-      foto_profil_user: true,   // ada di schema
+      foto_profil_user: true, // ada di schema
       role: true,
       divisi: true,
       id_departement: true,
       id_jabatan: true,
       // nama relasi di schema: Departement (tabel), field relasi di User: 'departement'
       departement: { select: { id_departement: true, nama_departement: true } },
-      jabatan:     { select: { id_jabatan: true,     nama_jabatan: true     } },
+      jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
     },
   },
   reports: {
@@ -72,6 +75,19 @@ const kunjunganInclude = {
   },
 };
 
+const STATUS_NORMALIZATION_MAP = new Map([
+  ['teragenda', 'teragenda'],
+  ['diproses', 'teragenda'],
+  ['berlangsung', 'berlangsung'],
+  ['selesai', 'selesai'],
+]);
+
+function normalizeStatusFilter(value) {
+  if (value == null) return '';
+  const normalized = STATUS_NORMALIZATION_MAP.get(String(value).trim().toLowerCase());
+  return normalized ?? '';
+}
+
 export async function GET(req) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
@@ -85,7 +101,7 @@ export async function GET(req) {
     const q = (searchParams.get('q') || searchParams.get('search') || '').trim();
     const kategoriId = (searchParams.get('id_kategori_kunjungan') || '').trim();
     const userId = (searchParams.get('id_user') || '').trim();
-    const status = (searchParams.get('status_kunjungan') || '').trim().toLowerCase();
+    const status = normalizeStatusFilter(searchParams.get('status_kunjungan'));
     const tanggalMulai = (searchParams.get('tanggal_mulai') || '').trim();
     const tanggalSelesai = (searchParams.get('tanggal_selesai') || '').trim();
 
@@ -121,10 +137,7 @@ export async function GET(req) {
 
     if (q) {
       filters.push({
-        OR: [
-          { deskripsi: { contains: q, mode: 'insensitive' } },
-          { hand_over: { contains: q, mode: 'insensitive' } },
-        ],
+        OR: [{ deskripsi: { contains: q, mode: 'insensitive' } }, { hand_over: { contains: q, mode: 'insensitive' } }],
       });
     }
 
@@ -163,15 +176,7 @@ export async function POST(req) {
   // hanya OP/SUPERADMIN boleh assign ke orang lain, tapi untuk ringkasnya skip validasi lanjutan di sini
   try {
     const body = await req.json();
-    const {
-      id_user,
-      id_kategori_kunjungan,
-      deskripsi,
-      hand_over,
-      tanggal,
-      jam_mulai,
-      jam_selesai,
-    } = body;
+    const { id_user, id_kategori_kunjungan, deskripsi, hand_over, tanggal, jam_mulai, jam_selesai } = body;
 
     if (isNullLike(id_kategori_kunjungan)) {
       return NextResponse.json({ message: "Field 'id_kategori_kunjungan' wajib diisi." }, { status: 400 });
@@ -201,7 +206,7 @@ export async function POST(req) {
         tanggal: tgl,
         jam_mulai: jm,
         jam_selesai: js,
-        status_kunjungan: 'diproses',
+        status_kunjungan: 'teragenda',
       },
       include: kunjunganInclude,
     });
