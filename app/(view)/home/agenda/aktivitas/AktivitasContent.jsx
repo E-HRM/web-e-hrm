@@ -37,6 +37,7 @@ dayjs.extend(utc);
 
 const BRAND = { accent: "#003A6F" };
 
+/* === helper tampilan === */
 function formatDuration(sec = 0) {
   if (!sec || sec < 1) return "0 detik";
   const h = Math.floor(sec / 3600);
@@ -49,26 +50,40 @@ function formatDuration(sec = 0) {
   return parts.join(" ");
 }
 
+function normalizeUrgency(v) {
+  const s = (v || "").toString().trim().toUpperCase();
+  switch (s) {
+    case "PENTING MENDESAK":
+      return { label: "PENTING MENDESAK", color: "red" };
+    case "TIDAK PENTING TAPI MENDESAK":
+    case "TIDAK PENTING, TAPI MENDESAK":
+      return { label: "TIDAK PENTING TAPI MENDESAK", color: "magenta" };
+    case "PENTING TAK MENDESAK":
+    case "PENTING TIDAK MENDESAK":
+      return { label: "PENTING TAK MENDESAK", color: "orange" };
+    case "TIDAK PENTING TIDAK MENDESAK":
+      return { label: "TIDAK PENTING TIDAK MENDESAK", color: "default" };
+    default:
+      return s ? { label: s, color: "default" } : null;
+  }
+}
+
 export default function AktivitasContent() {
   const vm = useAktivitasTimesheetViewModel();
 
-  // modal tambah aktivitas
   const [openAdd, setOpenAdd] = useState(false);
   const [savingAdd, setSavingAdd] = useState(false);
   const [addForm] = Form.useForm();
 
-  // modal tambah proyek master
   const [openAddAgenda, setOpenAddAgenda] = useState(false);
   const [savingAgenda, setSavingAgenda] = useState(false);
   const [agendaForm] = Form.useForm();
 
-  // modal ubah aktivitas (hanya ganti proyek/deskripsi)
   const [openEdit, setOpenEdit] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editForm] = Form.useForm();
   const [editingRow, setEditingRow] = useState(null);
 
-  // modal impor
   const [openImport, setOpenImport] = useState(false);
   const [importing, setImporting] = useState(false);
   const [fileImport, setFileImport] = useState(null);
@@ -120,11 +135,22 @@ export default function AktivitasContent() {
         title: "Pekerjaan",
         dataIndex: "deskripsi_kerja",
         key: "deskripsi_kerja",
+        width: 420,
         render: (v, r) => (
-          <div className="flex flex-col">
-            <span className="font-medium">{v}</span>
+          <div className="flex flex-col" style={{ maxWidth: 400 }}>
+            <span
+              className="font-medium"
+              style={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                overflowWrap: "anywhere",
+              }}
+              title={v}
+            >
+              {v || "—"}
+            </span>
             <span className="opacity-60 text-xs">
-              Dibuat: {dayjs.utc(r.created_at).format("DD MMM YYYY HH:mm")}
+              Dibuat: {r.created_at ? dayjs.utc(r.created_at).local().format("DD MMM YYYY HH:mm") : "—"}
             </span>
           </div>
         ),
@@ -133,16 +159,18 @@ export default function AktivitasContent() {
         title: "Proyek",
         dataIndex: ["agenda", "nama_agenda"],
         key: "agenda",
+        width: 100,
         render: (v) => v || "—",
       },
       {
         title: "Waktu",
         key: "waktu",
+        width: 100,
         render: (_, r) => {
           const s = r.start_date ? dayjs.utc(r.start_date) : null;
           const e = r.end_date ? dayjs.utc(r.end_date) : null;
 
-          if (!s && !e) return "Belum diisi"; // data lama null/null (fallback)
+          if (!s && !e) return "Belum diisi";
 
           const isSentinel =
             s && e &&
@@ -158,32 +186,49 @@ export default function AktivitasContent() {
         title: "Durasi",
         dataIndex: "duration_seconds",
         key: "durasi",
+        width: 100,
         render: (sec) => formatDuration(sec),
       },
       {
         title: "Status",
         dataIndex: "status",
         key: "status",
-        render: (st) => {
-          const m =
-            st === "selesai"
-              ? { color: "success", text: "Selesai" }
-              : st === "ditunda"
-              ? { color: "warning", text: "Ditunda" }
-              : { color: "processing", text: "Diproses" };
+        width: 120,
+        render: (st = "") => {
+          const map = {
+            selesai: { color: "success", text: "Selesai" },
+            ditunda: { color: "warning", text: "Ditunda" },
+            diproses: { color: "processing", text: "Diproses" },
+            teragenda: { color: "default", text: "Teragenda" },
+          };
+          const m = map[st] || { color: "default", text: st ? st[0].toUpperCase() + st.slice(1) : "—" };
           return <Tag color={m.color}>{m.text}</Tag>;
+        },
+      },
+      {
+        title: "Urgensi",
+        dataIndex: "kebutuhan_agenda",
+        key: "urgensi",
+        width: 220,
+        render: (v) => {
+          const u = normalizeUrgency(v);
+          if (!u) return <Tag style={{ fontStyle: "italic" }}>Belum diisi</Tag>;
+          return <Tag color={u.color}>{u.label}</Tag>;
         },
       },
       {
         title: "Pembuat",
         dataIndex: "user",
         key: "user",
+        width: 180,
         render: (u) => u?.nama_pengguna || u?.email || "—",
       },
       {
         title: "Aksi",
         key: "aksi",
         align: "right",
+        fixed: "right",
+        width: 120,
         render: (_, r) => (
           <Space>
             <Tooltip title="Ubah aktivitas">
@@ -204,7 +249,6 @@ export default function AktivitasContent() {
     [vm]
   );
 
-  // submit tambah pekerjaan — TANPA waktu
   const onSubmitAdd = async () => {
     try {
       const values = await addForm.validateFields();
@@ -212,7 +256,6 @@ export default function AktivitasContent() {
       await vm.createActivity({
         deskripsi_kerja: values.deskripsi_kerja.trim(),
         id_agenda: values.id_agenda,
-        // waktu akan diisi ViewModel sebagai sentinel 00:00:00 di tanggal aktif
       });
       setOpenAdd(false);
       addForm.resetFields();
@@ -225,7 +268,6 @@ export default function AktivitasContent() {
     }
   };
 
-  // submit tambah proyek master
   const onSubmitAgenda = async () => {
     try {
       const { nama_agenda } = await agendaForm.validateFields();
@@ -242,7 +284,6 @@ export default function AktivitasContent() {
     }
   };
 
-  // submit ubah aktivitas
   const onSubmitEdit = async () => {
     try {
       const { deskripsi_kerja, id_agenda } = await editForm.validateFields();
@@ -304,6 +345,8 @@ export default function AktivitasContent() {
             onChange={(v) => vm.setFilters((s) => ({ ...s, user_id: v }))}
             showSearch
             optionFilterProp="label"
+            listHeight={400}
+            virtual
           />
           <DatePicker
             value={vm.filters.from ? dayjs(vm.filters.from, "YYYY-MM-DD HH:mm:ss") : null}
@@ -368,6 +411,7 @@ export default function AktivitasContent() {
                   value={vm.filters.status || undefined}
                   onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
                   options={[
+                    { value: "teragenda", label: "Teragenda" },
                     { value: "diproses", label: "Diproses" },
                     { value: "ditunda", label: "Ditunda" },
                     { value: "selesai", label: "Selesai" },
@@ -395,7 +439,14 @@ export default function AktivitasContent() {
                 {vm.filteredRows.length === 0 ? (
                   <Empty description="Tidak ada pekerjaan pada rentang/tanggal ini" />
                 ) : (
-                  <Table rowKey="id_agenda_kerja" columns={columns} dataSource={vm.filteredRows} pagination={false} size="middle" />
+                  <Table
+                    rowKey="id_agenda_kerja"
+                    columns={columns}
+                    dataSource={vm.filteredRows}
+                    pagination={false}
+                    size="middle"
+                    scroll={{ x: 1100 }}
+                  />
                 )}
               </div>
             </>
@@ -405,7 +456,7 @@ export default function AktivitasContent() {
         )}
       </Card>
 
-      {/* MODAL: TAMBAH PEKERJAAN (tanpa jam) */}
+      {/* MODAL: TAMBAH PEKERJAAN */}
       <Modal
         title="Tambah Pekerjaan"
         open={openAdd}
@@ -445,8 +496,6 @@ export default function AktivitasContent() {
               </Button>
             </Space.Compact>
           </Form.Item>
-
-          {/* Tidak ada field waktu di sini */}
         </Form>
       </Modal>
 
@@ -542,7 +591,7 @@ export default function AktivitasContent() {
             <div>
               <ul className="list-disc pl-5 space-y-1">
                 <li>
-                  Gunakan template 3 kolom: <b>Tanggal Proyek</b>, <b>Aktivitas</b>, <b>Proyek/Agenda</b>.{" "}
+                  Gunakan template 3 kolom: <b>Tanggal Proyek</b>, <b>Aktivitas</b>, Pastikan penulisan <b>Proyek</b> sesuai dengan Proyek yang sudah dibuat pada menu Proyek.{" "}
                   <a
                     className="text-blue-600 underline cursor-pointer"
                     onClick={(e) => {

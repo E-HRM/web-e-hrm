@@ -1,4 +1,3 @@
-// AktivitasViewModel.jsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -50,15 +49,41 @@ export default function useAktivitasTimesheetViewModel() {
     setSelectedDay(today);
   }, [filters.user_id]);
 
-  // Users
-  const { data: usersRes, isLoading: loadingUsers } = useSWR(
-    ApiEndpoints.GetUsers,
-    fetcher,
+  /* ===== Users: fetch SEMUA halaman (tidak mentok 10) ===== */
+  const { data: usersAllRes, isLoading: loadingUsers } = useSWR(
+    "users:allpages",
+    async () => {
+      const perPage = 100;
+      let page = 1;
+      let all = [];
+      while (true) {
+        const url = `${ApiEndpoints.GetUsers}?page=${page}&perPage=${perPage}&orderBy=nama_pengguna&sort=asc`;
+        const json = await fetcher(url);
+        const items = Array.isArray(json?.data)
+          ? json.data
+          : Array.isArray(json?.items)
+          ? json.items
+          : [];
+        all.push(...items);
+
+        const totalPages =
+          json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
+        if (totalPages) {
+          if (page >= totalPages) break;
+          page += 1;
+        } else {
+          if (items.length < perPage) break;
+          page += 1;
+        }
+      }
+      return all;
+    },
     { revalidateOnFocus: false }
   );
+
   const usersList = useMemo(
-    () => (Array.isArray(usersRes?.data) ? usersRes.data : EMPTY_USERS),
-    [usersRes]
+    () => (Array.isArray(usersAllRes) ? usersAllRes : EMPTY_USERS),
+    [usersAllRes]
   );
   const userOptions = useMemo(
     () =>
@@ -130,7 +155,8 @@ export default function useAktivitasTimesheetViewModel() {
       xs = xs.filter((r) => {
         const s1 = (r.deskripsi_kerja || "").toLowerCase();
         const s2 = (r.agenda?.nama_agenda || "").toLowerCase();
-        return s1.includes(q) || s2.includes(q);
+        const s3 = (r.kebutuhan_agenda || "").toLowerCase();
+        return s1.includes(q) || s2.includes(q) || s3.includes(q);
       });
     }
     return xs
@@ -170,7 +196,7 @@ export default function useAktivitasTimesheetViewModel() {
     await mutate();
   };
 
-  // === Inti: create tanpa input jam — sentinel 00:00:00 di tanggal aktif
+  // create tanpa input jam — sentinel 00:00:00 di tanggal aktif
   const createActivity = async ({ deskripsi_kerja, id_agenda }) => {
     if (!filters.user_id) throw new Error("Pilih karyawan dulu");
     const ymd = getActiveYMD();

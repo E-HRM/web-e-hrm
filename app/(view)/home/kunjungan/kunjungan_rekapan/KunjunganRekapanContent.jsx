@@ -1,3 +1,5 @@
+// KunjunganRekapanContent.jsx
+// (SUDAH menampilkan label "Teragenda" untuk value 'diproses'; hanya kirim utuh)
 "use client";
 
 import { useMemo, useState } from "react";
@@ -23,7 +25,6 @@ import useVM, { showFromDB } from "./useKunjunganRekapanViewModel";
 
 const NAVY = "#003A6F";
 
-/* Helpers avatar seperti halaman Karyawan */
 function getPhotoUrl(user) {
   return (
     user?.foto_profil_user ||
@@ -45,13 +46,8 @@ function CircleImg({ src, size = 36, alt = "Foto" }) {
       src={src || "/avatar-placeholder.jpg"}
       alt={alt}
       style={{
-        width: size,
-        height: size,
-        borderRadius: 999,
-        objectFit: "cover",
-        border: "1px solid #003A6F22",
-        background: "#E6F0FA",
-        display: "inline-block",
+        width: size, height: size, borderRadius: 999, objectFit: "cover",
+        border: "1px solid #003A6F22", background: "#E6F0FA", display: "inline-block",
       }}
       onError={(e) => {
         e.currentTarget.src = "/avatar-placeholder.jpg";
@@ -67,31 +63,13 @@ export default function KunjunganRekapanContent() {
 
   const columns = useMemo(
     () => [
-      {
-        title: "Kategori",
-        key: "kategori",
-        width: 180,
-        render: (_, r) => r.kategori?.kategori_kunjungan || "—",
-      },
-      {
-        title: "Deskripsi",
-        dataIndex: "deskripsi",
-        width: 300,
-        key: "desk",
-        render: (v) => v || "—",
-      },
-      {
-        title: "Tanggal",
-        dataIndex: "tanggal",
-        key: "tgl",
-        width: 150,
-        render: (v) => (v ? showFromDB(v, "DD MMM YYYY") : "-"),
-      },
+      { title: "Kategori", key: "kategori", width: 180, render: (_, r) => r.kategori?.kategori_kunjungan || "—" },
+      { title: "Deskripsi", dataIndex: "deskripsi", width: 300, key: "desk", render: (v) => v || "—" },
+      { title: "Tanggal", dataIndex: "tanggal", key: "tgl", width: 150, render: (v) => (v ? showFromDB(v, "DD MMM YYYY") : "-") },
       {
         title: "Start",
         key: "start",
         render: (_, r) => {
-          // HANYA JAM (HH:mm)
           const t = r.jam_mulai ? showFromDB(r.jam_mulai, "HH:mm") : "-";
           const { lat, lon } = vm.getStartCoord(r);
           const photo = vm.pickPhotoUrl(r);
@@ -100,12 +78,7 @@ export default function KunjunganRekapanContent() {
               <span>{t}</span>
               {lat != null && lon != null ? (
                 <Tooltip title="Lihat lokasi (OpenStreetMap)">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<EnvironmentOutlined />}
-                    onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")}
-                  />
+                  <Button size="small" type="text" icon={<EnvironmentOutlined />} onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")} />
                 </Tooltip>
               ) : null}
               {photo ? (
@@ -121,7 +94,6 @@ export default function KunjunganRekapanContent() {
         title: "End",
         key: "end",
         render: (_, r) => {
-          // HANYA JAM (HH:mm)
           const t = r.jam_selesai ? showFromDB(r.jam_selesai, "HH:mm") : "-";
           const { lat, lon } = vm.getEndCoord(r);
           const photo = vm.pickPhotoUrl(r);
@@ -130,12 +102,7 @@ export default function KunjunganRekapanContent() {
               <span>{t}</span>
               {lat != null && lon != null ? (
                 <Tooltip title="Lihat lokasi (OpenStreetMap)">
-                  <Button
-                    size="small"
-                    type="text"
-                    icon={<EnvironmentOutlined />}
-                    onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")}
-                  />
+                  <Button size="small" type="text" icon={<EnvironmentOutlined />} onClick={() => window.open(vm.osmUrl(lat, lon), "_blank")} />
                 </Tooltip>
               ) : null}
               {photo ? (
@@ -158,7 +125,7 @@ export default function KunjunganRekapanContent() {
               ? { color: "success", text: "Selesai" }
               : st === "berlangsung"
               ? { color: "warning", text: "Berlangsung" }
-              : { color: "processing", text: "Diproses" };
+              : { color: "processing", text: "Teragenda" }; // diproses → Teragenda
           return <Tag color={m.color}>{m.text}</Tag>;
         },
       },
@@ -171,29 +138,44 @@ export default function KunjunganRekapanContent() {
           if (!u) return "—";
           const id = u.id_user ?? u.id ?? u.uuid;
           const href = id ? `/home/kelola_karyawan/karyawan/${id}` : undefined;
-
           const displayName = u.nama_pengguna ?? u.name ?? u.email ?? "—";
-          const jabatan = u.jabatan?.nama_jabatan ?? u.jabatan?.nama ?? u.jabatan ?? "";
-          const departemen = u.departement?.nama_departement ?? u.departemen?.nama ?? u.departemen ?? "";
+
+          const jabatan =
+            u.jabatan?.nama_jabatan ??
+            u.jabatan?.nama ??
+            u.jabatan?.title ??
+            (typeof u.jabatan === "string" ? u.jabatan : "") ?? "";
+
+          const departemen =
+            u.departemen?.nama_departemen ??
+            u.departemen?.nama ??
+            u.departemen?.title ??
+            u.departement?.nama_departement ??
+            u.departement?.nama ??
+            u.departement?.title ??
+            u.department?.name ??
+            u.department?.nama ??
+            u.department?.title ??
+            u.divisi?.nama_divisi ??
+            u.divisi?.nama ??
+            u.divisi?.title ??
+            (typeof u.departemen === "string" ? u.departemen : "") ??
+            (typeof u.departement === "string" ? u.departement : "") ??
+            (typeof u.department === "string" ? u.department : "") ??
+            (typeof u.divisi === "string" ? u.divisi : "") ?? "";
+
           const subtitle = jabatan && departemen ? `${jabatan} | ${departemen}` : (jabatan || departemen || "—");
 
           const node = (
             <div className="flex items-center gap-3 min-w-0">
               <CircleImg src={getPhotoUrl(u)} alt={displayName} />
               <div className="min-w-0">
-                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
-                  {displayName}
-                </div>
-                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
-                  {subtitle}
-                </div>
+                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">{displayName}</div>
+                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">{subtitle}</div>
               </div>
             </div>
           );
-
-          return href ? (
-            <Link href={href} className="no-underline">{node}</Link>
-          ) : node;
+          return href ? <Link href={href} className="no-underline">{node}</Link> : node;
         },
       },
     ],
@@ -235,7 +217,7 @@ export default function KunjunganRekapanContent() {
               value={vm.filters.status || undefined}
               onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
               options={[
-                { value: "diproses", label: "Diproses" },
+                { value: "diproses", label: "Teragenda" },   // value tetap diproses
                 { value: "berlangsung", label: "Berlangsung" },
                 { value: "selesai", label: "Selesai" },
               ]}
@@ -244,14 +226,14 @@ export default function KunjunganRekapanContent() {
             <DatePicker
               placeholder="Dari"
               value={vm.filters.from ? dayjs(vm.filters.from) : null}
-              onChange={(d) => vm.setFilters((s) => ({ ...s, from: d ? d.toDate() : null }))}
+              onChange={(d) => vm.setFilters((s) => ({ ...s, from: d ? d.toDate() : null })) }
               format="DD/MM/YYYY"
             />
             <span className="opacity-60">-</span>
             <DatePicker
               placeholder="Sampai"
               value={vm.filters.to ? dayjs(vm.filters.to) : null}
-              onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.toDate() : null }))}
+              onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.toDate() : null })) }
               format="DD/MM/YYYY"
             />
 

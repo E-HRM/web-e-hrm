@@ -238,14 +238,6 @@ export default function ShiftContent() {
             <Input className="rounded-xl" />
           </Form.Item>
 
-          <Form.Item label="Toleransi Keterlambatan" name="toleransi">
-            <InputNumber addonAfter="Menit" className="w-40" min={0} />
-          </Form.Item>
-
-          <Form.Item label="Catatan" name="catatan">
-            <Input className="rounded-xl" />
-          </Form.Item>
-
           {/* Jadwal Kerja */}
           <div className="pl-[25%] -mt-2 mb-2 text-slate-700 flex items-center gap-2">
             <span className="font-medium">Jadwal Kerja</span>

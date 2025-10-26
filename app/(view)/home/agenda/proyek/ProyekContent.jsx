@@ -1,3 +1,4 @@
+// ProyekContent.jsx (dengan ActivitiesModal)
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -18,17 +19,19 @@ import {
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import useSWR from "swr";
 import { fetcher } from "../../../../utils/fetcher";
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import useProyekViewModel from "./ProyekViewModel";
+
+dayjs.extend(utc);
 
 const BRAND = { accent: "#003A6F" };
 
 export default function ProyekContent() {
   const vm = useProyekViewModel();
 
-  // modal tambah & edit
   const [openAdd, setOpenAdd] = useState(false);
   const [savingAdd, setSavingAdd] = useState(false);
   const [addForm] = Form.useForm();
@@ -38,11 +41,9 @@ export default function ProyekContent() {
   const [editForm] = Form.useForm();
   const [editingRow, setEditingRow] = useState(null);
 
-  // modal activity list
   const [openList, setOpenList] = useState(false);
-  const [listProject, setListProject] = useState(null); // {id_agenda, nama_agenda}
+  const [listProject, setListProject] = useState(null);
 
-  // modal anggota lainnya
   const [openMembers, setOpenMembers] = useState(false);
   const [membersProjectName, setMembersProjectName] = useState("");
   const [membersList, setMembersList] = useState([]);
@@ -93,7 +94,7 @@ export default function ProyekContent() {
 
   const openMembersModal = (row, allNames, showFrom = 3) => {
     setMembersProjectName(row.nama_agenda);
-    setMembersList(allNames.slice(showFrom)); // sisanya
+    setMembersList(allNames.slice(showFrom));
     setOpenMembers(true);
   };
 
@@ -113,7 +114,7 @@ export default function ProyekContent() {
         title: "Anggota",
         key: "anggota",
         render: (_, row) => {
-          const names = vm.membersNames(row.id_agenda); // hanya user aktif
+          const names = vm.membersNames(row.id_agenda);
           if (!names.length) return "—";
 
           const top = names.slice(0, 3);
@@ -267,16 +268,36 @@ export default function ProyekContent() {
 }
 
 /* ======================= Modal List Aktivitas ======================= */
+
+function normalizeUrgency(v) {
+  const s = (v || "").toString().trim().toUpperCase();
+  switch (s) {
+    case "PENTING MENDESAK":
+      return { label: "PENTING MENDESAK", color: "red" };
+    case "TIDAK PENTING TAPI MENDESAK":
+    case "TIDAK PENTING, TAPI MENDESAK":
+      return { label: "TIDAK PENTING TAPI MENDESAK", color: "magenta" };
+    case "PENTING TAK MENDESAK":
+    case "PENTING TIDAK MENDESAK":
+      return { label: "PENTING TAK MENDESAK", color: "orange" };
+    case "TIDAK PENTING TIDAK MENDESAK":
+      return { label: "TIDAK PENTING TIDAK MENDESAK", color: "default" };
+    default:
+      return s ? { label: s, color: "default" } : null;
+  }
+}
+
 function ActivitiesModal({ open, onClose, project }) {
   const [from, setFrom] = useState(null);
   const [to, setTo] = useState(null);
   const [status, setStatus] = useState("");
   const [division, setDivision] = useState("");
+  const [urgency, setUrgency] = useState("");
   const [q, setQ] = useState("");
 
   const showDB = (v) => (v ? dayjs.utc(v).format("DD MMM YYYY HH:mm") : "-");
 
-  const fmtLocal = (d, edge /* 'start'|'end' */) =>
+  const fmtLocal = (d, edge) =>
     d ? dayjs(d)[edge === "end" ? "endOf" : "startOf"]("day").format("YYYY-MM-DD HH:mm:ss") : null;
 
   const qs = useMemo(() => {
@@ -301,19 +322,39 @@ function ActivitiesModal({ open, onClose, project }) {
     return Array.from(s).map((v) => ({ value: v, label: v }));
   }, [rows]);
 
+  const urgencyOptions = useMemo(() => {
+    const s = new Map();
+    rows.forEach((r) => {
+      const u = normalizeUrgency(r?.kebutuhan_agenda);
+      if (u) s.set(u.label, u.color);
+    });
+    return Array.from(s.entries()).map(([label, color]) => ({
+      value: label,
+      label,
+      color,
+    }));
+  }, [rows]);
+
   const filteredRows = useMemo(() => {
     let xs = rows;
     if (division) xs = xs.filter((r) => (r.user?.role || "") === division);
+    if (urgency) {
+      xs = xs.filter((r) => {
+        const u = normalizeUrgency(r?.kebutuhan_agenda);
+        return u?.label === urgency;
+      });
+    }
     const qq = q.trim().toLowerCase();
     if (qq) {
       xs = xs.filter(
         (r) =>
           (r.deskripsi_kerja || "").toLowerCase().includes(qq) ||
-          (r.user?.nama_pengguna || r.user?.email || "").toLowerCase().includes(qq)
+          (r.user?.nama_pengguna || r.user?.email || "").toLowerCase().includes(qq) ||
+          (r.kebutuhan_agenda || "").toLowerCase().includes(qq)
       );
     }
     return xs;
-  }, [rows, division, q]);
+  }, [rows, division, urgency, q]);
 
   const columns = useMemo(
     () => [
@@ -321,18 +362,40 @@ function ActivitiesModal({ open, onClose, project }) {
         title: "Pekerjaan",
         dataIndex: "deskripsi_kerja",
         key: "pek",
-        render: (v) => <a className="underline">{v}</a>,
+        width: 280,
+        onCell: () => ({
+          style: {
+            maxWidth: 280,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          },
+        }),
+        render: (v) => <span className="block leading-5">{v || "-"}</span>,
       },
       {
         title: "Diproses Oleh",
         key: "oleh",
+        width: 150,
+        onCell: () => ({
+          style: {
+            maxWidth: 220,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          },
+        }),
         render: (_, r) => r.user?.nama_pengguna || r.user?.email || "—",
       },
       {
         title: "Diproses Pada",
         key: "pada",
+        width: 150,
+        onCell: () => ({
+          style: { whiteSpace: "pre", maxWidth: 220, overflowWrap: "anywhere" },
+        }),
         render: (_, r) => (
-          <div className="whitespace-pre">
+          <div className="whitespace-pre leading-5">
             {`${showDB(r.start_date)}\n${showDB(r.end_date)}`}
           </div>
         ),
@@ -341,27 +404,43 @@ function ActivitiesModal({ open, onClose, project }) {
         title: "Durasi",
         dataIndex: "duration_seconds",
         key: "dur",
+        width: 80,
         render: (s) => formatDuration(s),
       },
       {
         title: "Status",
         dataIndex: "status",
         key: "status",
-        render: (st) => {
-          const c = st === "selesai" ? "success" : st === "ditunda" ? "warning" : "processing";
-          const t = st === "selesai" ? "Selesai" : st === "ditunda" ? "Ditunda" : "Diproses";
-          return <Tag color={c}>{t}</Tag>;
+        width: 100,
+        render: (st = "") => {
+          const map = {
+            selesai: { color: "success", text: "Selesai" },
+            ditunda: { color: "warning", text: "Ditunda" },
+            diproses: { color: "processing", text: "Diproses" },
+            teragenda: { color: "default", text: "Teragenda" },
+          };
+          const m = map[st] || { color: "default", text: st ? st[0].toUpperCase() + st.slice(1) : "—" };
+          return <Tag color={m.color}>{m.text}</Tag>;
         },
       },
       {
-        title: "Pembuat",
-        key: "pb",
-        render: (_, r) => (
-          <div className="flex flex-col">
-            <span>{r.user?.nama_pengguna || r.user?.email || "—"}</span>
-            <span className="opacity-60 text-xs">{showDB(r.created_at)}</span>
-          </div>
-        ),
+        title: "Urgensi",
+        dataIndex: "kebutuhan_agenda",
+        key: "urgensi",
+        width: 200,
+        onCell: () => ({
+          style: {
+            maxWidth: 200,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+          },
+        }),
+        render: (v) => {
+          const u = normalizeUrgency(v);
+          if (!u) return <Tag style={{ fontStyle: "italic" }}>Belum diisi</Tag>;
+          return <Tag color={u.color}>{u.label}</Tag>;
+        },
       },
     ],
     []
@@ -375,8 +454,8 @@ function ActivitiesModal({ open, onClose, project }) {
       footer={<Button onClick={onClose} style={{ background: "#F4F4F5" }}>Tutup</Button>}
       width={1000}
       destroyOnClose
+      styles={{ body: { maxHeight: 640, overflowY: "auto" } }}
     >
-      {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <DatePicker placeholder="Tanggal Mulai" value={from ? dayjs(from) : null} onChange={(d) => setFrom(d ? d.toDate() : null)} />
         <span className="opacity-60">-</span>
@@ -396,10 +475,21 @@ function ActivitiesModal({ open, onClose, project }) {
           value={status || undefined}
           onChange={(v) => setStatus(v || "")}
           options={[
+            { value: "teragenda", label: "Teragenda" },
             { value: "diproses", label: "Diproses" },
             { value: "ditunda", label: "Ditunda" },
             { value: "selesai", label: "Selesai" },
           ]}
+        />
+        <Select
+          className="min-w-[200px]"
+          placeholder="--Filter Urgensi--"
+          allowClear
+          value={urgency || undefined}
+          onChange={(v) => setUrgency(v || "")}
+          options={urgencyOptions}
+          optionFilterProp="label"
+          showSearch
         />
         <Input.Search className="w-[140px]" placeholder="Cari" value={q} onChange={(e) => setQ(e.target.value)} allowClear />
       </div>
@@ -413,9 +503,24 @@ function ActivitiesModal({ open, onClose, project }) {
           dataSource={filteredRows}
           pagination={{ pageSize: 10 }}
           size="middle"
-          footer={() => <div className="font-semibold">Menampilkan {filteredRows.length} dari {rows.length} total data</div>}
+          className="activities-table"
+          tableLayout="fixed"
         />
       )}
+
+      <style jsx global>{`
+        .activities-table .ant-table-cell {
+          white-space: normal;
+          word-break: break-word;
+        }
+        .activities-table .ant-table {
+          overflow-x: hidden !important;
+        }
+      `}</style>
+
+      <div className="mt-2 text-sm font-semibold">
+        Menampilkan {filteredRows.length} dari {rows.length} total data
+      </div>
     </Modal>
   );
 }

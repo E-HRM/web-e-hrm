@@ -1,3 +1,4 @@
+// KategoriKunjunganContent.jsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -15,9 +16,34 @@ import {
   ConfigProvider,
   theme,
   message,
+  Space,
 } from "antd";
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from "@ant-design/icons";
-import useVM, { showFromDB } from "./useKategoriKunjunganViewModel";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ReloadOutlined,
+  RollbackOutlined,
+} from "@ant-design/icons";
+import useVM from "./useKategoriKunjunganViewModel";
+
+// ===== Waktu lokal (sesuai user) =====
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+// Formatter lokal: kalau value ada suffix Z / offset → treat as zoned;
+// kalau tidak ada → treat as UTC lalu konversi ke zona lokal user.
+const AUDIT_TZ = dayjs.tz.guess(); // ganti manual ke "Asia/Jakarta" bila perlu
+function formatAuditLocal(v, fmt = "DD MMM YYYY HH:mm") {
+  if (!v) return "—";
+  const s = String(v).trim();
+  const hasTZ = /Z|[+-]\d{2}:\d{2}$/.test(s);
+  const m = hasTZ ? dayjs(s).tz(AUDIT_TZ) : dayjs.utc(s).tz(AUDIT_TZ);
+  return m.isValid() ? m.format(fmt) : "—";
+}
 
 const NAVY = "#003A6F";
 
@@ -93,28 +119,32 @@ export default function KategoriKunjunganContent() {
         dataIndex: "created_at",
         key: "cr",
         width: 180,
-        render: (v) => showFromDB(v),
+        // ⬇️ gunakan waktu lokal user
+        render: (v) => formatAuditLocal(v, "DD MMM YYYY HH:mm"),
       },
       {
         title: "Diubah",
         dataIndex: "updated_at",
         key: "up",
         width: 180,
-        render: (v) => showFromDB(v),
+        // ⬇️ gunakan waktu lokal user
+        render: (v) => formatAuditLocal(v, "DD MMM YYYY HH:mm"),
       },
       {
         title: "Aksi",
         key: "aksi",
         align: "right",
-        width: 170,
+        width: 280,
         render: (_, row) => {
           const isDeleted = !!row.deleted_at;
+          // Jika item sudah terhapus, tombol hapus berarti hard delete;
+          // Kalau belum terhapus, hapus = soft delete.
           const willHardDelete = isDeleted || vm.includeDeleted;
 
           const title = willHardDelete ? "Hapus permanen kategori?" : "Hapus kategori?";
           const desc = willHardDelete
             ? "Hard delete: data akan hilang permanen."
-            : "Soft delete: data bisa dihapus permanen dari tampilan 'Tampilkan yang terhapus'.";
+            : "Soft delete: data bisa dikembalikan dari tampilan 'Tampilkan yang terhapus saja'.";
 
           const onConfirmDelete = async () => {
             try {
@@ -131,15 +161,31 @@ export default function KategoriKunjunganContent() {
           };
 
           return (
-            <div className="flex gap-2 justify-end">
-              <Tooltip title={isDeleted ? "Tidak bisa ubah data yang sudah terhapus" : "Ubah"}>
-                <Button
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => onEditOpen(row)}
-                  disabled={isDeleted}
-                />
-              </Tooltip>
+            <Space>
+              {isDeleted ? (
+                <Tooltip title="Kembalikan kategori">
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<RollbackOutlined />}
+                    onClick={async () => {
+                      try {
+                        await vm.restore(row.id_kategori_kunjungan);
+                        message.success("Kategori dikembalikan.");
+                      } catch (e) {
+                        message.error(e?.message || "Gagal mengembalikan kategori");
+                      }
+                    }}
+                  >
+                    Kembalikan
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Tooltip title="Ubah">
+                  <Button size="small" icon={<EditOutlined />} onClick={() => onEditOpen(row)} />
+                </Tooltip>
+              )}
+
               <Popconfirm
                 title={title}
                 description={desc}
@@ -149,7 +195,7 @@ export default function KategoriKunjunganContent() {
               >
                 <Button size="small" danger icon={<DeleteOutlined />} />
               </Popconfirm>
-            </div>
+            </Space>
           );
         },
       },
@@ -158,21 +204,19 @@ export default function KategoriKunjunganContent() {
   );
 
   return (
-    <ConfigProvider theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: NAVY, borderRadius: 12 } }}>
+    <ConfigProvider
+      theme={{
+        algorithm: theme.defaultAlgorithm,
+        token: { colorPrimary: NAVY, borderRadius: 12 },
+      }}
+    >
       <div className="p-4">
         <Card
           title={<span className="text-lg font-semibold">Kategori Kunjungan</span>}
           styles={{ body: { paddingTop: 16 } }}
-          extra={
-            <div className="flex items-center gap-2">
-              <Tooltip title="Muat ulang">
-                <Button icon={<ReloadOutlined />} onClick={vm.refresh} />
-              </Tooltip>
-            </div>
-          }
         >
           {/* Filter bar */}
-          <div className="flex flex-wrap items-center gap-2 md:flex-nowrap mb-4">
+          <div className="flex flex-wrap items-center gap-3 md:flex-nowrap mb-4">
             <Input.Search
               placeholder="Cari kategori"
               className="w-[240px]"
@@ -182,11 +226,8 @@ export default function KategoriKunjunganContent() {
               allowClear
             />
             <div className="flex items-center gap-2">
-              <Switch
-                checked={vm.includeDeleted}
-                onChange={(v) => vm.setIncludeDeleted(v)}
-              />
-              <span className="opacity-75">Tampilkan yang terhapus</span>
+              <Switch checked={vm.includeDeleted} onChange={(v) => vm.setIncludeDeleted(v)} />
+              <span className="opacity-75">Tampilkan yang terhapus saja</span>
             </div>
             <Button
               icon={<PlusOutlined />}

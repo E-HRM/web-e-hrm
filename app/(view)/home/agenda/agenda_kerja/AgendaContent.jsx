@@ -1,3 +1,4 @@
+// AgendaContent.jsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -7,7 +8,10 @@ import {
 } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import useAgendaViewModel from "./AgendaViewModel";
+
+dayjs.extend(utc);
 
 const BRAND = { accent: "#003A6F" };
 
@@ -47,37 +51,73 @@ export default function AgendaContent() {
     }
   };
 
+  /* =======================
+     TABEL ANAK (per karyawan)
+  ======================== */
   const activityColumns = [
-    { title: "Aktivitas", dataIndex: "deskripsi_kerja", key: "desk" },
+    {
+      title: "Aktivitas",
+      dataIndex: "deskripsi_kerja",
+      key: "desk",
+      width: 420,
+      render: (text) => (
+        <div
+          style={{
+            maxWidth: 420,
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            overflowWrap: "anywhere",
+          }}
+        >
+          <span className="font-medium">{text || "—"}</span>
+        </div>
+      ),
+    },
     {
       title: "Waktu",
       key: "waktu",
+      width: 170,
       render: (_, r) => {
-        const s = r.start_date ? dayjs(r.start_date).format("DD/MM HH:mm") : "-";
-        const e = r.end_date ? dayjs(r.end_date).format("DD/MM HH:mm") : "-";
+        const s = r.start_date ? dayjs.utc(r.start_date).format("DD/MM HH:mm") : "-";
+        const e = r.end_date ? dayjs.utc(r.end_date).format("DD/MM HH:mm") : "-";
         return `${s} - ${e}`;
       },
     },
-    { title: "Durasi", dataIndex: "duration_seconds", key: "dur", render: (s) => formatDuration(s) },
+    {
+      title: "Durasi",
+      dataIndex: "duration_seconds",
+      key: "dur",
+      width: 140,
+      render: (s) => formatDuration(s),
+    },
     {
       title: "Proyek",
       dataIndex: ["agenda", "nama_agenda"],
       key: "agenda",
+      width: 100,
       render: (v) => v || "—",
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      render: (st) => {
-        const c = st === "selesai" ? "success" : st === "ditunda" ? "warning" : "processing";
-        return <Tag color={c}>{st[0].toUpperCase() + st.slice(1)}</Tag>;
+      width: 120,
+      render: (st = "") => {
+        const map = {
+          selesai: { color: "success", label: "Selesai" },
+          ditunda: { color: "warning", label: "Ditunda" },
+          diproses: { color: "processing", label: "Diproses" },
+          teragenda: { color: "default", label: "Teragenda" },
+        };
+        const m = map[st] || { color: "default", label: st ? st[0].toUpperCase() + st.slice(1) : "—" };
+        return <Tag color={m.color}>{m.label}</Tag>;
       },
     },
     {
       title: "Aksi",
       key: "aksi",
       align: "right",
+      width: 120,
       render: (_, r) => (
         <Space>
           <Button size="small" icon={<EditOutlined />} onClick={() => openEditRow(r)} />
@@ -107,11 +147,13 @@ export default function AgendaContent() {
         dataIndex: "count",
         key: "count",
         align: "center",
+        width: 120,
       },
       {
         title: "Total Durasi",
         dataIndex: "duration",
         key: "duration",
+        width: 180,
         render: (sec) => formatDuration(sec),
       },
     ],
@@ -120,14 +162,7 @@ export default function AgendaContent() {
 
   return (
     <div className="p-4">
-      <Card
-        title={<span className="text-lg font-semibold">Agenda Kerja (Semua Karyawan)</span>}
-        extra={
-          <Button style={{ background: BRAND.accent, color: "#fff" }} onClick={vm.refresh}>
-            Refresh
-          </Button>
-        }
-      >
+      <Card title={<span className="text-lg font-semibold">Agenda Kerja (Semua Karyawan)</span>}>
         <div className="flex flex-wrap gap-3 items-center mb-4">
           <Select
             className="min-w-[220px]"
@@ -150,16 +185,29 @@ export default function AgendaContent() {
             options={vm.userOptions}
             showSearch
             optionFilterProp="label"
+            listHeight={400}
+            virtual
           />
+
           <DatePicker
-            value={vm.filters.from ? dayjs(vm.filters.from) : null}
-            onChange={(d) => vm.setFilters((s) => ({ ...s, from: d ? d.startOf("day").toISOString() : "" }))}
+            value={vm.filters.from ? dayjs(vm.filters.from, "YYYY-MM-DD HH:mm:ss") : null}
+            onChange={(d) =>
+              vm.setFilters((s) => ({
+                ...s,
+                from: d ? d.startOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
+              }))
+            }
             format="DD/MM/YYYY"
           />
           <span className="opacity-60">-</span>
           <DatePicker
-            value={vm.filters.to ? dayjs(vm.filters.to) : null}
-            onChange={(d) => vm.setFilters((s) => ({ ...s, to: d ? d.endOf("day").toISOString() : "" }))}
+            value={vm.filters.to ? dayjs(vm.filters.to, "YYYY-MM-DD HH:mm:ss") : null}
+            onChange={(d) =>
+              vm.setFilters((s) => ({
+                ...s,
+                to: d ? d.endOf("day").format("YYYY-MM-DD HH:mm:ss") : "",
+              }))
+            }
             format="DD/MM/YYYY"
           />
           <Select
@@ -169,6 +217,7 @@ export default function AgendaContent() {
             value={vm.filters.status || undefined}
             onChange={(v) => vm.setFilters((s) => ({ ...s, status: v || "" }))}
             options={[
+              { value: "teragenda", label: "Teragenda" },
               { value: "diproses", label: "Diproses" },
               { value: "ditunda", label: "Ditunda" },
               { value: "selesai", label: "Selesai" },
@@ -201,6 +250,7 @@ export default function AgendaContent() {
                   dataSource={userRow.rows}
                   pagination={false}
                   size="small"
+                  tableLayout="fixed"
                 />
               ),
             }}
@@ -225,6 +275,7 @@ export default function AgendaContent() {
           <Form.Item name="status" label="Status" rules={[{ required: true }]}>
             <Select
               options={[
+                { value: "teragenda", label: "Teragenda" },
                 { value: "diproses", label: "Diproses" },
                 { value: "ditunda", label: "Ditunda" },
                 { value: "selesai", label: "Selesai" },

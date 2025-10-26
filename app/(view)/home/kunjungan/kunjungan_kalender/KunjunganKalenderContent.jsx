@@ -161,9 +161,9 @@ export default function KunjunganKalenderContent() {
         kategoriId: v.id_kategori_kunjungan || null,
       });
       setOpenCreate(false);
-      message.success("Visit plan saved");
+      message.success("Jadwal Kunjungan tersimpan");
     } catch (e) {
-      message.error(e?.message || "Failed to save plan");
+      message.error(e?.message || "Gagal menyimpan");
     }
   }, [formCreate, vm]);
 
@@ -177,11 +177,11 @@ export default function KunjunganKalenderContent() {
         deskripsi: v.deskripsi,
         id_kategori_kunjungan: v.id_kategori_kunjungan,
       });
-      message.success("Visit updated");
+      message.success("Kunjungan berhasil diperbarui");
       setEditing(false);
       setOpenDetail(false);
     } catch (e) {
-      message.error(e?.message || "Failed to update visit");
+      message.error(e?.message || "Gagal Memperbarui Kunjungan");
     }
   }, [formEdit, activeRow, vm]);
 
@@ -235,28 +235,45 @@ export default function KunjunganKalenderContent() {
   );
 
   // Render Event – match agenda kerja: judul ellipsis + chip status, background via event prop
-  const renderEventContent = (info) => {
-    const r = info.event.extendedProps?.raw;
-    const timePrefix = info.timeText ? `${info.timeText} ` : "";
-    return (
-      <div className="fc-event-custom">
-        <span className="fc-title-ellipsis" title={info.event.title}>
-          {timePrefix}
-          {info.event.title}
-        </span>
-        {r?.status_kunjungan ? (
-          <span className={statusClass(r.status_kunjungan)}>{r.status_kunjungan}</span>
-        ) : null}
-      </div>
-    );
-  };
+const renderEventContent = (info) => {
+  const r = info.event.extendedProps?.raw || {};
+  const jam = info.timeText ? info.timeText.replace(":", ".") : ""; // 08.00 – 09.00
+  const kategori = r?.kategori?.kategori_kunjungan || "-";
+
+  // Ambil nama user dari map (lebih konsisten), fallback dari payload event
+  const uid = r?.id_user ?? info.event.extendedProps?.id_user ?? r?.user?.id_user;
+  const fromMap = uid ? vm.getUserById(uid) : null;
+  const userObj = fromMap || r?.user || info.event.extendedProps?.user || {};
+  const nama =
+    userObj?.nama_pengguna || userObj?.name || userObj?.email || String(uid || "—");
+
+  // Status: pakai value DB untuk class, pakai vm.displayStatusLabel untuk teks
+  const stDb = (r?.status_kunjungan || info.event.extendedProps?.status || "").toLowerCase();
+  const stText = vm.displayStatusLabel(stDb) || "-";
+
+  // titik warna di kiri (ambil dari warna event)
+  const dotColor = info.event.backgroundColor || info.event.borderColor || "#3b82f6";
+
+  const titleText = [jam, kategori, nama].filter(Boolean).join(" · ");
+
+  return (
+    <div className="fc-event-custom">
+      <span className="fc-dot" style={{ backgroundColor: dotColor }} />
+      <span className="fc-title-ellipsis" title={`${titleText} · ${stText}`}>
+        {titleText}
+      </span>
+      {stDb ? <span className={statusClass(stDb)}>{stText}</span> : null}
+    </div>
+  );
+};
+
 
   return (
     <ConfigProvider
       theme={{ algorithm: theme.defaultAlgorithm, token: { colorPrimary: NAVY, borderRadius: 12 } }}
     >
       <div className="p-4">
-        <Card title={<span className="text-lg font-semibold">Visit Calendar</span>} styles={{ body: { paddingTop: 16 } }}>
+        <Card title={<span className="text-lg font-semibold">Kalender Kunjungan</span>} styles={{ body: { paddingTop: 16 } }}>
           <FullCalendar
             height="auto"
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
@@ -283,7 +300,7 @@ export default function KunjunganKalenderContent() {
 
       {/* Create Plan Modal */}
       <Modal
-        title="Create Visit Plan"
+        title="Buat Jadwal Kunjungan"
         open={openCreate}
         onCancel={() => setOpenCreate(false)}
         okText="Save"
@@ -294,13 +311,13 @@ export default function KunjunganKalenderContent() {
       >
         <Form form={formCreate} layout="vertical">
           <Form.Item
-            label="Employees"
+            label="Karyawan"
             name="user_ids"
-            rules={[{ required: true, message: "Pick at least one employee" }]}
+            rules={[{ required: true, message: "Pilih setidaknya satu karyawan" }]}
           >
             <Select
               mode="multiple"
-              placeholder="Select employees"
+              placeholder="Pilih Karyawan"
               options={vm.userOptions}
               showSearch
               optionFilterProp="label"
@@ -311,12 +328,12 @@ export default function KunjunganKalenderContent() {
           </Form.Item>
 
           <Form.Item
-            label="Visit Category"
+            label="Kategori Kunjungan"
             name="id_kategori_kunjungan"
-            rules={[{ required: !!vm.kategoriRequired, message: "Select a category" }]}
+            rules={[{ required: !!vm.kategoriRequired, message: "Pilih kategori" }]}
           >
             <Select
-              placeholder="Select category"
+              placeholder="Pilih kategori"
               options={vm.kategoriOptions}
               showSearch
               optionFilterProp="label"
@@ -324,21 +341,21 @@ export default function KunjunganKalenderContent() {
             />
           </Form.Item>
 
-          <Form.Item label="Date" name="tanggal" rules={[{ required: true, message: "Pick a date" }]}>
+          <Form.Item label="Tanggal" name="tanggal" rules={[{ required: true, message: "Pilih tanggal" }]}>
             <DatePicker className="w-full" />
           </Form.Item>
 
           <div className="grid grid-cols-2 gap-2">
-            <Form.Item label="Start Time" name="jam_mulai">
+            <Form.Item label="Jam mulai" name="jam_mulai">
               <TimePicker format="HH:mm" className="w-full" />
             </Form.Item>
-            <Form.Item label="End Time" name="jam_selesai">
+            <Form.Item label="Jam selesai" name="jam_selesai">
               <TimePicker format="HH:mm" className="w-full" />
             </Form.Item>
           </div>
 
-          <Form.Item label="Description" name="deskripsi">
-            <Input.TextArea rows={3} placeholder="Optional notes" />
+          <Form.Item label="Deskripsi" name="deskripsi">
+            <Input.TextArea rows={3} placeholder="Opsional" />
           </Form.Item>
         </Form>
       </Modal>
@@ -348,7 +365,7 @@ export default function KunjunganKalenderContent() {
         title={
           <div className="flex items-center gap-2">
             <ProfileOutlined />
-            <span>Visit Detail</span>
+            <span>Detail Kunjungan</span>
           </div>
         }
         open={openDetail}
@@ -383,11 +400,12 @@ export default function KunjunganKalenderContent() {
 
                 {/* Chips */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {activeRow?.status_kunjungan ? (
-                    <span className={statusClass(activeRow.status_kunjungan)}>
-                      {activeRow.status_kunjungan}
-                    </span>
-                  ) : null}
+                {activeRow?.status_kunjungan ? (
+                  <span className={statusClass(activeRow.status_kunjungan)}>
+                    {vm.displayStatusLabel(activeRow.status_kunjungan)}  
+                  </span>
+                ) : null}
+
 
                   {activeRow?.kategori?.kategori_kunjungan ? (
                     <span className="fc-chip">{activeRow.kategori.kategori_kunjungan}</span>
@@ -420,12 +438,12 @@ export default function KunjunganKalenderContent() {
             {editing ? (
               <Form form={formEdit} layout="vertical">
                 <Form.Item
-                  label="Visit Category"
+                  label="Kategori Kunjungan"
                   name="id_kategori_kunjungan"
-                  rules={[{ required: !!vm.kategoriRequired, message: "Select a category" }]}
+                  rules={[{ required: !!vm.kategoriRequired, message: "Pilih Kategori" }]}
                 >
                   <Select
-                    placeholder="Select category"
+                    placeholder="Pilih kategori"
                     options={vm.kategoriOptions}
                     showSearch
                     optionFilterProp="label"
@@ -433,20 +451,20 @@ export default function KunjunganKalenderContent() {
                   />
                 </Form.Item>
 
-                <Form.Item label="Date" name="tanggal" rules={[{ required: true, message: "Pick a date" }]}>
+                <Form.Item label="Tanggal" name="tanggal" rules={[{ required: true, message: "Pilih tanggal" }]}>
                   <DatePicker className="w-full" />
                 </Form.Item>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <Form.Item label="Start Time" name="jam_mulai">
+                  <Form.Item label="Jam mulai " name="jam_mulai">
                     <TimePicker format="HH:mm" className="w-full" />
                   </Form.Item>
-                  <Form.Item label="End Time" name="jam_selesai">
+                  <Form.Item label="Jam selesai" name="jam_selesai">
                     <TimePicker format="HH:mm" className="w-full" />
                   </Form.Item>
                 </div>
 
-                <Form.Item label="Description" name="deskripsi">
+                <Form.Item label="Deskripsi" name="deskripsi">
                   <Input.TextArea rows={3} placeholder="Optional notes" />
                 </Form.Item>
 
@@ -525,7 +543,7 @@ export default function KunjunganKalenderContent() {
                     title={
                       (activeRow.status_kunjungan || "").toLowerCase() === "selesai"
                         ? "Tidak bisa hapus (status selesai)"
-                        : "Delete visit"
+                        : "Hapus Kunjungan"
                     }
                   >
                     <Button

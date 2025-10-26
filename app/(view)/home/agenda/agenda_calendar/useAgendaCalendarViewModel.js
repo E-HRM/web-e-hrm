@@ -41,13 +41,49 @@ export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
   return dayjs(local).format(fmt);
 };
 
+/* ===== Urgensi normalizer (DB -> label + level) ===== */
+const normalizeUrgency = (v) => {
+  const s = (v || "").toString().trim().toUpperCase();
+  switch (s) {
+    case "PENTING MENDESAK":
+      return { label: "PENTING MENDESAK", level: 1 };
+    case "TIDAK PENTING TAPI MENDESAK":
+    case "TIDAK PENTING, TAPI MENDESAK":
+      return { label: "TIDAK PENTING TAPI MENDESAK", level: 2 };
+    case "PENTING TAK MENDESAK":
+    case "PENTING TIDAK MENDESAK":
+      return { label: "PENTING TAK MENDESAK", level: 3 };
+    case "TIDAK PENTING TIDAK MENDESAK":
+      return { label: "TIDAK PENTING TIDAK MENDESAK", level: 4 };
+    default:
+      return s ? { label: s, level: 4 } : null;
+  }
+};
+
+/* Ambil nilai “kebutuhan_agenda” dari berbagai kemungkinan lokasi */
+const extractUrgencyRaw = (row) =>
+  row?.kebutuhan_agenda ??
+  row?.kebutuhan ??
+  row?.urgensi ??
+  row?.prioritas ??
+  row?.agenda?.kebutuhan_agenda ??
+  row?.agenda_kerja?.kebutuhan_agenda ??
+  null;
+
 /* ============== Map Server -> FullCalendar ============== */
 
 const mapServerToFC = (row) => {
+  // status default → teragenda
   const status =
-    row.status || row.status_agenda || row.status_kerja || "diproses";
+    row.status || row.status_agenda || row.status_kerja || "teragenda";
 
-  const title = row.deskripsi_kerja || row.nama_agenda || row.title || "Agenda";
+  // TAMPILKAN PROYEK sebagai judul event (bukan deskripsi aktivitas)
+  const title =
+    row.agenda?.nama_agenda ||
+    row.nama_agenda ||
+    row.deskripsi_kerja ||
+    row.title ||
+    "Agenda";
 
   const startRaw = row.start_date || row.tanggal_mulai || row.start || row.mulai;
   const endRaw =
@@ -56,13 +92,17 @@ const mapServerToFC = (row) => {
   const start = toLocalWallTime(startRaw);
   const end = toLocalWallTime(endRaw);
 
-  let backgroundColor = "#3b82f6"; // diproses
+  const urgency = normalizeUrgency(extractUrgencyRaw(row));
+
+  // warna berdasarkan status
+  let backgroundColor = "#9ca3af"; // teragenda (abu-abu)
   if (status === "selesai") backgroundColor = "#22c55e";
   else if (status === "ditunda") backgroundColor = "#f59e0b";
+  else if (status === "diproses") backgroundColor = "#3b82f6";
 
   return {
     id: row.id_agenda_kerja || row.id || row._id,
-    title,
+    title,          // judul = nama proyek
     start,
     end,
     backgroundColor,
@@ -70,13 +110,37 @@ const mapServerToFC = (row) => {
     extendedProps: {
       status,
       deskripsi: row.deskripsi_kerja || row.deskripsi || "",
-      agenda: row.agenda || null,
+      agenda: row.agenda || (row.nama_agenda ? { nama_agenda: row.nama_agenda, id_agenda: row.id_agenda } : null),
       id_agenda: row.id_agenda || row.agenda?.id_agenda || null,
       id_user: row.id_user || row.user?.id_user || null,
       user: row.user || null,
+      urgency,
       raw: row,
     },
   };
+};
+
+/* ====== Signature helper: identitas “serupa” (judul + proyek + jam) ====== */
+const signatureFromRow = (row) => {
+  const title = (row?.deskripsi_kerja || "").trim();
+  const id_agenda = String(row?.id_agenda || row?.agenda?.id_agenda || "");
+  const start = toLocalWallTime(row?.start_date || row?.mulai);
+  const end = toLocalWallTime(row?.end_date || row?.selesai || row?.start_date || row?.mulai);
+  return `${id_agenda}|${title}|${start}|${end}`;
+};
+
+const signatureFromEventLike = (evLike) => {
+  const title = (evLike.title || evLike.deskripsi_kerja || "").trim();
+  const id_agenda = String(
+    evLike.id_agenda ??
+      evLike.extendedProps?.id_agenda ??
+      evLike.raw?.id_agenda ??
+      evLike.raw?.agenda?.id_agenda ??
+      ""
+  );
+  const start = toLocalWallTime(evLike.start || evLike.raw?.start_date);
+  const end = toLocalWallTime(evLike.end || evLike.raw?.end_date || evLike.start || evLike.raw?.start_date);
+  return `${id_agenda}|${title}|${start}|${end}`;
 };
 
 export default function useAgendaCalendarViewModel() {
@@ -89,9 +153,9 @@ export default function useAgendaCalendarViewModel() {
 
   const qs = useMemo(() => {
     const p = new URLSearchParams();
-    p.set("from", dayjs(range.start).format("YYYY-MM-DD")); // sesuai API
-    p.set("to", dayjs(range.end).format("YYYY-MM-DD"));     // sesuai API
-    p.set("perPage", "100"); // server default 20 (maks 100)
+    p.set("from", dayjs(range.start).format("YYYY-MM-DD"));
+    p.set("to", dayjs(range.end).format("YYYY-MM-DD"));
+    p.set("perPage", "100");
     return p.toString();
   }, [range]);
 
@@ -234,9 +298,9 @@ export default function useAgendaCalendarViewModel() {
 
   /* ===== CRUD ===== */
 
-  // CREATE untuk banyak user (1 event per user)
+  // CREATE untuk banyak user (1 event per user) → status default teragenda
   const createEvents = useCallback(
-    async ({ title, start, end, status = "diproses", userIds = [], id_agenda }) => {
+    async ({ title, start, end, status = "teragenda", userIds = [], id_agenda }) => {
       for (const uid of userIds) {
         const payload = {
           id_user: uid,
@@ -259,7 +323,7 @@ export default function useAgendaCalendarViewModel() {
         deskripsi_kerja: title,
         start_date: serializeLocalWallTime(start),
         end_date: serializeLocalWallTime(end || start),
-        status: status || "diproses",
+        status: status || "teragenda",
         ...(id_agenda ? { id_agenda } : {}),
       };
       await crudService.put(ApiEndpoints.UpdateAgendaKerja(id), payload);
@@ -276,6 +340,70 @@ export default function useAgendaCalendarViewModel() {
       await mutate();
     },
     [mutate]
+  );
+
+  /* ===== Bulk tools: cari & hapus “serupa” (judul+proyek+jam sama) ===== */
+
+  const findSimilarEventsByEvent = useCallback(async (fcEvent) => {
+    if (!fcEvent) return { targets: [] };
+
+    const raw = fcEvent.extendedProps?.raw || {};
+    const id_agenda =
+      fcEvent.extendedProps?.id_agenda ||
+      raw?.id_agenda ||
+      raw?.agenda?.id_agenda ||
+      null;
+
+    const start = toLocalWallTime(raw.start_date || fcEvent.start);
+    const end = toLocalWallTime(raw.end_date || fcEvent.end || fcEvent.start);
+
+    // rentang pencarian (per hari)
+    const p = new URLSearchParams();
+    p.set("from", dayjs(start).format("YYYY-MM-DD"));
+    p.set("to", dayjs(end).format("YYYY-MM-DD"));
+    if (id_agenda) p.set("id_agenda", String(id_agenda));
+    p.set("perPage", "1000");
+
+    const url = `${ApiEndpoints.GetAgendaKerja}?${p.toString()}`;
+    const json = await fetcher(url);
+    const items = Array.isArray(json?.data) ? json.data : [];
+
+    const wantSig = signatureFromEventLike({
+      title: fcEvent.title,
+      id_agenda,
+      start,
+      end,
+      raw,
+      extendedProps: fcEvent.extendedProps,
+    });
+
+    const targets = items.filter((row) => signatureFromRow(row) === wantSig);
+    return { targets };
+  }, []);
+
+  const bulkDeleteByIds = useCallback(
+    async (ids = [], { hard = false } = {}) => {
+      if (!Array.isArray(ids) || ids.length === 0) return 0;
+      const delFn = crudService.del || crudService.delete;
+      await Promise.all(
+        ids.map((id) =>
+          delFn(ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : ""))
+        )
+      );
+      await mutate();
+      return ids.length;
+    },
+    [mutate]
+  );
+
+  const bulkDeleteSimilarByEvent = useCallback(
+    async (fcEvent, { hard = false } = {}) => {
+      const { targets } = await findSimilarEventsByEvent(fcEvent);
+      const ids = targets.map((t) => t.id_agenda_kerja || t.id);
+      const n = await bulkDeleteByIds(ids, { hard });
+      return { count: n };
+    },
+    [findSimilarEventsByEvent, bulkDeleteByIds]
   );
 
   return {
@@ -296,6 +424,11 @@ export default function useAgendaCalendarViewModel() {
     updateEvent,
     deleteEvent,
     createAgendaMaster,
+
+    // bulk helpers
+    findSimilarEventsByEvent,
+    bulkDeleteByIds,
+    bulkDeleteSimilarByEvent,
 
     // util
     showFromDB,

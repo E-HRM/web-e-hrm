@@ -1,3 +1,4 @@
+// app/home/.../useKunjunganRekapanViewModel.js (atau path kamu)
 "use client";
 
 import { useMemo, useState } from "react";
@@ -31,7 +32,7 @@ export default function useKunjunganRekapanViewModel() {
     to: null,
   });
 
-  /** Users untuk filter & join kolom User */
+  // Users
   const { data: usersRes } = useSWR(
     `${ApiEndpoints.GetUsers}?perPage=1000`,
     fetcher,
@@ -46,7 +47,7 @@ export default function useKunjunganRekapanViewModel() {
     }));
   }, [usersRes]);
 
-  // Peta id_user -> user (stringify id agar aman tipe number/string)
+  // Map id_user -> user
   const usersById = useMemo(() => {
     const xs = Array.isArray(usersRes?.data) ? usersRes.data : [];
     const map = new Map();
@@ -57,7 +58,7 @@ export default function useKunjunganRekapanViewModel() {
     return map;
   }, [usersRes]);
 
-  /** Kategori untuk filter */
+  // Kategori
   const { data: katRes } = useSWR(
     `${ApiEndpoints.GetKategoriKunjungan}?pageSize=1000&orderBy=kategori_kunjungan&sort=asc`,
     fetcher,
@@ -68,12 +69,12 @@ export default function useKunjunganRekapanViewModel() {
     return xs.map((k) => ({ value: k.id_kategori_kunjungan, label: k.kategori_kunjungan }));
   }, [katRes]);
 
-  /** List kunjungan */
+  // List kunjungan
   const listUrl = useMemo(() => {
     const p = new URLSearchParams();
     if (filters.q?.trim()) p.set("q", filters.q.trim());
     if (filters.userId) p.set("id_user", filters.userId);
-    if (filters.status) p.set("status_kunjungan", filters.status); // diproses | berlangsung | selesai
+    if (filters.status) p.set("status_kunjungan", filters.status);
     if (filters.kategoriId) p.set("id_kategori_kunjungan", filters.kategoriId);
     const f = asDateOnly(filters.from);
     const t = asDateOnly(filters.to);
@@ -85,35 +86,27 @@ export default function useKunjunganRekapanViewModel() {
     return `${ApiEndpoints.GetKunjungan}?${p.toString()}`;
   }, [filters]);
 
-  const { data: listRes, isLoading } = useSWR(
-    listUrl,
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+  const { data: listRes, isLoading } = useSWR(listUrl, fetcher, { revalidateOnFocus: false });
 
-  // Suntikkan user ke setiap baris (join di frontend)
+  // ⬇️ MERGE: user dari API kunjungan + user dari /users (kalau ada)
   const rows = useMemo(() => {
     const xs = Array.isArray(listRes?.data) ? listRes.data : [];
     return xs.map((r) => {
       const key = String(r.id_user ?? r.user?.id_user ?? r.user?.id ?? "");
       const userFromMap = key ? usersById.get(key) : null;
-      // Pakai yang dari map bila ada; fallback ke r.user jika backend kebetulan sudah include
-      const user = userFromMap || r.user || null;
-      return { ...r, user };
+      const mergedUser = userFromMap ? { ...r.user, ...userFromMap } : (r.user || null);
+      return { ...r, user: mergedUser };
     });
   }, [listRes, usersById]);
 
-  /** Link OSM untuk lihat titik */
   const osmUrl = (lat, lon) =>
     lat != null && lon != null
       ? `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=18/${lat}/${lon}`
       : null;
 
-  /** Ambil foto dari beberapa kemungkinan nama field */
   const pickPhotoUrl = (r) =>
     r.lampiran_kunjungan_url || r.lampiran_url || r.foto_url || r.image_url || r.photo_url || null;
 
-  /** Koordinat start/end dengan fallback naming */
   const getStartCoord = (r) => ({
     lat: r.start_latitude ?? r.latitude_start ?? null,
     lon: r.start_longitude ?? r.longitude_start ?? null,
