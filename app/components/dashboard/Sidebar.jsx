@@ -66,6 +66,22 @@ const MENU = [
       { href: "/home/agenda/agenda_calendar", match: ["/home/agenda/agenda_calendar"], label: "Kalender Agenda" },
     ],
   },
+   {
+    key: "cuti",
+    href: "/home/pengajuanCuti",
+    match: ["/home/pengajuanCuti"],
+    label: "Pengajuan Cuti/Izin",
+    icon: NotificationOutlined,
+    hasCaret: true,
+    children: [
+      { href: "/home/pengajuanCuti/cuti", match: ["/home/pengajuanCuti/cuti"], label: "Cuti" },
+      { href: "/home/pengajuanCuti/sakit", match: ["/home/pengajuanCuti/sakit"], label: "Izin Sakit" },
+      { href: "/home/pengajuanCuti/tukarHari", match: ["/home/pengajuanCuti/tukarHari"], label: "Izin Tukar Hari" },
+      { href: "/home/pengajuanCuti/izinJam", match: ["/home/pengajuanCuti/izinJam"], label: "Izin Jam" },
+      { href: "/home/pengajuanCuti/manajemenKategori", match: ["/home/pengajuanCuti/manajemenKategori"], label: "Management Kategori" },
+      { href: "/home/pengajuanCuti/manajemenPengajuan", match: ["/home/pengajuanCuti/manajemenPengajuan"], label: "Management Pengajuan" },
+    ],
+  },
   // { href: "/home/broadcast", match: ["/home/broadcast"], label: "Broadcast", icon: NotificationOutlined },
 ];
 
