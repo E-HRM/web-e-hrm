@@ -102,15 +102,19 @@ const mapServerToFC = (row) => {
 
   return {
     id: row.id_agenda_kerja || row.id || row._id,
-    title,          // judul = nama proyek
+    title, // judul = nama proyek
     start,
     end,
     backgroundColor,
     borderColor: backgroundColor,
     extendedProps: {
       status,
-      deskripsi: row.deskripsi_kerja || row.deskripsi || "",
-      agenda: row.agenda || (row.nama_agenda ? { nama_agenda: row.nama_agenda, id_agenda: row.id_agenda } : null),
+      deskripsi: row.deskripsi_kerja || row.deskripsi || "", // <— judul aktivitas disimpan di sini
+      agenda:
+        row.agenda ||
+        (row.nama_agenda
+          ? { nama_agenda: row.nama_agenda, id_agenda: row.id_agenda }
+          : null),
       id_agenda: row.id_agenda || row.agenda?.id_agenda || null,
       id_user: row.id_user || row.user?.id_user || null,
       user: row.user || null,
@@ -125,21 +129,36 @@ const signatureFromRow = (row) => {
   const title = (row?.deskripsi_kerja || "").trim();
   const id_agenda = String(row?.id_agenda || row?.agenda?.id_agenda || "");
   const start = toLocalWallTime(row?.start_date || row?.mulai);
-  const end = toLocalWallTime(row?.end_date || row?.selesai || row?.start_date || row?.mulai);
+  const end = toLocalWallTime(
+    row?.end_date || row?.selesai || row?.start_date || row?.mulai
+  );
   return `${id_agenda}|${title}|${start}|${end}`;
 };
 
+/* ====== FIX: gunakan deskripsi aktivitas, bukan event.title (nama proyek) ====== */
 const signatureFromEventLike = (evLike) => {
-  const title = (evLike.title || evLike.deskripsi_kerja || "").trim();
+  const raw = evLike.extendedProps?.raw || {};
+
+  // judul aktivitas (bukan nama proyek)
+  const title = (
+    evLike.extendedProps?.deskripsi ||
+    raw.deskripsi_kerja ||
+    evLike.deskripsi_kerja || // ekstra toleransi
+    evLike.title || // fallback terakhir bila benar2 kosong
+    ""
+  ).trim();
+
   const id_agenda = String(
-    evLike.id_agenda ??
-      evLike.extendedProps?.id_agenda ??
-      evLike.raw?.id_agenda ??
-      evLike.raw?.agenda?.id_agenda ??
+    evLike.extendedProps?.id_agenda ??
+      raw?.id_agenda ??
+      raw?.agenda?.id_agenda ??
+      evLike.id_agenda ??
       ""
   );
-  const start = toLocalWallTime(evLike.start || evLike.raw?.start_date);
-  const end = toLocalWallTime(evLike.end || evLike.raw?.end_date || evLike.start || evLike.raw?.start_date);
+
+  const start = toLocalWallTime(raw.start_date || evLike.start);
+  const end = toLocalWallTime(raw.end_date || evLike.end || evLike.start);
+
   return `${id_agenda}|${title}|${start}|${end}`;
 };
 
@@ -368,14 +387,8 @@ export default function useAgendaCalendarViewModel() {
     const json = await fetcher(url);
     const items = Array.isArray(json?.data) ? json.data : [];
 
-    const wantSig = signatureFromEventLike({
-      title: fcEvent.title,
-      id_agenda,
-      start,
-      end,
-      raw,
-      extendedProps: fcEvent.extendedProps,
-    });
+    // === FIX: signature dari event harus pakai deskripsi aktivitas, bukan event.title (proyek) ===
+    const wantSig = signatureFromEventLike(fcEvent);
 
     const targets = items.filter((row) => signatureFromRow(row) === wantSig);
     return { targets };
