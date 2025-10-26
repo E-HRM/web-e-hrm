@@ -49,12 +49,12 @@ const MENU = [
     children: [
       { href: "/home/kunjungan/kunjungan_rekapan", match: ["/home/kunjungan/kunjungan_rekapan"], label: "Review Kunjungan" },
       { href: "/home/kunjungan/kategori_kunjungan", match: ["/home/kunjungan/kategori_kunjungan"], label: "Kategori" },
-      { href: "/home/kunjungan/kunjungan_kalender", match: ["/home/kunjungan/kunjungan_kalender"], label: "Kalender" },
+      { href: "/home/kunjungan/kunjungan_kalender", match: ["/home/kunjungan/kunjungan_kalender"], label: "Kalender Kunjungan" },
     ],
   },
   {
     key: "agenda",
-    href: "/home/agenda-kerja",                   
+    href: "/home/agenda-kerja",
     match: ["/home/agenda-kerja", "/agenda-kerja"],
     label: "Time Sheet",
     icon: FileTextOutlined,
@@ -66,7 +66,7 @@ const MENU = [
       { href: "/home/agenda/agenda_calendar", match: ["/home/agenda/agenda_calendar"], label: "Kalender Agenda" },
     ],
   },
-   {
+  {
     key: "cuti",
     href: "/home/pengajuanCuti",
     match: ["/home/pengajuanCuti"],
@@ -94,7 +94,7 @@ function roleAwareDashboard(menu, role) {
     if (item.label !== "Dashboard") return item;
     return role === "OPERASIONAL"
       ? { ...item, href: "/home/dashboard2", match: ["/home/dashboard2"] }
-      : { ...item, href: "/home/dashboard",  match: ["/home/dashboard"]  };
+      : { ...item, href: "/home/dashboard", match: ["/home/dashboard"] };
   });
 }
 
@@ -192,16 +192,17 @@ export default function Sidebar() {
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ===== tokens UI =====
+  // ===== tokens UI (diperkecil) =====
   const baseItem =
-    "group flex items-center justify-between gap-3 w-full px-4 py-3 rounded-lg text-white/80 transition-colors duration-200 hover:!bg-[#FFFFFF] hover:!text-[#003A6F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
+    "group flex items-center justify-between gap-2.5 w-full px-4 py-2.5 rounded-lg text-white/80 transition-colors duration-200 hover:!bg-[#FFFFFF] hover:!text-[#003A6F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
   const activeItem = "!bg-[#FFFFFF] !text-[#003A6F]";
   const subItem =
-    "group flex items-center gap-3 w-full pl-10 pr-4 py-2.5 rounded-lg text-white/80 transition-colors duration-200 hover:!bg-[#FFFFFF] hover:!text-[#003A6F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
+    "group flex items-center gap-2.5 w-full pl-9 pr-4 py-2 rounded-lg text-white/80 transition-colors duration-200 hover:!bg-[#FFFFFF] hover:!text-[#003A6F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40";
   const subActive = "!bg-[#FFFFFF] !text-[#003A6F]";
 
-  const iconCls = "menu-icon text-xl leading-none";
-  const iconBox = "w-6 shrink-0 flex items-center justify-center";
+  // ikon lebih kecil & box menyempit
+  const iconCls = "menu-icon leading-none text-base md:text-lg";
+  const iconBox = "w-5 shrink-0 flex items-center justify-center";
   const rightSlot = "w-4 flex items-center justify-center";
 
   const StripBullet = ({ active = false }) => (
@@ -219,7 +220,8 @@ export default function Sidebar() {
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
   return (
-    <aside className="flex flex-col h-full bg-[#003A6F] text-white">
+    // font sidebar dikecilkan (responsif)
+    <aside className="flex flex-col h-full bg-[#003A6F] text-white text-xs sm:text-sm md:text-[13px]">
       <nav ref={scrollRef} className="flex-1 py-4 px-3 sider-scroll overflow-y-auto">
         <ul className="space-y-1">
           {MENU_FOR_ROLE.map((m) => {
@@ -241,7 +243,7 @@ export default function Sidebar() {
                     aria-expanded={displayOpen}
                     aria-controls={`submenu-${key}`}
                   >
-                    <span className="flex items-center gap-4">
+                    <span className="flex items-center gap-3">
                       <span className={iconBox}>
                         <Icon className={iconCls} />
                       </span>
@@ -296,9 +298,9 @@ export default function Sidebar() {
                   className={[baseItem, active ? activeItem : ""].join(" ")}
                   aria-current={active ? "page" : undefined}
                 >
-                  <span className="flex items-center gap-4">
+                  <span className="flex items-center gap-3">
                     <span className={iconBox}>
-                      <m.icon className={iconCls} />
+                      <Icon className={iconCls} />
                     </span>
                     <span className="leading-none transition-colors font-semibold">{m.label}</span>
                   </span>
