@@ -2,7 +2,7 @@
 
 import { Suspense, lazy } from "react";
 
-const Cuti = lazy(() => import("./cutiContent"));
+const Sakit = lazy(() => import("./SakitContent"));
 import LoadingSplash from "@/app/components/common/LoadingSplash";
 
 export default function Page() {
@@ -19,7 +19,7 @@ export default function Page() {
         </div>
       }
     >
-      <Cuti />
+      <Sakit />
     </Suspense>
   );
 }

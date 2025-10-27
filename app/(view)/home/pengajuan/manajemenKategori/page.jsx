@@ -2,7 +2,7 @@
 
 import { Suspense, lazy } from "react";
 
-const IzinJam = lazy(() => import("./izinJamContent"));
+const ManajemenKategori = lazy(() => import("./ManajemenKategoriContent"));
 import LoadingSplash from "@/app/components/common/LoadingSplash";
 
 export default function Page() {
@@ -19,7 +19,7 @@ export default function Page() {
         </div>
       }
     >
-      <IzinJam />
+      <ManajemenKategori />
     </Suspense>
   );
 }

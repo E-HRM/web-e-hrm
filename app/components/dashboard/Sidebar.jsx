@@ -16,6 +16,7 @@ import {
   ScheduleOutlined,
   ProductOutlined,
   NotificationOutlined,
+  AuditOutlined,
 } from "@ant-design/icons";
 
 /** ===== MENU dasar ===== */
@@ -68,18 +69,17 @@ const MENU = [
   },
   {
     key: "cuti",
-    href: "/home/pengajuanCuti",
-    match: ["/home/pengajuanCuti"],
+    href: "/home/pengajuan",
+    match: ["/home/pengajuan"],
     label: "Pengajuan Cuti/Izin",
-    icon: NotificationOutlined,
+    icon: AuditOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/pengajuanCuti/cuti", match: ["/home/pengajuanCuti/cuti"], label: "Cuti" },
-      { href: "/home/pengajuanCuti/sakit", match: ["/home/pengajuanCuti/sakit"], label: "Izin Sakit" },
-      { href: "/home/pengajuanCuti/tukarHari", match: ["/home/pengajuanCuti/tukarHari"], label: "Izin Tukar Hari" },
-      { href: "/home/pengajuanCuti/izinJam", match: ["/home/pengajuanCuti/izinJam"], label: "Izin Jam" },
-      { href: "/home/pengajuanCuti/manajemenKategori", match: ["/home/pengajuanCuti/manajemenKategori"], label: "Management Kategori" },
-      { href: "/home/pengajuanCuti/manajemenPengajuan", match: ["/home/pengajuanCuti/manajemenPengajuan"], label: "Management Pengajuan" },
+      { href: "/home/pengajuan/manajemenKategori", match: ["/home/pengajuan/manajemenKategori"], label: "Management Kategori" },
+      { href: "/home/pengajuan/cuti", match: ["/home/pengajuan/cuti"], label: "Cuti" },
+      { href: "/home/pengajuan/sakit", match: ["/home/pengajuan/sakit"], label: "Izin Sakit" },
+      { href: "/home/pengajuan/tukarHari", match: ["/home/pengajuan/tukarHari"], label: "Izin Tukar Hari" },
+      { href: "/home/pengajuan/izinJam", match: ["/home/pengajuan/izinJam"], label: "Izin Jam" },
     ],
   },
   // { href: "/home/broadcast", match: ["/home/broadcast"], label: "Broadcast", icon: NotificationOutlined },

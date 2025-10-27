@@ -2,7 +2,7 @@
 
 import { Suspense, lazy } from "react";
 
-const TukarHari = lazy(() => import("./tukarHariContent"));
+const IzinJam = lazy(() => import("./IzinJamContent"));
 import LoadingSplash from "@/app/components/common/LoadingSplash";
 
 export default function Page() {
@@ -19,7 +19,7 @@ export default function Page() {
         </div>
       }
     >
-      <TukarHari />
+      <IzinJam />
     </Suspense>
   );
 }
