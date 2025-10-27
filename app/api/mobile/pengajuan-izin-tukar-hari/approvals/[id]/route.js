@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { ensureAuth, baseInclude } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
+import { applyShiftSwapForIzinTukarHari } from '../../helpers/shiftAdjuster';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
 const PENDING_DECISIONS = new Set(['pending', 'menunggu']);
@@ -24,7 +25,7 @@ function buildInclude() {
     approvals: {
       orderBy: { level: 'asc' },
       select: {
-        id_approval_pengajuan_izin_jam: true,
+        id_approval_izin_tukar_hari: true,
         level: true,
         approver_user_id: true,
         approver_role: true,
@@ -55,9 +56,9 @@ async function handleDecision(req, { params }) {
     return NextResponse.json({ message: 'Unauthorized.' }, { status: 401 });
   }
 
-  const id = params?.id;
-  if (!id) {
-    return NextResponse.json({ message: 'id wajib diisi.' }, { status: 400 });
+  const approvalId = params?.approvalId;
+  if (!approvalId) {
+    return NextResponse.json({ message: 'approvalId wajib diisi.' }, { status: 400 });
   }
 
   let body;
@@ -76,13 +77,15 @@ async function handleDecision(req, { params }) {
 
   try {
     const result = await db.$transaction(async (tx) => {
-      const approvalRecord = await tx.approvalPengajuanIzinJam.findUnique({
-        where: { id_approval_pengajuan_izin_jam: id },
+      const approvalRecord = await tx.approvalIzinTukarHari.findUnique({
+        where: { id_approval_izin_tukar_hari: approvalId },
         include: {
-          pengajuan_izin_jam: {
+          izin_tukar_hari: {
             select: {
-              id_pengajuan_izin_jam: true,
+              id_izin_tukar_hari: true,
               id_user: true,
+              hari_izin: true,
+              hari_pengganti: true,
               status: true,
               current_level: true,
               deleted_at: true,
@@ -95,7 +98,7 @@ async function handleDecision(req, { params }) {
         throw NextResponse.json({ message: 'Approval tidak ditemukan.' }, { status: 404 });
       }
 
-      if (!approvalRecord.pengajuan_izin_jam || approvalRecord.pengajuan_izin_jam.deleted_at) {
+      if (!approvalRecord.izin_tukar_hari || approvalRecord.izin_tukar_hari.deleted_at) {
         throw NextResponse.json({ message: 'Pengajuan tidak ditemukan.' }, { status: 404 });
       }
 
@@ -110,16 +113,16 @@ async function handleDecision(req, { params }) {
         throw NextResponse.json({ message: 'Approval sudah memiliki keputusan.' }, { status: 409 });
       }
 
-      const updatedApproval = await tx.approvalPengajuanIzinJam.update({
-        where: { id_approval_pengajuan_izin_jam: id },
+      const updatedApproval = await tx.approvalIzinTukarHari.update({
+        where: { id_approval_izin_tukar_hari: approvalId },
         data: {
           decision,
           note,
           decided_at: new Date(),
         },
         select: {
-          id_approval_pengajuan_izin_jam: true,
-          id_pengajuan_izin_jam: true,
+          id_approval_izin_tukar_hari: true,
+          id_izin_tukar_hari: true,
           level: true,
           decision: true,
           note: true,
@@ -127,11 +130,11 @@ async function handleDecision(req, { params }) {
         },
       });
 
-      const approvals = await tx.approvalPengajuanIzinJam.findMany({
-        where: { id_pengajuan_izin_jam: approvalRecord.id_pengajuan_izin_jam, deleted_at: null },
+      const approvals = await tx.approvalIzinTukarHari.findMany({
+        where: { id_izin_tukar_hari: approvalRecord.id_izin_tukar_hari, deleted_at: null },
         orderBy: { level: 'asc' },
         select: {
-          id_approval_pengajuan_izin_jam: true,
+          id_approval_izin_tukar_hari: true,
           level: true,
           approver_user_id: true,
           approver_role: true,
@@ -143,50 +146,88 @@ async function handleDecision(req, { params }) {
 
       const { anyApproved, allRejected, highestApprovedLevel } = summarizeApprovalStatus(approvals);
       const parentUpdate = {};
+      const previousStatus = approvalRecord.izin_tukar_hari.status;
 
       if (anyApproved) {
-        parentUpdate.status = 'disetujui';
-        parentUpdate.current_level = highestApprovedLevel;
+        if (previousStatus !== 'disetujui') {
+          parentUpdate.status = 'disetujui';
+        }
+        if (typeof highestApprovedLevel === 'number' && approvalRecord.izin_tukar_hari.current_level !== highestApprovedLevel) {
+          parentUpdate.current_level = highestApprovedLevel;
+        }
       } else if (allRejected) {
         parentUpdate.status = 'ditolak';
         parentUpdate.current_level = null;
       }
 
       let submission;
+      let shiftAdjustmentResult = null;
       if (Object.keys(parentUpdate).length) {
-        submission = await tx.pengajuanIzinJam.update({
-          where: { id_pengajuan_izin_jam: approvalRecord.id_pengajuan_izin_jam },
+        submission = await tx.izinTukarHari.update({
+          where: { id_izin_tukar_hari: approvalRecord.id_izin_tukar_hari },
           data: parentUpdate,
           include: buildInclude(),
         });
       } else {
-        submission = await tx.pengajuanIzinJam.findUnique({
-          where: { id_pengajuan_izin_jam: approvalRecord.id_pengajuan_izin_jam },
+        submission = await tx.izinTukarHari.findUnique({
+          where: { id_izin_tukar_hari: approvalRecord.id_izin_tukar_hari },
           include: buildInclude(),
         });
       }
+      if (decision === 'disetujui' && previousStatus !== 'disetujui') {
+        try {
+          shiftAdjustmentResult = await applyShiftSwapForIzinTukarHari(tx, approvalRecord.izin_tukar_hari);
+        } catch (shiftErr) {
+          console.error('Gagal memperbarui shift tukar hari:', shiftErr);
+          shiftAdjustmentResult = {
+            adjustments: [],
+            issues: [
+              {
+                message: 'Terjadi kesalahan saat memperbarui jadwal shift pemohon.',
+                detail: shiftErr?.message || String(shiftErr),
+              },
+            ],
+          };
+        }
+      }
 
-      return { submission, approval: updatedApproval };
+      return { submission, approval: updatedApproval, shiftAdjustment: shiftAdjustmentResult };
     });
 
     const submission = result?.submission;
     const approval = result?.approval;
+    const shiftAdjustment = result?.shiftAdjustment;
+    let responseData = submission;
+    if (submission) {
+      responseData = {
+        ...submission,
+        ...(shiftAdjustment?.adjustments?.length ? { shift_adjustments: shiftAdjustment.adjustments } : {}),
+        ...(shiftAdjustment?.issues?.length ? { shift_adjustment_issues: shiftAdjustment.issues } : {}),
+      };
+    } else if (shiftAdjustment) {
+      responseData = {
+        ...(shiftAdjustment?.adjustments?.length ? { shift_adjustments: shiftAdjustment.adjustments } : {}),
+        ...(shiftAdjustment?.issues?.length ? { shift_adjustment_issues: shiftAdjustment.issues } : {}),
+      };
+    }
 
     if (submission?.id_user) {
       const decisionDisplay = decision === 'disetujui' ? 'disetujui' : 'ditolak';
-      const overrideTitle = `Pengajuan izin jam ${decisionDisplay}`;
-      const overrideBody = `Pengajuan izin jam Anda telah ${decisionDisplay}.`;
-      const deeplink = `/pengajuan-izin-jam/${submission.id_pengajuan_izin_jam}`;
+      const overrideTitle = `Pengajuan izin tukar hari ${decisionDisplay}`;
+      const overrideBody = `Pengajuan izin tukar hari Anda telah ${decisionDisplay}.`;
+      const deeplink = `/pengajuan-izin-tukar-hari/${submission.id_izin_tukar_hari}`;
 
       await sendNotification(
-        'IZIN_JAM_APPROVAL_DECIDED',
+        'IZIN_TUKAR_HARI_APPROVAL_DECIDED',
         submission.id_user,
         {
           decision,
           note: approval?.note || undefined,
           approval_level: approval?.level,
-          related_table: 'pengajuan_izin_jam',
-          related_id: submission.id_pengajuan_izin_jam,
+          related_table: 'izin_tukar_hari',
+          related_id: submission.id_izin_tukar_hari,
+          shift_adjustments: shiftAdjustment?.adjustments,
+          shift_adjustment_issues: shiftAdjustment?.issues,
           overrideTitle,
           overrideBody,
         },
@@ -194,10 +235,10 @@ async function handleDecision(req, { params }) {
       );
     }
 
-    return NextResponse.json({ message: 'Keputusan approval berhasil disimpan.', data: submission });
+    return NextResponse.json({ message: 'Keputusan approval berhasil disimpan.', data: responseData });
   } catch (err) {
     if (err instanceof NextResponse) return err;
-    console.error('PATCH /mobile/pengajuan-izin-jam/approvals error:', err);
+    console.error('PATCH /mobile/pengajuan-izin-tukar-hari/approvals error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }
