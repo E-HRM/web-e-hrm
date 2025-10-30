@@ -73,11 +73,10 @@ const extractUrgencyRaw = (row) =>
 /* ============== Map Server -> FullCalendar ============== */
 
 const mapServerToFC = (row) => {
-  // status default → teragenda
   const status =
     row.status || row.status_agenda || row.status_kerja || "teragenda";
 
-  // TAMPILKAN PROYEK sebagai judul event (bukan deskripsi aktivitas)
+  // Nama PROYEK di judul event (aktivitas/desc disimpan di extendedProps.deskripsi)
   const title =
     row.agenda?.nama_agenda ||
     row.nama_agenda ||
@@ -94,15 +93,14 @@ const mapServerToFC = (row) => {
 
   const urgency = normalizeUrgency(extractUrgencyRaw(row));
 
-  // warna berdasarkan status
-  let backgroundColor = "#9ca3af"; // teragenda (abu-abu)
+  let backgroundColor = "#9ca3af"; // teragenda
   if (status === "selesai") backgroundColor = "#22c55e";
   else if (status === "ditunda") backgroundColor = "#f59e0b";
   else if (status === "diproses") backgroundColor = "#3b82f6";
 
   return {
     id: row.id_agenda_kerja || row.id || row._id,
-    title,          // judul = nama proyek
+    title,
     start,
     end,
     backgroundColor,
@@ -110,7 +108,11 @@ const mapServerToFC = (row) => {
     extendedProps: {
       status,
       deskripsi: row.deskripsi_kerja || row.deskripsi || "",
-      agenda: row.agenda || (row.nama_agenda ? { nama_agenda: row.nama_agenda, id_agenda: row.id_agenda } : null),
+      agenda:
+        row.agenda ||
+        (row.nama_agenda
+          ? { nama_agenda: row.nama_agenda, id_agenda: row.id_agenda }
+          : null),
       id_agenda: row.id_agenda || row.agenda?.id_agenda || null,
       id_user: row.id_user || row.user?.id_user || null,
       user: row.user || null,
@@ -125,21 +127,35 @@ const signatureFromRow = (row) => {
   const title = (row?.deskripsi_kerja || "").trim();
   const id_agenda = String(row?.id_agenda || row?.agenda?.id_agenda || "");
   const start = toLocalWallTime(row?.start_date || row?.mulai);
-  const end = toLocalWallTime(row?.end_date || row?.selesai || row?.start_date || row?.mulai);
+  const end = toLocalWallTime(
+    row?.end_date || row?.selesai || row?.start_date || row?.mulai
+  );
   return `${id_agenda}|${title}|${start}|${end}`;
 };
 
+/* ====== FIX: gunakan deskripsi aktivitas, bukan event.title (nama proyek) ====== */
 const signatureFromEventLike = (evLike) => {
-  const title = (evLike.title || evLike.deskripsi_kerja || "").trim();
+  const raw = evLike.extendedProps?.raw || {};
+
+  const title = (
+    evLike.extendedProps?.deskripsi ||
+    raw.deskripsi_kerja ||
+    evLike.deskripsi_kerja ||
+    evLike.title ||
+    ""
+  ).trim();
+
   const id_agenda = String(
-    evLike.id_agenda ??
-      evLike.extendedProps?.id_agenda ??
-      evLike.raw?.id_agenda ??
-      evLike.raw?.agenda?.id_agenda ??
+    evLike.extendedProps?.id_agenda ??
+      raw?.id_agenda ??
+      raw?.agenda?.id_agenda ??
+      evLike.id_agenda ??
       ""
   );
-  const start = toLocalWallTime(evLike.start || evLike.raw?.start_date);
-  const end = toLocalWallTime(evLike.end || evLike.raw?.end_date || evLike.start || evLike.raw?.start_date);
+
+  const start = toLocalWallTime(raw.start_date || evLike.start);
+  const end = toLocalWallTime(raw.end_date || evLike.end || evLike.start);
+
   return `${id_agenda}|${title}|${start}|${end}`;
 };
 
@@ -150,14 +166,6 @@ export default function useAgendaCalendarViewModel() {
     end: dayjs().endOf("month").endOf("week").toDate(),
   }));
   const setRange = useCallback((start, end) => setRangeState({ start, end }), []);
-
-  const qs = useMemo(() => {
-    const p = new URLSearchParams();
-    p.set("from", dayjs(range.start).format("YYYY-MM-DD"));
-    p.set("to", dayjs(range.end).format("YYYY-MM-DD"));
-    p.set("perPage", "100");
-    return p.toString();
-  }, [range]);
 
   /* ===== Master Users: fetch semua halaman ===== */
   const fetchAllUsers = useCallback(async () => {
@@ -284,21 +292,68 @@ export default function useAgendaCalendarViewModel() {
     [refetchAgenda]
   );
 
-  /* ===== List agenda kerja ===== */
-  const { data, mutate } = useSWR(
-    `${ApiEndpoints.GetAgendaKerja}?${qs}`,
-    fetcher,
+  /* ===== List agenda kerja: AMBIL SEMUA HALAMAN ===== */
+  const fetchAllAgendaKerja = useCallback(
+    async (fromDate, toDate) => {
+      const perPage = 200; // aman & ringan; naikkan jika perlu
+      let page = 1;
+      let all = [];
+
+      const from = dayjs(fromDate).format("YYYY-MM-DD");
+      const to = dayjs(toDate).format("YYYY-MM-DD");
+
+      while (true) {
+        const params = new URLSearchParams();
+        params.set("from", from);
+        params.set("to", to);
+        params.set("perPage", String(perPage));
+        // kalau backend dukung sorting, ini bikin deterministik:
+        params.set("orderBy", "start_date");
+        params.set("sort", "asc");
+        params.set("page", String(page));
+
+        const url = `${ApiEndpoints.GetAgendaKerja}?${params.toString()}`;
+        const json = await fetcher(url);
+
+        const items = Array.isArray(json?.data)
+          ? json.data
+          : Array.isArray(json?.items)
+          ? json.items
+          : [];
+
+        all.push(...items);
+
+        const totalPages =
+          json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
+
+        if (totalPages) {
+          if (page >= totalPages) break;
+          page += 1;
+        } else {
+          if (items.length < perPage) break;
+          page += 1;
+        }
+      }
+
+      return all;
+    },
+    []
+  );
+
+  // SWR key pakai range; fetcher gabung semua halaman
+  const { data: agendaKerjaAll, mutate } = useSWR(
+    range ? ["agendaKerja:all", range.start?.valueOf(), range.end?.valueOf()] : null,
+    () => fetchAllAgendaKerja(range.start, range.end),
     { revalidateOnFocus: false }
   );
 
   const events = useMemo(
-    () => (Array.isArray(data?.data) ? data.data.map(mapServerToFC) : []),
-    [data]
+    () => (Array.isArray(agendaKerjaAll) ? agendaKerjaAll.map(mapServerToFC) : []),
+    [agendaKerjaAll]
   );
 
   /* ===== CRUD ===== */
 
-  // CREATE untuk banyak user (1 event per user) → status default teragenda
   const createEvents = useCallback(
     async ({ title, start, end, status = "teragenda", userIds = [], id_agenda }) => {
       for (const uid of userIds) {
@@ -357,26 +412,19 @@ export default function useAgendaCalendarViewModel() {
     const start = toLocalWallTime(raw.start_date || fcEvent.start);
     const end = toLocalWallTime(raw.end_date || fcEvent.end || fcEvent.start);
 
-    // rentang pencarian (per hari)
     const p = new URLSearchParams();
     p.set("from", dayjs(start).format("YYYY-MM-DD"));
     p.set("to", dayjs(end).format("YYYY-MM-DD"));
     if (id_agenda) p.set("id_agenda", String(id_agenda));
     p.set("perPage", "1000");
+    p.set("orderBy", "start_date");
+    p.set("sort", "asc");
 
     const url = `${ApiEndpoints.GetAgendaKerja}?${p.toString()}`;
     const json = await fetcher(url);
     const items = Array.isArray(json?.data) ? json.data : [];
 
-    const wantSig = signatureFromEventLike({
-      title: fcEvent.title,
-      id_agenda,
-      start,
-      end,
-      raw,
-      extendedProps: fcEvent.extendedProps,
-    });
-
+    const wantSig = signatureFromEventLike(fcEvent);
     const targets = items.filter((row) => signatureFromRow(row) === wantSig);
     return { targets };
   }, []);

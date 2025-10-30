@@ -28,7 +28,7 @@ import dayjs from "dayjs";
 import "dayjs/locale/id";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import useVM from "./useAgendaCalendarViewModel";
+import useVM, { showFromDB as showFromDBVM } from "./useAgendaCalendarViewModel";
 
 dayjs.locale("id");
 dayjs.extend(utc);
@@ -210,7 +210,7 @@ export default function AgendaCalendarContent() {
       }
       Modal.confirm({
         title: `Hapus ${n} agenda serupa untuk semua karyawan?`,
-        content: "Semua item dengan Proyek, Judul, dan jam Mulai/Selesai yang sama akan dihapus.",
+        content: "Semua item dengan Proyek, Aktivitas, dan jam Mulai/Selesai yang sama akan dihapus.",
         okText: "Hapus Semua",
         okButtonProps: { danger: true },
         cancelText: "Batal",
@@ -462,12 +462,12 @@ export default function AgendaCalendarContent() {
                   <div className="fc-chip--time">
                     <ClockCircleOutlined />
                     <span>
-                      {vm.showFromDB(
+                      {showFromDBVM(
                         detailEvent.extendedProps?.raw?.start_date || detailEvent.start,
                         "DD MMM YYYY HH:mm"
                       )}{" "}
                       -{" "}
-                      {vm.showFromDB(
+                      {showFromDBVM(
                         detailEvent.extendedProps?.raw?.end_date ||
                           detailEvent.end ||
                           detailEvent.start,

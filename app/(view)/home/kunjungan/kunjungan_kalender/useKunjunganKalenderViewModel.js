@@ -38,11 +38,7 @@ const combineLocalDateTime = (dateOnly, timeOnly) => {
   if (!dateOnly || !timeOnly) return null;
   const d = dayjs(dateOnly);
   const t = dayjs(timeOnly);
-  return d
-    .hour(t.hour())
-    .minute(t.minute())
-    .second(t.second() || 0)
-    .millisecond(0);
+  return d.hour(t.hour()).minute(t.minute()).second(t.second() || 0).millisecond(0);
 };
 
 /** Safe number (number/string → number; selain itu → null). */
@@ -53,8 +49,7 @@ const toNum = (v) => {
 };
 
 // opsional: default kategori saat create
-const DEFAULT_KATEGORI_ID =
-  process.env.NEXT_PUBLIC_KUNJUNGAN_DEFAULT_KATEGORI_ID || null;
+const DEFAULT_KATEGORI_ID = process.env.NEXT_PUBLIC_KUNJUNGAN_DEFAULT_KATEGORI_ID || null;
 
 export default function useKunjunganKalenderViewModel() {
   /* ==== USERS: ambil semua halaman (tidak mentok 10) ==== */
@@ -92,10 +87,7 @@ export default function useKunjunganKalenderViewModel() {
     revalidateOnFocus: false,
   });
 
-  const usersList = useMemo(
-    () => (Array.isArray(usersAll) ? usersAll : []),
-    [usersAll]
-  );
+  const usersList = useMemo(() => (Array.isArray(usersAll) ? usersAll : []), [usersAll]);
 
   const userOptions = useMemo(
     () =>
@@ -177,29 +169,76 @@ export default function useKunjunganKalenderViewModel() {
     });
   }, []);
 
-  /* ==== LIST KUNJUNGAN ==== */
-  const listUrl = useMemo(() => {
-    if (!viewRange.start || !viewRange.end) return null;
-    // FullCalendar end EXCLUSIVE → -1 hari
-    const start = dayjs(viewRange.start).startOf("day");
-    const end = dayjs(viewRange.end).startOf("day").subtract(1, "day").endOf("day");
+  /* ==== LIST KUNJUNGAN: AMBIL SEMUA HALAMAN ==== */
+  const fetchAllKunjungan = useCallback(async (rangeStart, rangeEnd) => {
+    if (!rangeStart || !rangeEnd) return [];
 
-    const p = new URLSearchParams();
-    p.set("startDate", start.format("YYYY-MM-DD HH:mm:ss"));
-    p.set("endDate", end.format("YYYY-MM-DD HH:mm:ss"));
-    p.set("pageSize", "1000");
-    p.set("orderBy", "tanggal");
-    p.set("sort", "desc");
-    return `${ApiEndpoints.GetKunjungan}?${p.toString()}`;
-  }, [viewRange.start, viewRange.end]);
+    // FullCalendar `end` eksklusif → kurangi 1 hari.
+    const start = dayjs(rangeStart).startOf("day");
+    const end = dayjs(rangeEnd).startOf("day").subtract(1, "day").endOf("day");
 
-  const { data: listRes, isLoading, mutate } = useSWR(listUrl, fetcher, {
-    revalidateOnFocus: false,
-  });
-  const rows = useMemo(
-    () => (Array.isArray(listRes?.data) ? listRes.data : []),
-    [listRes]
+    const perPage = 200; // aman, bisa dinaikkan
+    let page = 1;
+    let all = [];
+
+    while (true) {
+      const p = new URLSearchParams();
+
+      // Kompatibilitas 1: backend gaya "from/to + perPage + page"
+      p.set("from", start.format("YYYY-MM-DD HH:mm:ss"));
+      p.set("to", end.format("YYYY-MM-DD HH:mm:ss"));
+      p.set("perPage", String(perPage));
+      p.set("page", String(page));
+
+      // Kompatibilitas 2: backend gaya "startDate/endDate + pageSize + page"
+      p.set("startDate", start.format("YYYY-MM-DD HH:mm:ss"));
+      p.set("endDate", end.format("YYYY-MM-DD HH:mm:ss"));
+      p.set("pageSize", String(perPage));
+
+      // Sort biar deterministik (ubah sesuai kolom di DB kamu)
+      p.set("orderBy", "tanggal");
+      p.set("sort", "desc");
+
+      const url = `${ApiEndpoints.GetKunjungan}?${p.toString()}`;
+      const json = await fetcher(url);
+
+      const items = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.items)
+        ? json.items
+        : [];
+
+      all.push(...items);
+
+      const totalPages =
+        json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
+
+      if (totalPages) {
+        if (page >= totalPages) break;
+        page += 1;
+      } else {
+        // Fallback jika backend tidak expose totalPages
+        if (items.length < perPage) break;
+        page += 1;
+      }
+    }
+
+    return all;
+  }, []);
+
+  // SWR key pakai range; fetcher gabung semua halaman
+  const swrKey =
+    viewRange.start && viewRange.end
+      ? ["kunjungan:list:all", +dayjs(viewRange.start), +dayjs(viewRange.end)]
+      : null;
+
+  const { data: rowsAll, isLoading, mutate } = useSWR(
+    swrKey,
+    () => fetchAllKunjungan(viewRange.start, viewRange.end),
+    { revalidateOnFocus: false }
   );
+
+  const rows = useMemo(() => (Array.isArray(rowsAll) ? rowsAll : []), [rowsAll]);
 
   /* ==== Label tampilan status (value DB tetap) ==== */
   const displayStatusLabel = useCallback((st) => {
@@ -334,17 +373,11 @@ export default function useKunjunganKalenderViewModel() {
 
   /** Buat URL embed OSM, null jika invalid. */
   const makeOsmEmbed = useCallback((lat, lon) => {
-    const la = toNum(lat),
-      lo = toNum(lon);
+    const la = toNum(lat), lo = toNum(lon);
     if (la == null || lo == null) return null;
-    const dx = 0.002,
-      dy = 0.002;
-    const bbox = `${(lo - dx).toFixed(6)},${(la - dy).toFixed(6)},${(lo + dx).toFixed(
-      6
-    )},${(la + dy).toFixed(6)}`;
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(
-      bbox
-    )}&layer=mapnik&marker=${encodeURIComponent(la)},${encodeURIComponent(lo)}`;
+    const dx = 0.002, dy = 0.002;
+    const bbox = `${(lo - dx).toFixed(6)},${(la - dy).toFixed(6)},${(lo + dx).toFixed(6)},${(la + dy).toFixed(6)}`;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(la)},${encodeURIComponent(lo)}`;
   }, []);
 
   /** Format periode untuk pill jam seperti contoh agenda. */
@@ -385,6 +418,6 @@ export default function useKunjunganKalenderViewModel() {
     getStartCoord,
     getEndCoord,
     makeOsmEmbed,
-    displayStatusLabel, // ⬅️ dipakai UI
+    displayStatusLabel,
   };
 }
