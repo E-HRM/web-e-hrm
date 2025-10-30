@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Layout, Grid, ConfigProvider } from "antd";
 import Image from "next/image";
 import Link from "next/link";
-import useSWR from "swr";
+import { useSession } from "next-auth/react";
 
 import Sidebar from "@/app/components/dashboard/Sidebar";
-import AppHeader from "@/app/components/dashboard/Appheader"; 
+import AppHeader from "@/app/components/dashboard/AppHeader"; // perbaiki case-nya
 import useLogoutViewModel from "../auth/logout/useLogoutViewModel";
 
 const { Sider, Content, Footer } = Layout;
@@ -45,36 +45,25 @@ const THEME = {
   },
 };
 
-/* ================= User Session ================= */
-const sessionFetcher = async (url) => {
-  try {
-    const res = await fetch(url, { credentials: "include" });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-};
-
 export default function ViewLayout({ children }) {
   const screens = useBreakpoint();
   const { onLogout } = useLogoutViewModel();
-  const [collapsed, setCollapsed] = useState(false);
+  const { data: session } = useSession();
 
-  // Ambil session user dari NextAuth
-  const { data: session } = useSWR("/api/auth/session", sessionFetcher, {
-    revalidateOnFocus: false,
-  });
-  const user = session?.user || session?.data?.user || null;
-
-  const userName = user?.nama_pengguna || user?.name || user?.email || "Admin";
+  const user = session?.user ?? null;
+  const userName = user?.name ?? "User";
+  const userRole = user?.jabatan_name ?? user?.role ?? "-";
+  const userDepartment = user?.departement_name ?? "-";
   const avatarSrc =
     user?.image || user?.foto_profil_user || user?.avatarUrl || "/logo-burung.png";
+
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem(LS_COLLAPSED_KEY) : null;
     if (saved !== null) setCollapsed(saved === "1");
   }, []);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       localStorage.setItem(LS_COLLAPSED_KEY, collapsed ? "1" : "0");
@@ -154,6 +143,8 @@ export default function ViewLayout({ children }) {
             collapsed={collapsed}
             onToggleSider={() => setCollapsed((v) => !v)}
             userName={userName}
+            userRole={userRole}
+            userDepartment={userDepartment}
             avatarSrc={avatarSrc}
             onLogout={onLogout}
           />
