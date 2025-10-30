@@ -1,148 +1,208 @@
 "use client";
 
-import React, { useState } from "react";
-import { Tabs, Button, Table, ConfigProvider } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import React from "react";
+import {
+  Tabs,
+  Button,
+  Table,
+  ConfigProvider,
+  Card,
+  Space,
+  Tooltip,
+  Modal,
+  Form,
+  Input,
+} from "antd";
+import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import useManajemenKategoriviewModel from "./useManajemenKategoriviewModel";
 
 const GOLD = "#003A6F";
+const LIGHT_BLUE = "#E8F6FF";
 
-export default function ManajemenKategori() {
-  const [activeTab, setActiveTab] = useState("cuti");
+// ==== Modal Form Reusable ====
+function FormKategoriModal({
+  open,
+  mode,
+  kind,
+  initialName,
+  onCancel,
+  onSubmit,
+}) {
+  const [form] = Form.useForm();
+  React.useEffect(() => {
+    if (open) {
+      form.setFieldsValue({ nama_kategori: initialName || "" });
+    } else {
+      form.resetFields();
+    }
+  }, [open, initialName, form]);
 
-  const columns = [
+  return (
+    <Modal
+      open={open}
+      onCancel={onCancel}
+      onOk={() => form.submit()}
+      title={
+        mode === "create"
+          ? `Tambah Kategori ${kind === "cuti" ? "Cuti" : "Sakit"}`
+          : `Edit Kategori ${kind === "cuti" ? "Cuti" : "Sakit"}`
+      }
+      okText={mode === "create" ? "Simpan" : "Simpan Perubahan"}
+      cancelText="Batal"
+    >
+      <Form form={form} layout="vertical" onFinish={onSubmit}>
+        <Form.Item
+          label="Nama Kategori"
+          name="nama_kategori"
+          rules={[{ required: true, message: "Nama kategori wajib diisi" }]}
+        >
+          <Input placeholder="Contoh: Cuti Tahunan / Sakit Dokter" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}
+
+export default function ManajemenKategoriContent() {
+  const vm = useManajemenKategoriviewModel();
+
+  const columns = (kind) => [
+    {
+      title: "No",
+      key: "no",
+      width: 60,
+      render: (_, __, index) => index + 1,
+    },
     {
       title: "Nama Kategori",
       dataIndex: "nama",
       key: "nama",
+      render: (text) => (
+        <span className="font-medium text-slate-800">{text}</span>
+      ),
     },
     {
       title: "Aksi",
       key: "aksi",
-      render: () => (
-        <div className="flex gap-2">
-          <Button
-            type="default"
-            className="!rounded-full !bg-[#E8F6FF] !border-none !text-[#003A6F] hover:!bg-[#99D7FF]/40 hover:!text-[#184c81]"
-          >
-            Edit
-          </Button>
-          <Button
-            type="default"
-            danger
-            className="!rounded-full !bg-[#FFECEC] !border-none !text-[#B00020] hover:!bg-[#FFD4D4]"
-          >
-            Hapus
-          </Button>
-        </div>
+      width: 120,
+      render: (_, record) => (
+        <Space size="middle">
+          <Tooltip title="Edit">
+            <Button
+              aria-label="Edit"
+              type="default"
+              shape="circle"
+              className="!w-7 !h-7 !p-0 !rounded-full !border !border-[#B9DAFF] !bg-[#F3FAFF] hover:!bg-[#E6F2FF]"
+              icon={<EditOutlined style={{ color: "#003A6F", fontSize: 13 }} />}
+              onClick={() => vm.openEdit(kind, record)}
+            />
+          </Tooltip>
+          <Tooltip title="Hapus">
+            <Button
+              aria-label="Hapus"
+              type="default"
+              shape="circle"
+              className="!w-7 !h-7 !p-0 !rounded-full !border !border-[#FFC2C8] !bg-[#FFF5F6] hover:!bg-[#FFE8EA]"
+              icon={<DeleteOutlined style={{ color: "#ff4d4f", fontSize: 13 }} />}
+              onClick={() => vm.confirmDelete(kind, record)}
+            />
+          </Tooltip>
+        </Space>
       ),
     },
   ];
 
-  const data = [];
-
-  const items = [
+  const tabItems = [
     {
       key: "cuti",
-      label: "Cuti",
+      label: "Kategori Cuti",
+      count: vm.pagCuti?.total ?? 0,
       children: (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">
-              Kategori Cuti
-            </h2>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              className="!rounded-full !bg-[#003A6F] hover:!bg-[#0056A1]"
-            >
-              Tambah Kategori
-            </Button>
+        <Card className="shadow-lg border-0 mt-4" bodyStyle={{ padding: 0 }}>
+          <div className="p-5 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-0.5">
+                  Kategori Cuti
+                </h2>
+                <p className="text-slate-500 text-xs md:text-sm">
+                  Kelola berbagai jenis cuti yang tersedia
+                </p>
+              </div>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                size="middle"
+                className="!rounded-lg !bg-[#003A6F] hover:!bg-[#0056A1]"
+                onClick={() => vm.openCreate("cuti")}
+              >
+                Tambah Kategori
+              </Button>
+            </div>
           </div>
           <Table
-            dataSource={data}
-            columns={columns}
+            rowKey={(r) => r.id}
+            dataSource={vm.itemsCuti}
+            columns={columns("cuti")}
+            loading={vm.loading}
             pagination={false}
-            locale={{ emptyText: "Belum ada kategori" }}
+            locale={{
+              emptyText: (
+                <div className="py-10 text-center">
+                  <div className="text-3xl mb-3">📝</div>
+                  <p className="text-slate-500">Belum ada kategori</p>
+                </div>
+              ),
+            }}
+            className="[&_.ant-table-thead>tr>th]:!bg-slate-50 [&_.ant-table-thead>tr>th]:!text-slate-600 [&_.ant-table-thead>tr>th]:!font-semibold"
           />
-        </div>
+        </Card>
       ),
     },
     {
-      key: "izinjam",
-      label: "Izin Jam",
-      children: (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">
-              Kategori Izin Jam
-            </h2>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              className="!rounded-full !bg-[#003A6F] hover:!bg-[#0056A1]"
-            >
-              Tambah Kategori
-            </Button>
-          </div>
-          <Table
-            dataSource={data}
-            columns={columns}
-            pagination={false}
-            locale={{ emptyText: "Belum ada kategori" }}
-          />
-        </div>
-      ),
-    },
-    {
-      key: "tukarhari",
-      label: "Izin Tukar Hari",
-      children: (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">
-              Kategori Izin Tukar Hari
-            </h2>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              className="!rounded-full !bg-[#003A6F] hover:!bg-[#0056A1]"
-            >
-              Tambah Kategori
-            </Button>
-          </div>
-          <Table
-            dataSource={data}
-            columns={columns}
-            pagination={false}
-            locale={{ emptyText: "Belum ada kategori" }}
-          />
-        </div>
-      ),
-    },
-    {
-      key: "izinsakit",
+      key: "sakit",
       label: "Izin Sakit",
+      count: vm.pagSakit?.total ?? 0,
       children: (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 mt-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-800">
-              Kategori Izin Sakit
-            </h2>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              className="!rounded-full !bg-[#003A6F] hover:!bg-[#0056A1]"
-            >
-              Tambah Kategori
-            </Button>
+        <Card className="shadow-lg border-0 mt-4" bodyStyle={{ padding: 0 }}>
+          <div className="p-5 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-0.5">
+                  Izin Sakit
+                </h2>
+                <p className="text-slate-500 text-xs md:text-sm">
+                  Kelola kategori izin sakit
+                </p>
+              </div>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                size="middle"
+                className="!rounded-lg !bg-[#003A6F] hover:!bg-[#0056A1]"
+                onClick={() => vm.openCreate("sakit")}
+              >
+                Tambah Kategori
+              </Button>
+            </div>
           </div>
           <Table
-            dataSource={data}
-            columns={columns}
+            rowKey={(r) => r.id}
+            dataSource={vm.itemsSakit}
+            columns={columns("sakit")}
+            loading={vm.loading}
             pagination={false}
-            locale={{ emptyText: "Belum ada kategori" }}
+            locale={{
+              emptyText: (
+                <div className="py-10 text-center">
+                  <div className="text-3xl mb-3">🏥</div>
+                  <p className="text-slate-500">Belum ada kategori izin sakit</p>
+                </div>
+              ),
+            }}
+            className="[&_.ant-table-thead>tr>th]:!bg-slate-50 [&_.ant-table-thead>tr>th]:!text-slate-600 [&_.ant-table-thead>tr>th]:!font-semibold"
           />
-        </div>
+        </Card>
       ),
     },
   ];
@@ -152,49 +212,78 @@ export default function ManajemenKategori() {
       theme={{
         components: {
           Tabs: {
-            inkBarColor: "transparent", // hilangkan garis aktif
+            inkBarColor: GOLD,
+            itemActiveColor: GOLD,
+            itemHoverColor: GOLD,
+            itemSelectedColor: GOLD,
           },
+          Card: { borderRadiusLG: 12 },
         },
-        token: {
-          colorPrimary: GOLD,
-          borderRadius: 12,
-        },
+        token: { colorPrimary: GOLD, borderRadius: 8, colorBgContainer: "#ffffff" },
       }}
     >
-      <div className="p-6">
-        {/* HEADER */}
-        <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
-          <h1 className="text-2xl font-semibold text-slate-900 flex-1">
+      <div className="min-h-screen bg-slate-50 p-6">
+        {/* HEADER kecil */}
+        <div className="mb-6">
+          <h1 className="text-2xl md:text-[22px] font-semibold leading-tight text-slate-900 mb-1">
             Manajemen Kategori
           </h1>
+          <p className="text-slate-500 text-sm">
+            Kelola berbagai jenis kategori cuti dan izin
+          </p>
         </div>
 
         {/* TABS */}
         <Tabs
-          activeKey={activeTab}
-          onChange={(key) => setActiveTab(key)}
-          tabBarStyle={{ borderBottom: "none" }} // hilangkan garis bawah
-          className="
-            [&_.ant-tabs-nav]:!mb-2
-            [&_.ant-tabs-tab]:!rounded-full
-            [&_.ant-tabs-tab]:!px-5
-            [&_.ant-tabs-tab]:!py-1.5
-            [&_.ant-tabs-tab]:!transition-all
-            [&_.ant-tabs-tab]:!text-sm
-            [&_.ant-tabs-tab-active]:!bg-[#003A6F]/25
-            [&_.ant-tabs-tab-active>div>span]:!text-[#003A6F]
-            [&_.ant-tabs-tab:hover]:!bg-[#003A6F]/15
-            [&_.ant-tabs-tab:hover>div>span]:!text-[#003A6F]
-            [&_.ant-tabs-tab-btn]:!text-slate-700
-          "
-        >
-          {items.map((item) => (
-            <Tabs.TabPane key={item.key} tab={item.label}>
-              {item.children}
-            </Tabs.TabPane>
-          ))}
-        </Tabs>
+          activeKey={vm.activeTab}
+          onChange={vm.setActiveTab}
+          type="card"
+          className="custom-tabs"
+          items={tabItems.map((item) => ({
+            key: item.key,
+            label: (
+              <div className="flex items-center gap-2 px-2 py-1 text-[13px]">
+                <span>{item.label}</span>
+                <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 text-[11px] min-w-6 text-center">
+                  {item.count}
+                </span>
+              </div>
+            ),
+            children: item.children,
+          }))}
+        />
       </div>
+
+      {/* Modal Form */}
+      <FormKategoriModal
+        open={vm.modalOpen}
+        mode={vm.modalMode}
+        kind={vm.modalKind}
+        initialName={vm.editingItem?.nama}
+        onCancel={() => vm.setModalOpen(false)}
+        onSubmit={vm.submitForm}
+      />
+
+      <style jsx>{`
+        .custom-tabs :global(.ant-tabs-tab) {
+          border: none !important;
+          background: white !important;
+          border-radius: 8px !important;
+          margin-right: 8px !important;
+          padding: 6px 14px !important;
+          box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+        .custom-tabs :global(.ant-tabs-tab-active) {
+          background: ${LIGHT_BLUE} !important;
+          border: 1px solid ${GOLD} !important;
+        }
+        .custom-tabs :global(.ant-tabs-nav) {
+          margin-bottom: 0 !important;
+        }
+        .custom-tabs :global(.ant-tabs-content) {
+          margin-top: 12px;
+        }
+      `}</style>
     </ConfigProvider>
   );
 }

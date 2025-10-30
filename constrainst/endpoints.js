@@ -31,6 +31,10 @@ const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
 // === Kategori Kunjungan (BARU)
 const API_KATEGORI_KUNJUNGAN = "/api/admin/kategori-kunjungan";
 
+/* === BARU: KATEGORI CUTI & KATEGORI SAKIT === */
+const API_KATEGORI_CUTI = "/api/admin/kategori-cuti";
+const API_KATEGORI_SAKIT = "/api/admin/kategori-sakit";
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -122,4 +126,17 @@ export const ApiEndpoints = {
   UpdateKategoriKunjungan: (id) => `${API_KATEGORI_KUNJUNGAN}/${id}`,
   DeleteKategoriKunjungan: (id) => `${API_KATEGORI_KUNJUNGAN}/${id}`,
   RestoreKategoriKunjungan: (id) => `${API_KATEGORI_KUNJUNGAN}/${id}/restore`,
+
+    /* === BARU: Kategori Cuti & Sakit === */
+  GetKategoriCuti: API_KATEGORI_CUTI,
+  CreateKategoriCuti: API_KATEGORI_CUTI,
+  GetKategoriCutiById: (id) => `${API_KATEGORI_CUTI}/${id}`,
+  UpdateKategoriCuti: (id) => `${API_KATEGORI_CUTI}/${id}`,
+  DeleteKategoriCuti: (id) => `${API_KATEGORI_CUTI}/${id}`,
+
+  GetKategoriSakit: API_KATEGORI_SAKIT,
+  CreateKategoriSakit: API_KATEGORI_SAKIT,
+  GetKategoriSakitById: (id) => `${API_KATEGORI_SAKIT}/${id}`,
+  UpdateKategoriSakit: (id) => `${API_KATEGORI_SAKIT}/${id}`,
+  DeleteKategoriSakit: (id) => `${API_KATEGORI_SAKIT}/${id}`,
 };
