@@ -13,10 +13,8 @@ import {
   Input,
   ConfigProvider,
   theme,
-  Tag,
   message,
   Tooltip,
-  Space,
   Button,
   Segmented,
   Image,
@@ -34,7 +32,7 @@ import {
   ExclamationCircleFilled,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import useVM, { showFromDB } from "./useKunjunganKalenderViewModel";
+import useVM from "./useKunjunganKalenderViewModel";
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), { ssr: false });
 import interactionPlugin from "@fullcalendar/interaction";
@@ -235,38 +233,37 @@ export default function KunjunganKalenderContent() {
   );
 
   // Render Event – match agenda kerja: judul ellipsis + chip status, background via event prop
-const renderEventContent = (info) => {
-  const r = info.event.extendedProps?.raw || {};
-  const jam = info.timeText ? info.timeText.replace(":", ".") : ""; // 08.00 – 09.00
-  const kategori = r?.kategori?.kategori_kunjungan || "-";
+  const renderEventContent = (info) => {
+    const r = info.event.extendedProps?.raw || {};
+    const jam = info.timeText ? info.timeText.replace(":", ".") : ""; // 08.00 – 09.00
+    const kategori = r?.kategori?.kategori_kunjungan || "-";
 
-  // Ambil nama user dari map (lebih konsisten), fallback dari payload event
-  const uid = r?.id_user ?? info.event.extendedProps?.id_user ?? r?.user?.id_user;
-  const fromMap = uid ? vm.getUserById(uid) : null;
-  const userObj = fromMap || r?.user || info.event.extendedProps?.user || {};
-  const nama =
-    userObj?.nama_pengguna || userObj?.name || userObj?.email || String(uid || "—");
+    // Ambil nama user dari map (lebih konsisten), fallback dari payload event
+    const uid = r?.id_user ?? info.event.extendedProps?.id_user ?? r?.user?.id_user;
+    const fromMap = uid ? vm.getUserById(uid) : null;
+    const userObj = fromMap || r?.user || info.event.extendedProps?.user || {};
+    const nama =
+      userObj?.nama_pengguna || userObj?.name || userObj?.email || String(uid || "—");
 
-  // Status: pakai value DB untuk class, pakai vm.displayStatusLabel untuk teks
-  const stDb = (r?.status_kunjungan || info.event.extendedProps?.status || "").toLowerCase();
-  const stText = vm.displayStatusLabel(stDb) || "-";
+    // Status: pakai value DB untuk class, pakai vm.displayStatusLabel untuk teks
+    const stDb = (r?.status_kunjungan || info.event.extendedProps?.status || "").toLowerCase();
+    const stText = vm.displayStatusLabel(stDb) || "-";
 
-  // titik warna di kiri (ambil dari warna event)
-  const dotColor = info.event.backgroundColor || info.event.borderColor || "#3b82f6";
+    // titik warna di kiri (ambil dari warna event)
+    const dotColor = info.event.backgroundColor || info.event.borderColor || "#3b82f6";
 
-  const titleText = [jam, kategori, nama].filter(Boolean).join(" · ");
+    const titleText = [jam, kategori, nama].filter(Boolean).join(" · ");
 
-  return (
-    <div className="fc-event-custom">
-      <span className="fc-dot" style={{ backgroundColor: dotColor }} />
-      <span className="fc-title-ellipsis" title={`${titleText} · ${stText}`}>
-        {titleText}
-      </span>
-      {stDb ? <span className={statusClass(stDb)}>{stText}</span> : null}
-    </div>
-  );
-};
-
+    return (
+      <div className="fc-event-custom">
+        <span className="fc-dot" style={{ backgroundColor: dotColor }} />
+        <span className="fc-title-ellipsis" title={`${titleText} · ${stText}`}>
+          {titleText}
+        </span>
+        {stDb ? <span className={statusClass(stDb)}>{stText}</span> : null}
+      </div>
+    );
+  };
 
   return (
     <ConfigProvider
@@ -286,6 +283,7 @@ const renderEventContent = (info) => {
             locale="id"
             timeZone="local"
             dayMaxEventRows={3}
+            moreLinkClick="popover"
             selectable
             selectMirror
             datesSet={handleDatesSet}
@@ -360,7 +358,7 @@ const renderEventContent = (info) => {
         </Form>
       </Modal>
 
-      {/* Detail Modal */}
+      {/* Detail Modal – selalu di atas popover FullCalendar */}
       <Modal
         title={
           <div className="flex items-center gap-2">
@@ -376,7 +374,8 @@ const renderEventContent = (info) => {
         destroyOnClose
         width={760}
         maskClosable={false}
-        zIndex={1300}
+        zIndex={2600}
+        getContainer={() => document.body}
         footer={null}
       >
         {!activeRow ? null : (
@@ -400,12 +399,11 @@ const renderEventContent = (info) => {
 
                 {/* Chips */}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                {activeRow?.status_kunjungan ? (
-                  <span className={statusClass(activeRow.status_kunjungan)}>
-                    {vm.displayStatusLabel(activeRow.status_kunjungan)}  
-                  </span>
-                ) : null}
-
+                  {activeRow?.status_kunjungan ? (
+                    <span className={statusClass(activeRow.status_kunjungan)}>
+                      {vm.displayStatusLabel(activeRow.status_kunjungan)}
+                    </span>
+                  ) : null}
 
                   {activeRow?.kategori?.kategori_kunjungan ? (
                     <span className="fc-chip">{activeRow.kategori.kategori_kunjungan}</span>
@@ -586,7 +584,7 @@ const renderEventContent = (info) => {
         onCancel={() => setPhotoOpen(false)}
         footer={null}
         width={560}
-        zIndex={1500}
+        zIndex={3000}
         getContainer={() => document.body}
       >
         {photoSrc ? (
@@ -594,7 +592,7 @@ const renderEventContent = (info) => {
             src={photoSrc}
             alt="Attachment"
             style={{ width: "100%", maxWidth: 520, maxHeight: "50vh", objectFit: "contain" }}
-            preview={{ mask: "Click to zoom", zIndex: 1600 }}
+            preview={{ mask: "Click to zoom", zIndex: 3100 }}
             onError={(e) => (e.currentTarget.src = "/image-not-found.png")}
           />
         ) : (
@@ -609,7 +607,7 @@ const renderEventContent = (info) => {
         onCancel={() => setMapOpen(false)}
         footer={null}
         width={860}
-        zIndex={1550}
+        zIndex={3050}
         getContainer={() => document.body}
       >
         <div className="mb-2">
@@ -650,8 +648,11 @@ const renderEventContent = (info) => {
         )}
       </Modal>
 
-      {/* Gaya global – sama seperti Agenda Kerja */}
+      {/* Gaya global – samakan z-index popover */}
       <style jsx global>{`
+        .fc-popover {
+          z-index: 1500 !important;
+        }
         .fc .fc-daygrid-event {
           padding: 2px 6px;
         }

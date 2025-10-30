@@ -210,7 +210,7 @@ export default function AgendaCalendarContent() {
       }
       Modal.confirm({
         title: `Hapus ${n} agenda serupa untuk semua karyawan?`,
-        content: "Semua item dengan Proyek, Judul, dan jam Mulai/Selesai yang sama akan dihapus.",
+        content: "Semua item dengan Proyek, Aktivitas, dan jam Mulai/Selesai yang sama akan dihapus.",
         okText: "Hapus Semua",
         okButtonProps: { danger: true },
         cancelText: "Batal",
