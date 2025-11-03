@@ -18,6 +18,8 @@ import useManajemenKategoriviewModel from "./useManajemenKategoriviewModel";
 
 const GOLD = "#003A6F";
 const LIGHT_BLUE = "#E8F6FF";
+const DEFAULT_PAGE_SIZE = 10;      // ukuran halaman default
+const DEFAULT_SCROLL_Y = 440;      // tinggi konten agar tabel tidak “mlompong”
 
 // ==== Modal Form Reusable ====
 function FormKategoriModal({
@@ -37,16 +39,14 @@ function FormKategoriModal({
     }
   }, [open, initialName, form]);
 
+  const kindLabel = kind === "cuti" ? "Cuti" : kind === "sakit" ? "Sakit" : "Izin Jam";
+
   return (
     <Modal
       open={open}
       onCancel={onCancel}
       onOk={() => form.submit()}
-      title={
-        mode === "create"
-          ? `Tambah Kategori ${kind === "cuti" ? "Cuti" : "Sakit"}`
-          : `Edit Kategori ${kind === "cuti" ? "Cuti" : "Sakit"}`
-      }
+      title={mode === "create" ? `Tambah Kategori ${kindLabel}` : `Edit Kategori ${kindLabel}`}
       okText={mode === "create" ? "Simpan" : "Simpan Perubahan"}
       cancelText="Batal"
     >
@@ -56,7 +56,7 @@ function FormKategoriModal({
           name="nama_kategori"
           rules={[{ required: true, message: "Nama kategori wajib diisi" }]}
         >
-          <Input placeholder="Contoh: Cuti Tahunan / Sakit Dokter" />
+          <Input placeholder="Contoh: Cuti Tahunan / Sakit Dokter / Izin Jam Reguler" />
         </Form.Item>
       </Form>
     </Modal>
@@ -65,6 +65,40 @@ function FormKategoriModal({
 
 export default function ManajemenKategoriContent() {
   const vm = useManajemenKategoriviewModel();
+
+  // ===== Pagination Helper (pakai data dari view model bila ada) =====
+  const makePagination = (kind) => {
+    const pag =
+      kind === "cuti" ? vm.pagCuti :
+      kind === "sakit" ? vm.pagSakit :
+      vm.pagTukar;
+
+    const current = pag?.page ?? 1;
+    const pageSize = pag?.pageSize ?? DEFAULT_PAGE_SIZE;
+    const total =
+      pag?.total ??
+      (kind === "cuti"
+        ? (Array.isArray(vm.itemsCuti) ? vm.itemsCuti.length : 0)
+        : kind === "sakit"
+        ? (Array.isArray(vm.itemsSakit) ? vm.itemsSakit.length : 0)
+        : (Array.isArray(vm.itemsTukar) ? vm.itemsTukar.length : 0));
+
+    return {
+      current,
+      pageSize,
+      total,
+      showSizeChanger: true,
+      pageSizeOptions: ["5", "10", "20", "50", "100"],
+      showTotal: (t, [a, b]) => `${a}-${b} dari ${t}`,
+      onChange: (page, size) => {
+        if (typeof vm.onPageChange === "function") {
+          vm.onPageChange(kind, page, size);
+        } else if (typeof vm.setPage === "function") {
+          vm.setPage(kind, page, size);
+        }
+      },
+    };
+  };
 
   const columns = (kind) => [
     {
@@ -140,12 +174,15 @@ export default function ManajemenKategoriContent() {
               </Button>
             </div>
           </div>
+
           <Table
+            sticky
             rowKey={(r) => r.id}
             dataSource={vm.itemsCuti}
             columns={columns("cuti")}
             loading={vm.loading}
-            pagination={false}
+            pagination={makePagination("cuti")}
+            scroll={{ y: DEFAULT_SCROLL_Y }}
             locale={{
               emptyText: (
                 <div className="py-10 text-center">
@@ -186,17 +223,69 @@ export default function ManajemenKategoriContent() {
               </Button>
             </div>
           </div>
+
           <Table
+            sticky
             rowKey={(r) => r.id}
             dataSource={vm.itemsSakit}
             columns={columns("sakit")}
             loading={vm.loading}
-            pagination={false}
+            pagination={makePagination("sakit")}
+            scroll={{ y: DEFAULT_SCROLL_Y }}
             locale={{
               emptyText: (
                 <div className="py-10 text-center">
                   <div className="text-3xl mb-3">🏥</div>
                   <p className="text-slate-500">Belum ada kategori izin sakit</p>
+                </div>
+              ),
+            }}
+            className="[&_.ant-table-thead>tr>th]:!bg-slate-50 [&_.ant-table-thead>tr>th]:!text-slate-600 [&_.ant-table-thead>tr>th]:!font-semibold"
+          />
+        </Card>
+      ),
+    },
+    {
+      key: "tukar",
+      label: "Izin Jam",
+      count: vm.pagTukar?.total ?? (Array.isArray(vm.itemsTukar) ? vm.itemsTukar.length : 0),
+      children: (
+        <Card className="shadow-lg border-0 mt-4" bodyStyle={{ padding: 0 }}>
+          <div className="p-5 border-b border-slate-100">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-0.5">
+                  Kategori Izin Jam
+                </h2>
+                <p className="text-slate-500 text-xs md:text-sm">
+                  Kelola kategori izin jam
+                </p>
+              </div>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                size="middle"
+                className="!rounded-lg !bg-[#003A6F] hover:!bg-[#0056A1]"
+                onClick={() => vm.openCreate("tukar")}
+              >
+                Tambah Kategori
+              </Button>
+            </div>
+          </div>
+
+          <Table
+            sticky
+            rowKey={(r) => r.id}
+            dataSource={vm.itemsTukar}
+            columns={columns("tukar")}
+            loading={false}
+            pagination={makePagination("tukar")}
+            scroll={{ y: DEFAULT_SCROLL_Y }}
+            locale={{
+              emptyText: (
+                <div className="py-10 text-center">
+                  <div className="text-3xl mb-3">🔁</div>
+                  <p className="text-slate-500">Belum ada kategori Izin jam</p>
                 </div>
               ),
             }}
@@ -229,7 +318,7 @@ export default function ManajemenKategoriContent() {
             Manajemen Kategori
           </h1>
           <p className="text-slate-500 text-sm">
-            Kelola berbagai jenis kategori cuti dan izin
+            Kelola berbagai jenis kategori cuti, izin sakit, dan izin jam
           </p>
         </div>
 

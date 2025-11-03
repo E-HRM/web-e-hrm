@@ -82,7 +82,7 @@ const MENU = [
       { href: "/home/pengajuan/izinJam", match: ["/home/pengajuan/izinJam"], label: "Izin Jam" },
     ],
   },
-  // { href: "/home/broadcast", match: ["/home/broadcast"], label: "Broadcast", icon: NotificationOutlined },
+  { href: "/home/broadcast", match: ["/home/broadcast"], label: "Broadcast", icon: NotificationOutlined },
 ];
 
 /** ===== RBAC Sidebar ===== */
