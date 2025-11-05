@@ -42,25 +42,9 @@ const DAY_TOKEN_TO_INDEX = new Map([
   ['SAB', 6],
 ]);
 
-const DAY_INDEX_TO_NAME = [
-  'SUNDAY',
-  'MONDAY',
-  'TUESDAY',
-  'WEDNESDAY',
-  'THURSDAY',
-  'FRIDAY',
-  'SATURDAY',
-];
+const DAY_INDEX_TO_NAME = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
 
-const DAY_INDEX_TO_LOCAL = [
-  'Minggu',
-  'Senin',
-  'Selasa',
-  'Rabu',
-  'Kamis',
-  'Jumat',
-  'Sabtu',
-];
+const DAY_INDEX_TO_LOCAL = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
 function normalizeToken(raw) {
   if (raw === undefined || raw === null) return '';
@@ -109,11 +93,11 @@ function parseSingleDayToken(token) {
   }
 
   if (isPlainObject(token)) {
-    if ('index' in token)       return parseSingleDayToken(token.index);
-    if ('dayIndex' in token)    return parseSingleDayToken(token.dayIndex);
-    if ('day' in token)         return parseSingleDayToken(token.day);
-    if ('hari' in token)        return parseSingleDayToken(token.hari);
-    if ('name' in token)        return parseSingleDayToken(token.name);
+    if ('index' in token) return parseSingleDayToken(token.index);
+    if ('dayIndex' in token) return parseSingleDayToken(token.dayIndex);
+    if ('day' in token) return parseSingleDayToken(token.day);
+    if ('hari' in token) return parseSingleDayToken(token.hari);
+    if ('name' in token) return parseSingleDayToken(token.name);
   }
 
   throw new Error('Format nilai hari kerja tidak didukung.');
@@ -184,10 +168,7 @@ function resolveDateCandidate(value, fallback) {
  * CATATAN: Agar kompatibel dengan schema baru (kolom non-null),
  * - Jika endDate tidak diberikan, tanggalSelesai akan otomatis = tanggalMulai (single-day).
  */
-export function normalizeWeeklySchedule(
-  rawInput,
-  options = {}
-) {
+export function normalizeWeeklySchedule(rawInput, options = {}) {
   if (rawInput === undefined || rawInput === null) return null;
 
   const { fallbackStartDate, fallbackEndDate } = options;
@@ -213,39 +194,21 @@ export function normalizeWeeklySchedule(
     throw new Error("Saat ini hanya tipe jadwal mingguan ('WEEKLY') yang didukung.");
   }
 
-  const startCandidate =
-    scheduleInput.start_date ??
-    scheduleInput.startDate ??
-    scheduleInput.mulai ??
-    scheduleInput.referenceDate ??
-    scheduleInput.weekStart ??
-    fallbackStartDate;
+  const startCandidate = scheduleInput.start_date ?? scheduleInput.startDate ?? scheduleInput.mulai ?? scheduleInput.referenceDate ?? scheduleInput.weekStart ?? fallbackStartDate;
 
   const startDate = resolveDateCandidate(startCandidate, undefined);
   if (!startDate) {
     throw new Error("Jadwal mingguan memerlukan 'start_date' yang valid.");
   }
 
-  const endCandidate =
-    scheduleInput.end_date ??
-    scheduleInput.endDate ??
-    scheduleInput.selesai ??
-    scheduleInput.until ??
-    scheduleInput.weekEnd ??
-    fallbackEndDate;
+  const endCandidate = scheduleInput.end_date ?? scheduleInput.endDate ?? scheduleInput.selesai ?? scheduleInput.until ?? scheduleInput.weekEnd ?? fallbackEndDate;
 
   const endDate = resolveDateCandidate(endCandidate, undefined);
   if (endDate && endDate < startDate) {
     throw new Error("Field 'end_date' tidak boleh lebih awal dari 'start_date'.");
   }
 
-  const daysInput =
-    scheduleInput.days ??
-    scheduleInput.day ??
-    scheduleInput.hari ??
-    scheduleInput.hari_kerja ??
-    scheduleInput.weekdays ??
-    scheduleInput.list;
+  const daysInput = scheduleInput.days ?? scheduleInput.day ?? scheduleInput.hari ?? scheduleInput.hari_kerja ?? scheduleInput.weekdays ?? scheduleInput.list;
 
   if (!Array.isArray(daysInput) || daysInput.length === 0) {
     throw new Error('Jadwal mingguan wajib memiliki minimal satu hari kerja.');

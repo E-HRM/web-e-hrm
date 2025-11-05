@@ -286,9 +286,12 @@ export async function PUT(req, { params }) {
     } catch (err) {
       // === Perbaikan: tangkap konflik unik (ubah id_user/tanggal_ke_yang_sudah_ada)
       if (err?.code === 'P2002') {
-        return NextResponse.json({
-          message: 'Sudah ada shift untuk kombinasi pengguna & tanggal tersebut.',
-        }, { status: 409 });
+        return NextResponse.json(
+          {
+            message: 'Sudah ada shift untuk kombinasi pengguna & tanggal tersebut.',
+          },
+          { status: 409 }
+        );
       }
       throw err;
     }

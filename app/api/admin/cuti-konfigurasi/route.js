@@ -6,7 +6,8 @@ import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
 const ALLOWED_MONTHS = new Set(['JANUARI','FEBRUARI','MARET','APRIL','MEI','JUNI','JULI','AGUSTUS','SEPTEMBER','OKTOBER','NOVEMBER','DESEMBER']);
 
-async function ensureAuth(req){ /* sama seperti versi kamu */ 
+async function ensureAuth(req) {
+  /* sama seperti versi kamu */
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
     try {
@@ -18,15 +19,17 @@ async function ensureAuth(req){ /* sama seperti versi kamu */
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
   return { actor: { id: sessionOrRes.user.id, role: sessionOrRes.user.role, source: 'session' } };
 }
-function guardHr(actor){
-  const role = String(actor?.role||'').trim().toUpperCase();
-  if(!['HR','OPERASIONAL','SUPERADMIN'].includes(role)){
-    return NextResponse.json({message:'Forbidden: hanya HR/OPERASIONAL/SUPERADMIN yang dapat mengakses resource ini.'},{status:403});
+function guardHr(actor) {
+  const role = String(actor?.role || '')
+    .trim()
+    .toUpperCase();
+  if (!['HR', 'OPERASIONAL', 'SUPERADMIN'].includes(role)) {
+    return NextResponse.json({ message: 'Forbidden: hanya HR/OPERASIONAL/SUPERADMIN yang dapat mengakses resource ini.' }, { status: 403 });
   }
   return null;
 }
 
-const ALLOWED_ORDER_BY = new Set(['created_at','updated_at','bulan','kouta_cuti','user']);
+const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'bulan', 'kouta_cuti', 'user']);
 
 export async function GET(req){
   const auth = await ensureAuth(req);
@@ -36,12 +39,12 @@ export async function GET(req){
 
   try{
     const { searchParams } = new URL(req.url);
-    const page = Math.max(parseInt(searchParams.get('page')||'1',10),1);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize')||'10',10),1),100);
-    const includeDeleted = ['1','true'].includes((searchParams.get('includeDeleted')||'').toLowerCase());
-    const search = (searchParams.get('search')||'').trim();
-    const userId = (searchParams.get('userId')||'').trim();
-    const bulanParam = (searchParams.get('bulan')||'').trim().toUpperCase();
+    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
+    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
+    const includeDeleted = ['1', 'true'].includes((searchParams.get('includeDeleted') || '').toLowerCase());
+    const search = (searchParams.get('search') || '').trim();
+    const userId = (searchParams.get('userId') || '').trim();
+    const bulanParam = (searchParams.get('bulan') || '').trim().toUpperCase();
     const bulanFilter = ALLOWED_MONTHS.has(bulanParam) ? bulanParam : null;
 
     const orderByParam = (searchParams.get('orderBy')||'created_at').trim();
@@ -52,11 +55,7 @@ export async function GET(req){
       ...(includeDeleted ? {} : { deleted_at: null }),
       ...(userId ? { id_user: userId } : {}),
       ...(bulanFilter ? { bulan: bulanFilter } : {}),
-      ...(search ? { OR: [
-        { user: { nama_pengguna: { contains: search } } },
-        { user: { email: { contains: search } } },
-        { user: { nomor_induk_karyawan: { contains: search } } },
-      ] } : {}),
+      ...(search ? { OR: [{ user: { nama_pengguna: { contains: search } } }, { user: { email: { contains: search } } }, { user: { nomor_induk_karyawan: { contains: search } } }] } : {}),
     };
 
     const orderClause = orderBy === 'user' ? { user: { nama_pengguna: sort } } : { [orderBy]: sort };
@@ -111,14 +110,14 @@ export async function POST(req){
     const bulanInput = body?.bulan ? String(body.bulan).trim().toUpperCase() : '';
     const koutaRaw = body?.kouta_cuti;
 
-    if(!idUser) return NextResponse.json({message:"Field 'id_user' wajib diisi."},{status:400});
-    if(!bulanInput || !ALLOWED_MONTHS.has(bulanInput)) return NextResponse.json({message:"Field 'bulan' tidak valid."},{status:400});
+    if (!idUser) return NextResponse.json({ message: "Field 'id_user' wajib diisi." }, { status: 400 });
+    if (!bulanInput || !ALLOWED_MONTHS.has(bulanInput)) return NextResponse.json({ message: "Field 'bulan' tidak valid." }, { status: 400 });
 
     const kouta = Number(koutaRaw);
-    if(!Number.isInteger(kouta) || kouta < 0) return NextResponse.json({message:"Field 'kouta_cuti' harus berupa bilangan bulat >= 0."},{status:400});
+    if (!Number.isInteger(kouta) || kouta < 0) return NextResponse.json({ message: "Field 'kouta_cuti' harus berupa bilangan bulat >= 0." }, { status: 400 });
 
     const user = await db.user.findUnique({ where: { id_user: idUser }, select: { id_user: true } });
-    if(!user) return NextResponse.json({message:'User tidak ditemukan.'},{status:404});
+    if (!user) return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });
 
     const created = await db.cutiKonfigurasi.create({
       data: { id_user: idUser, bulan: bulanInput, kouta_cuti: kouta },
