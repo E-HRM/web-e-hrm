@@ -14,6 +14,7 @@ import {
   Upload,
   message,
   Space,
+  Tag,
 } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -26,7 +27,7 @@ dayjs.locale("id");
 const LABEL_STYLE = { width: 240, fontWeight: 600 };
 const BRAND = "#003A6F";
 
-/* ======== Opsi Select (rapih & konsisten) ======== */
+/* ======== Opsi Select ======== */
 const OPSI_STATUS_PERKAWINAN = [
   { value: "Belum Kawin", label: "Belum Kawin" },
   { value: "Kawin", label: "Kawin" },
@@ -65,18 +66,22 @@ const OPSI_STATUS_KERJA = [
   { value: "CUTI", label: "CUTI" },
 ];
 
+// NEW: Status Cuti
+const OPSI_STATUS_CUTI = [
+  { value: "aktif", label: "Aktif" },
+  { value: "nonaktif", label: "Nonaktif" },
+];
+
 /* ---------------- helpers ---------------- */
 const DASH = "—";
 
-// Untuk tampilan (Descriptions, teks biasa)
 function displayOrDash(v) {
-  if (v === 0) return 0; // angka 0 dianggap valid
-  if (v == null) return DASH; // null/undefined
+  if (v === 0) return 0;
+  if (v == null) return DASH;
   const s = String(v).trim();
   return (!s || s.toLowerCase() === "null" || s.toLowerCase() === "undefined") ? DASH : s;
 }
 
-// Untuk nilai form (supaya field kosong, bukan "null"/"-")
 function nz(v) {
   if (v == null) return undefined;
   const s = String(v).trim();
@@ -88,7 +93,6 @@ function toDateOnly(d) {
   return d ? dayjs(d).format("YYYY-MM-DD") : undefined;
 }
 
-// Gabung alamat aman (hindari "— —")
 function joinAlamat(base, kota, prov) {
   const b = displayOrDash(base);
   const k = displayOrDash(kota);
@@ -96,33 +100,22 @@ function joinAlamat(base, kota, prov) {
   if (b === DASH) {
     const segs = [k, p].filter((x) => x !== DASH);
     return segs.length ? segs.join(", ") : DASH;
-  }
+    }
   return b + (k !== DASH ? ` — ${k}` : "") + (p !== DASH ? `, ${p}` : "");
 }
 
-/** Append helper: selalu append string (server sering ekspektasi key exist) */
 function append(fd, key, val) {
-  const v =
-    val === undefined || val === null
-      ? ""
-      : typeof val === "number"
-      ? String(val)
-      : String(val);
+  const v = val === undefined || val === null ? "" : typeof val === "number" ? String(val) : String(val);
   fd.append(key, v);
 }
 
-/** SWR fetcher pakai crudService.get */
 const swrFetcher = (url) => crudService.get(url);
 
 /* ---------------- main component ---------------- */
 export default function KaryawanProfileForm({
-  /** "view" | "edit" | "add" */
-  mode = "view",
-  /** id user untuk view/edit */
-  id,
-  /** bila perlu, forceReadOnly (mis. role bukan HR) */
+  mode = "view",        // "view" | "edit" | "add"
+  id,                   // user id (view/edit)
   forceReadOnly = false,
-  /** callback setelah sukses simpan/add */
   onSuccess,
 }) {
   const readOnly = mode === "view" || forceReadOnly;
@@ -130,63 +123,53 @@ export default function KaryawanProfileForm({
   const [saving, setSaving] = useState(false);
   const [fileList, setFileList] = useState([]);
 
-  /* ====== data master (select) ====== */
-  const { data: deptRes } = useSWR(
-    `${ApiEndpoints.GetDepartement}?page=1&pageSize=500`,
-    swrFetcher
-  );
-  const { data: locRes } = useSWR(
-    `${ApiEndpoints.GetLocation}?page=1&pageSize=500`,
-    swrFetcher
-  );
-  const { data: jabRes } = useSWR(
-    `${ApiEndpoints.GetJabatan}?page=1&pageSize=500`,
-    swrFetcher
-  );
+  // Default initial values → status_cuti = "aktif" saat ADD
+  const initialValues = useMemo(() => (
+    mode === "add" ? { status_cuti: "aktif" } : {}
+  ), [mode]);
+
+  /* ====== data master ====== */
+  const { data: deptRes } = useSWR(`${ApiEndpoints.GetDepartement}?page=1&pageSize=500`, swrFetcher);
+  const { data: locRes } = useSWR(`${ApiEndpoints.GetLocation}?page=1&pageSize=500`, swrFetcher);
+  const { data: jabRes } = useSWR(`${ApiEndpoints.GetJabatan}?page=1&pageSize=500`, swrFetcher);
 
   const deptOpts = useMemo(
-    () =>
-      (deptRes?.data || []).map((d) => ({
-        value: d.id_departement,
-        label: d.nama_departement,
-      })),
+    () => (deptRes?.data || []).map((d) => ({ value: d.id_departement, label: d.nama_departement })),
     [deptRes]
   );
-
   const locOpts = useMemo(
-    () =>
-      (locRes?.data || []).map((l) => ({
-        value: l.id_location,
-        label: l.nama_kantor || l.nama_location || l.nama,
-      })),
+    () => (locRes?.data || []).map((l) => ({ value: l.id_location, label: l.nama_kantor || l.nama_location || l.nama })),
     [locRes]
   );
-
   const jabOpts = useMemo(
-    () =>
-      (jabRes?.data || []).map((j) => ({
-        value: j.id_jabatan,
-        label: j.nama_jabatan,
-      })),
+    () => (jabRes?.data || []).map((j) => ({ value: j.id_jabatan, label: j.nama_jabatan })),
     [jabRes]
   );
 
   /* ====== GET detail (view/edit) ====== */
-  const detailKey =
-    mode !== "add" && id ? ApiEndpoints.GetUserById(id) : null;
-  const { data: detailRes, isLoading: loadingDetail } = useSWR(
-    detailKey,
-    swrFetcher
-  );
+  const detailKey = mode !== "add" && id ? ApiEndpoints.GetUserById(id) : null;
+  const { data: detailRes, isLoading: loadingDetail } = useSWR(detailKey, swrFetcher);
   const detail = detailRes?.data;
 
   /* ====== initial form values ====== */
+  useEffect(() => {
+    if (mode === "add") {
+      // Pastikan default status_cuti = aktif saat ADD
+      form.setFieldsValue({ status_cuti: "aktif" });
+    }
+  }, [mode, form]);
+
   useEffect(() => {
     if (detail && (mode === "edit" || mode === "view")) {
       form.setFieldsValue({
         nama_pengguna: nz(detail.nama_pengguna),
         email: nz(detail.email),
         kontak: nz(detail.kontak),
+
+        // NEW: kontak darurat
+        nama_kontak_darurat: nz(detail.nama_kontak_darurat),
+        kontak_darurat: nz(detail.kontak_darurat),
+
         agama: nz(detail.agama),
         tempat_lahir: nz(detail.tempat_lahir),
         tanggal_lahir: detail.tanggal_lahir ? dayjs(detail.tanggal_lahir) : undefined,
@@ -210,6 +193,9 @@ export default function KaryawanProfileForm({
         nomor_rekening: nz(detail.nomor_rekening),
         role: nz(detail.role) || "KARYAWAN",
 
+        // NEW: status_cuti (biarkan apa adanya dari DB; default hanya untuk ADD)
+        status_cuti: nz(detail.status_cuti),
+
         alamat_ktp: nz(detail.alamat_ktp),
         alamat_ktp_provinsi: nz(detail.alamat_ktp_provinsi),
         alamat_ktp_kota: nz(detail.alamat_ktp_kota),
@@ -227,7 +213,7 @@ export default function KaryawanProfileForm({
       setSaving(true);
 
       if (mode === "add") {
-        // ——— 1) REGISTER minimal fields (POST TANPA token) ———
+        // 1) REGISTER minimal
         const registerPayload = {
           nama_pengguna: values.nama_pengguna,
           email: String(values.email).toLowerCase(),
@@ -238,7 +224,7 @@ export default function KaryawanProfileForm({
           id_departement: values.id_departement || undefined,
           id_location: values.id_location || undefined,
           tanggal_lahir: toDateOnly(values.tanggal_lahir),
-          tempat_lahir: values.tempat_lahir || undefined, // ikut kirim saat register
+          tempat_lahir: values.tempat_lahir || undefined,
         };
         const reg = await crudService.post(ApiEndpoints.CreateUser, registerPayload);
         const newId = reg?.user?.id_user;
@@ -249,7 +235,7 @@ export default function KaryawanProfileForm({
           return;
         }
 
-        // ——— 2) Lengkapi via PUT (pakai token). Jika ada file → FormData ———
+        // 2) Lengkapi via PUT
         const hasFile = fileList?.length > 0;
         if (hasFile) {
           const fd = new FormData();
@@ -279,16 +265,18 @@ export default function KaryawanProfileForm({
           append(fd, "alamat_domisili_provinsi", values.alamat_domisili_provinsi);
           append(fd, "alamat_domisili_kota", values.alamat_domisili_kota);
 
-          // tempat & tgl lahir ikut
           append(fd, "tempat_lahir", values.tempat_lahir);
           append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
 
-          // File
+          // NEW: status_cuti & kontak darurat
+          append(fd, "status_cuti", values.status_cuti);
+          append(fd, "nama_kontak_darurat", values.nama_kontak_darurat);
+          append(fd, "kontak_darurat", values.kontak_darurat);
+
           fd.append("file", fileList[0].originFileObj);
 
           await crudService.put(ApiEndpoints.UpdateUser(newId), fd);
         } else {
-          // Tanpa file → JSON body
           const putPayload = {
             id_jabatan: values.id_jabatan ?? null,
             jenis_kelamin: values.jenis_kelamin ?? null,
@@ -315,9 +303,13 @@ export default function KaryawanProfileForm({
             alamat_domisili_provinsi: values.alamat_domisili_provinsi ?? null,
             alamat_domisili_kota: values.alamat_domisili_kota ?? null,
 
-            // tempat & tanggal lahir ikut
             tempat_lahir: values.tempat_lahir ?? null,
             tanggal_lahir: toDateOnly(values.tanggal_lahir) ?? null,
+
+            // NEW
+            status_cuti: values.status_cuti ?? null,
+            nama_kontak_darurat: values.nama_kontak_darurat ?? null,
+            kontak_darurat: values.kontak_darurat ?? null,
           };
           await crudService.put(ApiEndpoints.UpdateUser(newId), putPayload);
         }
@@ -327,12 +319,11 @@ export default function KaryawanProfileForm({
         return;
       }
 
-      // ——— EDIT ———
+      // EDIT
       const hasFile = fileList?.length > 0;
 
       if (hasFile) {
         const fd = new FormData();
-        // Base profile
         append(fd, "nama_pengguna", values.nama_pengguna);
         append(fd, "email", String(values.email).toLowerCase());
         append(fd, "kontak", values.kontak);
@@ -344,7 +335,6 @@ export default function KaryawanProfileForm({
         append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
         append(fd, "tempat_lahir", values.tempat_lahir);
 
-        // Detail
         append(fd, "jenis_kelamin", values.jenis_kelamin);
         append(fd, "golongan_darah", values.golongan_darah);
         append(fd, "status_perkawinan", values.status_perkawinan);
@@ -368,7 +358,11 @@ export default function KaryawanProfileForm({
         append(fd, "alamat_domisili_provinsi", values.alamat_domisili_provinsi);
         append(fd, "alamat_domisili_kota", values.alamat_domisili_kota);
 
-        // File
+        // NEW: status_cuti & kontak darurat
+        append(fd, "status_cuti", values.status_cuti);
+        append(fd, "nama_kontak_darurat", values.nama_kontak_darurat);
+        append(fd, "kontak_darurat", values.kontak_darurat);
+
         fd.append("file", fileList[0].originFileObj);
 
         const res = await crudService.put(ApiEndpoints.UpdateUser(id), fd);
@@ -409,6 +403,11 @@ export default function KaryawanProfileForm({
           alamat_domisili: values.alamat_domisili ?? null,
           alamat_domisili_provinsi: values.alamat_domisili_provinsi ?? null,
           alamat_domisili_kota: values.alamat_domisili_kota ?? null,
+
+          // NEW
+          status_cuti: values.status_cuti ?? null,
+          nama_kontak_darurat: values.nama_kontak_darurat ?? null,
+          kontak_darurat: values.kontak_darurat ?? null,
         };
 
         const res = await crudService.put(ApiEndpoints.UpdateUser(id), put);
@@ -461,15 +460,11 @@ export default function KaryawanProfileForm({
           <Skeleton active avatar paragraph={{ rows: 6 }} />
         ) : (
           <div className="grid lg:grid-cols-[240px,1fr] gap-8">
-            {/* KIRI: foto & nama/jabatan/divisi */}
+            {/* KIRI: foto & identitas ringkas */}
             <div className="flex flex-col items-center">
               <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden ring-1 ring-gray-200 mb-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photoUrl}
-                  alt="Foto"
-                  className="object-cover w-full h-full"
-                />
+                <img src={photoUrl} alt="Foto" className="object-cover w-full h-full" />
               </div>
 
               {readOnly ? (
@@ -483,6 +478,13 @@ export default function KaryawanProfileForm({
                   <div className="text-sm text-slate-600">
                     {displayOrDash(detail?.departement?.nama_departement ?? detail?.divisi)}
                   </div>
+                  {/* NEW: Status Cuti badge */}
+                  <div className="mt-2">
+                    <span className="mr-2">Status Cuti:</span>
+                    <Tag color={(detail?.status_cuti || "") === "aktif" ? "green" : "red"}>
+                      {displayOrDash(detail?.status_cuti)?.replace(/^./, (c) => c.toUpperCase())}
+                    </Tag>
+                  </div>
                 </>
               ) : (
                 <Form
@@ -490,6 +492,7 @@ export default function KaryawanProfileForm({
                   layout="vertical"
                   className="w-full"
                   onFinish={onFinish}
+                  initialValues={initialValues}
                 >
                   <Form.Item
                     name="nama_pengguna"
@@ -534,7 +537,7 @@ export default function KaryawanProfileForm({
               )}
             </div>
 
-            {/* KANAN: deskripsi panjang / form */}
+            {/* KANAN */}
             {readOnly ? (
               <div className="space-y-8">
                 <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
@@ -566,6 +569,13 @@ export default function KaryawanProfileForm({
                   </Descriptions.Item>
                   <Descriptions.Item label="Email">
                     {displayOrDash(detail?.email)}
+                  </Descriptions.Item>
+                  {/* NEW: Kontak darurat */}
+                  <Descriptions.Item label="Nama Kontak Darurat">
+                    {displayOrDash(detail?.nama_kontak_darurat)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Nomor Kontak Darurat">
+                    {displayOrDash(detail?.kontak_darurat)}
                   </Descriptions.Item>
                 </Descriptions>
 
@@ -618,31 +628,17 @@ export default function KaryawanProfileForm({
                 <h3 className="text-xl font-semibold">Alamat</h3>
                 <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
                   <Descriptions.Item label="Alamat KTP">
-                    {joinAlamat(
-                      detail?.alamat_ktp,
-                      detail?.alamat_ktp_kota,
-                      detail?.alamat_ktp_provinsi
-                    )}
+                    {joinAlamat(detail?.alamat_ktp, detail?.alamat_ktp_kota, detail?.alamat_ktp_provinsi)}
                   </Descriptions.Item>
                   <Descriptions.Item label="Alamat Domisili">
-                    {joinAlamat(
-                      detail?.alamat_domisili,
-                      detail?.alamat_domisili_kota,
-                      detail?.alamat_domisili_provinsi
-                    )}
+                    {joinAlamat(detail?.alamat_domisili, detail?.alamat_domisili_kota, detail?.alamat_domisili_provinsi)}
                   </Descriptions.Item>
                 </Descriptions>
               </div>
             ) : (
-              <Form form={form} layout="vertical" onFinish={onFinish}>
+              <Form form={form} layout="vertical" onFinish={onFinish} initialValues={initialValues}>
                 {/* Identitas */}
-                <Descriptions
-                  title="Identitas"
-                  bordered
-                  column={1}
-                  labelStyle={LABEL_STYLE}
-                  items={[]}
-                />
+                <Descriptions title="Identitas" bordered column={1} labelStyle={LABEL_STYLE} items={[]} />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                   <Form.Item name="tempat_lahir" label="Tempat Lahir">
                     <Input placeholder={DASH} />
@@ -674,6 +670,18 @@ export default function KaryawanProfileForm({
                   </Form.Item>
                   <Form.Item name="zona_waktu" label="Zona Waktu">
                     <Input placeholder="mis. WIB / WITA / WIT / UTC+7" />
+                  </Form.Item>
+
+                  {/* NEW: Kontak Darurat */}
+                  <Form.Item name="nama_kontak_darurat" label="Nama Kontak Darurat">
+                    <Input placeholder={DASH} />
+                  </Form.Item>
+                  <Form.Item
+                    name="kontak_darurat"
+                    label="Nomor Kontak Darurat"
+                    rules={[{ pattern: /^[0-9+\-\s()]{6,20}$/, message: "Nomor tidak valid" }]}
+                  >
+                    <Input placeholder={DASH} />
                   </Form.Item>
                 </div>
 
@@ -732,6 +740,11 @@ export default function KaryawanProfileForm({
                       ]}
                       placeholder={DASH}
                     />
+                  </Form.Item>
+
+                  {/* NEW: Status Cuti */}
+                  <Form.Item name="status_cuti" label="Status Cuti">
+                    <Select options={OPSI_STATUS_CUTI} allowClear placeholder={DASH} />
                   </Form.Item>
                 </div>
 

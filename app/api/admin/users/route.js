@@ -39,7 +39,7 @@ export async function GET(req) {
     const locationId = (searchParams.get('locationId') || '').trim();
     const jabatanId = (searchParams.get('jabatanId') || '').trim();
     const namaPengguna = (searchParams.get('namaPengguna') || '').trim();
-    const includeDeleted = searchParams.get('includeDeleted') === '1';
+    const includeDeleted = (searchParams.get('includeDeleted') || '') === '1';
     const orderByParam = (searchParams.get('orderBy') || 'created_at').trim();
     const orderBy = ALLOWED_ORDER_BY.has(orderByParam) ? orderByParam : 'created_at';
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
@@ -54,7 +54,11 @@ export async function GET(req) {
       ...(namaPengguna ? { nama_pengguna: { contains: namaPengguna } } : {}),
       ...(search
         ? {
-            OR: [{ nama_pengguna: { contains: search } }, { email: { contains: search } }, { kontak: { contains: search } }],
+            OR: [
+              { nama_pengguna: { contains: search } },
+              { email: { contains: search } },
+              { kontak: { contains: search } },
+            ],
           }
         : {}),
     };
@@ -71,8 +75,11 @@ export async function GET(req) {
           nama_pengguna: true,
           email: true,
           kontak: true,
+
+          // NEW: kontak darurat
           nama_kontak_darurat: true,
           kontak_darurat: true,
+
           agama: true,
           foto_profil_user: true,
           tanggal_lahir: true,
@@ -98,13 +105,21 @@ export async function GET(req) {
           id_location: true,
           id_jabatan: true,
           status_kerja: true,
+
+          // NEW: status_cuti ikut dipilih
           status_cuti: true,
+
           tanggal_mulai_bekerja: true,
           nomor_rekening: true,
           jenis_bank: true,
+
           created_at: true,
           updated_at: true,
+
+          // NEW: tampilkan soft delete & catatan_delete
           deleted_at: true,
+          catatan_delete: true,
+
           departement: { select: { id_departement: true, nama_departement: true } },
           kantor: { select: { id_location: true, nama_kantor: true } },
           jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
