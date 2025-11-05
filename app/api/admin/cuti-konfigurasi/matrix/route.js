@@ -4,10 +4,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
-const MONTHS = [
-  'JANUARI','FEBRUARI','MARET','APRIL','MEI','JUNI',
-  'JULI','AGUSTUS','SEPTEMBER','OKTOBER','NOVEMBER','DESEMBER',
-];
+const MONTHS = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
 const ALLOWED_MONTHS = new Set(MONTHS);
 
 /* ========= AUTH HELPERS ========= */
@@ -54,12 +51,11 @@ export async function GET(req) {
       deleted_at: null,
       ...(deptId ? { id_departement: deptId } : {}),
       ...(jabatanId ? { id_jabatan: jabatanId } : {}),
-      ...(q ? {
-        OR: [
-          { nama_pengguna: { contains: q } },
-          { email: { contains: q } },
-        ],
-      } : {}),
+      ...(q
+        ? {
+            OR: [{ nama_pengguna: { contains: q } }, { email: { contains: q } }],
+          }
+        : {}),
     };
 
     const total = await db.user.count({ where: userWhere });
@@ -80,11 +76,13 @@ export async function GET(req) {
       },
     });
 
-    const ids = users.map(u => u.id_user);
-    const configs = ids.length ? await db.cutiKonfigurasi.findMany({
-      where: { id_user: { in: ids }, deleted_at: null },
-      select: { id_cuti_konfigurasi: true, id_user: true, bulan: true, kouta_cuti: true },
-    }) : [];
+    const ids = users.map((u) => u.id_user);
+    const configs = ids.length
+      ? await db.cutiKonfigurasi.findMany({
+          where: { id_user: { in: ids }, deleted_at: null },
+          select: { id_cuti_konfigurasi: true, id_user: true, bulan: true, kouta_cuti: true },
+        })
+      : [];
 
     // map id_user -> { bulan -> kouta }
     const byUser = new Map();
@@ -140,7 +138,9 @@ export async function POST(req) {
     // validasi ringan
     for (const [i, it] of items.entries()) {
       const id_user = String(it?.id_user || '').trim();
-      const bulan = String(it?.bulan || '').trim().toUpperCase();
+      const bulan = String(it?.bulan || '')
+        .trim()
+        .toUpperCase();
       const kouta = Number(it?.kouta_cuti);
       if (!id_user) return NextResponse.json({ message: `items[${i}].id_user wajib.` }, { status: 400 });
       if (!ALLOWED_MONTHS.has(bulan)) return NextResponse.json({ message: `items[${i}].bulan tidak valid.` }, { status: 400 });
