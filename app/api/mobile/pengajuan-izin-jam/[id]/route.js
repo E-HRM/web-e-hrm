@@ -16,6 +16,12 @@ const baseInclude = {
       role: true,
     },
   },
+  kategori: {
+    select: {
+      id_kategori_izin_jam: true,
+      nama_kategori: true,
+    },
+  },
   handover_users: {
     include: {
       user: {
@@ -191,6 +197,8 @@ export async function PUT(req, { params }) {
 
     let jamMulai = pengajuan.jam_mulai;
     let jamSelesai = pengajuan.jam_selesai;
+    let jamMulaiPengganti = pengajuan.jam_mulai_pengganti;
+    let jamSelesaiPengganti = pengajuan.jam_selesai_pengganti;
 
     if (Object.prototype.hasOwnProperty.call(body, 'jam_mulai')) {
       const parsed = parseDateTimeToUTC(body.jam_mulai);
@@ -213,13 +221,65 @@ export async function PUT(req, { params }) {
     if (jamMulai && jamSelesai && jamSelesai <= jamMulai) {
       return NextResponse.json({ message: 'jam_selesai harus lebih besar dari jam_mulai.' }, { status: 400 });
     }
-
-    if (Object.prototype.hasOwnProperty.call(body, 'kategori')) {
-      const kategori = String(body.kategori || '').trim();
-      if (!kategori) {
-        return NextResponse.json({ message: "Field 'kategori' tidak boleh kosong." }, { status: 400 });
+    if (Object.prototype.hasOwnProperty.call(body, 'tanggal_pengganti')) {
+      if (isNullLike(body.tanggal_pengganti)) {
+        data.tanggal_pengganti = null;
+      } else {
+        const parsed = parseDateOnlyToUTC(body.tanggal_pengganti);
+        if (!parsed) {
+          return NextResponse.json({ message: "Field 'tanggal_pengganti' harus berupa tanggal yang valid." }, { status: 400 });
+        }
+        data.tanggal_pengganti = parsed;
       }
-      data.kategori = kategori;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'jam_mulai_pengganti')) {
+      if (isNullLike(body.jam_mulai_pengganti)) {
+        data.jam_mulai_pengganti = null;
+        jamMulaiPengganti = null;
+      } else {
+        const parsed = parseDateTimeToUTC(body.jam_mulai_pengganti);
+        if (!parsed) {
+          return NextResponse.json({ message: "Field 'jam_mulai_pengganti' harus berupa waktu yang valid." }, { status: 400 });
+        }
+        data.jam_mulai_pengganti = parsed;
+        jamMulaiPengganti = parsed;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'jam_selesai_pengganti')) {
+      if (isNullLike(body.jam_selesai_pengganti)) {
+        data.jam_selesai_pengganti = null;
+        jamSelesaiPengganti = null;
+      } else {
+        const parsed = parseDateTimeToUTC(body.jam_selesai_pengganti);
+        if (!parsed) {
+          return NextResponse.json({ message: "Field 'jam_selesai_pengganti' harus berupa waktu yang valid." }, { status: 400 });
+        }
+        data.jam_selesai_pengganti = parsed;
+        jamSelesaiPengganti = parsed;
+      }
+    }
+
+    if (jamMulaiPengganti && jamSelesaiPengganti && jamSelesaiPengganti <= jamMulaiPengganti) {
+      return NextResponse.json({ message: 'jam_selesai_pengganti harus lebih besar dari jam_mulai_pengganti.' }, { status: 400 });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'id_kategori_izin_jam')) {
+      const kategoriId = String(body.id_kategori_izin_jam || '').trim();
+      if (!kategoriId) {
+        return NextResponse.json({ message: "Field 'id_kategori_izin_jam' tidak boleh kosong." }, { status: 400 });
+      }
+
+      const kategori = await db.kategoriIzinJam.findFirst({
+        where: { id_kategori_izin_jam: kategoriId, deleted_at: null },
+        select: { id_kategori_izin_jam: true },
+      });
+      if (!kategori) {
+        return NextResponse.json({ message: 'Kategori izin jam tidak ditemukan.' }, { status: 404 });
+      }
+
+      data.id_kategori_izin_jam = kategoriId;
     }
 
     if (Object.prototype.hasOwnProperty.call(body, 'keperluan')) {
