@@ -35,6 +35,9 @@ const API_KATEGORI_KUNJUNGAN = "/api/admin/kategori-kunjungan";
 const API_KATEGORI_CUTI = "/api/admin/kategori-cuti";
 const API_KATEGORI_SAKIT = "/api/admin/kategori-sakit";
 
+const API_CUTI_KONFIG = "/api/admin/cuti-konfigurasi";
+const API_CUTI_KONFIG_MATRIX = "/api/admin/cuti-konfigurasi/matrix";
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -139,4 +142,17 @@ export const ApiEndpoints = {
   GetKategoriSakitById: (id) => `${API_KATEGORI_SAKIT}/${id}`,
   UpdateKategoriSakit: (id) => `${API_KATEGORI_SAKIT}/${id}`,
   DeleteKategoriSakit: (id) => `${API_KATEGORI_SAKIT}/${id}`,
+
+  GetCutiKonfigurasi: API_CUTI_KONFIG,
+  CreateCutiKonfigurasi: API_CUTI_KONFIG,
+  GetCutiKonfigurasiById: (id) => `${API_CUTI_KONFIG}/${id}`,
+  UpdateCutiKonfigurasi: (id) => `${API_CUTI_KONFIG}/${id}`,
+  DeleteCutiKonfigurasi: (id) => `${API_CUTI_KONFIG}/${id}`,
+
+    GetCutiKonfigurasiMatrix: (qsObj = {}) => {
+    const qs = new URLSearchParams(qsObj);
+    const s = qs.toString();
+    return s ? `${API_CUTI_KONFIG_MATRIX}?${s}` : API_CUTI_KONFIG_MATRIX;
+  },
+  SaveCutiKonfigurasiMatrix: API_CUTI_KONFIG_MATRIX,
 };

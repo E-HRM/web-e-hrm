@@ -6,9 +6,7 @@ import {
   Select,
   DatePicker,
   Tooltip,
-  Tag,
   theme,
-  // Import Table dan Grid dari antd
   Table,
   Grid,
 } from "antd";
@@ -16,26 +14,22 @@ import {
   LeftOutlined,
   RightOutlined,
   DeleteOutlined,
-  UserOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
 import { useMemo } from "react";
-import Link from "next/link"; // Menggunakan Link dari Next.js
+import Link from "next/link";
 import UseShiftScheduleViewModel from "./UseShiftScheduleViewModel";
 
 dayjs.locale("id");
 
-/** Palet dan Konstanta */
 const BRAND_BLUE = "#004A9F";
 const BRAND_BLUE_HOVER = "#0B63C7";
 const BRAND_BLUE_ACTIVE = "#003A80";
 const HEADER_BLUE_BG = "#F0F6FF";
-const BRAND = "#003A6F"; // Menggunakan BRAND dari referensi
+const BRAND = "#003A6F";
 
-// --- Helper Functions dan Components dari Referensi ---
-
-/** Ambil URL foto dari row dengan berbagai kemungkinan nama field */
+/** Ambil URL foto dari row */
 function getPhotoUrl(row) {
   return (
     row?.foto_profil_user ||
@@ -50,7 +44,7 @@ function getPhotoUrl(row) {
   );
 }
 
-/** Gambar bulat anti-gepeng (selalu crop center) */
+/** Gambar bulat anti-gepeng */
 function CircleImg({ src, size = 48, alt = "Foto" }) {
   const s = {
     width: size,
@@ -77,11 +71,10 @@ function CircleImg({ src, size = 48, alt = "Foto" }) {
     </span>
   );
 }
-// Tanggal sudah lewat? (bandingkan lokal, mulai dari pukul 00:00 hari ini)
+
 function isPastDate(dateStr) {
   return dayjs(dateStr).isBefore(dayjs().startOf("day"), "day");
 }
-// --- Komponen Cell Jadwal ---
 
 function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
   const value = cell
@@ -93,14 +86,14 @@ function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
   const options = useMemo(() => {
     const arr = [{ value: "LIBUR", label: "Libur — (tidak bekerja)" }];
     polaMap.forEach((p, id) => {
-      arr.push({ value: id, label: `${p.nama} (${p.jam})` });
+      arr.push({ value: String(id), label: `${p.nama} (${p.jam})` });
     });
     return arr;
   }, [polaMap]);
 
   const safeAssign = (val) => {
     if (disabled) return;
-    onAssign(cell.userId, cell.date, val);
+    onAssign(cell.userId, cell.date, val === "LIBUR" ? "LIBUR" : String(val));
   };
   const safeDelete = () => {
     if (disabled) return;
@@ -135,7 +128,7 @@ function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
               ? "Libur"
               : value
               ? (() => {
-                  const p = polaMap.get(value);
+                  const p = polaMap.get(String(value));
                   return p ? `${p.nama} • ${p.jam}` : "Kerja";
                 })()
               : "Belum diatur"}
@@ -157,14 +150,11 @@ function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
   );
 }
 
-// --- Komponen Utama ShiftScheduleContent ---
-
 export default function ShiftScheduleContent() {
   const vm = UseShiftScheduleViewModel();
   const screens = Grid.useBreakpoint();
-  const isMobile = !screens.sm; // xs
+  const isMobile = !screens.sm;
 
-  // 1. Definisikan Kolom Hari (dinamis)
   const dayColumns = vm.days.map((d) => ({
     title: (
       <div className="font-semibold text-slate-800 text-center">
@@ -179,7 +169,7 @@ export default function ShiftScheduleContent() {
         userId: record.id,
         date: d.dateStr,
       };
-      const disabled = isPastDate(d.dateStr); // ⬅️ di sini
+      const disabled = isPastDate(d.dateStr);
       return (
         <Cell
           cell={cell}
@@ -192,40 +182,27 @@ export default function ShiftScheduleContent() {
     },
   }));
 
-
-  // 2. Definisikan Kolom Nama (sticky & linkable)
   const nameColumn = {
     title: <div className="text-left font-medium">Nama Karyawan</div>,
     dataIndex: "name",
     key: "name",
-    fixed: "left", // Kunci kolom di kiri
-    width: isMobile ? 220 : 380, // Lebih ramping di mobile, lebar di desktop
+    fixed: "left",
+    width: isMobile ? 220 : 380,
     render: (_, r) => {
       const photo = getPhotoUrl(r) || "/avatar-placeholder.jpg";
-      
       return (
         <div className="p-1">
-          {/* Detail Karyawan (Linkable) */}
           <Link
             href={`/home/kelola_karyawan/karyawan/${r.id}`}
             className="no-underline text-inherit hover:text-inherit"
           >
             <div className="flex items-center gap-3">
-              <CircleImg src={photo} alt={r.name} size={48} /> {/* Menggunakan CircleImg */}
-
+              <CircleImg src={photo} alt={r.name} size={48} />
               <div className="min-w-0">
-                {/* Nama */}
-                <div
-                  style={{ fontWeight: 600, color: "#0f172a" }}
-                  className="truncate"
-                >
+                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
                   {r.name}
                 </div>
-                {/* Jabatan dan Departemen (Email Dihapus) */}
-                <div
-                  style={{ fontSize: 12, color: "#475569" }}
-                  className="truncate"
-                >
+                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
                   {r.jabatan || "—"}
                   {r.jabatan && r.departemen && " "}
                   {r.departemen ? `| ${r.departemen}` : r.jabatan ? "" : "—"}
@@ -234,21 +211,19 @@ export default function ShiftScheduleContent() {
             </div>
           </Link>
 
-          {/* Checkbox Ulang Jadwal (di luar Link) */}
+          {/* Checkbox terkontrol oleh data minggu berikutnya */}
           <label className="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
             <input
               type="checkbox"
               className="accent-[#004A9F]"
+              checked={vm.isRepeatVisualOn(r.id)}
               onChange={(e) => vm.toggleRepeatSchedule(r.id, e.target.checked)}
             />
-            Ulangi jadwal ini tiap minggu
+            Ulangi minggu ini sampai akhir bulan
           </label>
 
-          {/* Ringkasan/Review Mingguan - DISIMPAN HANYA UNTUK DESKTOP/TABLET (sm:block) */}
           <div className="mt-3 space-y-1 text-xs hidden sm:block">
-            <div className="font-semibold text-slate-600 mb-1">
-              Ringkasan Minggu Ini:
-            </div>
+            <div className="font-semibold text-slate-600 mb-1">Ringkasan Minggu Ini:</div>
             {vm.days.map((d) => {
               const c = vm.getCell(r.id, d.dateStr);
               let label = "—";
@@ -257,15 +232,12 @@ export default function ShiftScheduleContent() {
                 label = "Libur";
                 color = "text-red-500";
               } else if (c?.polaId) {
-                const p = vm.polaMap.get(c.polaId);
+                const p = vm.polaMap.get(String(c?.polaId));
                 label = p ? `${p.nama} ${p.jam}` : "Kerja";
                 color = "text-blue-600";
               }
               return (
-                <div
-                  key={d.key}
-                  className={`${color} flex justify-between`}
-                >
+                <div key={d.key} className={`${color} flex justify-between`}>
                   <span className="w-16">{d.short}:</span>
                   <span className="font-medium truncate">{label}</span>
                 </div>
@@ -278,12 +250,7 @@ export default function ShiftScheduleContent() {
   };
 
   const columns = [nameColumn, ...dayColumns];
-
-  // 3. Siapkan data source
-  const dataSource = vm.rows.map((r) => ({
-    ...r,
-    key: r.id, 
-  }));
+  const dataSource = vm.rows.map((r) => ({ ...r, key: r.id }));
 
   return (
     <ConfigProvider
@@ -326,9 +293,7 @@ export default function ShiftScheduleContent() {
       }}
     >
       <div className="p-6">
-        {/* Toolbar - Diatur dalam satu baris (1 row) */}
         <div className="mb-6 flex flex-wrap items-center gap-2">
-          {/* Filter Dept */}
           <Select
             value={vm.deptId || undefined}
             placeholder="Semua Tim/Divisi"
@@ -337,7 +302,6 @@ export default function ShiftScheduleContent() {
             className="min-w-[220px]"
             allowClear
           />
-          {/* Filter Jabatan */}
           <Select
             allowClear
             showSearch
@@ -348,22 +312,14 @@ export default function ShiftScheduleContent() {
             options={vm.jabatanOptions}
             className="min-w-[220px]"
           />
-          {/* Filter Bulan & Tahun */}
           <Select
             className="min-w-[160px]"
             value={vm.currentMonthIdx}
             onChange={(m) => vm.setMonthYear(vm.currentYear, m)}
             options={vm.monthOptions}
           />
-          {/* <Select
-            className="min-w-[120px]"
-            value={vm.currentYear}
-            onChange={(y) => vm.setMonthYear(y, vm.currentMonthIdx)}
-            options={vm.yearOptions}
-          /> */}
-          
+
           <div className="flex-grow-0 ml-auto flex items-center gap-2">
-            {/* Tombol navigasi minggu */}
             <Button type="primary" icon={<LeftOutlined />} onClick={vm.prevWeek}>
               Minggu sebelumnya
             </Button>
@@ -380,21 +336,19 @@ export default function ShiftScheduleContent() {
         </div>
 
         <div className="text-xs text-slate-500 mb-3">
-          * Centang “Ulangi jadwal ini tiap minggu” → sistem menyalin pola minggu ini hingga akhir bulan.
+          * Centang “Ulangi minggu ini sampai akhir bulan” → sistem menyalin pola minggu ini.
+          Hari kosong di minggu sumber akan menghapus jadwal di minggu target.
+          Checkbox tetap nyala jika minggu berikutnya ada minimal 1 jadwal.
         </div>
 
-        {/* Tabel Utama menggunakan komponen Table Ant Design */}
         <Table
+          rowKey="id"
           columns={columns}
           dataSource={dataSource}
           pagination={false}
           loading={vm.loading}
-          // Konfigurasi Scroll dan Sticky
-          scroll={{ 
-            x: "max-content", // Memastikan scroll horizontal jika lebar konten > container
-            y: 640 // Mengunci tinggi tabel dan memungkinkan scroll vertikal di body tabel
-          }}
-          sticky 
+          scroll={{ x: "max-content", y: 640 }}
+          sticky
           size="middle"
           bordered={false}
           className="rounded-2xl overflow-hidden shadow-xl border border-slate-200"
