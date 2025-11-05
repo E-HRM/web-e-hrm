@@ -39,7 +39,8 @@ function FormKategoriModal({
     }
   }, [open, initialName, form]);
 
-  const kindLabel = kind === "cuti" ? "Cuti" : kind === "sakit" ? "Sakit" : "Izin Jam";
+  const kindLabel =
+    kind === "cuti" ? "Cuti" : kind === "sakit" ? "Izin Sakit" : "Izin Jam";
 
   return (
     <Modal
@@ -56,7 +57,7 @@ function FormKategoriModal({
           name="nama_kategori"
           rules={[{ required: true, message: "Nama kategori wajib diisi" }]}
         >
-          <Input placeholder="Contoh: Cuti Tahunan / Sakit Dokter / Izin Jam Reguler" />
+          <Input placeholder="Contoh: Cuti Tahunan / Sakit Dokter / Jam Extra Hari Sama" />
         </Form.Item>
       </Form>
     </Modal>
@@ -69,19 +70,15 @@ export default function ManajemenKategoriContent() {
   // ===== Pagination Helper (pakai data dari view model bila ada) =====
   const makePagination = (kind) => {
     const pag =
-      kind === "cuti" ? vm.pagCuti :
-      kind === "sakit" ? vm.pagSakit :
-      vm.pagTukar;
+      kind === "cuti"
+        ? vm.pagCuti
+        : kind === "sakit"
+        ? vm.pagSakit
+        : vm.pagIzinJam;
 
     const current = pag?.page ?? 1;
     const pageSize = pag?.pageSize ?? DEFAULT_PAGE_SIZE;
-    const total =
-      pag?.total ??
-      (kind === "cuti"
-        ? (Array.isArray(vm.itemsCuti) ? vm.itemsCuti.length : 0)
-        : kind === "sakit"
-        ? (Array.isArray(vm.itemsSakit) ? vm.itemsSakit.length : 0)
-        : (Array.isArray(vm.itemsTukar) ? vm.itemsTukar.length : 0));
+    const total = pag?.total ?? 0;
 
     return {
       current,
@@ -90,13 +87,7 @@ export default function ManajemenKategoriContent() {
       showSizeChanger: true,
       pageSizeOptions: ["5", "10", "20", "50", "100"],
       showTotal: (t, [a, b]) => `${a}-${b} dari ${t}`,
-      onChange: (page, size) => {
-        if (typeof vm.onPageChange === "function") {
-          vm.onPageChange(kind, page, size);
-        } else if (typeof vm.setPage === "function") {
-          vm.setPage(kind, page, size);
-        }
-      },
+      onChange: (page, size) => vm.onPageChange(kind, page, size),
     };
   };
 
@@ -246,9 +237,9 @@ export default function ManajemenKategoriContent() {
       ),
     },
     {
-      key: "tukar",
+      key: "izinjam",
       label: "Izin Jam",
-      count: vm.pagTukar?.total ?? (Array.isArray(vm.itemsTukar) ? vm.itemsTukar.length : 0),
+      count: vm.pagIzinJam?.total ?? 0,
       children: (
         <Card className="shadow-lg border-0 mt-4" bodyStyle={{ padding: 0 }}>
           <div className="p-5 border-b border-slate-100">
@@ -266,7 +257,7 @@ export default function ManajemenKategoriContent() {
                 icon={<PlusOutlined />}
                 size="middle"
                 className="!rounded-lg !bg-[#003A6F] hover:!bg-[#0056A1]"
-                onClick={() => vm.openCreate("tukar")}
+                onClick={() => vm.openCreate("izinjam")}
               >
                 Tambah Kategori
               </Button>
@@ -276,16 +267,16 @@ export default function ManajemenKategoriContent() {
           <Table
             sticky
             rowKey={(r) => r.id}
-            dataSource={vm.itemsTukar}
-            columns={columns("tukar")}
-            loading={false}
-            pagination={makePagination("tukar")}
+            dataSource={vm.itemsIzinJam}
+            columns={columns("izinjam")}
+            loading={vm.loading}
+            pagination={makePagination("izinjam")}
             scroll={{ y: DEFAULT_SCROLL_Y }}
             locale={{
               emptyText: (
                 <div className="py-10 text-center">
                   <div className="text-3xl mb-3">🔁</div>
-                  <p className="text-slate-500">Belum ada kategori Izin jam</p>
+                  <p className="text-slate-500">Belum ada kategori izin jam</p>
                 </div>
               ),
             }}

@@ -10,7 +10,11 @@ import { crudService } from "@/app/utils/services/crudService";
 /** Util bikin key SWR */
 function listKey(kind, { page, pageSize, search }) {
   const base =
-    kind === "cuti" ? ApiEndpoints.GetKategoriCuti : ApiEndpoints.GetKategoriSakit;
+    kind === "cuti"
+      ? ApiEndpoints.GetKategoriCuti
+      : kind === "sakit"
+      ? ApiEndpoints.GetKategoriSakit
+      : ApiEndpoints.GetKategoriIzinJam; // izinjam
   const qs = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
@@ -20,32 +24,28 @@ function listKey(kind, { page, pageSize, search }) {
 }
 
 export default function useManajemenKategoriviewModel() {
-  const [activeTab, setActiveTab] = useState("cuti");
+  const [activeTab, setActiveTab] = useState("cuti"); // 'cuti' | 'sakit' | 'izinjam'
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
 
-  // ===== Dummy data lokal untuk "Tukar Hari" =====
-  const [tukarSource, setTukarSource] = useState([
-    { id_kategori_tukar: 1001, nama_kategori: "Jam extra di hari sama" },
-    { id_kategori_tukar: 1002, nama_kategori: "Mengganti dengan jam saat libur" },
-  ]);
-
   // modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create"); // 'create' | 'edit'
-  const [modalKind, setModalKind] = useState("cuti");   // 'cuti' | 'sakit' | 'tukar'
+  const [modalKind, setModalKind] = useState("cuti");   // 'cuti' | 'sakit' | 'izinjam'
   const [editingItem, setEditingItem] = useState(null); // { id, nama }
 
   // SWR – CUTI
-  const swrCuti = useSWR(
-    listKey("cuti", { page, pageSize, search }),
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+  const swrCuti = useSWR(listKey("cuti", { page, pageSize, search }), fetcher, {
+    revalidateOnFocus: false,
+  });
   // SWR – SAKIT
-  const swrSakit = useSWR(
-    listKey("sakit", { page, pageSize, search }),
+  const swrSakit = useSWR(listKey("sakit", { page, pageSize, search }), fetcher, {
+    revalidateOnFocus: false,
+  });
+  // SWR – IZIN JAM
+  const swrIzinJam = useSWR(
+    listKey("izinjam", { page, pageSize, search }),
     fetcher,
     { revalidateOnFocus: false }
   );
@@ -68,20 +68,20 @@ export default function useManajemenKategoriviewModel() {
     }));
   }, [swrSakit.data]);
 
-  // Map dummy Tukar Hari -> items
-  const itemsTukar = useMemo(() => {
-    return tukarSource.map((x) => ({
-      id: x.id_kategori_tukar,
+  const itemsIzinJam = useMemo(() => {
+    const arr = Array.isArray(swrIzinJam.data?.data) ? swrIzinJam.data.data : [];
+    return arr.map((x) => ({
+      id: x.id_kategori_izin_jam,
       nama: x.nama_kategori,
       raw: x,
     }));
-  }, [tukarSource]);
+  }, [swrIzinJam.data]);
 
-  const loading = swrCuti.isLoading || swrSakit.isLoading;
+  const loading = swrCuti.isLoading || swrSakit.isLoading || swrIzinJam.isLoading;
 
   const mutateAll = useCallback(async () => {
-    await Promise.all([swrCuti.mutate(), swrSakit.mutate()]);
-  }, [swrCuti, swrSakit]);
+    await Promise.all([swrCuti.mutate(), swrSakit.mutate(), swrIzinJam.mutate()]);
+  }, [swrCuti, swrSakit, swrIzinJam]);
 
   // ACTIONS
   const openCreate = useCallback((kind) => {
@@ -108,47 +108,28 @@ export default function useManajemenKategoriviewModel() {
 
       try {
         if (modalMode === "create") {
-          if (modalKind === "tukar") {
-            // Create dummy lokal
-            setTukarSource((prev) => [
-              ...prev,
-              { id_kategori_tukar: Date.now(), nama_kategori: payload.nama_kategori },
-            ]);
-            message.success("Kategori tukar hari dibuat.");
-          } else {
-            const ep =
-              modalKind === "cuti"
-                ? ApiEndpoints.CreateKategoriCuti
-                : ApiEndpoints.CreateKategoriSakit;
-            await crudService.postAuth(ep, payload);
-            message.success("Kategori berhasil dibuat.");
-          }
+          const ep =
+            modalKind === "cuti"
+              ? ApiEndpoints.CreateKategoriCuti
+              : modalKind === "sakit"
+              ? ApiEndpoints.CreateKategoriSakit
+              : ApiEndpoints.CreateKategoriIzinJam; // izinjam
+          await crudService.postAuth(ep, payload);
+          message.success("Kategori berhasil dibuat.");
         } else {
-          if (modalKind === "tukar") {
-            // Edit dummy lokal
-            setTukarSource((prev) =>
-              prev.map((x) =>
-                x.id_kategori_tukar === editingItem.id
-                  ? { ...x, nama_kategori: payload.nama_kategori }
-                  : x
-              )
-            );
-            message.success("Kategori diperbarui.");
-          } else {
-            const id = editingItem.id;
-            const ep =
-              modalKind === "cuti"
-                ? ApiEndpoints.UpdateKategoriCuti(id)
-                : ApiEndpoints.UpdateKategoriSakit(id);
-            await crudService.put(ep, payload);
-            message.success("Kategori diperbarui.");
-          }
+          const id = editingItem.id;
+          const ep =
+            modalKind === "cuti"
+              ? ApiEndpoints.UpdateKategoriCuti(id)
+              : modalKind === "sakit"
+              ? ApiEndpoints.UpdateKategoriSakit(id)
+              : ApiEndpoints.UpdateKategoriIzinJam(id);
+          await crudService.put(ep, payload);
+          message.success("Kategori diperbarui.");
         }
 
         setModalOpen(false);
-        if (modalKind !== "tukar") {
-          await mutateAll();
-        }
+        await mutateAll();
       } catch (err) {
         message.error(err?.message || "Gagal menyimpan kategori.");
       }
@@ -162,7 +143,7 @@ export default function useManajemenKategoriviewModel() {
         title: "Hapus kategori?",
         content: (
           <>
-            Kategori <b>{item?.nama}</b> akan dihapus {kind === "tukar" ? "(dummy lokal)" : "(soft delete)"}.
+            Kategori <b>{item?.nama}</b> akan dihapus (soft delete).
           </>
         ),
         okText: "Hapus",
@@ -170,20 +151,15 @@ export default function useManajemenKategoriviewModel() {
         cancelText: "Batal",
         onOk: async () => {
           try {
-            if (kind === "tukar") {
-              setTukarSource((prev) =>
-                prev.filter((x) => x.id_kategori_tukar !== item.id)
-              );
-              message.success("Kategori dihapus.");
-            } else {
-              const ep =
-                kind === "cuti"
-                  ? ApiEndpoints.DeleteKategoriCuti(item.id)
-                  : ApiEndpoints.DeleteKategoriSakit(item.id);
-              await crudService.delete(ep);
-              message.success("Kategori dihapus.");
-              await mutateAll();
-            }
+            const ep =
+              kind === "cuti"
+                ? ApiEndpoints.DeleteKategoriCuti(item.id)
+                : kind === "sakit"
+                ? ApiEndpoints.DeleteKategoriSakit(item.id)
+                : ApiEndpoints.DeleteKategoriIzinJam(item.id);
+            await crudService.delete(ep);
+            message.success("Kategori dihapus.");
+            await mutateAll();
           } catch (err) {
             message.error(err?.message || "Gagal menghapus kategori.");
           }
@@ -199,32 +175,36 @@ export default function useManajemenKategoriviewModel() {
     setPageSize(ps);
   }, []);
 
-  // Pagination object untuk tukar (local)
-  const pagTukar = useMemo(
-    () => ({ page, pageSize, total: tukarSource.length }),
-    [page, pageSize, tukarSource]
-  );
-
   return {
     // state
-    activeTab, setActiveTab,
-    page, setPage,
-    pageSize, setPageSize,
-    search, setSearch,
+    activeTab,
+    setActiveTab,
+    page,
+    setPage,
+    pageSize,
+    setPageSize,
+    search,
+    setSearch,
     loading,
 
     // data
     itemsCuti,
     itemsSakit,
-    itemsTukar,
+    itemsIzinJam,
     pagCuti: swrCuti.data?.pagination,
     pagSakit: swrSakit.data?.pagination,
-    pagTukar,
+    pagIzinJam: swrIzinJam.data?.pagination,
 
     // modal
-    modalOpen, setModalOpen,
-    modalMode, modalKind, editingItem,
-    openCreate, openEdit, submitForm, confirmDelete,
+    modalOpen,
+    setModalOpen,
+    modalMode,
+    modalKind,
+    editingItem,
+    openCreate,
+    openEdit,
+    submitForm,
+    confirmDelete,
 
     // table handlers
     onPageChange,

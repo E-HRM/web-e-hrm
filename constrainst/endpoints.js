@@ -38,6 +38,8 @@ const API_KATEGORI_SAKIT = "/api/admin/kategori-sakit";
 const API_CUTI_KONFIG = "/api/admin/cuti-konfigurasi";
 const API_CUTI_KONFIG_MATRIX = "/api/admin/cuti-konfigurasi/matrix";
 
+const API_KATEGORI_IZIN_JAM = "/api/admin/kategori-izin-jam";
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -155,4 +157,11 @@ export const ApiEndpoints = {
     return s ? `${API_CUTI_KONFIG_MATRIX}?${s}` : API_CUTI_KONFIG_MATRIX;
   },
   SaveCutiKonfigurasiMatrix: API_CUTI_KONFIG_MATRIX,
+
+  // (opsional) Master kategori izin jam:
+  GetKategoriIzinJam: API_KATEGORI_IZIN_JAM,
+  GetKategoriIzinJamById: (id) => `${API_KATEGORI_IZIN_JAM}/${id}`,
+  CreateKategoriIzinJam: API_KATEGORI_IZIN_JAM,
+  UpdateKategoriIzinJam: (id) => `${API_KATEGORI_IZIN_JAM}/${id}`,
+  DeleteKategoriIzinJam: (id) => `${API_KATEGORI_IZIN_JAM}/${id}`,
 };
