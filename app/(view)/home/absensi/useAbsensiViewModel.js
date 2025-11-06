@@ -39,6 +39,7 @@ function pickCoord(obj) {
   }
   return null;
 }
+
 function toMinutes(hhmm) {
   if (!hhmm) return null;
   if (typeof hhmm === "string") {
@@ -48,6 +49,7 @@ function toMinutes(hhmm) {
   const d = dayjs(hhmm);
   return d.isValid() ? d.hour() * 60 + d.minute() : null;
 }
+
 function minStartMaxEnd(istirahatArr) {
   if (!Array.isArray(istirahatArr) || istirahatArr.length === 0) return { start: null, end: null };
   let min = null, max = null;
@@ -64,6 +66,32 @@ function minStartMaxEnd(istirahatArr) {
     }
   }
   return { start: min?.toISOString() ?? null, end: max?.toISOString() ?? null };
+}
+
+// Ambil koordinat istirahat dari list (fallback)
+function getBreakCoordsFromList(list) {
+  if (!Array.isArray(list) || list.length === 0) return { start: null, end: null };
+
+  let start = null;
+  let end = null;
+
+  for (const it of list) {
+    // kemungkinan nama field koordinat "start"
+    const sLat = it.start_istirahat_latitude ?? it.start_latitude ?? it.start_lat ?? it.lat_start ?? it.latitude_start;
+    const sLon = it.start_istirahat_longitude ?? it.start_longitude ?? it.start_lon ?? it.lon_start ?? it.longitude_start;
+    // kemungkinan nama field koordinat "end"
+    const eLat = it.end_istirahat_latitude ?? it.end_latitude ?? it.end_lat ?? it.lat_end ?? it.latitude_end;
+    const eLon = it.end_istirahat_longitude ?? it.end_longitude ?? it.end_lon ?? it.lon_end ?? it.longitude_end;
+
+    if (!start && Number.isFinite(Number(sLat)) && Number.isFinite(Number(sLon))) {
+      start = pickCoord({ latitude: Number(sLat), longitude: Number(sLon) });
+    }
+    if (Number.isFinite(Number(eLat)) && Number.isFinite(Number(eLon))) {
+      // simpan yang terakhir ditemui sebagai "end" (untuk multi-interval)
+      end = pickCoord({ latitude: Number(eLat), longitude: Number(eLon) });
+    }
+  }
+  return { start, end };
 }
 
 /** Bisa terima payload nested (rec.absensi) ATAU row absensi langsung */
@@ -110,6 +138,22 @@ function flatten(rec) {
     user?.foto_profil_user ?? user?.foto ?? user?.avatarUrl ?? user?.avatar ?? user?.photoUrl ?? user?.photo ?? null
   );
 
+  // === NEW: koordinat istirahat langsung dari kolom DB ===
+  const startBreakCoordDirect = pickCoord({
+    latitude:  a.start_istirahat_latitude  ?? a.start_break_latitude  ?? a.lat_istirahat_mulai,
+    longitude: a.start_istirahat_longitude ?? a.start_break_longitude ?? a.lon_istirahat_mulai,
+  });
+  const endBreakCoordDirect = pickCoord({
+    latitude:  a.end_istirahat_latitude  ?? a.end_break_latitude  ?? a.lat_istirahat_selesai,
+    longitude: a.end_istirahat_longitude ?? a.end_break_longitude ?? a.lon_istirahat_selesai,
+  });
+
+  // === NEW: fallback dari list istirahat (kalau ada) ===
+  const { start: startBreakFromList, end: endBreakFromList } = getBreakCoordsFromList(istirahat_list);
+
+  const breakStartCoord = startBreakCoordDirect || startBreakFromList || null;
+  const breakEndCoord   = endBreakCoordDirect   || endBreakFromList   || null;
+
   return {
     id_absensi: a.id_absensi ?? rec?.id_absensi ?? rec?.id ?? null,
     user: user
@@ -129,15 +173,17 @@ function flatten(rec) {
     istirahat_mulai,
     istirahat_selesai,
     istirahat_list,
-    status_masuk,   
-    status_pulang,  
+    status_masuk,
+    status_pulang,
     lokasiIn: pickCoord(lokasiIn),
     lokasiOut: pickCoord(lokasiOut),
+    // === NEW
+    breakStartCoord,
+    breakEndCoord,
     photo_in,
     photo_out,
   };
 }
-
 
 export default function useAbsensiViewModel() {
   const [dateIn, setDateIn] = useState(dayjs());
@@ -187,7 +233,7 @@ export default function useAbsensiViewModel() {
           : "");
       if (label) s.add(label);
     };
-    for (const r of base) { add(r?.lokasiIn); add(r?.lokasiOut); }
+    for (const r of base) { add(r?.lokasiIn); add(r?.lokasiOut); add(r?.breakStartCoord); add(r?.breakEndCoord); }
     return Array.from(s).map(v => ({ value: v, label: v }));
   }, [base]);
 

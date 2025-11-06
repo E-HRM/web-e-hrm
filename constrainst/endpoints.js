@@ -43,6 +43,17 @@ const API_KATEGORI_IZIN_JAM = "/api/admin/kategori-izin-jam";
 const API_MOBILE_PENGAJUAN_CUTI = "/api/mobile/pengajuan-cuti";
 const API_MOBILE_PENGAJUAN_CUTI_APPROVALS = "/api/mobile/pengajuan-cuti/approvals";
 
+const API_MOBILE_IZIN_JAM = "/api/mobile/pengajuan-izin-jam";
+const API_MOBILE_IZIN_JAM_APPROVALS = "/api/mobile/pengajuan-izin-jam/approvals";
+
+// ==== SAKIT ====
+const API_MOBILE_IZIN_SAKIT = "/api/mobile/pengajuan-izin-sakit";
+const API_MOBILE_IZIN_SAKIT_APPROVALS = "/api/mobile/pengajuan-izin-sakit/approvals";
+
+// ==== TUKAR HARI ====
+const API_MOBILE_TUKAR_HARI = "/api/mobile/pengajuan-izin-tukar-hari";
+const API_MOBILE_TUKAR_HARI_APPROVALS = "/api/mobile/pengajuan-izin-tukar-hari/approvals";
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -182,4 +193,47 @@ export const ApiEndpoints = {
   // Keputusan approval (butuh id_approval_pengajuan_cuti)
   DecidePengajuanCutiMobile: (approvalId) =>
     `${API_MOBILE_PENGAJUAN_CUTI_APPROVALS}/${approvalId}`,
+
+    GetPengajuanIzinJamMobile: (qsObj = {}) => {
+    const qs = new URLSearchParams(qsObj);
+    const s = qs.toString();
+    return s ? `${API_MOBILE_IZIN_JAM}?${s}` : API_MOBILE_IZIN_JAM;
+  },
+  
+  CreatePengajuanIzinJamMobile: API_MOBILE_IZIN_JAM,
+  GetPengajuanIzinJamMobileById: (id) => `${API_MOBILE_IZIN_JAM}/${id}`,
+  UpdatePengajuanIzinJamMobile: (id) => `${API_MOBILE_IZIN_JAM}/${id}`,
+  DeletePengajuanIzinJamMobile: (id) => `${API_MOBILE_IZIN_JAM}/${id}`,
+
+  DecidePengajuanIzinJamMobile: (approvalId) =>
+    `${API_MOBILE_IZIN_JAM_APPROVALS}/${approvalId}`,
+
+    GetPengajuanIzinSakitMobile: (qsObj = {}) => {
+    const p = new URLSearchParams();
+    Object.entries(qsObj).forEach(([k, v]) => {
+      if (v === undefined || v === null) return;
+      const s = String(v).trim();
+      if (s !== "") p.set(k, s);
+    });
+    const qs = p.toString();
+    return qs ? `${API_MOBILE_IZIN_SAKIT}?${qs}` : API_MOBILE_IZIN_SAKIT;
+  },
+  // Approve/Reject Sakit
+  DecidePengajuanIzinSakitMobile: (approvalId) =>
+    `${API_MOBILE_IZIN_SAKIT_APPROVALS}/${approvalId}`,
+
+  // LIST Tukar Hari
+  GetPengajuanTukarHariMobile: (qsObj = {}) => {
+    const p = new URLSearchParams();
+    Object.entries(qsObj).forEach(([k, v]) => {
+      if (v === undefined || v === null) return;
+      const s = String(v).trim();
+      if (s !== "") p.set(k, s);
+    });
+    const qs = p.toString();
+    return qs ? `${API_MOBILE_TUKAR_HARI}?${qs}` : API_MOBILE_TUKAR_HARI;
+  },
+  // Approve/Reject Tukar Hari
+  DecidePengajuanTukarHariMobile: (approvalId) =>
+    `${API_MOBILE_TUKAR_HARI_APPROVALS}/${approvalId}`,
 };

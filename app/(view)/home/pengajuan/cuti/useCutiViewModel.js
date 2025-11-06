@@ -6,15 +6,16 @@ import { message } from "antd";
 import { ApiEndpoints } from "@/constrainst/endpoints";
 import { fetcher } from "@/app/utils/fetcher";
 
-// Map status API -> label UI
+// Seragamkan label status untuk UI
 function toLabelStatus(s) {
   const v = String(s || "").toLowerCase();
   if (v === "disetujui") return "Disetujui";
   if (v === "ditolak") return "Ditolak";
-  return "Menunggu"; // pending/menunggu -> Menunggu
+  // pending/menunggu -> Menunggu
+  return "Menunggu";
 }
 
-// Ambil approvalId (jika API list sudah include approvals milik actor)
+// Ambil approvalId dari approvals yang masih menunggu
 function pickApprovalId(item) {
   const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
   const pending = approvals.find((a) =>
@@ -23,12 +24,12 @@ function pickApprovalId(item) {
   return pending?.id_approval_pengajuan_cuti || null;
 }
 
-// Map item API → row yang dipakai CutiContent
+// Map item API → row tabel
 function mapItemToRow(item) {
   return {
     id: item?.id_pengajuan_cuti,
     nama: item?.user?.nama_pengguna ?? "—",
-    jabatan: item?.user?.role ?? "—", // sesuaikan jika backend kirim jabatan/divisi
+    jabatan: item?.user?.role ?? "—",
     foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
     jenisCuti: item?.kategori_cuti?.nama_kategori ?? "—",
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
@@ -38,29 +39,30 @@ function mapItemToRow(item) {
     handover: item?.handover ?? "—",
     buktiUrl: item?.lampiran_cuti_url ?? null,
     status: toLabelStatus(item?.status),
-    alasan: "", // biasanya ada di note approval (detail), list tidak wajib
+    alasan: "",
     tempAlasan: "",
     tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
-    approvalId: pickApprovalId(item), // penting untuk approve/reject
+    approvalId: pickApprovalId(item),
   };
 }
 
 function statusFromTab(tab) {
   if (tab === "disetujui") return "disetujui";
   if (tab === "ditolak") return "ditolak";
-  return "menunggu"; // tab "pengajuan"
+  // Tab "pengajuan": kita kirim "pending" (API treat pending/menunggu)
+  return "pending";
 }
 
 export default function useCutiViewModel() {
   const [search, setSearch] = useState("");
-  const [tab, setTab] = useState("pengajuan"); // 'pengajuan' | 'disetujui' | 'ditolak'
+  const [tab, setTab] = useState("pengajuan");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [reasonDraft, setReasonDraft] = useState({}); // simpan alasan sementara per id
+  const [reasonDraft, setReasonDraft] = useState({});
 
   // Key untuk SWR
   const listKey = useMemo(() => {
-    const qs = { status: statusFromTab(tab), page, perPage: pageSize };
+    const qs = { status: statusFromTab(tab), page, perPage: pageSize, all: 1 };
     return ApiEndpoints.GetPengajuanCutiMobile(qs);
   }, [tab, page, pageSize]);
 
@@ -68,13 +70,13 @@ export default function useCutiViewModel() {
     revalidateOnFocus: false,
   });
 
-  // Rows hasil map dari API
+  // Rows
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
     return items.map(mapItemToRow);
   }, [data]);
 
-  // Pencarian client-side
+  // Pencarian lokal
   const filteredData = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
@@ -94,7 +96,6 @@ export default function useCutiViewModel() {
     );
   }, [rows, search]);
 
-  // Simpan catatan penolakan sementara (dipakai modal sebelum submit)
   function handleAlasanChange(id, value) {
     setReasonDraft((prev) => ({ ...prev, [id]: value }));
   }
@@ -169,30 +170,22 @@ export default function useCutiViewModel() {
   const refresh = useCallback(() => mutate(), [mutate]);
 
   return {
-    // data untuk tabel
     data: rows,
     filteredData,
-
-    // UI state
     tab,
     setTab,
     search,
     setSearch,
-
-    // pagination (opsional dipakai)
     page,
     pageSize,
     changePage: (p, ps) => {
       setPage(p);
       setPageSize(ps);
     },
-
-    // actions
     handleAlasanChange,
     approve,
     reject,
     refresh,
-
     loading: isLoading,
   };
 }

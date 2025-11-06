@@ -1,177 +1,107 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
+import useSWR from "swr";
 import { message } from "antd";
+import { ApiEndpoints } from "@/constrainst/endpoints";
+import { fetcher } from "@/app/utils/fetcher";
 
-/** ViewModel Izin Jam – konsisten dengan Cuti/Tukar Hari/Sakit
- * Status: "Menunggu" | "Disetujui" | "Ditolak"
- * Tabs  : "pengajuan" | "disetujui" | "ditolak"
- */
+/* ===== Helpers ===== */
+function statusFromTab(tab) {
+  if (tab === "disetujui") return "disetujui";
+  if (tab === "ditolak") return "ditolak";
+  return "pending"; // tab "pengajuan"
+}
+
+function toLabelStatus(s) {
+  const v = String(s || "").toLowerCase();
+  if (v === "disetujui") return "Disetujui";
+  if (v === "ditolak") return "Ditolak";
+  return "Menunggu"; // treat pending/menunggu/null/""
+}
+
+function toHM(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/* Ambil approval pending untuk aktor dari payload API list (kalau ada) */
+function pickApprovalId(item) {
+  const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
+  const a = approvals.find((ap) => {
+    const d = String(ap?.decision ?? "").trim().toLowerCase();
+    return d === "" || d === "pending" || d === "menunggu";
+  });
+  return a?.id_approval_pengajuan_izin_jam || null;
+}
+
+/* Map item API → row tabel */
+function mapItemToRow(item) {
+  return {
+    id: item?.id_pengajuan_izin_jam,
+    // user
+    nama: item?.user?.nama_pengguna ?? "—",
+    jabatan: item?.user?.role ?? "—",
+    foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
+    // waktu
+    tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
+    tglIzin: item?.tanggal_izin ?? null,
+    jamMulai: toHM(item?.jam_mulai) ?? "—",
+    jamSelesai: toHM(item?.jam_selesai) ?? "—",
+    // pengganti (opsional)
+    pgTglMulai: item?.tanggal_pengganti ?? null,
+    pgJamMulai: toHM(item?.jam_mulai_pengganti) ?? null,
+    pgTglSelesai: item?.tanggal_pengganti ?? null, // biasa sama dgn pgTglMulai
+    pgJamSelesai: toHM(item?.jam_selesai_pengganti) ?? null,
+    // detail
+    kategori: item?.kategori?.nama_kategori ?? "—",
+    keperluan: item?.keperluan ?? "—",
+    handover: item?.handover ?? "—",
+    bukti: item?.lampiran_izin_jam_url ?? null,
+    // status
+    status: toLabelStatus(item?.status),
+    alasan: "",
+    tempAlasan: "",
+    tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
+    // untuk approve/reject
+    approvalId: pickApprovalId(item),
+  };
+}
+
 export default function useIzinJamViewModel() {
-  const initial = [
-    // --- Menunggu ---
-    {
-      id: 1,
-      nama: "Dewa Ode",
-      jabatan: "Manager | IDE",
-      foto: "https://randomuser.me/api/portraits/women/65.jpg",
-
-      tglPengajuan: "2025-07-19T16:28:00+08:00",
-
-      // Izin jam
-      tglIzin: "2025-07-23",
-      jamMulai: "09:00",
-      jamSelesai: "13:00",
-
-      // Jam pengganti (boleh kosong)
-      pgTglMulai: null,
-      pgJamMulai: null,
-      pgTglSelesai: null,
-      pgJamSelesai: null,
-
-      // Kategori hanya 2 opsi:
-      // "Jam extra di hari sama" | "Mengganti dengan jam saat libur"
-      kategori: "Jam extra di hari sama",
-      keperluan: "Mengikuti rapat mendadak dengan klien proyek.",
-      handover:
-        "Tugas administrasi proyek diambil alih oleh Ni Luh Ayu Sari selama izin.",
-      bukti: "izin1.pdf",
-
-      status: "Menunggu",
-      alasan: "",
-      tempAlasan: "",
-      tglKeputusan: null,
-    },
-    // --- Disetujui ---
-    {
-      id: 2,
-      nama: "Kimartha Putri",
-      jabatan: "Konsultan | Super Team OS… · WITA (UTC+8) | Gen Z",
-      foto: "https://randomuser.me/api/portraits/women/66.jpg",
-
-      tglPengajuan: "2025-05-25T07:37:00+08:00",
-
-      tglIzin: "2025-05-31",
-      jamMulai: "09:00",
-      jamSelesai: "18:00",
-
-      pgTglMulai: "2025-06-15",
-      pgJamMulai: "08:30",
-      pgTglSelesai: "2025-06-15",
-      pgJamSelesai: "18:08",
-
-      kategori: "Mengganti dengan jam saat libur",
-      keperluan: "Mendampingi keluarga ke rumah sakit.",
-      handover:
-        "Pekerjaan CS dilanjutkan oleh tim shift sore. Laporan harian tetap diinput.",
-      bukti: "izin2.pdf",
-
-      status: "Disetujui",
-      alasan: "",
-      tempAlasan: "",
-      tglKeputusan: "2025-06-01T10:10:00+08:00",
-    },
-    // --- Ditolak ---
-    {
-      id: 3,
-      nama: "Kadek Rian Saputra",
-      jabatan: "IDE | Social Media",
-      foto: "https://randomuser.me/api/portraits/men/46.jpg",
-
-      tglPengajuan: "2025-10-20T10:20:00+08:00",
-
-      tglIzin: "2025-10-27",
-      jamMulai: "09:00",
-      jamSelesai: "11:30",
-
-      pgTglMulai: null,
-      pgJamMulai: null,
-      pgTglSelesai: null,
-      pgJamSelesai: null,
-
-      kategori: "Jam extra di hari sama",
-      keperluan: "Koordinasi konten promosi offline.",
-      handover: "Postingan media sosial dipegang sementara oleh Gede Adi Putra.",
-      bukti: "izin3.pdf",
-
-      status: "Ditolak",
-      alasan: "Tidak ada bukti pendukung.",
-      tempAlasan: "",
-      tglKeputusan: "2025-10-20T18:10:00+08:00",
-    },
-    // --- Menunggu ---
-    {
-      id: 4,
-      nama: "I Gede Agus Mahendra",
-      jabatan: "Developer | Web",
-      foto: "https://randomuser.me/api/portraits/men/50.jpg",
-
-      tglPengajuan: "2025-06-10T09:35:00+08:00",
-
-      tglIzin: "2025-06-12",
-      jamMulai: "14:00",
-      jamSelesai: "17:00",
-
-      pgTglMulai: "2025-06-20",
-      pgJamMulai: "15:00",
-      pgTglSelesai: "2025-06-20",
-      pgJamSelesai: "16:00",
-
-      kategori: "Mengganti dengan jam saat libur",
-      keperluan: "Urus dokumen penting ke kantor pemerintahan.",
-      handover:
-        "Review PR diambil alih oleh tim backend, deploy ditunda ke malam.",
-      bukti: "izin4.pdf",
-
-      status: "Menunggu",
-      alasan: "",
-      tempAlasan: "",
-      tglKeputusan: null,
-    },
-    // --- Menunggu ---
-    {
-      id: 5,
-      nama: "Ni Luh Ayu Sari",
-      jabatan: "Admission | Admission",
-      foto: "https://randomuser.me/api/portraits/women/47.jpg",
-
-      tglPengajuan: "2025-10-22T12:12:00+08:00",
-
-      tglIzin: "2025-10-26",
-      jamMulai: "13:00",
-      jamSelesai: "16:00",
-
-      pgTglMulai: null,
-      pgJamMulai: null,
-      pgTglSelesai: null,
-      pgJamSelesai: null,
-
-      kategori: "Jam extra di hari sama",
-      keperluan: "Mengurus administrasi keluarga.",
-      handover: "Aktivitas pelayanan front office diteruskan oleh Gede Adi.",
-      bukti: "izin5.pdf",
-
-      status: "Menunggu",
-      alasan: "",
-      tempAlasan: "",
-      tglKeputusan: null,
-    },
-  ];
-
-  const [data, setData] = useState(initial);
-  const [search, setSearch] = useState("");
   const [tab, setTab] = useState("pengajuan"); // 'pengajuan' | 'disetujui' | 'ditolak'
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [reasonDraft, setReasonDraft] = useState({}); // catatan tolak per-id
 
+  // Key SWR
+  const listKey = useMemo(() => {
+    const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
+    return ApiEndpoints.GetPengajuanIzinJamMobile(qs);
+  }, [tab, page, pageSize]);
+
+  const { data, isLoading, mutate } = useSWR(listKey, fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  // rows dari API
+  const rows = useMemo(() => {
+    const items = Array.isArray(data?.data) ? data.data : [];
+    return items.map(mapItemToRow);
+  }, [data]);
+
+  // pencarian client-side
   const filteredData = useMemo(() => {
-    const term = search.toLowerCase();
-    const byTab = data.filter((d) =>
-      tab === "pengajuan"
-        ? d.status === "Menunggu"
-        : tab === "disetujui"
-        ? d.status === "Disetujui"
-        : d.status === "Ditolak"
-    );
-    return byTab.filter((d) =>
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((d) =>
       [
         d.nama,
         d.jabatan,
@@ -190,80 +120,122 @@ export default function useIzinJamViewModel() {
         .toLowerCase()
         .includes(term)
     );
-  }, [data, search, tab]);
+  }, [rows, search]);
 
-  function handleAlasanChange(id, value) {
-    setData((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, tempAlasan: value } : it))
-    );
-  }
-
-  // Setujui: tidak wajib alasan
-  function approve(id) {
-    setData((prev) =>
-      prev.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              status: "Disetujui",
-              alasan: it.tempAlasan || it.alasan,
-              tempAlasan: "",
-              tglKeputusan: new Date().toISOString(),
-            }
-          : it
-      )
-    );
-    message.success("Pengajuan izin jam disetujui");
-  }
-
-  // Tolak: wajib alasan
-  function reject(id) {
-    const row = data.find((d) => d.id === id);
-    if (!row?.tempAlasan && !row?.alasan) {
-      message.error("Alasan wajib diisi saat menolak.");
-      return;
-    }
-    setData((prev) =>
-      prev.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              status: "Ditolak",
-              alasan: it.tempAlasan || it.alasan,
-              tempAlasan: "",
-              tglKeputusan: new Date().toISOString(),
-            }
-          : it
-      )
-    );
-    message.success("Pengajuan izin jam ditolak");
-  }
-
-  function resetDummy() {
-    setData(initial);
-    setSearch("");
-  }
-
+  // counts per tab (berbasis data halaman ini)
   const counts = useMemo(() => {
-    const all = data ?? [];
+    const all = rows ?? [];
     return {
       pengajuan: all.filter((d) => d.status === "Menunggu").length,
       disetujui: all.filter((d) => d.status === "Disetujui").length,
       ditolak: all.filter((d) => d.status === "Ditolak").length,
     };
-  }, [data]);
+  }, [rows]);
+
+  // catatan sementara penolakan
+  const handleAlasanChange = useCallback((id, value) => {
+    setReasonDraft((prev) => ({ ...prev, [id]: value }));
+  }, []);
+
+  // Approve
+  const approve = useCallback(
+    async (id, note) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) return;
+      if (!row.approvalId) {
+        message.error(
+          "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
+        );
+        return;
+      }
+      try {
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanIzinJamMobile(row.approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              decision: "disetujui",
+              note: note ?? null,
+            }),
+          }
+        );
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.message || "Gagal menyimpan keputusan.");
+        message.success("Pengajuan izin jam disetujui");
+        mutate();
+      } catch (e) {
+        message.error(e?.message || "Gagal menyimpan keputusan.");
+      }
+    },
+    [rows, mutate]
+  );
+
+  // Reject
+  const reject = useCallback(
+    async (id, note) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) return;
+      const reason = (note ?? reasonDraft[id] ?? "").trim();
+      if (!reason) {
+        message.error("Alasan wajib diisi saat menolak.");
+        return;
+      }
+      if (!row.approvalId) {
+        message.error(
+          "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
+        );
+        return;
+      }
+      try {
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanIzinJamMobile(row.approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision: "ditolak", note: reason }),
+          }
+        );
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.message || "Gagal menyimpan keputusan.");
+        message.success("Pengajuan izin jam ditolak");
+        mutate();
+      } catch (e) {
+        message.error(e?.message || "Gagal menyimpan keputusan.");
+      }
+    },
+    [rows, reasonDraft, mutate]
+  );
+
+  const refresh = useCallback(() => mutate(), [mutate]);
 
   return {
-    data,
+    // data
+    rows,
     filteredData,
-    search,
-    setSearch,
+
+    // state UI
     tab,
     setTab,
-    counts,
+    search,
+    setSearch,
+
+    // pagination
+    page,
+    pageSize,
+    changePage: (p, ps) => {
+      setPage(p);
+      setPageSize(ps);
+    },
+
+    // actions
     handleAlasanChange,
     approve,
     reject,
-    resetDummy,
+    refresh,
+
+    // misc
+    counts,
+    loading: isLoading,
   };
 }

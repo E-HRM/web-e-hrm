@@ -35,7 +35,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import useAbsensiViewModel from "./useAbsensiViewModel";
-import ExportExcelModal from "../../../components/modal/ExportExcelModal"; 
+import ExportExcelModal from "../../../components/modal/ExportExcelModal";
 
 /* -------------------- Helpers tampilan -------------------- */
 function fmtHHmmss(v) {
@@ -200,13 +200,13 @@ function AttendanceCard({
   stats,
   headerRight,
   selectedDate,
-  onOpenExport, // <— tambahan kecil: dipakai oleh tombol Export
+  onOpenExport, // tombol Export
 }) {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoSrc, setPhotoSrc] = useState(null);
 
   const [mapOpen, setMapOpen] = useState(false);
-  const [mapWhich, setMapWhich] = useState("start");
+  const [mapWhich, setMapWhich] = useState("start");   // 'start' | 'breakStart' | 'breakEnd' | 'end'
   const [mapEmbedUrl, setMapEmbedUrl] = useState(null);
   const [activeRow, setActiveRow] = useState(null);
 
@@ -226,8 +226,50 @@ function AttendanceCard({
       6
     )}%2C${lon.toFixed(6)}`;
   };
-  const getStartCoord = (row) => row?.lokasiIn || null;
-  const getEndCoord = (row) => row?.lokasiOut || null;
+
+  // === Ambil koordinat per jenis ===
+  const getStartCoord      = (row) => row?.lokasiIn || null;
+  const getEndCoord        = (row) => row?.lokasiOut || null;
+  const getBreakStartCoord = (row) => row?.breakStartCoord || null;
+  const getBreakEndCoord   = (row) => row?.breakEndCoord || null;
+
+  const coordFor = (which, row) => {
+    if (!row) return null;
+    switch (which) {
+      case "start":      return getStartCoord(row);
+      case "breakStart": return getBreakStartCoord(row);
+      case "breakEnd":   return getBreakEndCoord(row);
+      case "end":        return getEndCoord(row);
+      default: return null;
+    }
+  };
+
+  const openPhoto = (which, row) => {
+    const src = which === "in" ? row?.photo_in : row?.photo_out;
+    if (!src) return;
+    setPhotoSrc(normalizePhotoUrl(src));
+    setPhotoOpen(true);
+  };
+
+  const openMap = (which, row) => {
+    const c = coordFor(which, row);
+    if (!c) return;
+    setActiveRow(row);
+    setMapWhich(which);
+    setMapEmbedUrl(makeOsmEmbed(c.lat, c.lon));
+    setMapOpen(true);
+  };
+
+  // opsi segmented dinamis sesuai data yang ada
+  const mapOptions = useMemo(() => {
+    if (!activeRow) return [];
+    const opts = [];
+    if (getStartCoord(activeRow))      opts.push({ label: "Start", value: "start" });
+    if (getBreakStartCoord(activeRow)) opts.push({ label: "Break Start", value: "breakStart" });
+    if (getBreakEndCoord(activeRow))   opts.push({ label: "Break End", value: "breakEnd" });
+    if (getEndCoord(activeRow))        opts.push({ label: "End", value: "end" });
+    return opts;
+  }, [activeRow]);
 
   const data = useMemo(() => {
     const q = (filters?.q || "").toLowerCase().trim();
@@ -260,23 +302,6 @@ function AttendanceCard({
         return hay.includes(q);
       });
   }, [rows, filters, selectedDate]);
-
-  const openPhoto = (which, row) => {
-    const src = which === "in" ? row?.photo_in : row?.photo_out;
-    if (!src) return;
-    setPhotoSrc(normalizePhotoUrl(src));
-    setPhotoOpen(true);
-  };
-
-  const openMap = (which, row) => {
-    const coord = which === "end" ? getEndCoord(row) : getStartCoord(row);
-    if (!coord) return;
-    const url = makeOsmEmbed(coord.lat, coord.lon);
-    setActiveRow(row);
-    setMapWhich(which);
-    setMapEmbedUrl(url);
-    setMapOpen(true);
-  };
 
   const columns = useMemo(
     () => [
@@ -355,7 +380,7 @@ function AttendanceCard({
                   shape="circle"
                   icon={<EnvironmentOutlined />}
                   onClick={() => openMap("start", r)}
-                  disabled={!r.lokasiIn}
+                  disabled={!getStartCoord(r)}
                 />
               </Tooltip>
             </div>
@@ -368,10 +393,23 @@ function AttendanceCard({
       {
         title: "Mulai Istirahat",
         dataIndex: "istirahat_mulai",
-        width: 220,
-        render: (v) => (
-          <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
-            {fmtHHmmss(v)}
+        width: 240,
+        render: (_, r) => (
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
+              {fmtHHmmss(r.istirahat_mulai)}
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip title="Lihat lokasi mulai istirahat">
+                <Button
+                  size="middle"
+                  shape="circle"
+                  icon={<EnvironmentOutlined />}
+                  onClick={() => openMap("breakStart", r)}
+                  disabled={!getBreakStartCoord(r)}
+                />
+              </Tooltip>
+            </div>
           </div>
         ),
         sorter: (a, b) =>
@@ -381,10 +419,23 @@ function AttendanceCard({
       {
         title: "Selesai Istirahat",
         dataIndex: "istirahat_selesai",
-        width: 220,
-        render: (v) => (
-          <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
-            {fmtHHmmss(v)}
+        width: 240,
+        render: (_, r) => (
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
+              {fmtHHmmss(r.istirahat_selesai)}
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip title="Lihat lokasi selesai istirahat">
+                <Button
+                  size="middle"
+                  shape="circle"
+                  icon={<EnvironmentOutlined />}
+                  onClick={() => openMap("breakEnd", r)}
+                  disabled={!getBreakEndCoord(r)}
+                />
+              </Tooltip>
+            </div>
           </div>
         ),
         sorter: (a, b) =>
@@ -396,7 +447,7 @@ function AttendanceCard({
         dataIndex: "jam_pulang",
         width: 280,
         render: (_, r) => (
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items中心 justify-between gap-2">
             <div>
               <div className="text-3xl md:text-4xl font-bold tracking-tight tabular-nums">
                 {fmtHHmmss(r.jam_pulang)}
@@ -410,7 +461,7 @@ function AttendanceCard({
                   shape="circle"
                   icon={<EnvironmentOutlined />}
                   onClick={() => openMap("end", r)}
-                  disabled={!r.lokasiOut}
+                  disabled={!getEndCoord(r)}
                 />
               </Tooltip>
             </div>
@@ -436,14 +487,14 @@ function AttendanceCard({
             <div className="mt-1 text-sm text-gray-500">{dateLabel}</div>
           </div>
 
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
             {headerRight}
             <Tooltip title="Export data">
               <Button
                 icon={<DownloadOutlined />}
                 className="rounded-lg"
                 type="primary"
-                onClick={onOpenExport} // <— buka modal export
+                onClick={onOpenExport}
               >
                 Export
               </Button>
@@ -542,21 +593,19 @@ function AttendanceCard({
         zIndex={1550}
         getContainer={() => document.body}
       >
-        <div className="mb-2">
-          <Segmented
-            value={mapWhich}
-            onChange={(v) => {
-              setMapWhich(v);
-              if (!activeRow) return;
-              const src = v === "end" ? (activeRow?.lokasiOut || null) : (activeRow?.lokasiIn || null);
-              if (src) setMapEmbedUrl(makeOsmEmbed(src.lat, src.lon));
-            }}
-            options={[
-              { label: "Start", value: "start" },
-              { label: "End", value: "end" },
-            ]}
-          />
-        </div>
+        {mapOptions.length > 0 && (
+          <div className="mb-2">
+            <Segmented
+              value={mapWhich}
+              onChange={(v) => {
+                const c = coordFor(v, activeRow);
+                setMapWhich(v);
+                if (c) setMapEmbedUrl(makeOsmEmbed(c.lat, c.lon));
+              }}
+              options={mapOptions}
+            />
+          </div>
+        )}
         {mapEmbedUrl ? (
           <div style={{ width: "100%", height: 420, borderRadius: 12, overflow: "hidden", border: "1px solid #e5e7eb" }}>
             <iframe
@@ -580,7 +629,7 @@ export default function AbsensiContent() {
 
   const [mode, setMode] = useState("in");
   const isIn = mode === "in";
-  const [exportOpen, setExportOpen] = useState(false); // <— state modal export
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {}, []);
 
@@ -638,16 +687,15 @@ export default function AbsensiContent() {
             />
           }
           selectedDate={tableDate}
-          onOpenExport={() => setExportOpen(true)} // <— buka modal export
+          onOpenExport={() => setExportOpen(true)}
         />
 
-        {/* Modal Export (tanpa ubah API & VM) */}
         <ExportExcelModal
           open={exportOpen}
           onClose={() => setExportOpen(false)}
           rowsAll={vm.rowsAll}
-          employeeOptions={vm.employeeOptions}   // NEW
-          lokasiOptions={vm.lokasiOptions}       // NEW
+          employeeOptions={vm.employeeOptions}
+          lokasiOptions={vm.lokasiOptions}
         />
       </div>
     </div>

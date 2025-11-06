@@ -1,212 +1,180 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
+import useSWR from "swr";
 import { message } from "antd";
+import { ApiEndpoints } from "@/constrainst/endpoints";
+import { fetcher } from "@/app/utils/fetcher";
 
-/**
- * ViewModel Dummy – Izin Sakit
- * Status: "Menunggu" | "Disetujui" | "Ditolak"
- */
+// Normalisasi status API -> label UI
+function toLabelStatus(s) {
+  const v = String(s || "").toLowerCase();
+  if (v === "disetujui") return "Disetujui";
+  if (v === "ditolak") return "Ditolak";
+  return "Menunggu"; // pending/menunggu
+}
+
+// Ambil approvalId pending (API sudah filter approvals relevan untuk aktor)
+function pickApprovalId(item) {
+  const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
+  const pending = approvals.find((a) =>
+    ["pending", "menunggu"].includes(String(a?.decision || "").toLowerCase())
+  );
+  return pending?.id_approval_pengajuan_izin_sakit || null;
+}
+
+// Map item API → row UI
+function mapItemToRow(item) {
+  const tanggal =
+    item?.tanggal_sakit ||
+    item?.tanggal ||
+    item?.created_at ||
+    item?.createdAt ||
+    null;
+
+  return {
+    id: item?.id_pengajuan_izin_sakit,
+    tanggal,
+    nama: item?.user?.nama_pengguna ?? "—",
+    jabatan: item?.user?.role ?? "—",
+    kategori: item?.kategori_sakit?.nama_kategori ?? item?.kategori?.nama_kategori ?? "—",
+    handover: item?.handover ?? "—",
+    buktiUrl: item?.lampiran_sakit_url ?? item?.lampiran_url ?? null,
+    status: toLabelStatus(item?.status),
+    alasan: "", // biasanya ada di detail approval; list ga wajib
+    tempAlasan: "",
+    foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
+    tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
+    approvalId: pickApprovalId(item),
+  };
+}
+
+function statusFromTab(tab) {
+  if (tab === "disetujui") return "disetujui";
+  if (tab === "ditolak") return "ditolak";
+  return "pending"; // tab pengajuan
+}
+
 export default function useSakitViewModel() {
-  const initial = [
-    // --- Menunggu ---
-    {
-      id: 1,
-      tanggal: "2025-10-23",
-      nama: "I Gede Agung Pramana",
-      jabatan: "Konsultan | Konsultan",
-      kategori: "Demam",
-      handover:
-        "Tugas proyek minggu ini dilanjutkan oleh Ni Luh Ayu Sari, pastikan laporan harian tetap diperbarui setiap sore melalui sistem internal.",
-      buktiUrl: "/dummy/file1.pdf",
-      status: "Menunggu",
-      alasan: "",
-      tempAlasan: "",
-      foto: "https://randomuser.me/api/portraits/men/45.jpg",
-      tglKeputusan: null,
-    },
-    {
-      id: 4,
-      tanggal: "2025-10-19",
-      nama: "Kadek Rian Saputra",
-      jabatan: "Admission | Admission",
-      kategori: "Sakit Kepala",
-      handover:
-        "Analisis data penjualan diteruskan ke Komang Dewi agar laporan kuartal selesai tepat waktu dan tidak ada kendala input.",
-      buktiUrl: "/dummy/file4.pdf",
-      status: "Menunggu",
-      alasan: "",
-      tempAlasan: "",
-      foto: "https://randomuser.me/api/portraits/men/46.jpg",
-      tglKeputusan: null,
-    },
-
-    // --- Disetujui ---
-    {
-      id: 2,
-      tanggal: "2025-10-22",
-      nama: "Ni Luh Ayu Sari",
-      jabatan: "Admission | Admission",
-      kategori: "Flu/Pilek",
-      handover:
-        "Administrasi pasien diteruskan kepada Gede Adi, termasuk rekap data mingguan dan verifikasi dokumen tertunda.",
-      buktiUrl: "/dummy/file2.pdf",
-      status: "Disetujui",
-      alasan: "",
-      tempAlasan: "",
-      foto: "https://randomuser.me/api/portraits/women/47.jpg",
-      tglKeputusan: "2025-10-22T10:00:00+08:00",
-    },
-
-    // --- Ditolak ---
-    {
-      id: 3,
-      tanggal: "2025-10-20",
-      nama: "Gede Adi Putra",
-      jabatan: "IDE | Social Media",
-      kategori: "Maag",
-      handover:
-        "Tanggung jawab perancangan sistem sementara diserahkan ke tim HR agar proyek tetap berjalan.",
-      buktiUrl: "/dummy/file3.pdf",
-      status: "Ditolak",
-      alasan: "Tidak ada surat keterangan dokter.",
-      tempAlasan: "",
-      foto: "https://randomuser.me/api/portraits/men/51.jpg",
-      tglKeputusan: "2025-10-20T16:30:00+08:00",
-    },
-
-    // --- Tambahan dummy ---
-    {
-      id: 5,
-      tanggal: "2025-10-18",
-      nama: "Komang Dwi Yuliana",
-      jabatan: "OPS | CS",
-      kategori: "Radang Tenggorokan",
-      handover: "Shift sore ditukar dengan Putu Satria. SLA tetap dipenuhi.",
-      buktiUrl: "/dummy/file5.pdf",
-      status: "Menunggu",
-      alasan: "",
-      tempAlasan: "",
-      foto: "https://randomuser.me/api/portraits/women/66.jpg",
-      tglKeputusan: null,
-    },
-    {
-      id: 6,
-      tanggal: "2025-10-17",
-      nama: "I Made Dwi Santosa",
-      jabatan: "Support | Helpdesk",
-      kategori: "Sakit",
-      handover: "Ticket akan di-*auto-assign* ke tim helpdesk lain.",
-      buktiUrl: "/dummy/file6.pdf",
-      status: "Disetujui",
-      alasan: "Lampiran surat dokter lengkap.",
-      tempAlasan: "",
-      foto: "https://randomuser.me/api/portraits/men/73.jpg",
-      tglKeputusan: "2025-10-17T12:05:00+08:00",
-    },
-    {
-      id: 7,
-      tanggal: "2025-10-16",
-      nama: "Ni Komang Ayu Lestari",
-      jabatan: "Sales | B2B",
-      kategori: "Pusing",
-      handover: "Follow-up klien dipegang Satria.",
-      buktiUrl: "/dummy/file7.pdf",
-      status: "Ditolak",
-      alasan: "Mendekati *quarter closing*, mohon atur ulang.",
-      tempAlasan: "",
-      foto: "https://randomuser.me/api/portraits/women/21.jpg",
-      tglKeputusan: "2025-10-16T17:00:00+08:00",
-    },
-  ];
-
-  const [data, setData] = useState(initial);
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("pengajuan"); // 'pengajuan' | 'disetujui' | 'ditolak'
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [reasonDraft, setReasonDraft] = useState({});
+
+  // Key SWR
+  const listKey = useMemo(() => {
+    const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
+    return ApiEndpoints.GetPengajuanIzinSakitMobile(qs);
+  }, [tab, page, pageSize]);
+
+  const { data, isLoading, mutate } = useSWR(listKey, fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  const rows = useMemo(() => {
+    const items = Array.isArray(data?.data) ? data.data : [];
+    return items.map(mapItemToRow);
+  }, [data]);
 
   const filteredData = useMemo(() => {
-    // Urutkan terbaru dulu (tanggal)
-    const sorted = [...data].sort(
-      (a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime()
-    );
-    const term = search.toLowerCase();
-    const byTab = sorted.filter((d) =>
-      tab === "pengajuan"
-        ? d.status === "Menunggu"
-        : tab === "disetujui"
-        ? d.status === "Disetujui"
-        : d.status === "Ditolak"
-    );
-    return byTab.filter((d) =>
+    const term = search.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((d) =>
       [d.nama, d.jabatan, d.kategori, d.handover, d.tanggal]
         .join(" ")
         .toLowerCase()
         .includes(term)
     );
-  }, [data, search, tab]);
+  }, [rows, search]);
 
   function handleAlasanChange(id, value) {
-    setData((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, tempAlasan: value } : it))
-    );
+    setReasonDraft((prev) => ({ ...prev, [id]: value }));
   }
 
-  // Setujui: tidak wajib alasan
-  function approve(id) {
-    setData((prev) =>
-      prev.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              status: "Disetujui",
-              alasan: it.tempAlasan || it.alasan,
-              tempAlasan: "",
-              tglKeputusan: new Date().toISOString(),
-            }
-          : it
-      )
-    );
-    message.success("Izin sakit disetujui");
-  }
+  const approve = useCallback(
+    async (id, note) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) return;
+      if (!row.approvalId) {
+        message.error("Tidak menemukan id approval. Pastikan API list mengembalikan approvals.");
+        return;
+      }
+      try {
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanIzinSakitMobile(row.approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision: "disetujui", note: note ?? null }),
+          }
+        );
+        const json = await res.json();
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
+        message.success("Izin sakit disetujui");
+        mutate();
+      } catch (e) {
+        message.error(e?.message || "Gagal menyimpan keputusan.");
+      }
+    },
+    [rows, mutate]
+  );
 
-  // Tolak: wajib alasan
-  function reject(id) {
-    const row = data.find((d) => d.id === id);
-    if (!row?.tempAlasan && !row?.alasan) {
-      message.error("Alasan wajib diisi saat menolak.");
-      return;
-    }
-    setData((prev) =>
-      prev.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              status: "Ditolak",
-              alasan: it.tempAlasan || it.alasan,
-              tempAlasan: "",
-              tglKeputusan: new Date().toISOString(),
-            }
-          : it
-      )
-    );
-    message.success("Izin sakit ditolak");
-  }
+  const reject = useCallback(
+    async (id, note) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) return;
+      const reason = (note ?? reasonDraft[id] ?? "").trim();
+      if (!reason) {
+        message.error("Alasan wajib diisi saat menolak.");
+        return;
+      }
+      if (!row.approvalId) {
+        message.error("Tidak menemukan id approval. Pastikan API list mengembalikan approvals.");
+        return;
+      }
+      try {
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanIzinSakitMobile(row.approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision: "ditolak", note: reason }),
+          }
+        );
+        const json = await res.json();
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
+        message.success("Izin sakit ditolak");
+        mutate();
+      } catch (e) {
+        message.error(e?.message || "Gagal menyimpan keputusan.");
+      }
+    },
+    [rows, reasonDraft, mutate]
+  );
 
-  function resetDummy() {
-    setData(initial);
-    setSearch("");
-  }
+  const refresh = useCallback(() => mutate(), [mutate]);
 
   return {
-    data,
-    search,
-    tab,
+    data: rows,
     filteredData,
-    setSearch,
+    loading: isLoading,
+
+    tab,
     setTab,
+    search,
+    setSearch,
+
+    page,
+    pageSize,
+    changePage: (p, ps) => {
+      setPage(p);
+      setPageSize(ps);
+    },
+
     handleAlasanChange,
     approve,
     reject,
-    resetDummy,
+    refresh,
   };
 }
