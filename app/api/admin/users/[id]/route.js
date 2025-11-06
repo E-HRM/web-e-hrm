@@ -5,7 +5,14 @@ import db from '../../../../../lib/prisma';
 import { verifyAuthToken } from '../../../../../lib/jwt';
 import { authenticateRequest } from '../../../../../app/utils/auth/authUtils';
 import { createClient } from '@supabase/supabase-js';
-import { JENIS_KELAMIN_VALUES, STATUS_KERJA_VALUES, normalizeNullableEnum, normalizeNullableInt, normalizeNullableString, normalizeOptionalDate } from '../../../_utils/user-field-normalizer';
+import {
+  JENIS_KELAMIN_VALUES,
+  STATUS_KERJA_VALUES,
+  normalizeNullableEnum,
+  normalizeNullableInt,
+  normalizeNullableString,
+  normalizeOptionalDate
+} from '../../../_utils/user-field-normalizer';
 
 const normRole = (r) => String(r || '').trim().toUpperCase();
 const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
@@ -26,7 +33,7 @@ async function getAdminActor(req) {
   return { id: sessionOrRes.user.id, role: normRole(sessionOrRes.user.role), source: 'session' };
 }
 
-// Supabase helpers (unchanged)
+/* ========== Supabase helpers ========== */
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -68,6 +75,7 @@ async function uploadFotoToSupabase(nama_pengguna, file) {
   return pub?.publicUrl || null;
 }
 
+/* ========== Safe body parser (no crash on empty) ========== */
 async function parseBody(req) {
   const ct = req.headers.get('content-type') || '';
   if (ct.includes('multipart/form-data')) {
@@ -79,12 +87,18 @@ async function parseBody(req) {
     }
     return { type: 'form', body: obj };
   }
-  if (ct) return { type: 'json', body: await req.json() };
-  // DELETE sometimes no content-type, try json but allow empty
-  try { return { type: 'json', body: await req.json() }; } catch { return { type: 'json', body: {} }; }
+  // Non-form: baca sebagai text dulu agar aman jika kosong
+  let raw = '';
+  try { raw = await req.text(); } catch { raw = ''; }
+  if (!raw) return { type: 'json', body: {} };
+  try {
+    return { type: 'json', body: JSON.parse(raw) };
+  } catch {
+    return { type: 'text', body: raw };
+  }
 }
 
-// ===== GET =====
+/* ========== GET ========== */
 export async function GET(_req, { params }) {
   const actor = await getAdminActor(_req);
   if (actor instanceof NextResponse) return actor;
@@ -155,7 +169,7 @@ export async function GET(_req, { params }) {
   }
 }
 
-// ===== PUT =====
+/* ========== PUT ========== */
 export async function PUT(req, { params }) {
   const actor = await getAdminActor(req);
   if (actor instanceof NextResponse) return actor;
@@ -357,7 +371,7 @@ export async function PUT(req, { params }) {
   }
 }
 
-// ===== DELETE (soft delete + catatan_delete) =====
+/* ========== DELETE (soft delete → permanent delete kalau dihapus lagi) ========== */
 export async function DELETE(req, { params }) {
   const actor = await getAdminActor(req);
   if (actor instanceof NextResponse) return actor;
@@ -370,21 +384,45 @@ export async function DELETE(req, { params }) {
     const { body } = await parseBody(req);
     const { searchParams } = new URL(req.url);
 
-    // Terima dari body: catatan_delete / note / alasan, atau dari query ?note=
     const note =
-      body?.catatan_delete ??
-      body?.note ??
-      body?.alasan ??
+      (body && (body.catatan_delete ?? body.note ?? body.alasan)) ??
       searchParams.get('note') ??
       searchParams.get('catatan') ??
       null;
 
-    await db.user.update({
+    // Cek kondisi sekarang
+    const current = await db.user.findUnique({
       where: { id_user: id },
-      data: { deleted_at: new Date(), catatan_delete: note ? String(note).slice(0, 2000) : null },
+      select: { id_user: true, deleted_at: true, foto_profil_user: true, nama_pengguna: true },
     });
+    if (!current) {
+      return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });
+    }
 
-    return NextResponse.json({ message: 'User dihapus (soft delete).', catatan_delete: note ?? null });
+    if (!current.deleted_at) {
+      // Soft delete pertama
+      await db.user.update({
+        where: { id_user: id },
+        data: { deleted_at: new Date(), catatan_delete: note ? String(note).slice(0, 2000) : null },
+      });
+      return NextResponse.json({ message: 'User dihapus (soft delete).', catatan_delete: note ?? null, mode: 'soft' });
+    }
+
+    // Sudah soft-deleted → hapus permanen
+    await deleteOldFotoFromSupabase(current.foto_profil_user);
+    try {
+      await db.user.delete({ where: { id_user: id } });
+      return NextResponse.json({ message: 'User dihapus permanen.', mode: 'hard' });
+    } catch (e) {
+      // Foreign key constraint? sampaikan info jelas.
+      if (e?.code === 'P2003') {
+        return NextResponse.json({
+          message: 'Tidak bisa hapus permanen karena masih terkait data lain (foreign key). User tetap soft-deleted.',
+          detail: 'Bersihkan/arsip relasi (izin/cuti/absen/dll) atau atur ON DELETE CASCADE di skema.',
+        }, { status: 409 });
+      }
+      throw e;
+    }
   } catch (err) {
     if (err?.code === 'P2025') {
       return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });

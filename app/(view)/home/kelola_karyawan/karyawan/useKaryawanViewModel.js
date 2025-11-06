@@ -46,7 +46,7 @@ export default function useKaryawanViewModel() {
   const [deptId, setDeptId] = useState(null);
   const [jabatanId, setJabatanId] = useState(null);
   const [statusCuti, setStatusCuti] = useState(null); // 'aktif' | 'nonaktif' | null
-  const [showDeleted, setShowDeleted] = useState(false); // tampilkan yg soft-deleted
+  const [showDeleted, setShowDeleted] = useState(false); // HANYA tampilkan soft-deleted
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -82,7 +82,7 @@ export default function useKaryawanViewModel() {
       departementId: deptId || "",
       jabatanId: jabatanId || "",
       statusCuti: statusCuti || "",
-      includeDeleted: showDeleted ? "1" : "",
+      includeDeleted: showDeleted ? "1" : "", // mintakan yang deleted kalau toggle ON
     });
     return `${ApiEndpoints.GetUsers}${qs}`;
   }, [page, pageSize, qDebounced, deptId, jabatanId, statusCuti, showDeleted]);
@@ -94,7 +94,7 @@ export default function useKaryawanViewModel() {
 
   const rawRows = useMemo(() => (Array.isArray(listRes?.data) ? listRes.data : []), [listRes]);
 
-  const rows = useMemo(() => {
+  const mappedRows = useMemo(() => {
     return rawRows.map((u) => {
       const name = u.nama_pengguna || u.nama || u.name || u.email || "—";
       const email = u.email || "—";
@@ -115,19 +115,24 @@ export default function useKaryawanViewModel() {
         avatarUrl: foto,
         foto_profil_user: foto,
 
-        // NEW: status cuti + soft delete & catatan
         statusCuti: u.status_cuti || null, // 'aktif' | 'nonaktif'
         deletedAt: u.deleted_at || null,
         deleteNote: u.catatan_delete || null,
 
-        // NEW: kontak darurat (untuk view/tooltip jika perlu)
         emergencyName: u.nama_kontak_darurat || null,
         emergencyPhone: u.kontak_darurat || null,
       };
     });
   }, [rawRows]);
 
-  const total = listRes?.pagination?.total ?? rows.length;
+  // Saat toggle ON → tampilkan HANYA yang dihapus
+  const filteredRows = useMemo(() => {
+    if (showDeleted) return mappedRows.filter((r) => !!r.deletedAt);
+    return mappedRows.filter((r) => !r.deletedAt);
+  }, [mappedRows, showDeleted]);
+
+  // total untuk pagination disesuaikan dengan hasil filter client
+  const total = filteredRows.length;
 
   /* ====== actions (CRUD) ====== */
   const changePage = useCallback((p, ps) => {
@@ -137,7 +142,6 @@ export default function useKaryawanViewModel() {
 
   const reload = useCallback(async () => { await globalMutate(listKey); }, [listKey]);
 
-  // NOTE support catatan delete → dikirim via ?note= supaya aman ke semua fetcher
   const deleteById = useCallback(
     async (id, note) => {
       try {
@@ -169,7 +173,7 @@ export default function useKaryawanViewModel() {
     deptOptions, jabatanOptions,
 
     // table
-    page, pageSize, total, rows, loading: isLoading,
+    page, pageSize, total, rows: filteredRows, loading: isLoading,
     changePage, reload,
 
     // actions

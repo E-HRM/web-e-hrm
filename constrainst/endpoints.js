@@ -40,6 +40,9 @@ const API_CUTI_KONFIG_MATRIX = "/api/admin/cuti-konfigurasi/matrix";
 
 const API_KATEGORI_IZIN_JAM = "/api/admin/kategori-izin-jam";
 
+const API_MOBILE_PENGAJUAN_CUTI = "/api/mobile/pengajuan-cuti";
+const API_MOBILE_PENGAJUAN_CUTI_APPROVALS = "/api/mobile/pengajuan-cuti/approvals";
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -164,4 +167,19 @@ export const ApiEndpoints = {
   CreateKategoriIzinJam: API_KATEGORI_IZIN_JAM,
   UpdateKategoriIzinJam: (id) => `${API_KATEGORI_IZIN_JAM}/${id}`,
   DeleteKategoriIzinJam: (id) => `${API_KATEGORI_IZIN_JAM}/${id}`,
+  
+  // PENGAJUAN CUTI
+    GetPengajuanCutiMobile: (qsObj = {}) => {
+    const qs = new URLSearchParams(qsObj);
+    const s = qs.toString();
+    return s ? `${API_MOBILE_PENGAJUAN_CUTI}?${s}` : API_MOBILE_PENGAJUAN_CUTI;
+  },
+  CreatePengajuanCutiMobile: API_MOBILE_PENGAJUAN_CUTI,
+  GetPengajuanCutiMobileById: (id) => `${API_MOBILE_PENGAJUAN_CUTI}/${id}`,
+  UpdatePengajuanCutiMobile: (id) => `${API_MOBILE_PENGAJUAN_CUTI}/${id}`,
+  DeletePengajuanCutiMobile: (id) => `${API_MOBILE_PENGAJUAN_CUTI}/${id}`,
+
+  // Keputusan approval (butuh id_approval_pengajuan_cuti)
+  DecidePengajuanCutiMobile: (approvalId) =>
+    `${API_MOBILE_PENGAJUAN_CUTI_APPROVALS}/${approvalId}`,
 };

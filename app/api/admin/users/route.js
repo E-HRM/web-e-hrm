@@ -105,8 +105,6 @@ export async function GET(req) {
           id_location: true,
           id_jabatan: true,
           status_kerja: true,
-
-          // NEW: status_cuti ikut dipilih
           status_cuti: true,
 
           tanggal_mulai_bekerja: true,
@@ -116,7 +114,6 @@ export async function GET(req) {
           created_at: true,
           updated_at: true,
 
-          // NEW: tampilkan soft delete & catatan_delete
           deleted_at: true,
           catatan_delete: true,
 
