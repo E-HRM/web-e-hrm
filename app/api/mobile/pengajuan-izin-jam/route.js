@@ -6,6 +6,7 @@ import { parseDateOnlyToUTC, parseDateTimeToUTC, startOfUTCDay, endOfUTCDay } fr
 import { sendNotification } from '@/app/utils/services/notificationService';
 import storageClient from '@/app/api/_utils/storageClient';
 import { parseRequestBody, findFileInBody, hasOwn } from '@/app/api/_utils/requestBody';
+import { readApprovalsFromBody } from './_utils/approvals';
 
 const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending', 'menunggu']);
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN']);
@@ -36,6 +37,19 @@ const baseInclude = {
           foto_profil_user: true,
         },
       },
+    },
+  },
+  approvals: {
+    where: { deleted_at: null },
+    orderBy: { level: 'asc' },
+    select: {
+      id_approval_pengajuan_izin_jam: true,
+      level: true,
+      approver_user_id: true,
+      approver_role: true,
+      decision: true,
+      decided_at: true,
+      note: true,
     },
   },
 };
@@ -309,7 +323,13 @@ export async function POST(req) {
   try {
     const parsed = await parseRequestBody(req);
     const body = parsed.body || {};
-
+    let approvalsInput;
+    try {
+      approvalsInput = readApprovalsFromBody(body);
+    } catch (err) {
+      if (err instanceof NextResponse) return err;
+      throw err;
+    }
     const tanggalIzin = parseDateOnlyToUTC(body.tanggal_izin);
     if (!tanggalIzin) {
       return NextResponse.json({ message: "Field 'tanggal_izin' wajib diisi dan harus berupa tanggal yang valid." }, { status: 400 });
@@ -459,6 +479,18 @@ export async function POST(req) {
             id_user_tagged: id,
           })),
           skipDuplicates: true,
+        });
+      }
+
+      if (approvalsInput && approvalsInput.length) {
+        await tx.approvalPengajuanIzinJam.createMany({
+          data: approvalsInput.map((approval) => ({
+            id_pengajuan_izin_jam: created.id_pengajuan_izin_jam,
+            level: approval.level,
+            approver_user_id: approval.approver_user_id,
+            approver_role: approval.approver_role,
+            decision: 'pending',
+          })),
         });
       }
 

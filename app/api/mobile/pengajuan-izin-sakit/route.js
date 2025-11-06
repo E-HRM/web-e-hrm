@@ -38,6 +38,19 @@ const baseInclude = {
       },
     },
   },
+  approvals: {
+    where: { deleted_at: null },
+    orderBy: { level: 'asc' },
+    select: {
+      id_approval_izin_sakit: true,
+      level: true,
+      approver_user_id: true,
+      approver_role: true,
+      decision: true,
+      decided_at: true,
+      note: true,
+    },
+  },
 };
 
 const normRole = (role) =>
@@ -45,6 +58,62 @@ const normRole = (role) =>
     .trim()
     .toUpperCase();
 const canManageAll = (role) => ADMIN_ROLES.has(normRole(role));
+
+export function normalizeApprovals(payload) {
+  if (!payload || typeof payload !== 'object') return undefined;
+
+  const rawApprovals = payload.approvals ?? payload['approvals[]'] ?? payload.approval ?? payload['approval[]'];
+
+  if (rawApprovals === undefined) return undefined;
+
+  const entries = Array.isArray(rawApprovals) ? rawApprovals : [rawApprovals];
+  const normalized = [];
+
+  for (const entry of entries) {
+    if (entry === undefined || entry === null) continue;
+
+    let value = entry;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      try {
+        value = JSON.parse(trimmed);
+      } catch (err) {
+        throw NextResponse.json({ message: 'Format approvals tidak valid. Gunakan JSON array.' }, { status: 400 });
+      }
+    }
+
+    if (!value || typeof value !== 'object') continue;
+
+    const levelRaw = value.level ?? value.order ?? value.sequence ?? value.seq;
+    const level = Number(levelRaw);
+    if (!Number.isFinite(level)) {
+      throw NextResponse.json({ message: 'Setiap approval harus memiliki level numerik.' }, { status: 400 });
+    }
+
+    const idRaw = value.id_approval_izin_sakit ?? value.id ?? value.approval_id ?? value.approvalId ?? null;
+    const approverUserRaw = value.approver_user_id ?? value.user_id ?? value.id_user ?? value.approverId ?? value.userId;
+    const approverRoleRaw = value.approver_role ?? value.role ?? value.role_code ?? value.roleCode;
+
+    const approver_user_id = approverUserRaw === undefined || approverUserRaw === null ? null : String(approverUserRaw).trim();
+    const approver_role = approverRoleRaw === undefined || approverRoleRaw === null ? null : normRole(approverRoleRaw);
+
+    if (!approver_user_id && !approver_role) {
+      continue;
+    }
+
+    normalized.push({
+      id: idRaw ? String(idRaw).trim() || null : null,
+      level,
+      approver_user_id: approver_user_id || null,
+      approver_role: approver_role || null,
+    });
+  }
+
+  normalized.sort((a, b) => a.level - b.level);
+
+  return normalized;
+}
 
 const formatStatusDisplay = (status) => {
   if (!status) return 'Pending';
@@ -239,6 +308,7 @@ export async function POST(req) {
   try {
     const parsed = await parseRequestBody(req);
     const body = parsed.body || {};
+    const approvalsInput = normalizeApprovals(body) ?? [];
 
     const rawTanggalPengajuan = body.tanggal_pengajuan;
     let tanggalPengajuan;
@@ -341,6 +411,20 @@ export async function POST(req) {
             id_user_tagged: id,
           })),
           skipDuplicates: true,
+        });
+      }
+
+      if (approvalsInput.length) {
+        await tx.approvalIzinSakit.createMany({
+          data: approvalsInput.map((item) => ({
+            id_pengajuan_izin_sakit: created.id_pengajuan_izin_sakit,
+            level: item.level,
+            approver_user_id: item.approver_user_id,
+            approver_role: item.approver_role,
+            decision: 'pending',
+            decided_at: null,
+            note: null,
+          })),
         });
       }
 
@@ -452,4 +536,4 @@ export async function POST(req) {
   }
 }
 
-export { ensureAuth, parseTagUserIds };
+export { ensureAuth, parseTagUserIds, baseInclude };
