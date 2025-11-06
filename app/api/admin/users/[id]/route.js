@@ -14,7 +14,10 @@ import {
   normalizeOptionalDate
 } from '../../../_utils/user-field-normalizer';
 
-const normRole = (r) => String(r || '').trim().toUpperCase();
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
 const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
@@ -89,7 +92,11 @@ async function parseBody(req) {
   }
   // Non-form: baca sebagai text dulu agar aman jika kosong
   let raw = '';
-  try { raw = await req.text(); } catch { raw = ''; }
+  try {
+    raw = await req.text();
+  } catch {
+    raw = '';
+  }
   if (!raw) return { type: 'json', body: {} };
   try {
     return { type: 'json', body: JSON.parse(raw) };
@@ -384,11 +391,7 @@ export async function DELETE(req, { params }) {
     const { body } = await parseBody(req);
     const { searchParams } = new URL(req.url);
 
-    const note =
-      (body && (body.catatan_delete ?? body.note ?? body.alasan)) ??
-      searchParams.get('note') ??
-      searchParams.get('catatan') ??
-      null;
+    const note = (body && (body.catatan_delete ?? body.note ?? body.alasan)) ?? searchParams.get('note') ?? searchParams.get('catatan') ?? null;
 
     // Cek kondisi sekarang
     const current = await db.user.findUnique({
@@ -416,10 +419,13 @@ export async function DELETE(req, { params }) {
     } catch (e) {
       // Foreign key constraint? sampaikan info jelas.
       if (e?.code === 'P2003') {
-        return NextResponse.json({
-          message: 'Tidak bisa hapus permanen karena masih terkait data lain (foreign key). User tetap soft-deleted.',
-          detail: 'Bersihkan/arsip relasi (izin/cuti/absen/dll) atau atur ON DELETE CASCADE di skema.',
-        }, { status: 409 });
+        return NextResponse.json(
+          {
+            message: 'Tidak bisa hapus permanen karena masih terkait data lain (foreign key). User tetap soft-deleted.',
+            detail: 'Bersihkan/arsip relasi (izin/cuti/absen/dll) atau atur ON DELETE CASCADE di skema.',
+          },
+          { status: 409 }
+        );
       }
       throw e;
     }
