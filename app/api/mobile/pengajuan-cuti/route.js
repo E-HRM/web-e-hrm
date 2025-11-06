@@ -257,10 +257,7 @@ export async function GET(req) {
 
     // Jika BUKAN admin all, batasi ke actor (user/role) agar tidak bocor
     if (!wantAll) {
-      approvalsWhere.OR = [
-        ...(actorId ? [{ approver_user_id: actorId }] : []),
-        ...(actorRoleNorm ? [{ approver_role: actorRoleNorm }] : []),
-      ];
+      approvalsWhere.OR = [...(actorId ? [{ approver_user_id: actorId }] : []), ...(actorRoleNorm ? [{ approver_role: actorRoleNorm }] : [])];
     }
 
     const include = {
@@ -441,14 +438,7 @@ export async function POST(req) {
           const overrideTitle = `${basePayload.nama_pemohon} mengajukan cuti`;
           const overrideBody = `${basePayload.nama_pemohon} menandai Anda sebagai handover cuti (${basePayload.kategori_cuti}) pada ${basePayload.tanggal_mulai_display}.`;
 
-          notifPromises.push(
-            sendNotification(
-              'LEAVE_HANDOVER_TAGGED',
-              taggedId,
-              { ...basePayload, nama_penerima: handoverUser?.user?.nama_pengguna || undefined, overrideTitle, overrideBody },
-              { deeplink }
-            )
-          );
+          notifPromises.push(sendNotification('LEAVE_HANDOVER_TAGGED', taggedId, { ...basePayload, nama_penerima: handoverUser?.user?.nama_pengguna || undefined, overrideTitle, overrideBody }, { deeplink }));
         }
       }
 
@@ -456,9 +446,7 @@ export async function POST(req) {
         const overrideTitle = 'Pengajuan cuti berhasil dikirim';
         const overrideBody = `Pengajuan cuti ${basePayload.kategori_cuti} pada ${basePayload.tanggal_mulai_display} telah berhasil dibuat.`;
 
-        notifPromises.push(
-          sendNotification('LEAVE_HANDOVER_TAGGED', fullPengajuan.id_user, { ...basePayload, is_pemohon: true, overrideTitle, overrideBody }, { deeplink })
-        );
+        notifPromises.push(sendNotification('LEAVE_HANDOVER_TAGGED', fullPengajuan.id_user, { ...basePayload, is_pemohon: true, overrideTitle, overrideBody }, { deeplink }));
       }
 
       if (notifPromises.length) {
