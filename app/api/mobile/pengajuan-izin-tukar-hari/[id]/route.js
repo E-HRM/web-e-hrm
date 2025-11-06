@@ -3,8 +3,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
-import storageClient from '@/app/api/_utils/storageClient';
-import { parseRequestBody, findFileInBody, hasOwn, isNullLike } from '@/app/api/_utils/requestBody';
+import { parseRequestBody, isNullLike } from '@/app/api/_utils/requestBody';
 
 const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending', 'menunggu']);
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN']);
@@ -38,17 +37,6 @@ const normRole = (role) =>
     .trim()
     .toUpperCase();
 const isAdminRole = (role) => ADMIN_ROLES.has(normRole(role));
-
-function isNullLike(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return true;
-    const lowered = trimmed.toLowerCase();
-    if (lowered === 'null' || lowered === 'undefined') return true;
-  }
-  return false;
-}
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -237,22 +225,6 @@ export async function PUT(req, { params }) {
       await validateTaggedUsers(tagUserIds);
     }
 
-    let uploadMeta = null;
-    const newFile = findFileInBody(body, ['lampiran_izin_tukar_hari', 'lampiran', 'lampiran_file', 'file']);
-    if (newFile) {
-      try {
-        const res = await storageClient.uploadBufferWithPresign(newFile, { folder: 'pengajuan' });
-        data.lampiran_izin_tukar_hari_url = res.publicUrl || null;
-        uploadMeta = { key: res.key, publicUrl: res.publicUrl, etag: res.etag, size: res.size };
-      } catch (e) {
-        return NextResponse.json({ message: 'Gagal mengunggah lampiran.', detail: e?.message || String(e) }, { status: 502 });
-      }
-    } else if (hasOwn(body, 'lampiran_izin_tukar_hari_url')) {
-      data.lampiran_izin_tukar_hari_url = isNullLike(body.lampiran_izin_tukar_hari_url)
-        ? null
-        : String(body.lampiran_izin_tukar_hari_url).trim();
-    }
-
     const updated = await db.$transaction(async (tx) => {
       const saved = await tx.izinTukarHari.update({
         where: { id_izin_tukar_hari: pengajuan.id_izin_tukar_hari },
@@ -295,7 +267,7 @@ export async function PUT(req, { params }) {
       });
     });
 
-    return NextResponse.json({ message: 'Pengajuan izin tukar hari berhasil diperbarui.', data: updated, upload: uploadMeta || undefined });
+    return NextResponse.json({ message: 'Pengajuan izin tukar hari berhasil diperbarui.', data: updated });
   } catch (err) {
     if (err instanceof NextResponse) return err;
     if (err?.code === 'P2003') {
