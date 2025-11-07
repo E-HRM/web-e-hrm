@@ -170,7 +170,7 @@ export default function CutiContent() {
   const counts = useMemo(() => {
     const all = vm.data ?? [];
     return {
-      pengajuan: all.filter((d) => d.status === "Menunggu").length,
+      pengajuan: all.filter((d) => d.status === "P").length,
       disetujui: all.filter((d) => d.status === "Disetujui").length,
       ditolak: all.filter((d) => d.status === "Ditolak").length,
     };
