@@ -206,7 +206,6 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
     const createResult = await tx.shiftKerja.createMany({ data, skipDuplicates: true });
     createdCount = createResult?.count ?? data.length;
   }
-
   let returnShiftAdjustment = null;
   const effectiveReturnShift = returnShift?.date ? toDateOnly(returnShift.date) : toDateOnly(returnDate);
   const returnShiftIdPolaKerja = returnShift?.idPolaKerja || null;
@@ -409,10 +408,7 @@ async function handleDecision(req, { params }) {
             });
           } catch (shiftErr) {
             console.error('Gagal menyelaraskan shift kerja selama cuti:', shiftErr);
-            throw NextResponse.json(
-              { ok: false, message: 'Terjadi kesalahan saat menyelaraskan jadwal shift pemohon.' },
-              { status: 500 }
-            );
+            throw NextResponse.json({ ok: false, message: 'Terjadi kesalahan saat menyelaraskan jadwal shift pemohon.' }, { status: 500 });
           }
         }
       } else {
