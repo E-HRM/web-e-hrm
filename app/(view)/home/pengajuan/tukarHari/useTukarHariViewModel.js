@@ -6,23 +6,65 @@ import { message } from "antd";
 import { ApiEndpoints } from "@/constrainst/endpoints";
 import { fetcher } from "@/app/utils/fetcher";
 
+/* ===================== Utils Normalisasi ====================== */
+function norm(v) {
+  return String(v ?? "").trim().toLowerCase();
+}
+
+function isPendingDecision(d) {
+  const v = norm(d);
+  // anggap null/kosong juga "pending"
+  return (
+    v === "" ||
+    v === "pending" ||
+    v === "menunggu" ||
+    v === "null" ||
+    v === "0" ||
+    v === "undefined"
+  );
+}
+
+function getApprovalsArray(item) {
+  const candidates = [
+    item?.approvals,
+    item?.approval_izin_tukar_hari,
+    item?.ApprovalIzinTukarHari,
+  ];
+  for (const c of candidates) if (Array.isArray(c)) return c;
+  return [];
+}
+
+function pickApprovalId(item) {
+  // kalau backend sudah bantu hitungkan id yang relevan untuk aktor saat ini
+  if (item?.my_pending_approval_id) return item.my_pending_approval_id;
+  if (item?.next_approval_id_for_me) return item.next_approval_id_for_me;
+  if (item?.current_approval_id) return item.current_approval_id;
+
+  const approvals = getApprovalsArray(item);
+  if (!approvals.length) return null;
+
+  const pending = approvals
+    .filter((a) => !a?.deleted_at)
+    .sort((a, b) => (a?.level ?? 0) - (b?.level ?? 0))
+    .find((a) => isPendingDecision(a?.decision));
+
+  return (
+    pending?.id_approval_izin_tukar_hari ??
+    pending?.id ??
+    null
+  );
+}
+
 function toLabelStatus(s) {
-  const v = String(s || "").toLowerCase();
+  const v = norm(s);
   if (v === "disetujui") return "Disetujui";
   if (v === "ditolak") return "Ditolak";
   return "Menunggu";
 }
 
-function pickApprovalId(item) {
-  const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
-  const pending = approvals.find((a) =>
-    ["pending", "menunggu"].includes(String(a?.decision || "").toLowerCase())
-  );
-  return pending?.id_approval_izin_tukar_hari || null;
-}
+/* ===================== Mapper Row ====================== */
 
 function mapItemToRow(item) {
-  // tanggal/hari — menyesuaikan field di DB kamu
   const hariIzin =
     item?.hari_izin || item?.tanggal_izin || item?.tgl_izin || item?.tanggal || null;
   const hariPengganti =
@@ -56,6 +98,8 @@ function statusFromTab(tab) {
   if (tab === "ditolak") return "ditolak";
   return "pending";
 }
+
+/* ===================== Hook ViewModel ====================== */
 
 export default function useTukarHariViewModel() {
   const [search, setSearch] = useState("");
@@ -93,23 +137,50 @@ export default function useTukarHariViewModel() {
     setReasonDraft((prev) => ({ ...prev, [id]: value }));
   }
 
+  // Fallback: kalau approvalId belum ada di list, coba fetch detail dulu.
+  async function ensureApprovalId(row) {
+    if (row?.approvalId) return row.approvalId;
+
+    try {
+      const detailUrl =
+        typeof ApiEndpoints.GetPengajuanTukarHariDetail === "function"
+          ? ApiEndpoints.GetPengajuanTukarHariDetail(row.id)
+          : ApiEndpoints.GetPengajuanTukarHariMobile({ id: row.id, all: 1 });
+
+      const res = await fetch(detailUrl, { cache: "no-store" });
+      const json = await res.json();
+
+      const raw =
+        (json?.data && !Array.isArray(json.data) && json.data) ||
+        (Array.isArray(json?.data) && json.data[0]) ||
+        json?.result ||
+        null;
+
+      return raw ? pickApprovalId(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+
   const approve = useCallback(
     async (id, note) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
-      if (!row.approvalId) {
-        message.error("Tidak menemukan id approval. Pastikan API list mengembalikan approvals.");
+
+      const approvalId = await ensureApprovalId(row);
+      if (!approvalId) {
+        message.error(
+          "Tidak menemukan id approval. Pastikan API mengembalikan approvals / my_pending_approval_id atau aktifkan endpoint detail."
+        );
         return;
       }
+
       try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanTukarHariMobile(row.approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision: "disetujui", note: note ?? null }),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "disetujui", note: note ?? null }),
+        });
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari disetujui");
@@ -130,19 +201,21 @@ export default function useTukarHariViewModel() {
         message.error("Alasan wajib diisi saat menolak.");
         return;
       }
-      if (!row.approvalId) {
-        message.error("Tidak menemukan id approval. Pastikan API list mengembalikan approvals.");
+
+      const approvalId = await ensureApprovalId(row);
+      if (!approvalId) {
+        message.error(
+          "Tidak menemukan id approval. Pastikan API mengembalikan approvals / my_pending_approval_id atau aktifkan endpoint detail."
+        );
         return;
       }
+
       try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanTukarHariMobile(row.approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision: "ditolak", note: reason }),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "ditolak", note: reason }),
+        });
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari ditolak");

@@ -24,7 +24,6 @@ import {
   SearchOutlined,
   FileTextOutlined,
   CalendarOutlined,
-  ReloadOutlined,
   CheckOutlined,
   CloseOutlined,
   InfoCircleOutlined,
@@ -49,7 +48,7 @@ function MiniField({ label, children, span = 1 }) {
   );
 }
 
-/** Keperluan dengan tombol “Lihat selengkapnya” yang muncul HANYA jika > 1 baris */
+/** Keperluan dengan tombol “Lihat selengkapnya” hanya bila text > 1 baris */
 function KeperluanCell({ id, text, expanded, onToggle }) {
   const ghostRef = useRef(null);
   const [showToggle, setShowToggle] = useState(false);
@@ -58,15 +57,13 @@ function KeperluanCell({ id, text, expanded, onToggle }) {
     const el = ghostRef.current;
     if (!el) return;
     const cs = window.getComputedStyle(el);
-    // fallback jika lineHeight "normal"
     const base = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3 || 18;
     const lines = Math.round(el.scrollHeight / base);
-    setShowToggle(lines > 1); // toleransi: tampil hanya jika lebih dari 1 baris
+    setShowToggle(lines > 1);
   }, []);
 
   useLayoutEffect(() => {
     recompute();
-    // perhitungan ulang saat resize
     const ro = new ResizeObserver(recompute);
     if (ghostRef.current?.parentElement) ro.observe(ghostRef.current.parentElement);
     return () => ro.disconnect();
@@ -74,7 +71,6 @@ function KeperluanCell({ id, text, expanded, onToggle }) {
 
   return (
     <>
-      {/* Teks tampil */}
       <Tooltip title={!expanded ? text : undefined}>
         <span
           style={
@@ -103,7 +99,7 @@ function KeperluanCell({ id, text, expanded, onToggle }) {
         </button>
       )}
 
-      {/* Ghost untuk menghitung jumlah baris, selebar container */}
+      {/* Ghost untuk menghitung jumlah baris */}
       <div
         ref={ghostRef}
         aria-hidden
@@ -197,7 +193,11 @@ export default function TukarHariContent() {
               <div className="mt-1">
                 <Tag
                   color={
-                    r.status === "Disetujui" ? "green" : r.status === "Ditolak" ? "red" : "blue"
+                    r.status === "Disetujui"
+                      ? "green"
+                      : r.status === "Ditolak"
+                      ? "red"
+                      : "blue"
                   }
                   className="!rounded-md"
                 >
@@ -250,9 +250,10 @@ export default function TukarHariContent() {
                   icon={<FileTextOutlined />}
                   size="small"
                   className="!rounded-md !border-none !bg-[#E8F6FF] !text-[#003A6F] hover:!bg-[#99D7FF]/40 hover:!text-[#184c81]"
-                  onClick={() => window.open(r.buktiUrl, "_blank")}
+                  disabled={!r.buktiUrl}
+                  onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
                 >
-                  Lihat
+                  {r.buktiUrl ? "Lihat" : "Tidak ada file"}
                 </Button>
               </MiniField>
             </div>
@@ -279,7 +280,7 @@ export default function TukarHariContent() {
                     size="small"
                     icon={<CheckOutlined />}
                     className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
-                    style={{ ["--gold"]: GOLD }}
+                    style={{ "--gold": GOLD }}
                   >
                     Setujui
                   </Button>
@@ -305,11 +306,15 @@ export default function TukarHariContent() {
               <div className="text-xs font-semibold text-slate-900 mb-0.5">
                 {vm.tab === "disetujui" ? "Tgl. Disetujui" : "Tgl. Ditolak"}
               </div>
-              <div className="text-sm text-slate-700">{formatDateID(r.tglKeputusan)}</div>
+              <div className="text-sm text-slate-700">
+                {formatDateID(r.tglKeputusan)}
+              </div>
 
               {r.alasan && (
                 <>
-                  <div className="text-xs font-semibold text-slate-900 mt-3">Catatan</div>
+                  <div className="text-xs font-semibold text-slate-900 mt-3">
+                    Catatan
+                  </div>
                   <div className="mt-1 flex items-start gap-1 text-[13px] text-slate-700">
                     <InfoCircleOutlined className="text-slate-400 mt-0.5" />
                     <Tooltip title={r.alasan}>
@@ -335,7 +340,7 @@ export default function TukarHariContent() {
                     size="small"
                     icon={<CheckOutlined />}
                     className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
-                    style={{ ["--gold"]: GOLD }}
+                    style={{ "--gold": GOLD }}
                     onClick={() => vm.approve(r.id)}
                   >
                     Setujui
@@ -426,7 +431,7 @@ export default function TukarHariContent() {
 
         <Tabs
           activeKey={vm.tab}
-          onChange={vm.setTab}
+          onChange={(k) => vm.setTab(k)}
           type="card"
           className="custom-tabs"
           items={tabItems.map((t) => ({
@@ -436,12 +441,12 @@ export default function TukarHariContent() {
               <Card className="shadow-lg border-0 mt-4" bodyStyle={{ padding: 0 }}>
                 <div
                   className="p-5 border-b border-slate-100 bg-[var(--header-bg)]"
-                  style={{ ["--header-bg"]: HEADER_BLUE_BG }}
+                  style={{ "--header-bg": HEADER_BLUE_BG }}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-0.5">
-                        Daftar {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
+                        Daftar {String(t.key).charAt(0).toUpperCase() + String(t.key).slice(1)}
                       </h2>
                       <p className="text-slate-500 text-xs md:text-sm">
                         Menampilkan {dataSource.length} item pada tab ini

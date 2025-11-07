@@ -374,7 +374,7 @@ model User {
   divisi                    String?       @db.VarChar(100)
   id_jabatan                String?       @db.Char(36)
   status_kerja              StatusKerja?
-  status_cuti               StatusCuti    @default(aktif)
+  status_cuti               StatusCuti    @default(nonaktif)
   tanggal_mulai_bekerja     DateTime?     @db.Date
   nomor_rekening            String?       @db.VarChar(50)
   jenis_bank                String?       @db.VarChar(50)
