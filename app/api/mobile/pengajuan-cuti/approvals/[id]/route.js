@@ -124,14 +124,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
     where: {
       id_user: userId,
       deleted_at: null,
-      AND: [
-        {
-          OR: [{ tanggal_mulai: null }, { tanggal_mulai: { lte: effectiveEnd } }],
-        },
-        {
-          OR: [{ tanggal_selesai: null }, { tanggal_selesai: { gte: leaveStart } }],
-        },
-      ],
+      AND: [{ tanggal_mulai: { lte: effectiveEnd } }, { tanggal_selesai: { gte: leaveStart } }],
     },
     select: {
       id_shift_kerja: true,
