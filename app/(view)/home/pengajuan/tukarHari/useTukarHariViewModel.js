@@ -48,11 +48,7 @@ function pickApprovalId(item) {
     .sort((a, b) => (a?.level ?? 0) - (b?.level ?? 0))
     .find((a) => isPendingDecision(a?.decision));
 
-  return (
-    pending?.id_approval_izin_tukar_hari ??
-    pending?.id ??
-    null
-  );
+  return pending?.id_approval_izin_tukar_hari ?? pending?.id ?? null;
 }
 
 function toLabelStatus(s) {
@@ -66,9 +62,16 @@ function toLabelStatus(s) {
 
 function mapItemToRow(item) {
   const hariIzin =
-    item?.hari_izin || item?.tanggal_izin || item?.tgl_izin || item?.tanggal || null;
+    item?.hari_izin ||
+    item?.tanggal_izin ||
+    item?.tgl_izin ||
+    item?.tanggal ||
+    null;
   const hariPengganti =
-    item?.hari_pengganti || item?.tanggal_pengganti || item?.tgl_pengganti || null;
+    item?.hari_pengganti ||
+    item?.tanggal_pengganti ||
+    item?.tgl_pengganti ||
+    null;
 
   return {
     id: item?.id_izin_tukar_hari,
@@ -82,7 +85,6 @@ function mapItemToRow(item) {
 
     kategori: item?.kategori?.nama_kategori ?? item?.kategori ?? "—",
     keperluan: item?.keperluan ?? "—",
-    buktiUrl: item?.lampiran_url ?? null,
 
     status: toLabelStatus(item?.status),
     alasan: "",
@@ -99,6 +101,48 @@ function statusFromTab(tab) {
   return "pending";
 }
 
+/* ===================== Pola kerja options helper ====================== */
+// Coba tebak beberapa endpoint umum. Sesuaikan jika perlu.
+function guessPolaOptionsUrl() {
+  try {
+    if (typeof ApiEndpoints?.GetPolaKerjaOptions === "function")
+      return ApiEndpoints.GetPolaKerjaOptions();
+    if (ApiEndpoints?.GetPolaKerjaOptions) return ApiEndpoints.GetPolaKerjaOptions;
+
+    if (typeof ApiEndpoints?.GetPolaKerja === "function")
+      return ApiEndpoints.GetPolaKerja({ page: 1, pageSize: 999 });
+    if (ApiEndpoints?.GetPolaKerja) return ApiEndpoints.GetPolaKerja;
+
+    if (typeof ApiEndpoints?.GetPolaOptions === "function")
+      return ApiEndpoints.GetPolaOptions();
+    if (ApiEndpoints?.GetPolaOptions) return ApiEndpoints.GetPolaOptions;
+  } catch {}
+  return null;
+}
+
+function normalizePolaItems(json) {
+  const items =
+    (Array.isArray(json?.data) && json.data) ||
+    (Array.isArray(json) && json) ||
+    [];
+  return items.map((it) => {
+    const id =
+      it?.id_pola_kerja ?? it?.id ?? it?.polaId ?? it?.uuid ?? String(it?.value);
+    const nama =
+      it?.nama_pola_kerja ?? it?.nama ?? it?.label ?? it?.name ?? "Pola";
+    const jamMasuk = it?.jam_masuk ?? it?.jamIn ?? it?.start ?? it?.masuk;
+    const jamPulang = it?.jam_pulang ?? it?.jamOut ?? it?.end ?? it?.pulang;
+    const jam =
+      jamMasuk && jamPulang ? `${String(jamMasuk).slice(0, 5)}-${String(jamPulang).slice(0, 5)}` : null;
+
+    return {
+      value: String(id),
+      label: jam ? `${nama} (${jam})` : nama,
+      raw: it,
+    };
+  });
+}
+
 /* ===================== Hook ViewModel ====================== */
 
 export default function useTukarHariViewModel() {
@@ -107,6 +151,10 @@ export default function useTukarHariViewModel() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [reasonDraft, setReasonDraft] = useState({});
+
+  // pola kerja options (untuk modal Setujui)
+  const [polaOptions, setPolaOptions] = useState([]);
+  const [loadingPola, setLoadingPola] = useState(false);
 
   const listKey = useMemo(() => {
     const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
@@ -162,8 +210,27 @@ export default function useTukarHariViewModel() {
     }
   }
 
+  // Loader opsi pola kerja untuk modal
+  const fetchPolaOptions = useCallback(async () => {
+    if (polaOptions.length) return; // sudah ada
+    const url = guessPolaOptionsUrl();
+    if (!url) return;
+
+    try {
+      setLoadingPola(true);
+      const res = await fetch(url, { cache: "no-store" });
+      const json = await res.json();
+      setPolaOptions(normalizePolaItems(json));
+    } catch (_e) {
+      // Biarkan kosong; user masih bisa Setujui tanpa override jika perlu
+    } finally {
+      setLoadingPola(false);
+    }
+  }, [polaOptions.length]);
+
+  // Approve dengan optional override pola kerja hari_pengganti
   const approve = useCallback(
-    async (id, note) => {
+    async (id, note, overridePolaId) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
 
@@ -176,13 +243,27 @@ export default function useTukarHariViewModel() {
       }
 
       try {
-        const res = await fetch(ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ decision: "disetujui", note: note ?? null }),
-        });
+        const body = {
+          decision: "disetujui",
+          note: note ?? null,
+        };
+        if (overridePolaId) {
+          body.shift_overrides = {
+            hari_pengganti: { id_pola_kerja: String(overridePolaId) },
+          };
+        }
+
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          }
+        );
         const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false)
+          throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari disetujui");
         mutate();
       } catch (e) {
@@ -211,13 +292,17 @@ export default function useTukarHariViewModel() {
       }
 
       try {
-        const res = await fetch(ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ decision: "ditolak", note: reason }),
-        });
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision: "ditolak", note: reason }),
+          }
+        );
         const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false)
+          throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari ditolak");
         mutate();
       } catch (e) {
@@ -250,5 +335,9 @@ export default function useTukarHariViewModel() {
     approve,
     reject,
     refresh,
+
+    polaOptions,
+    fetchPolaOptions,
+    loadingPola,
   };
 }

@@ -14,21 +14,25 @@ import {
   Button,
   Tag,
   Modal,
-  Popconfirm,
   Tooltip,
   Space,
   Card,
   Table,
+  Select,
+  DatePicker,
 } from "antd";
 import {
   SearchOutlined,
-  FileTextOutlined,
   CalendarOutlined,
   CheckOutlined,
   CloseOutlined,
   InfoCircleOutlined,
 } from "@ant-design/icons";
+import dayjs from "dayjs";
+import "dayjs/locale/id";
 import useTukarHariViewModel from "./useTukarHariViewModel";
+
+dayjs.locale("id");
 
 const GOLD = "#003A6F";
 const LIGHT_BLUE = "#E8F6FF";
@@ -136,12 +140,33 @@ function formatDateID(d) {
   }
 }
 
+// Tanggal TANPA jam/TZ — sama seperti di halaman Cuti
+function formatDateOnlyID(d) {
+  if (!d) return "—";
+  try {
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return "—";
+    return dt.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
 export default function TukarHariContent() {
   const vm = useTukarHariViewModel();
 
   const [rejectRow, setRejectRow] = useState(null);
   const [reason, setReason] = useState("");
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+
+  // Modal Setujui (pilih pola kerja hari pengganti)
+  const [approveRow, setApproveRow] = useState(null);
+  const [approveDate, setApproveDate] = useState(null); // readonly info
+  const [approvePola, setApprovePola] = useState();
 
   // state expand per-row
   const [expandedKeperluan, setExpandedKeperluan] = useState(new Set());
@@ -160,6 +185,17 @@ export default function TukarHariContent() {
       ditolak: all.filter((d) => d.status === "Ditolak").length,
     };
   }, [vm.data]);
+
+  const openApproveModal = useCallback(
+    async (row) => {
+      setApproveRow(row);
+      setApproveDate(row.hariPengganti || null);
+      setApprovePola(undefined);
+      // muat opsi pola (sekali cukup)
+      vm.fetchPolaOptions();
+    },
+    [vm]
+  );
 
   const columns = useMemo(() => {
     return [
@@ -230,11 +266,15 @@ export default function TukarHariContent() {
               <MiniField label="Tgl. Pengajuan">
                 {formatDateID(r.tglPengajuan)}
               </MiniField>
-              <MiniField label="Tgl. Izin">{r.hariIzin}</MiniField>
+              <MiniField label="Tgl. Izin">
+                {formatDateOnlyID(r.hariIzin)}
+              </MiniField>
               <MiniField label="Kategori">
                 <span className="text-slate-700">{r.kategori}</span>
               </MiniField>
-              <MiniField label="Hari Pengganti">{r.hariPengganti}</MiniField>
+              <MiniField label="Hari Pengganti">
+                {formatDateOnlyID(r.hariPengganti)}
+              </MiniField>
 
               <MiniField label="Keperluan" span={2}>
                 <KeperluanCell
@@ -243,18 +283,6 @@ export default function TukarHariContent() {
                   expanded={expanded}
                   onToggle={() => toggleExpand(r.id)}
                 />
-              </MiniField>
-
-              <MiniField label="File Kelengkapan">
-                <Button
-                  icon={<FileTextOutlined />}
-                  size="small"
-                  className="!rounded-md !border-none !bg-[#E8F6FF] !text-[#003A6F] hover:!bg-[#99D7FF]/40 hover:!text-[#184c81]"
-                  disabled={!r.buktiUrl}
-                  onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
-                >
-                  {r.buktiUrl ? "Lihat" : "Tidak ada file"}
-                </Button>
               </MiniField>
             </div>
           );
@@ -269,22 +297,16 @@ export default function TukarHariContent() {
           if (vm.tab === "pengajuan") {
             return (
               <Space size={8} wrap>
-                <Popconfirm
-                  title="Setujui pengajuan ini?"
-                  okText="Setujui"
-                  cancelText="Batal"
-                  onConfirm={() => vm.approve(r.id)}
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckOutlined />}
+                  className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
+                  style={{ "--gold": GOLD }}
+                  onClick={() => openApproveModal(r)}
                 >
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<CheckOutlined />}
-                    className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
-                    style={{ "--gold": GOLD }}
-                  >
-                    Setujui
-                  </Button>
-                </Popconfirm>
+                  Setujui
+                </Button>
 
                 <Button
                   danger
@@ -341,7 +363,7 @@ export default function TukarHariContent() {
                     icon={<CheckOutlined />}
                     className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
                     style={{ "--gold": GOLD }}
-                    onClick={() => vm.approve(r.id)}
+                    onClick={() => openApproveModal(r)}
                   >
                     Setujui
                   </Button>
@@ -364,7 +386,7 @@ export default function TukarHariContent() {
         },
       },
     ];
-  }, [vm, expandedKeperluan, pagination]);
+  }, [vm, expandedKeperluan, pagination, openApproveModal]);
 
   const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
 
@@ -513,6 +535,64 @@ export default function TukarHariContent() {
         `}</style>
       </div>
 
+      {/* Modal SETUJUI - pilih pola kerja untuk Hari Pengganti */}
+      <Modal
+        title="Setujui Pengajuan — Atur Pola Kerja di Hari Pengganti"
+        open={!!approveRow}
+        okText="Setujui"
+        okButtonProps={{ disabled: !approvePola }}
+        onOk={async () => {
+          await vm.approve(approveRow.id, null, approvePola);
+          setApproveRow(null);
+          setApproveDate(null);
+          setApprovePola(undefined);
+        }}
+        onCancel={() => {
+          setApproveRow(null);
+          setApproveDate(null);
+          setApprovePola(undefined);
+        }}
+      >
+        <div className="space-y-3">
+          <div className="text-sm text-slate-600">
+            Pilih <strong>pola kerja</strong> yang akan diterapkan pada{" "}
+            <strong>Hari Pengganti</strong> milik karyawan ini.
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <div className="text-xs font-semibold text-slate-900 mb-1">
+                Tanggal Hari Pengganti
+              </div>
+              <DatePicker
+                className="w-full"
+                value={approveDate ? dayjs(approveDate) : null}
+                onChange={() => {}}
+                disabled
+                format="DD MMM YYYY"
+              />
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold text-slate-900 mb-1">
+                Pola Kerja
+              </div>
+              <Select
+                showSearch
+                placeholder="Pilih pola kerja…"
+                optionFilterProp="label"
+                loading={vm.loadingPola}
+                value={approvePola}
+                onChange={(v) => setApprovePola(v)}
+                options={vm.polaOptions}
+                className="w-full"
+              />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal TOLAK */}
       <Modal
         title="Tolak Pengajuan"
         open={!!rejectRow}
@@ -536,7 +616,7 @@ export default function TukarHariContent() {
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={4}
-          placeholder="Contoh: Lengkapi dokumen pendukung."
+          placeholder="Contoh: Jadwal pengganti belum sesuai."
         />
       </Modal>
     </ConfigProvider>

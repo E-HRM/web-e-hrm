@@ -6,6 +6,21 @@ import { sendNotification } from '@/app/utils/services/notificationService';
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
 const PENDING_DECISIONS = new Set(['pending', 'menunggu']);
 
+const DEFAULT_SHIFT_SYNC_RESULT = Object.freeze({
+  updatedCount: 0,
+  createdCount: 0,
+  affectedDates: [],
+  returnShift: null,
+});
+
+function createDefaultShiftSyncResult() {
+  return {
+    ...DEFAULT_SHIFT_SYNC_RESULT,
+    affectedDates: [],
+    returnShift: null,
+  };
+}
+
 const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
   day: '2-digit',
   month: 'long',
@@ -19,15 +34,14 @@ function normalizeDecision(value) {
 }
 
 function normalizeRole(role) {
-  return String(role || '')
-    .trim()
-    .toUpperCase();
+  return String(role || '').trim().toUpperCase();
 }
 
 function buildInclude() {
   return {
     ...pengajuanInclude,
     approvals: {
+      where: { deleted_at: null }, // konsisten dengan include lain
       orderBy: { level: 'asc' },
       select: {
         id_approval_pengajuan_cuti: true,
@@ -46,7 +60,9 @@ function summarizeApprovalStatus(approvals) {
   const approved = approvals.filter((item) => item.decision === 'disetujui');
   const anyApproved = approved.length > 0;
   const allRejected = approvals.length > 0 && approvals.every((item) => item.decision === 'ditolak');
-  const highestApprovedLevel = anyApproved ? approved.reduce((acc, curr) => (curr.level > acc ? curr.level : acc), approved[0].level) : null;
+  const highestApprovedLevel = anyApproved
+    ? approved.reduce((acc, curr) => (curr.level > acc ? curr.level : acc), approved[0].level)
+    : null;
 
   return { anyApproved, allRejected, highestApprovedLevel };
 }
@@ -76,9 +92,26 @@ function formatDateDisplay(value) {
   try {
     return dateDisplayFormatter.format(date);
   } catch (err) {
-    console.warn('Gagal memformat tanggal untuk tampilan:', err);
     return formatDateKey(date);
   }
+}
+
+function parseReturnShiftPayload(raw) {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== 'object') {
+    throw NextResponse.json({ ok: false, message: 'return_shift harus berupa objek.' }, { status: 400 });
+  }
+
+  const { date, id_pola_kerja: idPolaKerjaRaw } = raw;
+  const parsedDate = toDateOnly(date);
+  if (!parsedDate) {
+    throw NextResponse.json({ ok: false, message: 'return_shift.date wajib berisi tanggal valid (format YYYY-MM-DD).' }, { status: 400 });
+  }
+  if (!idPolaKerjaRaw) {
+    throw NextResponse.json({ ok: false, message: 'return_shift.id_pola_kerja wajib diisi saat return_shift dikirim.' }, { status: 400 });
+  }
+  const idPolaKerja = String(idPolaKerjaRaw);
+  return { date: parsedDate, idPolaKerja };
 }
 
 function getShiftOverlapRange(shift, rangeStart, rangeEnd) {
@@ -98,15 +131,11 @@ function getShiftOverlapRange(shift, rangeStart, rangeEnd) {
   return { start: overlapStart, end: overlapEnd };
 }
 
-async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDate }) {
-  if (!tx || !userId || !startDate) {
-    return { updatedCount: 0, createdCount: 0, affectedDates: [] };
-  }
+async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDate, returnShift }) {
+  if (!tx || !userId || !startDate) return createDefaultShiftSyncResult();
 
   const leaveStart = toDateOnly(startDate);
-  if (!leaveStart) {
-    return { updatedCount: 0, createdCount: 0, affectedDates: [] };
-  }
+  if (!leaveStart) return createDefaultShiftSyncResult();
 
   const rawReturn = toDateOnly(returnDate);
   const leaveEnd = rawReturn && rawReturn > leaveStart ? addDays(rawReturn, -1) : leaveStart;
@@ -116,9 +145,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
   for (let cursor = new Date(leaveStart.getTime()); cursor <= effectiveEnd; cursor = addDays(cursor, 1)) {
     affectedDates.push(new Date(cursor.getTime()));
   }
-  if (!affectedDates.length) {
-    affectedDates.push(leaveStart);
-  }
+  if (!affectedDates.length) affectedDates.push(leaveStart);
 
   const existingShifts = await tx.shiftKerja.findMany({
     where: {
@@ -149,10 +176,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
       updatedIds.push(shift.id_shift_kerja);
     }
   }
-
-  if (updates.length) {
-    await Promise.all(updates);
-  }
+  if (updates.length) await Promise.all(updates);
 
   const coverage = new Set();
   for (const shift of existingShifts) {
@@ -166,9 +190,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
   const missingDates = [];
   for (const date of affectedDates) {
     const key = formatDateKey(date);
-    if (!coverage.has(key)) {
-      missingDates.push(new Date(date.getTime()));
-    }
+    if (!coverage.has(key)) missingDates.push(new Date(date.getTime()));
   }
 
   let createdCount = 0;
@@ -181,12 +203,70 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
       status: 'LIBUR',
       id_pola_kerja: null,
     }));
-
     const createResult = await tx.shiftKerja.createMany({ data, skipDuplicates: true });
     createdCount = createResult?.count ?? data.length;
   }
 
-  return { updatedCount: updatedIds.length, createdCount, affectedDates };
+  let returnShiftAdjustment = null;
+  const effectiveReturnShift = returnShift?.date ? toDateOnly(returnShift.date) : toDateOnly(returnDate);
+  const returnShiftIdPolaKerja = returnShift?.idPolaKerja || null;
+
+  if (effectiveReturnShift && returnShiftIdPolaKerja) {
+    const existingReturnShift = await tx.shiftKerja.findFirst({
+      where: {
+        id_user: userId,
+        deleted_at: null,
+        tanggal_mulai: effectiveReturnShift,
+      },
+    });
+
+    if (existingReturnShift) {
+      const updated = await tx.shiftKerja.update({
+        where: { id_shift_kerja: existingReturnShift.id_shift_kerja },
+        data: {
+          tanggal_mulai: effectiveReturnShift,
+          tanggal_selesai: effectiveReturnShift,
+          hari_kerja: 'KERJA',
+          status: 'KERJA',
+          id_pola_kerja: returnShiftIdPolaKerja,
+        },
+      });
+      returnShiftAdjustment = {
+        action: 'updated',
+        id_shift_kerja: updated.id_shift_kerja,
+        tanggal_mulai: updated.tanggal_mulai,
+        id_pola_kerja: updated.id_pola_kerja,
+        status: 'KERJA',
+        tanggal_mulai_display: formatDateDisplay(updated.tanggal_mulai),
+      };
+    } else {
+      const created = await tx.shiftKerja.create({
+        data: {
+          id_user: userId,
+          tanggal_mulai: effectiveReturnShift,
+          tanggal_selesai: effectiveReturnShift,
+          hari_kerja: 'KERJA',
+          status: 'KERJA',
+          id_pola_kerja: returnShiftIdPolaKerja,
+        },
+      });
+      returnShiftAdjustment = {
+        action: 'created',
+        id_shift_kerja: created.id_shift_kerja,
+        tanggal_mulai: created.tanggal_mulai,
+        id_pola_kerja: created.id_pola_kerja,
+        status: 'KERJA',
+        tanggal_mulai_display: formatDateDisplay(created.tanggal_mulai),
+      };
+    }
+  }
+
+  return {
+    updatedCount: updatedIds.length,
+    createdCount,
+    affectedDates,
+    returnShift: returnShiftAdjustment,
+  };
 }
 
 async function handleDecision(req, { params }) {
@@ -218,6 +298,14 @@ async function handleDecision(req, { params }) {
 
   const note = body?.note === undefined || body?.note === null ? null : String(body.note);
 
+  let returnShift;
+  try {
+    returnShift = parseReturnShiftPayload(body?.return_shift);
+  } catch (err) {
+    if (err instanceof NextResponse) return err;
+    throw err;
+  }
+
   try {
     const result = await db.$transaction(async (tx) => {
       const approvalRecord = await tx.approvalPengajuanCuti.findUnique({
@@ -247,7 +335,6 @@ async function handleDecision(req, { params }) {
 
       const matchesUser = approvalRecord.approver_user_id && approvalRecord.approver_user_id === actorId;
       const matchesRole = approvalRecord.approver_role && normalizeRole(approvalRecord.approver_role) === actorRole;
-
       if (!matchesUser && !matchesRole) {
         throw NextResponse.json({ ok: false, message: 'Anda tidak memiliki akses untuk approval ini.' }, { status: 403 });
       }
@@ -299,30 +386,31 @@ async function handleDecision(req, { params }) {
       }
 
       let submission;
-      let shiftSyncResult = { updatedCount: 0, createdCount: 0, affectedDates: [] };
+      let shiftSyncResult = createDefaultShiftSyncResult();
+
       if (Object.keys(parentUpdate).length) {
         submission = await tx.pengajuanCuti.update({
           where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti },
           data: parentUpdate,
           include: buildInclude(),
         });
+
         if (parentUpdate.status === 'disetujui') {
           const targetUserId = submission?.id_user || approvalRecord.pengajuan_cuti?.id_user;
           const tanggalMulai = submission?.tanggal_mulai || approvalRecord.pengajuan_cuti?.tanggal_mulai;
           const tanggalMasukKerja = submission?.tanggal_masuk_kerja || approvalRecord.pengajuan_cuti?.tanggal_masuk_kerja;
+
           try {
             shiftSyncResult = await syncShiftLiburForApprovedLeave(tx, {
               userId: targetUserId,
               startDate: tanggalMulai,
               returnDate: tanggalMasukKerja,
+              returnShift,
             });
           } catch (shiftErr) {
             console.error('Gagal menyelaraskan shift kerja selama cuti:', shiftErr);
             throw NextResponse.json(
-              {
-                ok: false,
-                message: 'Terjadi kesalahan saat menyelaraskan jadwal shift pemohon.',
-              },
+              { ok: false, message: 'Terjadi kesalahan saat menyelaraskan jadwal shift pemohon.' },
               { status: 500 }
             );
           }
@@ -332,15 +420,14 @@ async function handleDecision(req, { params }) {
           where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti },
           include: buildInclude(),
         });
-        return { submission, approval: updatedApproval, shiftSyncResult };
       }
 
-      return { submission, approval: updatedApproval };
+      return { submission, approval: updatedApproval, shiftSyncResult };
     });
 
     const submission = result?.submission;
     const approval = result?.approval;
-    const shiftSyncResult = result?.shiftSyncResult;
+    const shiftSyncResult = result?.shiftSyncResult || createDefaultShiftSyncResult();
 
     if (submission?.id_user) {
       const decisionDisplay = decision === 'disetujui' ? 'disetujui' : 'ditolak';
@@ -353,7 +440,7 @@ async function handleDecision(req, { params }) {
         submission.id_user,
         {
           decision,
-          note: approval?.note || undefined,
+          note: approval?.note || undefined, // kirim catatan ke notifikasi
           approval_level: approval?.level,
           related_table: 'pengajuan_cuti',
           related_id: submission.id_pengajuan_cuti,
@@ -364,7 +451,12 @@ async function handleDecision(req, { params }) {
       );
     }
 
-    if (decision === 'disetujui' && submission?.id_user && shiftSyncResult && (shiftSyncResult.updatedCount > 0 || shiftSyncResult.createdCount > 0)) {
+    if (
+      decision === 'disetujui' &&
+      submission?.id_user &&
+      shiftSyncResult &&
+      (shiftSyncResult.updatedCount > 0 || shiftSyncResult.createdCount > 0)
+    ) {
       const affectedDates = Array.isArray(shiftSyncResult.affectedDates) ? shiftSyncResult.affectedDates : [];
       const sortedDates = affectedDates
         .map((d) => toDateOnly(d))
@@ -372,8 +464,7 @@ async function handleDecision(req, { params }) {
         .sort((a, b) => a.getTime() - b.getTime());
       const firstDate = sortedDates[0];
       const lastDate = sortedDates[sortedDates.length - 1] || firstDate;
-      const periodeMulai = firstDate ? formatDateKey(firstDate) : undefined;
-      const periodeSelesai = lastDate ? formatDateKey(lastDate) : undefined;
+
       const periodeMulaiDisplay = formatDateDisplay(firstDate);
       const periodeSelesaiDisplay = formatDateDisplay(lastDate);
 
@@ -384,9 +475,9 @@ async function handleDecision(req, { params }) {
         'SHIFT_LEAVE_ADJUSTMENT',
         submission.id_user,
         {
-          periode_mulai: periodeMulai,
+          periode_mulai: firstDate ? formatDateKey(firstDate) : undefined,
           periode_mulai_display: periodeMulaiDisplay,
-          periode_selesai: periodeSelesai,
+          periode_selesai: lastDate ? formatDateKey(lastDate) : undefined,
           periode_selesai_display: periodeSelesaiDisplay,
           updated_shift: shiftSyncResult.updatedCount,
           created_shift: shiftSyncResult.createdCount,
@@ -403,6 +494,7 @@ async function handleDecision(req, { params }) {
       ok: true,
       message: 'Keputusan approval berhasil disimpan.',
       data: submission,
+      shift_adjustment: shiftSyncResult,
     });
   } catch (err) {
     if (err instanceof NextResponse) return err;

@@ -19,24 +19,30 @@ import {
   Space,
   Card,
   Table,
+  Select,
+  DatePicker,
 } from "antd";
 import {
   SearchOutlined,
   FileTextOutlined,
   CalendarOutlined,
-  ReloadOutlined,
   CheckOutlined,
   CloseOutlined,
   InfoCircleOutlined,
-  SettingOutlined, // ⬅️ tambah
+  SettingOutlined,
 } from "@ant-design/icons";
-import Link from "next/link"; // ⬅️ tambah
+import Link from "next/link";
+import dayjs from "dayjs";
+import "dayjs/locale/id";
 import useCutiViewModel from "./useCutiViewModel";
+
+dayjs.locale("id");
 
 const GOLD = "#003A6F";
 const LIGHT_BLUE = "#E8F6FF";
 const HEADER_BLUE_BG = "#F0F6FF";
 
+/* ====== small bits ====== */
 function MiniField({ label, children, span = 1 }) {
   return (
     <div
@@ -51,7 +57,6 @@ function MiniField({ label, children, span = 1 }) {
   );
 }
 
-/** Cell teks dengan tombol “Lihat selengkapnya” (muncul hanya jika > 1 baris) */
 function TextClampCell({ text, expanded, onToggle }) {
   const ghostRef = useRef(null);
   const [showToggle, setShowToggle] = useState(false);
@@ -69,8 +74,7 @@ function TextClampCell({ text, expanded, onToggle }) {
   useLayoutEffect(() => {
     recompute();
     const ro = new ResizeObserver(recompute);
-    if (ghostRef.current?.parentElement)
-      ro.observe(ghostRef.current.parentElement);
+    if (ghostRef.current?.parentElement) ro.observe(ghostRef.current.parentElement);
     return () => ro.disconnect();
   }, [recompute, text]);
 
@@ -104,7 +108,6 @@ function TextClampCell({ text, expanded, onToggle }) {
         </button>
       )}
 
-      {/* Ghost untuk hitung jumlah baris */}
       <div
         ref={ghostRef}
         aria-hidden
@@ -141,6 +144,74 @@ function formatDateID(d) {
   }
 }
 
+/* ===== Modal Setujui: pilih tanggal + pola kerja ===== */
+function ApproveModal({ openRow, polaOptions, onSubmit, onCancel }) {
+  const [dateVal, setDateVal] = useState(() =>
+    openRow?.tglMasuk ? dayjs(openRow.tglMasuk) : dayjs()
+  );
+  const [polaId, setPolaId] = useState();
+
+  // reset tiap kali row berubah
+  React.useEffect(() => {
+    setDateVal(openRow?.tglMasuk ? dayjs(openRow.tglMasuk) : dayjs());
+    setPolaId(undefined);
+  }, [openRow]);
+
+  const handleOk = async () => {
+    if (!dateVal) {
+      // antd disable OK di parent, tapi jaga-jaga
+      return;
+    }
+    if (!polaId) {
+      // antd disable OK di parent, tapi jaga-jaga
+      return;
+    }
+    await onSubmit({
+      date: dateVal.format("YYYY-MM-DD"),
+      id_pola_kerja: String(polaId),
+    });
+  };
+
+  return (
+    <Modal
+      title="Setujui Pengajuan — Atur Pola Kerja Saat Masuk"
+      open={!!openRow}
+      okText="Setujui"
+      onOk={handleOk}
+      onCancel={onCancel}
+      okButtonProps={{ disabled: !dateVal || !polaId, type: "primary" }}
+    >
+      <div className="space-y-3">
+        <div>
+          <div className="text-xs font-semibold text-slate-900 mb-1">Tanggal Masuk Kerja</div>
+          <DatePicker
+            className="w-full"
+            value={dateVal}
+            onChange={(d) => setDateVal(d ?? null)}
+            format="DD MMM YYYY"
+          />
+        </div>
+
+        <div>
+          <div className="text-xs font-semibold text-slate-900 mb-1">Pola Kerja pada Tanggal Tersebut</div>
+          <Select
+            className="w-full"
+            showSearch
+            optionFilterProp="label"
+            placeholder="— Pilih pola kerja —"
+            value={polaId}
+            onChange={setPolaId}
+            options={polaOptions}
+          />
+          <div className="mt-2 text-xs text-slate-500">
+            Pola yang dipilih akan diterapkan sebagai jadwal <b>KERJA</b> untuk tanggal masuk.
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export default function CutiContent() {
   const vm = useCutiViewModel();
 
@@ -148,10 +219,13 @@ export default function CutiContent() {
   const [rejectRow, setRejectRow] = useState(null);
   const [reason, setReason] = useState("");
 
+  // modal setujui (return shift)
+  const [approveRow, setApproveRow] = useState(null);
+
   // pagination untuk kolom No
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
-  // expand state: keterangan & handover (per-row)
+  // expand state: keterangan & handover
   const [expandedKeterangan, setExpandedKeterangan] = useState(new Set());
   const [expandedHandover, setExpandedHandover] = useState(new Set());
   const toggleKeterangan = (id) =>
@@ -170,7 +244,7 @@ export default function CutiContent() {
   const counts = useMemo(() => {
     const all = vm.data ?? [];
     return {
-      pengajuan: all.filter((d) => d.status === "P").length,
+      pengajuan: all.filter((d) => d.status === "Menunggu").length,
       disetujui: all.filter((d) => d.status === "Disetujui").length,
       ditolak: all.filter((d) => d.status === "Ditolak").length,
     };
@@ -250,18 +324,22 @@ export default function CutiContent() {
                 {formatDateID(r.tglPengajuan)}
               </MiniField>
               <MiniField label="Tgl. Mulai Cuti">
-                {new Date(r.tglMulai).toLocaleDateString("id-ID", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {r.tglMulai
+                  ? new Date(r.tglMulai).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "—"}
               </MiniField>
               <MiniField label="Tgl. Masuk Kerja">
-                {new Date(r.tglMasuk).toLocaleDateString("id-ID", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {r.tglMasuk
+                  ? new Date(r.tglMasuk).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "—"}
               </MiniField>
 
               {/* Keterangan */}
@@ -287,9 +365,10 @@ export default function CutiContent() {
                   icon={<FileTextOutlined />}
                   size="small"
                   className="!rounded-md !border-none !bg-[#E8F6FF] !text-[#003A6F] hover:!bg-[#99D7FF]/40 hover:!text-[#184c81]"
-                  onClick={() => window.open(r.buktiUrl, "_blank")}
+                  disabled={!r.buktiUrl}
+                  onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
                 >
-                  Lihat
+                  {r.buktiUrl ? "Lihat" : "Tidak ada file"}
                 </Button>
               </MiniField>
             </div>
@@ -299,28 +378,23 @@ export default function CutiContent() {
       {
         title: "Keputusan",
         key: "aksi",
-        width: 180,
+        width: 220,
         fixed: "right",
         render: (_, r) => {
           if (vm.tab === "pengajuan") {
             return (
               <Space size={8} wrap>
-                <Popconfirm
-                  title="Setujui pengajuan ini?"
-                  okText="Setujui"
-                  cancelText="Batal"
-                  onConfirm={() => vm.approve(r.id)}
+                {/* Ganti Popconfirm -> buka modal approve */}
+                <Button
+                  type="primary"
+                  size="small"
+                  icon={<CheckOutlined />}
+                  className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
+                  style={{ ["--gold"]: GOLD }}
+                  onClick={() => setApproveRow(r)}
                 >
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<CheckOutlined />}
-                    className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
-                    style={{ ["--gold"]: GOLD }}
-                  >
-                    Setujui
-                  </Button>
-                </Popconfirm>
+                  Setujui
+                </Button>
 
                 <Button
                   danger
@@ -328,7 +402,7 @@ export default function CutiContent() {
                   icon={<CloseOutlined />}
                   onClick={() => {
                     setRejectRow(r);
-                    setReason(r.tempAlasan || "");
+                    setReason("");
                   }}
                 >
                   Tolak
@@ -377,7 +451,7 @@ export default function CutiContent() {
                     icon={<CheckOutlined />}
                     className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
                     style={{ ["--gold"]: GOLD }}
-                    onClick={() => vm.approve(r.id)}
+                    onClick={() => setApproveRow(r)} // tetap buka modal approve
                   >
                     Setujui
                   </Button>
@@ -388,7 +462,7 @@ export default function CutiContent() {
                     icon={<CloseOutlined />}
                     onClick={() => {
                       setRejectRow(r);
-                      setReason(r.tempAlasan || r.alasan || "");
+                      setReason(r.alasan || "");
                     }}
                   >
                     Tolak
@@ -456,7 +530,6 @@ export default function CutiContent() {
       }}
     >
       <div className="min-h-screen bg-slate-50 p-6">
-        {/* HEADER kecil – tambah action kanan */}
         <div className="mb-6">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -483,7 +556,6 @@ export default function CutiContent() {
           </div>
         </div>
 
-        {/* TABS ala Manajemen Kategori – sama persis */}
         <Tabs
           activeKey={vm.tab}
           onChange={vm.setTab}
@@ -568,15 +640,14 @@ export default function CutiContent() {
         `}</style>
       </div>
 
-      {/* Modal alasan penolakan – sama dengan Tukar Hari */}
+      {/* Modal penolakan */}
       <Modal
         title="Tolak Pengajuan"
         open={!!rejectRow}
         okText="Tolak"
         okButtonProps={{ danger: true, disabled: !reason.trim() }}
-        onOk={() => {
-          vm.handleAlasanChange(rejectRow.id, reason.trim());
-          vm.reject(rejectRow.id);
+        onOk={async () => {
+          await vm.reject(rejectRow.id, reason.trim());
           setRejectRow(null);
           setReason("");
         }}
@@ -595,6 +666,17 @@ export default function CutiContent() {
           placeholder="Contoh: Lengkapi dokumen pendukung."
         />
       </Modal>
+
+      {/* Modal setujui: pilih return shift */}
+      <ApproveModal
+        openRow={approveRow}
+        polaOptions={vm.polaOptions}
+        onCancel={() => setApproveRow(null)}
+        onSubmit={async (returnShift) => {
+          await vm.approve(approveRow.id, null, returnShift);
+          setApproveRow(null);
+        }}
+      />
     </ConfigProvider>
   );
 }

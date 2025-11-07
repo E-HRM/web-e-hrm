@@ -1,25 +1,60 @@
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, pengajuanInclude } from '../../route';
+import { verifyAuthToken } from '@/lib/jwt';
+import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 import { sendNotification } from '@/app/utils/services/notificationService';
+import storageClient from '@/app/api/_utils/storageClient';
+import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
+import { parseApprovalsFromBody, ensureApprovalUsersExist, syncApprovalRecords } from './_utils/approvals';
 
-const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
-const PENDING_DECISIONS = new Set(['pending', 'menunggu']);
+const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending', 'menunggu']);
+const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN']);
 
-const DEFAULT_SHIFT_SYNC_RESULT = Object.freeze({
-  updatedCount: 0,
-  createdCount: 0,
-  affectedDates: [],
-  returnShift: null,
-});
-
-function createDefaultShiftSyncResult() {
-  return {
-    ...DEFAULT_SHIFT_SYNC_RESULT,
-    affectedDates: [],
-    returnShift: null,
-  };
-}
+const pengajuanInclude = {
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+    },
+  },
+  kategori_cuti: {
+    select: {
+      id_kategori_cuti: true,
+      nama_kategori: true,
+    },
+  },
+  handover_users: {
+    include: {
+      user: {
+        select: {
+          id_user: true,
+          nama_pengguna: true,
+          email: true,
+          role: true,
+          foto_profil_user: true,
+        },
+      },
+    },
+  },
+  approvals: {
+    where: { deleted_at: null },
+    orderBy: { level: 'asc' },
+    select: {
+      id_approval_pengajuan_cuti: true,
+      level: true,
+      approver_user_id: true,
+      approver_role: true,
+      decision: true,
+      decided_at: true,
+      note: true,
+    },
+  },
+};
 
 const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
   day: '2-digit',
@@ -27,510 +62,470 @@ const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
   year: 'numeric',
 });
 
-function normalizeDecision(value) {
-  if (!value) return null;
-  const normalized = String(value).trim().toLowerCase();
-  return DECISION_ALLOWED.has(normalized) ? normalized : null;
-}
+const normRole = (role) => String(role || '').trim().toUpperCase();
+const canManageAll = (role) => ADMIN_ROLES.has(normRole(role));
 
-function normalizeRole(role) {
-  return String(role || '')
-    .trim()
-    .toUpperCase();
-}
-
-function buildInclude() {
-  return {
-    ...pengajuanInclude,
-    approvals: {
-      orderBy: { level: 'asc' },
-      select: {
-        id_approval_pengajuan_cuti: true,
-        level: true,
-        approver_user_id: true,
-        approver_role: true,
-        decision: true,
-        decided_at: true,
-        note: true,
-      },
-    },
-  };
-}
-
-function summarizeApprovalStatus(approvals) {
-  const approved = approvals.filter((item) => item.decision === 'disetujui');
-  const anyApproved = approved.length > 0;
-  const allRejected = approvals.length > 0 && approvals.every((item) => item.decision === 'ditolak');
-  const highestApprovedLevel = anyApproved ? approved.reduce((acc, curr) => (curr.level > acc ? curr.level : acc), approved[0].level) : null;
-
-  return { anyApproved, allRejected, highestApprovedLevel };
-}
-
-function toDateOnly(value) {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-function addDays(date, amount) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
-  const result = new Date(date.getTime());
-  result.setUTCDate(result.getUTCDate() + amount);
-  return result;
-}
-
-function formatDateKey(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
-  return date.toISOString().slice(0, 10);
+function formatDateISO(value) {
+  if (!value) return '-';
+  try {
+    return value.toISOString().split('T')[0];
+  } catch (err) {
+    try {
+      const asDate = new Date(value);
+      if (Number.isNaN(asDate.getTime())) return '-';
+      return asDate.toISOString().split('T')[0];
+    } catch (_) {
+      return '-';
+    }
+  }
 }
 
 function formatDateDisplay(value) {
-  const date = toDateOnly(value);
-  if (!date) return '-';
+  if (!value) return '-';
   try {
-    return dateDisplayFormatter.format(date);
+    return dateDisplayFormatter.format(value);
   } catch (err) {
-    console.warn('Gagal memformat tanggal untuk tampilan:', err);
-    return formatDateKey(date);
+    try {
+      const asDate = new Date(value);
+      if (Number.isNaN(asDate.getTime())) return '-';
+      return dateDisplayFormatter.format(asDate);
+    } catch (_) {
+      return '-';
+    }
   }
 }
 
-function parseReturnShiftPayload(raw) {
-  if (raw === undefined || raw === null) return null;
-  if (typeof raw !== 'object') {
-    throw NextResponse.json({ ok: false, message: 'return_shift harus berupa objek.' }, { status: 400 });
+async function ensureAuth(req) {
+  const auth = req.headers.get('authorization') || '';
+  if (auth.startsWith('Bearer ')) {
+    try {
+      const payload = verifyAuthToken(auth.slice(7).trim());
+      const id = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
+      if (id) {
+        return {
+          actor: {
+            id,
+            role: payload?.role,
+            source: 'bearer',
+          },
+        };
+      }
+    } catch (_) {
+      /* fallback ke NextAuth */
+    }
   }
 
-  const { date, id_pola_kerja: idPolaKerjaRaw } = raw;
-  const parsedDate = toDateOnly(date);
-  if (!parsedDate) {
-    throw NextResponse.json({ ok: false, message: 'return_shift.date wajib berisi tanggal valid (format YYYY-MM-DD).' }, { status: 400 });
-  }
+  const sessionOrRes = await authenticateRequest();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
-  if (!idPolaKerjaRaw) {
-    throw NextResponse.json({ ok: false, message: 'return_shift.id_pola_kerja wajib diisi saat return_shift dikirim.' }, { status: 400 });
+  const id = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
+  if (!id) {
+    return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
-
-  const idPolaKerja = String(idPolaKerjaRaw);
 
   return {
-    date: parsedDate,
-    idPolaKerja,
+    actor: {
+      id,
+      role: sessionOrRes?.user?.role,
+      source: 'session',
+    },
   };
 }
 
-function getShiftOverlapRange(shift, rangeStart, rangeEnd) {
-  const start = shift?.tanggal_mulai ? toDateOnly(shift.tanggal_mulai) : null;
-  const endRaw = shift?.tanggal_selesai ? toDateOnly(shift.tanggal_selesai) : null;
-  const startDate = start || endRaw || rangeStart;
-  const endDate = endRaw || start || rangeEnd;
-  if (!startDate || !endDate) return null;
-
-  if (endDate < rangeStart) return null;
-  if (startDate > rangeEnd) return null;
-
-  const overlapStart = startDate < rangeStart ? rangeStart : startDate;
-  const overlapEnd = endDate > rangeEnd ? rangeEnd : endDate;
-
-  if (overlapStart > overlapEnd) return null;
-  return { start: overlapStart, end: overlapEnd };
+function normalizeStatus(value) {
+  if (!value) return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (!APPROVE_STATUSES.has(normalized)) return null;
+  return normalized;
 }
 
-async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDate, returnShift }) {
-  if (!tx || !userId || !startDate) {
-    return createDefaultShiftSyncResult();
+function parseDateQuery(value) {
+  if (value === null || value === undefined) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  return parseDateOnlyToUTC(trimmed);
+}
+
+function sanitizeHandoverIds(ids) {
+  if (ids === undefined) return undefined;
+  const arr = Array.isArray(ids) ? ids : [ids];
+  const unique = new Set();
+  for (const raw of arr) {
+    const val = String(raw || '').trim();
+    if (!val) continue;
+    unique.add(val);
   }
+  return Array.from(unique);
+}
 
-  const leaveStart = toDateOnly(startDate);
-  if (!leaveStart) {
-    return createDefaultShiftSyncResult();
+function resolveJenisPengajuan(input, expected) {
+  const fallback = expected;
+  if (input === undefined || input === null) return { ok: true, value: fallback };
+
+  const trimmed = String(input).trim();
+  if (!trimmed) return { ok: true, value: fallback };
+
+  const normalized = trimmed.toLowerCase().replace(/[-\s]+/g, '_');
+  if (normalized !== expected) {
+    return {
+      ok: false,
+      message: `jenis_pengajuan harus bernilai '${expected}'.`,
+    };
   }
+  return { ok: true, value: fallback };
+}
 
-  const rawReturn = toDateOnly(returnDate);
-  const leaveEnd = rawReturn && rawReturn > leaveStart ? addDays(rawReturn, -1) : leaveStart;
-  const effectiveEnd = leaveEnd && leaveEnd >= leaveStart ? leaveEnd : leaveStart;
+/* ============================ GET ============================ */
+export async function GET(req) {
+  const auth = await ensureAuth(req);
+  if (auth instanceof NextResponse) return auth;
+  const actorRole = auth.actor?.role;
+  const actorId = auth.actor?.id;
+  if (!actorId) return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
 
-  const affectedDates = [];
-  for (let cursor = new Date(leaveStart.getTime()); cursor <= effectiveEnd; cursor = addDays(cursor, 1)) {
-    affectedDates.push(new Date(cursor.getTime()));
-  }
-  if (!affectedDates.length) {
-    affectedDates.push(leaveStart);
-  }
+  try {
+    const { searchParams } = new URL(req.url);
 
-  const existingShifts = await tx.shiftKerja.findMany({
-    where: {
-      id_user: userId,
-      deleted_at: null,
-      AND: [{ tanggal_mulai: { lte: effectiveEnd } }, { tanggal_selesai: { gte: leaveStart } }],
-    },
-    select: {
-      id_shift_kerja: true,
-      tanggal_mulai: true,
-      tanggal_selesai: true,
-      status: true,
-    },
-  });
+    const rawPage = parseInt(searchParams.get('page') || '1', 10);
+    const page = Number.isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
+    const perPageRaw = parseInt(
+      searchParams.get('perPage') || searchParams.get('pageSize') || '20',
+      10
+    );
+    const perPageBase = Number.isNaN(perPageRaw) || perPageRaw < 1 ? 20 : perPageRaw;
+    const perPage = Math.min(Math.max(perPageBase, 1), 100);
 
-  const updates = [];
-  const updatedIds = [];
-  for (const shift of existingShifts) {
-    const overlap = getShiftOverlapRange(shift, leaveStart, effectiveEnd);
-    if (!overlap) continue;
-    if (shift.status !== 'LIBUR') {
-      updates.push(
-        tx.shiftKerja.update({
-          where: { id_shift_kerja: shift.id_shift_kerja },
-          data: { status: 'LIBUR' },
-        })
-      );
-      updatedIds.push(shift.id_shift_kerja);
+    const statusParam = searchParams.get('status');
+    const status = normalizeStatus(statusParam);
+    if (statusParam && !status) {
+      return NextResponse.json({ ok: false, message: 'Parameter status tidak valid.' }, { status: 400 });
     }
-  }
 
-  if (updates.length) {
-    await Promise.all(updates);
-  }
+    const kategoriId = (searchParams.get('id_kategori_cuti') || '').trim();
 
-  const coverage = new Set();
-  for (const shift of existingShifts) {
-    const overlap = getShiftOverlapRange(shift, leaveStart, effectiveEnd);
-    if (!overlap) continue;
-    for (let cursor = new Date(overlap.start.getTime()); cursor <= overlap.end; cursor = addDays(cursor, 1)) {
-      coverage.add(formatDateKey(cursor));
+    const tanggalMulaiEqParam = searchParams.get('tanggal_mulai');
+    const tanggalMulaiFromParam = searchParams.get('tanggal_mulai_from');
+    const tanggalMulaiToParam = searchParams.get('tanggal_mulai_to');
+
+    const tanggalMasukEqParam = searchParams.get('tanggal_masuk_kerja');
+    const tanggalMasukFromParam = searchParams.get('tanggal_masuk_kerja_from');
+    const tanggalMasukToParam = searchParams.get('tanggal_masuk_kerja_to');
+
+    const targetUserParam = searchParams.get('id_user');
+    const targetUserFilter = targetUserParam ? String(targetUserParam).trim() : '';
+
+    // --- FIX 1: jangan kunci id_user ke actorId untuk admin ---
+    const where = { deleted_at: null, jenis_pengajuan: 'cuti' };
+
+    if (!canManageAll(actorRole)) {
+      // non-admin hanya lihat data sendiri
+      where.id_user = actorId;
+    } else if (targetUserFilter) {
+      // admin bisa filter user tertentu
+      where.id_user = targetUserFilter;
     }
-  }
 
-  const missingDates = [];
-  for (const date of affectedDates) {
-    const key = formatDateKey(date);
-    if (!coverage.has(key)) {
-      missingDates.push(new Date(date.getTime()));
+    // --- FIX 2: pending/menunggu dianggap sinonim ---
+    if (status) {
+      if (status === 'pending' || status === 'menunggu') {
+        where.status = { in: ['pending', 'menunggu'] };
+      } else {
+        where.status = status; // 'disetujui' | 'ditolak'
+      }
     }
-  }
 
-  let createdCount = 0;
-  if (missingDates.length) {
-    const data = missingDates.map((date) => ({
-      id_user: userId,
-      tanggal_mulai: date,
-      tanggal_selesai: date,
-      hari_kerja: 'LIBUR',
-      status: 'LIBUR',
-      id_pola_kerja: null,
-    }));
+    if (kategoriId) where.id_kategori_cuti = kategoriId;
 
-    const createResult = await tx.shiftKerja.createMany({ data, skipDuplicates: true });
-    createdCount = createResult?.count ?? data.length;
-  }
+    if (tanggalMulaiEqParam) {
+      const parsed = parseDateQuery(tanggalMulaiEqParam);
+      if (!parsed) {
+        return NextResponse.json({ ok: false, message: 'Parameter tanggal_mulai tidak valid.' }, { status: 400 });
+      }
+      where.tanggal_mulai = parsed;
+    } else if (tanggalMulaiFromParam || tanggalMulaiToParam) {
+      const gte = parseDateQuery(tanggalMulaiFromParam);
+      const lte = parseDateQuery(tanggalMulaiToParam);
+      if (tanggalMulaiFromParam && !gte) {
+        return NextResponse.json({ ok: false, message: 'Parameter tanggal_mulai_from tidak valid.' }, { status: 400 });
+      }
+      if (tanggalMulaiToParam && !lte) {
+        return NextResponse.json({ ok: false, message: 'Parameter tanggal_mulai_to tidak valid.' }, { status: 400 });
+      }
+      where.tanggal_mulai = {
+        ...(gte ? { gte } : {}),
+        ...(lte ? { lte } : {}),
+      };
+    }
 
-  let returnShiftAdjustment = null;
-  const effectiveReturnShift = returnShift?.date ? toDateOnly(returnShift.date) : toDateOnly(returnDate);
-  const returnShiftIdPolaKerja = returnShift?.idPolaKerja || null;
+    if (tanggalMasukEqParam) {
+      const parsed = parseDateQuery(tanggalMasukEqParam);
+      if (!parsed) {
+        return NextResponse.json({ ok: false, message: 'Parameter tanggal_masuk_kerja tidak valid.' }, { status: 400 });
+      }
+      where.tanggal_masuk_kerja = parsed;
+    } else if (tanggalMasukFromParam || tanggalMasukToParam) {
+      const gte = parseDateQuery(tanggalMasukFromParam);
+      const lte = parseDateQuery(tanggalMasukToParam);
+      if (tanggalMasukFromParam && !gte) {
+        return NextResponse.json({ ok: false, message: 'Parameter tanggal_masuk_kerja_from tidak valid.' }, { status: 400 });
+      }
+      if (tanggalMasukToParam && !lte) {
+        return NextResponse.json({ ok: false, message: 'Parameter tanggal_masuk_kerja_to tidak valid.' }, { status: 400 });
+      }
+      where.tanggal_masuk_kerja = {
+        ...(gte ? { gte } : {}),
+        ...(lte ? { lte } : {}),
+      };
+    }
 
-  if (effectiveReturnShift && returnShiftIdPolaKerja) {
-    const existingReturnShift = await tx.shiftKerja.findFirst({
-      where: {
-        id_user: userId,
-        deleted_at: null,
-        tanggal_mulai: effectiveReturnShift,
+    const [total, items] = await Promise.all([
+      db.pengajuanCuti.count({ where }),
+      db.pengajuanCuti.findMany({
+        where,
+        orderBy: [{ created_at: 'desc' }],
+        skip: (page - 1) * perPage,
+        take: perPage,
+        include: pengajuanInclude,
+      }),
+    ]);
+
+    return NextResponse.json({
+      ok: true,
+      data: items,
+      meta: {
+        page,
+        perPage,
+        total,
+        totalPages: Math.ceil(total / perPage),
       },
     });
-
-    if (existingReturnShift) {
-      const updated = await tx.shiftKerja.update({
-        where: { id_shift_kerja: existingReturnShift.id_shift_kerja },
-        data: {
-          tanggal_mulai: effectiveReturnShift,
-          tanggal_selesai: effectiveReturnShift,
-          hari_kerja: 'KERJA',
-          status: 'KERJA',
-          id_pola_kerja: returnShiftIdPolaKerja,
-        },
-      });
-
-      returnShiftAdjustment = {
-        action: 'updated',
-        id_shift_kerja: updated.id_shift_kerja,
-        tanggal_mulai: updated.tanggal_mulai,
-        id_pola_kerja: updated.id_pola_kerja,
-        status: 'KERJA',
-        tanggal_mulai_display: formatDateDisplay(updated.tanggal_mulai),
-      };
-    } else {
-      const created = await tx.shiftKerja.create({
-        data: {
-          id_user: userId,
-          tanggal_mulai: effectiveReturnShift,
-          tanggal_selesai: effectiveReturnShift,
-          hari_kerja: 'KERJA',
-          status: 'KERJA',
-          id_pola_kerja: returnShiftIdPolaKerja,
-        },
-      });
-
-      returnShiftAdjustment = {
-        action: 'created',
-        id_shift_kerja: created.id_shift_kerja,
-        tanggal_mulai: created.tanggal_mulai,
-        id_pola_kerja: created.id_pola_kerja,
-        status: 'KERJA',
-        tanggal_mulai_display: formatDateDisplay(created.tanggal_mulai),
-      };
-    }
-
-    console.info('Return shift updated for approved leave', {
-      userId,
-      tanggal_mulai: formatDateKey(effectiveReturnShift),
-      id_pola_kerja: returnShiftIdPolaKerja,
-      action: returnShiftAdjustment?.action,
-      status: 'KERJA',
-    });
+  } catch (err) {
+    console.error('GET /mobile/pengajuan-cuti error:', err);
+    return NextResponse.json({ ok: false, message: 'Gagal mengambil data pengajuan cuti.' }, { status: 500 });
   }
-
-  return {
-    updatedCount: updatedIds.length,
-    createdCount,
-    affectedDates,
-    returnShift: returnShiftAdjustment,
-  };
 }
 
-async function handleDecision(req, { params }) {
+/* ============================ POST ============================ */
+export async function POST(req) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
 
-  const actorId = auth?.actor?.id;
-  const actorRole = normalizeRole(auth?.actor?.role);
+  const actorId = auth.actor?.id;
   if (!actorId) {
     return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
 
-  const id = params?.id;
-  if (!id) {
-    return NextResponse.json({ ok: false, message: 'id wajib diisi.' }, { status: 400 });
-  }
-
-  let body;
+  let parsed;
   try {
-    body = await req.json();
+    parsed = await parseRequestBody(req);
   } catch (err) {
-    return NextResponse.json({ ok: false, message: 'Body request harus berupa JSON.' }, { status: 400 });
+    const status = err?.status || 400;
+    return NextResponse.json({ ok: false, message: err?.message || 'Body request tidak valid.' }, { status });
   }
+  const body = parsed.body || {};
 
-  const decision = normalizeDecision(body?.decision);
-  if (!decision) {
-    return NextResponse.json({ ok: false, message: 'decision harus diisi dengan nilai disetujui atau ditolak.' }, { status: 400 });
-  }
-
-  const note = body?.note === undefined || body?.note === null ? null : String(body.note);
-  let returnShift;
   try {
-    returnShift = parseReturnShiftPayload(body?.return_shift);
-  } catch (err) {
-    if (err instanceof NextResponse) return err;
-    throw err;
-  }
-  try {
-    const result = await db.$transaction(async (tx) => {
-      const approvalRecord = await tx.approvalPengajuanCuti.findUnique({
-        where: { id_approval_pengajuan_cuti: id },
-        include: {
-          pengajuan_cuti: {
-            select: {
-              id_pengajuan_cuti: true,
-              id_user: true,
-              status: true,
-              tanggal_mulai: true,
-              tanggal_masuk_kerja: true,
-              current_level: true,
-              deleted_at: true,
-            },
-          },
-        },
-      });
+    const id_kategori_cuti = String(body?.id_kategori_cuti || '').trim();
+    const tanggal_mulai_raw = body?.tanggal_mulai;
+    const tanggal_masuk_raw = body?.tanggal_masuk_kerja;
+    const keperluan = body?.keperluan === undefined || body?.keperluan === null ? null : String(body.keperluan);
+    const handover = body?.handover === undefined || body?.handover === null ? null : String(body.handover);
 
-      if (!approvalRecord || approvalRecord.deleted_at) {
-        throw NextResponse.json({ ok: false, message: 'Approval tidak ditemukan.' }, { status: 404 });
-      }
+    const jenisPengajuanResult = resolveJenisPengajuan(body?.jenis_pengajuan, 'cuti');
+    if (!jenisPengajuanResult.ok) {
+      return NextResponse.json({ ok: false, message: jenisPengajuanResult.message }, { status: 400 });
+    }
+    const jenis_pengajuan = jenisPengajuanResult.value;
 
-      if (!approvalRecord.pengajuan_cuti || approvalRecord.pengajuan_cuti.deleted_at) {
-        throw NextResponse.json({ ok: false, message: 'Pengajuan tidak ditemukan.' }, { status: 404 });
-      }
-
-      const matchesUser = approvalRecord.approver_user_id && approvalRecord.approver_user_id === actorId;
-      const matchesRole = approvalRecord.approver_role && normalizeRole(approvalRecord.approver_role) === actorRole;
-
-      if (!matchesUser && !matchesRole) {
-        throw NextResponse.json({ ok: false, message: 'Anda tidak memiliki akses untuk approval ini.' }, { status: 403 });
-      }
-
-      if (!PENDING_DECISIONS.has(approvalRecord.decision)) {
-        throw NextResponse.json({ ok: false, message: 'Approval sudah memiliki keputusan.' }, { status: 409 });
-      }
-
-      const updatedApproval = await tx.approvalPengajuanCuti.update({
-        where: { id_approval_pengajuan_cuti: id },
-        data: {
-          decision,
-          note,
-          decided_at: new Date(),
-        },
-        select: {
-          id_approval_pengajuan_cuti: true,
-          id_pengajuan_cuti: true,
-          level: true,
-          decision: true,
-          note: true,
-          decided_at: true,
-        },
-      });
-
-      const approvals = await tx.approvalPengajuanCuti.findMany({
-        where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti, deleted_at: null },
-        orderBy: { level: 'asc' },
-        select: {
-          id_approval_pengajuan_cuti: true,
-          level: true,
-          approver_user_id: true,
-          approver_role: true,
-          decision: true,
-          decided_at: true,
-          note: true,
-        },
-      });
-
-      const { anyApproved, allRejected, highestApprovedLevel } = summarizeApprovalStatus(approvals);
-      const parentUpdate = {};
-
-      if (anyApproved) {
-        parentUpdate.status = 'disetujui';
-        parentUpdate.current_level = highestApprovedLevel;
-      } else if (allRejected) {
-        parentUpdate.status = 'ditolak';
-        parentUpdate.current_level = null;
-      }
-
-      let submission;
-      let shiftSyncResult = createDefaultShiftSyncResult();
-      if (Object.keys(parentUpdate).length) {
-        submission = await tx.pengajuanCuti.update({
-          where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti },
-          data: parentUpdate,
-          include: buildInclude(),
-        });
-        if (parentUpdate.status === 'disetujui') {
-          const targetUserId = submission?.id_user || approvalRecord.pengajuan_cuti?.id_user;
-          const tanggalMulai = submission?.tanggal_mulai || approvalRecord.pengajuan_cuti?.tanggal_mulai;
-          const tanggalMasukKerja = submission?.tanggal_masuk_kerja || approvalRecord.pengajuan_cuti?.tanggal_masuk_kerja;
-          try {
-            shiftSyncResult = await syncShiftLiburForApprovedLeave(tx, {
-              userId: targetUserId,
-              startDate: tanggalMulai,
-              returnDate: tanggalMasukKerja,
-              returnShift,
-            });
-          } catch (shiftErr) {
-            console.error('Gagal menyelaraskan shift kerja selama cuti:', shiftErr);
-            throw NextResponse.json(
-              {
-                ok: false,
-                message: 'Terjadi kesalahan saat menyelaraskan jadwal shift pemohon.',
-              },
-              { status: 500 }
-            );
-          }
-        }
-      } else {
-        submission = await tx.pengajuanCuti.findUnique({
-          where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti },
-          include: buildInclude(),
-        });
-        return { submission, approval: updatedApproval, shiftSyncResult };
-      }
-
-      return { submission, approval: updatedApproval, shiftSyncResult };
-    });
-
-    const submission = result?.submission;
-    const approval = result?.approval;
-    const shiftSyncResult = result?.shiftSyncResult || createDefaultShiftSyncResult();
-
-    if (submission?.id_user) {
-      const decisionDisplay = decision === 'disetujui' ? 'disetujui' : 'ditolak';
-      const overrideTitle = `Pengajuan cuti ${decisionDisplay}`;
-      const overrideBody = `Pengajuan cuti Anda telah ${decisionDisplay}.`;
-      const deeplink = `/pengajuan-cuti/${submission.id_pengajuan_cuti}`;
-
-      await sendNotification(
-        'LEAVE_APPROVAL_DECIDED',
-        submission.id_user,
-        {
-          decision,
-          note: approval?.note || undefined,
-          approval_level: approval?.level,
-          related_table: 'pengajuan_cuti',
-          related_id: submission.id_pengajuan_cuti,
-          overrideTitle,
-          overrideBody,
-        },
-        { deeplink }
-      );
+    if (!id_kategori_cuti) {
+      return NextResponse.json({ ok: false, message: 'id_kategori_cuti wajib diisi.' }, { status: 400 });
     }
 
-    if (decision === 'disetujui' && submission?.id_user && shiftSyncResult && (shiftSyncResult.updatedCount > 0 || shiftSyncResult.createdCount > 0)) {
-      const affectedDates = Array.isArray(shiftSyncResult.affectedDates) ? shiftSyncResult.affectedDates : [];
-      const sortedDates = affectedDates
-        .map((d) => toDateOnly(d))
-        .filter(Boolean)
-        .sort((a, b) => a.getTime() - b.getTime());
-      const firstDate = sortedDates[0];
-      const lastDate = sortedDates[sortedDates.length - 1] || firstDate;
-      const periodeMulai = firstDate ? formatDateKey(firstDate) : undefined;
-      const periodeSelesai = lastDate ? formatDateKey(lastDate) : undefined;
-      const periodeMulaiDisplay = formatDateDisplay(firstDate);
-      const periodeSelesaiDisplay = formatDateDisplay(lastDate);
+    const tanggal_mulai = parseDateOnlyToUTC(tanggal_mulai_raw);
+    if (!tanggal_mulai) {
+      return NextResponse.json({ ok: false, message: 'tanggal_mulai tidak valid.' }, { status: 400 });
+    }
 
-      const overrideTitle = 'Jadwal kerja diperbarui selama cuti';
-      const overrideBody = `Shift Anda pada periode ${periodeMulaiDisplay} - ${periodeSelesaiDisplay} telah disesuaikan menjadi LIBUR.`;
+    const tanggal_masuk_kerja = parseDateOnlyToUTC(tanggal_masuk_raw);
+    if (!tanggal_masuk_kerja) {
+      return NextResponse.json({ ok: false, message: 'tanggal_masuk_kerja tidak valid.' }, { status: 400 });
+    }
 
-      await sendNotification(
-        'SHIFT_LEAVE_ADJUSTMENT',
-        submission.id_user,
-        {
-          periode_mulai: periodeMulai,
-          periode_mulai_display: periodeMulaiDisplay,
-          periode_selesai: periodeSelesai,
-          periode_selesai_display: periodeSelesaiDisplay,
-          updated_shift: shiftSyncResult.updatedCount,
-          created_shift: shiftSyncResult.createdCount,
-          related_table: 'pengajuan_cuti',
-          related_id: submission.id_pengajuan_cuti,
-          overrideTitle,
-          overrideBody,
+    if (tanggal_masuk_kerja < tanggal_mulai) {
+      return NextResponse.json({ ok: false, message: 'tanggal_masuk_kerja tidak boleh sebelum tanggal_mulai.' }, { status: 400 });
+    }
+
+    const handoverIdsInput = body?.['handover_tag_user_ids[]'] ?? body?.handover_tag_user_ids;
+    const handoverIds = sanitizeHandoverIds(handoverIdsInput);
+
+    const kategori = await db.kategoriCuti.findFirst({
+      where: { id_kategori_cuti, deleted_at: null },
+      select: { id_kategori_cuti: true },
+    });
+    if (!kategori) {
+      return NextResponse.json({ ok: false, message: 'Kategori cuti tidak ditemukan.' }, { status: 404 });
+    }
+
+    if (handoverIds && handoverIds.length) {
+      const users = await db.user.findMany({
+        where: { id_user: { in: handoverIds }, deleted_at: null },
+        select: { id_user: true },
+      });
+      const foundIds = new Set(users.map((u) => u.id_user));
+      const missing = handoverIds.filter((id) => !foundIds.has(id));
+      if (missing.length) {
+        return NextResponse.json({ ok: false, message: 'Beberapa handover_tag_user_ids tidak valid.' }, { status: 400 });
+      }
+    }
+
+    let approvalsInput;
+    try {
+      approvalsInput = parseApprovalsFromBody(body);
+    } catch (err) {
+      const status = err?.status || 400;
+      return NextResponse.json({ ok: false, message: err?.message || 'Data approvals tidak valid.' }, { status });
+    }
+
+    try {
+      if (approvalsInput !== undefined) {
+        await ensureApprovalUsersExist(db, approvalsInput);
+      }
+    } catch (err) {
+      const status = err?.status || 400;
+      return NextResponse.json({ ok: false, message: err?.message || 'Approver tidak valid.' }, { status });
+    }
+
+    let uploadMeta = null;
+    let lampiranUrl = null;
+    const lampiranFile = findFileInBody(body, ['lampiran_cuti', 'lampiran', 'lampiran_file', 'file']);
+    if (lampiranFile) {
+      try {
+        const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
+        lampiranUrl = res.publicUrl || null;
+        uploadMeta = { key: res.key, publicUrl: res.publicUrl, etag: res.etag, size: res.size };
+      } catch (e) {
+        return NextResponse.json({ ok: false, message: 'Gagal mengunggah lampiran.', detail: e?.message || String(e) }, { status: 502 });
+      }
+    }
+
+    const pengajuan = await db.$transaction(async (tx) => {
+      const created = await tx.pengajuanCuti.create({
+        data: {
+          id_user: actorId,
+          id_kategori_cuti,
+          keperluan,
+          tanggal_mulai,
+          tanggal_masuk_kerja,
+          handover,
+          jenis_pengajuan,
+          lampiran_cuti_url: lampiranUrl,
         },
-        { deeplink: '/shift-kerja' }
-      );
+      });
+
+      if (approvalsInput !== undefined) {
+        await syncApprovalRecords(tx, created.id_pengajuan_cuti, approvalsInput);
+      }
+
+      if (handoverIds && handoverIds.length) {
+        await tx.handoverCuti.createMany({
+          data: handoverIds.map((id_user_tagged) => ({
+            id_pengajuan_cuti: created.id_pengajuan_cuti,
+            id_user_tagged,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return created;
+    });
+
+    const fullPengajuan = await db.pengajuanCuti.findUnique({
+      where: { id_pengajuan_cuti: pengajuan.id_pengajuan_cuti },
+      include: pengajuanInclude,
+    });
+
+    if (fullPengajuan) {
+      const deeplink = `/pengajuan-cuti/${fullPengajuan.id_pengajuan_cuti}`;
+      const basePayload = {
+        nama_pemohon: fullPengajuan.user?.nama_pengguna || 'Rekan',
+        kategori_cuti: fullPengajuan.kategori_cuti?.nama_kategori || '-',
+        tanggal_mulai: formatDateISO(fullPengajuan.tanggal_mulai),
+        tanggal_mulai_display: formatDateDisplay(fullPengajuan.tanggal_mulai),
+        tanggal_masuk_kerja: formatDateISO(fullPengajuan.tanggal_masuk_kerja),
+        tanggal_masuk_kerja_display: formatDateDisplay(fullPengajuan.tanggal_masuk_kerja),
+        keperluan: fullPengajuan.keperluan || '-',
+        handover: fullPengajuan.handover || '-',
+        related_table: 'pengajuan_cuti',
+        related_id: fullPengajuan.id_pengajuan_cuti,
+        deeplink,
+      };
+
+      const notifiedUsers = new Set();
+      const notifPromises = [];
+
+      if (Array.isArray(fullPengajuan.handover_users)) {
+        for (const handoverUser of fullPengajuan.handover_users) {
+          const taggedId = handoverUser?.id_user_tagged;
+          if (!taggedId || notifiedUsers.has(taggedId)) continue;
+          notifiedUsers.add(taggedId);
+
+          const overrideTitle = `${basePayload.nama_pemohon} mengajukan cuti`;
+          const overrideBody = `${basePayload.nama_pemohon} menandai Anda sebagai handover cuti (${basePayload.kategori_cuti}) pada ${basePayload.tanggal_mulai_display}.`;
+
+          notifPromises.push(
+            sendNotification(
+              'LEAVE_HANDOVER_TAGGED',
+              taggedId,
+              {
+                ...basePayload,
+                nama_penerima: handoverUser?.user?.nama_pengguna || undefined,
+                title: overrideTitle,
+                body: overrideBody,
+                overrideTitle,
+                overrideBody,
+              },
+              { deeplink }
+            )
+          );
+        }
+      }
+
+      if (fullPengajuan.id_user && !notifiedUsers.has(fullPengajuan.id_user)) {
+        const overrideTitle = 'Pengajuan cuti berhasil dikirim';
+        const overrideBody = `Pengajuan cuti ${basePayload.kategori_cuti} pada ${basePayload.tanggal_mulai_display} telah berhasil dibuat.`;
+
+        notifPromises.push(
+          sendNotification(
+            'LEAVE_HANDOVER_TAGGED',
+            fullPengajuan.id_user,
+            {
+              ...basePayload,
+              is_pemohon: true,
+              title: overrideTitle,
+              body: overrideBody,
+              overrideTitle,
+              overrideBody,
+            },
+            { deeplink }
+          )
+        );
+      }
+
+      if (notifPromises.length) {
+        await Promise.allSettled(notifPromises);
+      }
     }
 
     return NextResponse.json({
       ok: true,
-      message: 'Keputusan approval berhasil disimpan.',
-      data: submission,
-      shift_adjustment: shiftSyncResult,
+      message: 'Pengajuan cuti berhasil dibuat.',
+      data: fullPengajuan ?? pengajuan,
+      upload: uploadMeta || undefined,
     });
   } catch (err) {
-    if (err instanceof NextResponse) return err;
-    console.error('PATCH /mobile/pengajuan-cuti/approvals error:', err);
-    return NextResponse.json({ ok: false, message: 'Terjadi kesalahan saat memproses approval.' }, { status: 500 });
+    console.error('POST /mobile/pengajuan-cuti error:', err);
+    return NextResponse.json({ ok: false, message: 'Gagal membuat pengajuan cuti.' }, { status: 500 });
   }
 }
 
-export async function PATCH(req, ctx) {
-  return handleDecision(req, ctx || {});
-}
-
-export async function PUT(req, ctx) {
-  return handleDecision(req, ctx || {});
-}
+export { ensureAuth, pengajuanInclude, sanitizeHandoverIds, normalizeStatus, parseDateQuery };
