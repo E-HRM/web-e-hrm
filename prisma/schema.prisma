@@ -222,6 +222,7 @@ model ShiftKerja {
   user      User       @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
   polaKerja PolaKerja? @relation(fields: [id_pola_kerja], references: [id_pola_kerja], onDelete: Restrict, onUpdate: Cascade)
 
+  @@unique([id_user, tanggal_mulai], name: "uniq_shift_per_user_per_date")
   @@index([id_user, tanggal_mulai])
   @@index([id_pola_kerja])
   @@map("shift_kerja")
