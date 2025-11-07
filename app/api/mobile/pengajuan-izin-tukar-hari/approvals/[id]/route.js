@@ -56,9 +56,9 @@ async function handleDecision(req, { params }) {
     return NextResponse.json({ message: 'Unauthorized.' }, { status: 401 });
   }
 
-  const approvalId = params?.approvalId;
-  if (!approvalId) {
-    return NextResponse.json({ message: 'approvalId wajib diisi.' }, { status: 400 });
+  const id = params?.id;
+  if (!id) {
+    return NextResponse.json({ message: 'id wajib diisi.' }, { status: 400 });
   }
 
   let body;
@@ -78,7 +78,7 @@ async function handleDecision(req, { params }) {
   try {
     const result = await db.$transaction(async (tx) => {
       const approvalRecord = await tx.approvalIzinTukarHari.findUnique({
-        where: { id_approval_izin_tukar_hari: approvalId },
+        where: { id_approval_izin_tukar_hari: id },
         include: {
           izin_tukar_hari: {
             select: {
@@ -114,7 +114,7 @@ async function handleDecision(req, { params }) {
       }
 
       const updatedApproval = await tx.approvalIzinTukarHari.update({
-        where: { id_approval_izin_tukar_hari: approvalId },
+        where: { id_approval_izin_tukar_hari: id },
         data: {
           decision,
           note,
