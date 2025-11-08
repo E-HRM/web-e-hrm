@@ -4,8 +4,9 @@ import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateOnlyToUTC, startOfUTCDay, endOfUTCDay } from '@/helpers/date-helper';
 import { sendNotification } from '@/app/utils/services/notificationService';
-import { parseRequestBody } from '@/app/api/_utils/requestBody';
-import { extractApprovalsFromBody, validateApprovalEntries } from '@/app/api/mobile/pengajuan-izin-tukar-hari/_utils/approvalValidation';
+import { parseRequestBody, findFileInBody, isNullLike } from '@/app/api/_utils/requestBody';
+import storageClient from '@/app/api/_utils/storageClient';
+import { extractApprovalsFromBody, validateApprovalEntries } from '@/app/api/mobile/_utils/approvalValidation';
 
 const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending', 'menunggu']);
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN']);
@@ -45,6 +46,19 @@ const baseInclude = {
       note: true,
     },
   },
+  // Pull all swap pairs associated with this submission.  Only the date
+  // fields and optional note are needed here; by ordering on the
+  // `hari_izin` field, the first element will represent the earliest
+  // swap.  Clients can compute their own display values from these
+  // entries rather than relying on deprecated scalar columns.
+  pairs: {
+    select: {
+      hari_izin: true,
+      hari_pengganti: true,
+      catatan_pair: true,
+    },
+    orderBy: { hari_izin: 'asc' },
+  },
 };
 
 const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -58,17 +72,6 @@ const normRole = (role) =>
     .trim()
     .toUpperCase();
 const canManageAll = (role) => ADMIN_ROLES.has(normRole(role));
-
-function isNullLike(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return true;
-    const lowered = trimmed.toLowerCase();
-    if (lowered === 'null' || lowered === 'undefined') return true;
-  }
-  return false;
-}
 
 function formatDateISO(value) {
   if (!value) return '-';
@@ -225,42 +228,65 @@ export async function GET(req) {
     }
 
     const and = [];
+    // Filter by requested swap date(s).  Because swap dates are now stored
+    // in the `pairs` relation rather than as scalar columns, convert
+    // legacy query params into relation filters.  Each filter uses a
+    // `some` clause to match at least one pair within a submission.
     if (hariIzin) {
       const parsed = parseDateParam(hariIzin);
       if (parsed) {
-        and.push({ hari_izin: { gte: startOfUTCDay(parsed), lte: endOfUTCDay(parsed) } });
+        and.push({
+          pairs: {
+            some: {
+              hari_izin: { gte: startOfUTCDay(parsed), lte: endOfUTCDay(parsed) },
+            },
+          },
+        });
       }
     } else {
       const parsedFrom = from ? parseDateParam(from) : null;
       const parsedTo = to ? parseDateParam(to) : null;
       if (parsedFrom || parsedTo) {
         and.push({
-          hari_izin: {
-            ...(parsedFrom ? { gte: startOfUTCDay(parsedFrom) } : {}),
-            ...(parsedTo ? { lte: endOfUTCDay(parsedTo) } : {}),
+          pairs: {
+            some: {
+              hari_izin: {
+                ...(parsedFrom ? { gte: startOfUTCDay(parsedFrom) } : {}),
+                ...(parsedTo ? { lte: endOfUTCDay(parsedTo) } : {}),
+              },
+            },
           },
         });
       }
     }
-
+    // Filter by replacement dates
     if (hariPengganti) {
       const parsed = parseDateParam(hariPengganti);
       if (parsed) {
-        and.push({ hari_pengganti: { gte: startOfUTCDay(parsed), lte: endOfUTCDay(parsed) } });
+        and.push({
+          pairs: {
+            some: {
+              hari_pengganti: { gte: startOfUTCDay(parsed), lte: endOfUTCDay(parsed) },
+            },
+          },
+        });
       }
     } else {
       const parsedFrom = penggantiFrom ? parseDateParam(penggantiFrom) : null;
       const parsedTo = penggantiTo ? parseDateParam(penggantiTo) : null;
       if (parsedFrom || parsedTo) {
         and.push({
-          hari_pengganti: {
-            ...(parsedFrom ? { gte: startOfUTCDay(parsedFrom) } : {}),
-            ...(parsedTo ? { lte: endOfUTCDay(parsedTo) } : {}),
+          pairs: {
+            some: {
+              hari_pengganti: {
+                ...(parsedFrom ? { gte: startOfUTCDay(parsedFrom) } : {}),
+                ...(parsedTo ? { lte: endOfUTCDay(parsedTo) } : {}),
+              },
+            },
           },
         });
       }
     }
-
     if (q) {
       const keyword = String(q).trim();
       if (keyword) {
@@ -269,22 +295,51 @@ export async function GET(req) {
         });
       }
     }
-
     if (and.length) {
       where.AND = and;
     }
-
-    const [total, items] = await Promise.all([
+    const [total, rawItems] = await Promise.all([
       db.izinTukarHari.count({ where }),
       db.izinTukarHari.findMany({
         where,
-        orderBy: [{ hari_izin: 'desc' }, { created_at: 'desc' }],
+        // Order by most recently created submissions.  Ordering by swap
+        // dates via relation fields is not supported by Prisma, so we
+        // perform any date-based ordering in memory after fetching.
+        orderBy: [{ created_at: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
         include: baseInclude,
       }),
     ]);
-
+    // Transform each record to compute derived scalar fields from the
+    // related pairs.  The earliest pair (sorted by hari_izin) defines
+    // `hari_izin` and `hari_pengganti` for backward compatibility.  A
+    // flattened array of pair objects is exposed via `pairs`.
+    const items = rawItems.map((item) => {
+      const pairs = Array.isArray(item.pairs)
+        ? item.pairs.map((p) => ({
+            hari_izin: p.hari_izin,
+            hari_pengganti: p.hari_pengganti,
+            catatan_pair: p.catatan_pair ?? null,
+          }))
+        : [];
+      // sort by hari_izin ascending
+      pairs.sort((a, b) => {
+        const aTime = a.hari_izin instanceof Date ? a.hari_izin.getTime() : new Date(a.hari_izin).getTime();
+        const bTime = b.hari_izin instanceof Date ? b.hari_izin.getTime() : new Date(b.hari_izin).getTime();
+        return aTime - bTime;
+      });
+      const firstPair = pairs.length ? pairs[0] : null;
+      const derivedHariIzin = firstPair ? firstPair.hari_izin : null;
+      const derivedHariPengganti = firstPair ? firstPair.hari_pengganti : null;
+      const { pairs: _pairs, ...rest } = item;
+      return {
+        ...rest,
+        hari_izin: derivedHariIzin,
+        hari_pengganti: derivedHariPengganti,
+        pairs,
+      };
+    });
     return NextResponse.json({
       ok: true,
       data: items,
@@ -316,14 +371,62 @@ export async function POST(req) {
     const parsed = await parseRequestBody(req);
     const body = parsed.body || {};
 
-    const hariIzin = parseDateOnlyToUTC(body.hari_izin);
-    if (!hariIzin) {
-      return NextResponse.json({ message: "Field 'hari_izin' wajib diisi dan harus berupa tanggal yang valid." }, { status: 400 });
+    /*
+     * Perubahan besar: mendukung pengajuan banyak tanggal
+     * Secara historis, API ini hanya menerima satu hari_izin dan satu hari_pengganti.
+     * Namun untuk memenuhi permintaan agar satu pengajuan bisa memilih lebih dari satu tanggal,
+     * kita cek apakah input merupakan array. Jika array, setiap pasangan akan dibuatkan record terpisah.
+     */
+    const rawHariIzin = body.hari_izin;
+    const rawHariPengganti = body.hari_pengganti;
+
+    // Normalisasi menjadi array
+    const hariIzinArr = Array.isArray(rawHariIzin) ? rawHariIzin : [rawHariIzin];
+    const hariPenggantiArr = Array.isArray(rawHariPengganti) ? rawHariPengganti : [rawHariPengganti];
+
+    // Validasi jumlah array: boleh 1 atau sama panjang
+    if (hariIzinArr.length > 1 && hariPenggantiArr.length > 1 && hariIzinArr.length !== hariPenggantiArr.length) {
+      return NextResponse.json(
+        {
+          message: "Jumlah elemen pada 'hari_izin' dan 'hari_pengganti' tidak sesuai. Panjang array keduanya harus sama atau salah satunya satu.",
+        },
+        { status: 400 }
+      );
     }
 
-    const hariPengganti = parseDateOnlyToUTC(body.hari_pengganti);
-    if (!hariPengganti) {
-      return NextResponse.json({ message: "Field 'hari_pengganti' wajib diisi dan harus berupa tanggal yang valid." }, { status: 400 });
+    // Parse setiap pasangan tanggal
+    const datePairs = [];
+    for (let i = 0; i < hariIzinArr.length; i++) {
+      const hIzinRaw = hariIzinArr[i];
+      const hPenggantiRaw = hariPenggantiArr.length > 1 ? hariPenggantiArr[i] : hariPenggantiArr[0];
+      const hIzin = parseDateOnlyToUTC(hIzinRaw);
+      if (!hIzin) {
+        return NextResponse.json({ message: "Field 'hari_izin' wajib diisi dan harus berupa tanggal yang valid." }, { status: 400 });
+      }
+      const hPengganti = parseDateOnlyToUTC(hPenggantiRaw);
+      if (!hPengganti) {
+        return NextResponse.json({ message: "Field 'hari_pengganti' wajib diisi dan harus berupa tanggal yang valid." }, { status: 400 });
+      }
+      datePairs.push({ hariIzin: hIzin, hariPengganti: hPengganti });
+    }
+
+    // ===== Lampiran processing =====
+    // Allow clients to attach a file via multipart form-data under various keys or provide a direct URL.
+    let uploadMeta = null;
+    let lampiranUrl = null;
+    try {
+      const lampiranFile = findFileInBody(body, ['lampiran_izin_tukar_hari', 'lampiran', 'lampiran_file', 'file']);
+      if (lampiranFile) {
+        // Upload file to object storage and capture metadata
+        const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
+        lampiranUrl = res.publicUrl || null;
+        uploadMeta = { key: res.key, publicUrl: res.publicUrl, etag: res.etag, size: res.size };
+      } else if (Object.prototype.hasOwnProperty.call(body, 'lampiran_izin_tukar_hari_url')) {
+        // Fallback: accept a URL or explicit null/empty string to clear existing attachment
+        lampiranUrl = isNullLike(body.lampiran_izin_tukar_hari_url) ? null : String(body.lampiran_izin_tukar_hari_url);
+      }
+    } catch (e) {
+      return NextResponse.json({ message: 'Gagal mengunggah lampiran.', detail: e?.message || String(e) }, { status: 502 });
     }
 
     const kategori = String(body.kategori || '').trim();
@@ -366,21 +469,39 @@ export async function POST(req) {
       return NextResponse.json({ message: 'User tujuan tidak ditemukan.' }, { status: 404 });
     }
 
-    const result = await db.$transaction(async (tx) => {
+    // ===== Proses transaksi untuk pengajuan swap hari dengan banyak pasangan =====
+    const resultObj = await db.$transaction(async (tx) => {
+      // Pre-validate approvals jika ada
+      let approvalsValidated = [];
+      if (approvalsInput !== undefined) {
+        approvalsValidated = await validateApprovalEntries(approvalsInput, tx);
+      }
+
+      // Create the main IzinTukarHari record.  The scalar date fields
+      // (hari_izin, hari_pengganti) have been removed from the model; all
+      // pairs are stored in the related `pairs` relation.  We expand the
+      // collected datePairs into separate pair records using a nested
+      // create.
       const created = await tx.izinTukarHari.create({
         data: {
           id_user: targetUserId,
-          hari_izin: hariIzin,
-          hari_pengganti: hariPengganti,
           kategori,
           keperluan,
           handover,
           status: statusRaw,
           current_level: currentLevel,
           jenis_pengajuan,
+          lampiran_izin_tukar_hari_url: lampiranUrl,
+          pairs: {
+            create: datePairs.map(({ hariIzin, hariPengganti }) => ({
+              hari_izin: hariIzin,
+              hari_pengganti: hariPengganti,
+            })),
+          },
         },
       });
 
+      // Create handover/tagged users if provided
       if (tagUserIds && tagUserIds.length) {
         await tx.handoverTukarHari.createMany({
           data: tagUserIds.map((id) => ({
@@ -390,47 +511,68 @@ export async function POST(req) {
           skipDuplicates: true,
         });
       }
-      if (approvalsInput !== undefined) {
-        const approvals = await validateApprovalEntries(approvalsInput, tx);
-        if (approvals.length) {
-          await tx.approvalIzinTukarHari.createMany({
-            data: approvals.map((item) => ({
-              id_izin_tukar_hari: created.id_izin_tukar_hari,
-              level: item.level,
-              approver_user_id: item.approver_user_id,
-              approver_role: item.approver_role,
-              decision: 'pending',
-            })),
-          });
-        }
+
+      // Create approvals if provided
+      if (approvalsInput !== undefined && approvalsValidated.length) {
+        await tx.approvalIzinTukarHari.createMany({
+          data: approvalsValidated.map((item) => ({
+            id_izin_tukar_hari: created.id_izin_tukar_hari,
+            level: item.level,
+            approver_user_id: item.approver_user_id,
+            approver_role: item.approver_role,
+            decision: 'pending',
+          })),
+        });
       }
+
+      // Fetch the complete object with includes
       return tx.izinTukarHari.findUnique({
         where: { id_izin_tukar_hari: created.id_izin_tukar_hari },
         include: baseInclude,
       });
     });
 
-    if (result) {
-      const deeplink = `/pengajuan-izin-tukar-hari/${result.id_izin_tukar_hari}`;
+    // Kirim notifikasi untuk pengajuan yang telah dibuat
+    if (resultObj) {
+      const deeplink = `/pengajuan-izin-tukar-hari/${resultObj.id_izin_tukar_hari}`;
+      // Determine the earliest swap pair to populate legacy fields in the notification.
+      let firstHariIzin = null;
+      let firstHariPengganti = null;
+      if (Array.isArray(resultObj.pairs) && resultObj.pairs.length) {
+        const sorted = resultObj.pairs
+          .map((p) => ({
+            hari_izin: p.hari_izin,
+            hari_pengganti: p.hari_pengganti,
+          }))
+          .sort((a, b) => {
+            const aT = a.hari_izin instanceof Date ? a.hari_izin.getTime() : new Date(a.hari_izin).getTime();
+            const bT = b.hari_izin instanceof Date ? b.hari_izin.getTime() : new Date(b.hari_izin).getTime();
+            return aT - bT;
+          });
+        const first = sorted[0];
+        firstHariIzin = first?.hari_izin || null;
+        firstHariPengganti = first?.hari_pengganti || null;
+      }
+
       const basePayload = {
-        nama_pemohon: result.user?.nama_pengguna || 'Rekan',
-        kategori_izin: result.kategori || '-',
-        hari_izin: result.hari_izin instanceof Date ? result.hari_izin.toISOString() : null,
-        hari_pengganti: result.hari_pengganti instanceof Date ? result.hari_pengganti.toISOString() : null,
-        hari_izin_display: formatDateDisplay(result.hari_izin),
-        hari_pengganti_display: formatDateDisplay(result.hari_pengganti),
-        keperluan: result.keperluan || '-',
-        handover: result.handover || '-',
+        nama_pemohon: resultObj.user?.nama_pengguna || 'Rekan',
+        kategori_izin: resultObj.kategori || '-',
+        hari_izin: firstHariIzin instanceof Date ? firstHariIzin.toISOString() : null,
+        hari_pengganti: firstHariPengganti instanceof Date ? firstHariPengganti.toISOString() : null,
+        hari_izin_display: formatDateDisplay(firstHariIzin),
+        hari_pengganti_display: formatDateDisplay(firstHariPengganti),
+        keperluan: resultObj.keperluan || '-',
+        handover: resultObj.handover || '-',
         related_table: 'izin_tukar_hari',
-        related_id: result.id_izin_tukar_hari,
+        related_id: resultObj.id_izin_tukar_hari,
         deeplink,
       };
 
       const notifiedUsers = new Set();
       const notifPromises = [];
 
-      if (Array.isArray(result.handover_users)) {
-        for (const handoverUser of result.handover_users) {
+      if (Array.isArray(resultObj.handover_users)) {
+        for (const handoverUser of resultObj.handover_users) {
           const taggedId = handoverUser?.id_user_tagged;
           if (!taggedId || notifiedUsers.has(taggedId)) continue;
           notifiedUsers.add(taggedId);
@@ -456,14 +598,14 @@ export async function POST(req) {
         }
       }
 
-      if (result.id_user && !notifiedUsers.has(result.id_user)) {
+      if (resultObj.id_user && !notifiedUsers.has(resultObj.id_user)) {
         const overrideTitle = 'Pengajuan izin tukar hari berhasil dikirim';
         const overrideBody = `Pengajuan izin tukar hari ${basePayload.kategori_izin} pada ${basePayload.hari_izin_display} diganti ${basePayload.hari_pengganti_display} telah berhasil dibuat.`;
 
         notifPromises.push(
           sendNotification(
             'IZIN_TUKAR_HARI_HANDOVER_TAGGED',
-            result.id_user,
+            resultObj.id_user,
             {
               ...basePayload,
               is_pemohon: true,
@@ -475,7 +617,7 @@ export async function POST(req) {
             { deeplink }
           )
         );
-        notifiedUsers.add(result.id_user);
+        notifiedUsers.add(resultObj.id_user);
       }
 
       if (canManageAll(actorRole) && actorId && !notifiedUsers.has(actorId)) {
@@ -505,7 +647,15 @@ export async function POST(req) {
       }
     }
 
-    return NextResponse.json({ message: 'Pengajuan izin tukar hari berhasil dibuat.', data: result }, { status: 201 });
+    return NextResponse.json(
+      {
+        message: 'Pengajuan izin tukar hari berhasil dibuat.',
+        data: resultObj,
+        // Include upload metadata if a file was uploaded
+        upload: uploadMeta || undefined,
+      },
+      { status: 201 }
+    );
   } catch (err) {
     if (err instanceof NextResponse) return err;
     if (err?.code === 'P2003') {
