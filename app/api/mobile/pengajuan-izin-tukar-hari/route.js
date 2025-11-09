@@ -422,9 +422,14 @@ export async function POST(req) {
     const pairs = pairsCheck.value;
 
     // Approvals (opsional)
+    // --- PERBAIKAN DI SINI ---
+    // Baca dari body.approvals (untuk JSON) atau body['approvals[]'] (untuk form-data)
+    const rawApprovals = body.approvals ?? body['approvals[]'];
     let approvals = [];
-    if (Array.isArray(body.approvals)) {
-      approvals = body.approvals.map((a) => {
+    if (rawApprovals !== undefined) {
+      const list = Array.isArray(rawApprovals) ? rawApprovals : [rawApprovals];
+      // --- AKHIR PERBAIKAN ---
+      approvals = list.map((a) => {
         if (typeof a === 'string') {
           try {
             return JSON.parse(a);
