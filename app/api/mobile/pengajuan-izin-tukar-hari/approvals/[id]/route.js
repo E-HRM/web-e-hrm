@@ -4,7 +4,6 @@ import { ensureAuth } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
-const PENDING_DECISIONS = new Set(['pending', 'menunggu']);
 
 const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
   day: '2-digit',
@@ -52,44 +51,27 @@ async function syncShiftForSwapPairs(tx, { userId, pairs, idPolaKerjaPengganti =
     return { updatedCount: 0, createdCount: 0, affectedDates: [], returnShift: null };
   }
 
-  const datesNeeded = new Set();
-  for (const p of pairs) {
-    const i = toDateOnly(p.hari_izin);
-    const g = toDateOnly(p.hari_pengganti);
-    if (i) datesNeeded.add(i.toISOString().slice(0, 10));
-    if (g) datesNeeded.add(g.toISOString().slice(0, 10));
-  }
-  const rangeMin = toDateOnly(
-    pairs
-      .map((p) => p.hari_izin)
-      .concat(pairs.map((p) => p.hari_pengganti))
-      .sort((a, b) => new Date(a) - new Date(b))[0]
-  );
-  const rangeMax = toDateOnly(
-    pairs
-      .map((p) => p.hari_izin)
-      .concat(pairs.map((p) => p.hari_pengganti))
-      .sort((a, b) => new Date(b) - new Date(a))[0]
-  );
-
   const existing = await tx.shiftKerja.findMany({
     where: {
       id_user: userId,
       deleted_at: null,
-      AND: [{ tanggal_mulai: { lte: rangeMax } }, { tanggal_selesai: { gte: rangeMin } }],
+      AND: [
+        { tanggal_mulai: { lte: toDateOnly(pairs.map((p) => p.hari_pengganti).sort((a, b) => new Date(b) - new Date(a))[0]) } },
+        { tanggal_selesai: { gte: toDateOnly(pairs.map((p) => p.hari_izin).sort((a, b) => new Date(a) - new Date(b))[0]) } },
+      ],
     },
-    select: { id_shift_kerja: true, tanggal_mulai: true, tanggal_selesai: true, status: true },
+    select: { id_shift_kerja: true, tanggal_mulai: true, tanggal_selesai: true, status: true, id_pola_kerja: true },
   });
 
   const updates = [];
   const updatedIds = new Set();
   const coverage = new Set();
 
-  function isCovered(shift, date) {
+  const covered = (shift, d) => {
     const s = toDateOnly(shift.tanggal_mulai);
     const e = toDateOnly(shift.tanggal_selesai);
-    return s <= date && e >= date;
-  }
+    return s <= d && e >= d;
+  };
 
   // Apply LIBUR on hari_izin
   for (const p of pairs) {
@@ -97,7 +79,7 @@ async function syncShiftForSwapPairs(tx, { userId, pairs, idPolaKerjaPengganti =
     const key = d.toISOString().slice(0, 10);
     let found = false;
     for (const sh of existing) {
-      if (isCovered(sh, d)) {
+      if (covered(sh, d)) {
         found = true;
         if (sh.status !== 'LIBUR' && !updatedIds.has(sh.id_shift_kerja)) {
           updates.push(tx.shiftKerja.update({ where: { id_shift_kerja: sh.id_shift_kerja }, data: { status: 'LIBUR' } }));
@@ -130,7 +112,7 @@ async function syncShiftForSwapPairs(tx, { userId, pairs, idPolaKerjaPengganti =
     const key = d.toISOString().slice(0, 10);
     let found = false;
     for (const sh of existing) {
-      if (isCovered(sh, d)) {
+      if (covered(sh, d)) {
         found = true;
         if (sh.status !== 'KERJA' && !updatedIds.has(sh.id_shift_kerja)) {
           updates.push(
@@ -196,8 +178,6 @@ async function handleDecision(req, { params }) {
     return NextResponse.json({ ok: false, message: 'decision harus diisi dengan nilai disetujui atau ditolak.' }, { status: 400 });
   }
   const note = body?.note === undefined || body?.note === null ? null : String(body.note);
-
-  // opsional: set pola kerja untuk semua hari_pengganti
   const idPolaKerjaPengganti = body?.id_pola_kerja_pengganti ? String(body.id_pola_kerja_pengganti) : null;
 
   try {
@@ -233,7 +213,7 @@ async function handleDecision(req, { params }) {
         throw NextResponse.json({ ok: false, message: 'Anda tidak memiliki akses untuk approval ini.' }, { status: 403 });
       }
 
-      if (!PENDING_DECISIONS.has(approval.decision)) {
+      if (approval.decision !== 'pending') {
         throw NextResponse.json({ ok: false, message: 'Approval sudah memiliki keputusan.' }, { status: 409 });
       }
 

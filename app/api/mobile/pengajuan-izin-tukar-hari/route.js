@@ -9,7 +9,7 @@ import storageClient from '@/app/api/_utils/storageClient';
 import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
-const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending', 'menunggu']);
+const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']); // ❗ tanpa 'menunggu'
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
 const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
@@ -27,7 +27,7 @@ const canManageAll = (role) => ADMIN_ROLES.has(normRole(role));
 function normalizeStatus(value) {
   if (!value) return null;
   const raw = String(value).trim().toLowerCase();
-  return raw === 'menunggu' ? 'pending' : raw;
+  return APPROVE_STATUSES.has(raw) ? raw : null;
 }
 
 function formatDateISO(value) {
@@ -215,7 +215,7 @@ async function validateAndNormalizePairs(userId, pairsRaw) {
       izin_tukar_hari: {
         id_user: userId,
         deleted_at: null,
-        status: { in: ['pending', 'menunggu', 'disetujui'] },
+        status: { in: ['pending', 'disetujui'] }, // ❗ tanpa 'menunggu'
       },
     },
     select: { hari_izin: true, hari_pengganti: true },
@@ -226,7 +226,7 @@ async function validateAndNormalizePairs(userId, pairsRaw) {
     return { ok: false, status: 409, message: `Terdapat pasangan yang sudah diajukan sebelumnya: ${details}.` };
   }
 
-  // (Opsional) Cek bentrok cuti yang sudah disetujui – biasanya tidak boleh tukar hari pada tanggal cuti/pengganti.
+  // Cek bentrok cuti disetujui
   const cutiBentrok = await db.pengajuanCutiTanggal.findMany({
     where: {
       tanggal_cuti: { in: [...izinDates, ...gantiDates] },
@@ -288,7 +288,7 @@ export async function GET(req) {
     }
 
     if (status) {
-      where.status = status === 'pending' ? { in: ['pending', 'menunggu'] } : status;
+      where.status = status; // 'pending' | 'disetujui' | 'ditolak'
     }
     if (kategori) where.kategori = kategori;
 
@@ -351,7 +351,9 @@ export async function POST(req) {
   if (auth instanceof NextResponse) return auth;
 
   const actorId = auth.actor?.id;
-  if (!actorId) return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
+  if (!actorId) {
+    return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
+  }
 
   let parsed;
   try {
@@ -419,7 +421,7 @@ export async function POST(req) {
     }
     const pairs = pairsCheck.value;
 
-    // Approvals (opsional): terima 'approvals' = [{ level, approver_user_id?, approver_role? }, ...]
+    // Approvals (opsional)
     let approvals = [];
     if (Array.isArray(body.approvals)) {
       approvals = body.approvals.map((a) => {
@@ -474,14 +476,13 @@ export async function POST(req) {
       }
 
       if (approvals.length) {
-        // normalisasi approvals: level wajib, user/role opsional
         const rows = approvals
           .map((a, idx) => ({
             id_izin_tukar_hari: created.id_izin_tukar_hari,
             level: Number.isFinite(+a.level) ? +a.level : idx + 1,
             approver_user_id: a.approver_user_id ? String(a.approver_user_id) : null,
             approver_role: a.approver_role ? String(a.approver_role) : null,
-            decision: 'pending',
+            decision: 'pending', // ❗ default enum
           }))
           .sort((x, y) => x.level - y.level);
         await tx.approvalIzinTukarHari.createMany({ data: rows, skipDuplicates: true });
