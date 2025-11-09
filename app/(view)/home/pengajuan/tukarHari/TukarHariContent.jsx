@@ -1,12 +1,6 @@
 "use client";
 
-import React, {
-  useMemo,
-  useState,
-  useRef,
-  useCallback,
-  useLayoutEffect,
-} from "react";
+import React, { useMemo, useState, useRef, useCallback, useLayoutEffect } from "react";
 import {
   ConfigProvider,
   Tabs,
@@ -18,8 +12,8 @@ import {
   Space,
   Card,
   Table,
-  Select,
   DatePicker,
+  Select,
 } from "antd";
 import {
   SearchOutlined,
@@ -34,25 +28,19 @@ import useTukarHariViewModel from "./useTukarHariViewModel";
 
 dayjs.locale("id");
 
-const GOLD = "#003A6F";
+const BRAND = "#003A6F";
 const LIGHT_BLUE = "#E8F6FF";
 const HEADER_BLUE_BG = "#F0F6FF";
 
 function MiniField({ label, children, span = 1 }) {
   return (
-    <div
-      className="min-w-0 relative"
-      style={{ gridColumn: `span ${span} / span ${span}` }}
-    >
+    <div className="min-w-0 relative" style={{ gridColumn: `span ${span} / span ${span}` }}>
       <div className="text-xs font-semibold text-slate-900 mb-0.5">{label}</div>
-      <div className="text-[13px] text-slate-700 leading-5 break-words">
-        {children}
-      </div>
+      <div className="text-[13px] text-slate-700 leading-5 break-words">{children}</div>
     </div>
   );
 }
 
-/** Keperluan dengan tombol “Lihat selengkapnya” hanya bila text > 1 baris */
 function KeperluanCell({ id, text, expanded, onToggle }) {
   const ghostRef = useRef(null);
   const [showToggle, setShowToggle] = useState(false);
@@ -94,16 +82,11 @@ function KeperluanCell({ id, text, expanded, onToggle }) {
       </Tooltip>
 
       {showToggle && (
-        <button
-          onClick={onToggle}
-          className="ml-2 text-[12px] font-medium"
-          style={{ color: GOLD }}
-        >
+        <button onClick={onToggle} className="ml-2 text-[12px] font-medium" style={{ color: BRAND }}>
           {expanded ? "Sembunyikan" : "Lihat selengkapnya"}
         </button>
       )}
 
-      {/* Ghost untuk menghitung jumlah baris */}
       <div
         ref={ghostRef}
         aria-hidden
@@ -139,8 +122,6 @@ function formatDateID(d) {
     return d;
   }
 }
-
-// Tanggal TANPA jam/TZ — sama seperti di halaman Cuti
 function formatDateOnlyID(d) {
   if (!d) return "—";
   try {
@@ -163,12 +144,10 @@ export default function TukarHariContent() {
   const [reason, setReason] = useState("");
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
-  // Modal Setujui (pilih pola kerja hari pengganti)
+  // Modal Setujui (global pola untuk semua hari_pengganti)
   const [approveRow, setApproveRow] = useState(null);
-  const [approveDate, setApproveDate] = useState(null); // readonly info
-  const [approvePola, setApprovePola] = useState();
+  const [approvePola, setApprovePola] = useState(""); // id_pola_kerja_pengganti global
 
-  // state expand per-row
   const [expandedKeperluan, setExpandedKeperluan] = useState(new Set());
   const toggleExpand = (id) =>
     setExpandedKeperluan((prev) => {
@@ -180,25 +159,23 @@ export default function TukarHariContent() {
   const counts = useMemo(() => {
     const all = vm.data ?? [];
     return {
-      pengajuan: all.filter((d) => d.status === "Menunggu").length,
-      disetujui: all.filter((d) => d.status === "Disetujui").length,
-      ditolak: all.filter((d) => d.status === "Ditolak").length,
+      pengajuan: all.filter((d) => d.statusRaw === "pending").length,
+      disetujui: all.filter((d) => d.statusRaw === "disetujui").length,
+      ditolak: all.filter((d) => d.statusRaw === "ditolak").length,
     };
   }, [vm.data]);
 
   const openApproveModal = useCallback(
     async (row) => {
       setApproveRow(row);
-      setApproveDate(row.hariPengganti || null);
-      setApprovePola(undefined);
-      // muat opsi pola (sekali cukup)
+      setApprovePola(""); // reset
       vm.fetchPolaOptions();
     },
     [vm]
   );
 
-  const columns = useMemo(() => {
-    return [
+  const columns = useMemo(
+    () => [
       {
         title: "",
         key: "no",
@@ -228,13 +205,7 @@ export default function TukarHariContent() {
               </div>
               <div className="mt-1">
                 <Tag
-                  color={
-                    r.status === "Disetujui"
-                      ? "green"
-                      : r.status === "Ditolak"
-                      ? "red"
-                      : "blue"
-                  }
+                  color={r.status === "Disetujui" ? "green" : r.status === "Ditolak" ? "red" : "blue"}
                   className="!rounded-md"
                 >
                   {r.status}
@@ -251,10 +222,7 @@ export default function TukarHariContent() {
         render: (_, r) => {
           const expanded = expandedKeperluan.has(r.id);
           return (
-            <div
-              className="grid gap-3 min-w-0"
-              style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}
-            >
+            <div className="grid gap-3 min-w-0" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
               <style jsx>{`
                 @media (min-width: 768px) {
                   div[role='cell'] > div > div.grid {
@@ -263,18 +231,10 @@ export default function TukarHariContent() {
                 }
               `}</style>
 
-              <MiniField label="Tgl. Pengajuan">
-                {formatDateID(r.tglPengajuan)}
-              </MiniField>
-              <MiniField label="Tgl. Izin">
-                {formatDateOnlyID(r.hariIzin)}
-              </MiniField>
-              <MiniField label="Kategori">
-                <span className="text-slate-700">{r.kategori}</span>
-              </MiniField>
-              <MiniField label="Hari Pengganti">
-                {formatDateOnlyID(r.hariPengganti)}
-              </MiniField>
+              <MiniField label="Tgl. Pengajuan">{formatDateID(r.tglPengajuan)}</MiniField>
+              <MiniField label="Tgl. Izin">{formatDateOnlyID(r.hariIzin)}</MiniField>
+              <MiniField label="Kategori"><span className="text-slate-700">{r.kategori}</span></MiniField>
+              <MiniField label="Hari Pengganti">{formatDateOnlyID(r.hariPengganti)}</MiniField>
 
               <MiniField label="Keperluan" span={2}>
                 <KeperluanCell
@@ -301,8 +261,8 @@ export default function TukarHariContent() {
                   type="primary"
                   size="small"
                   icon={<CheckOutlined />}
-                  className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
-                  style={{ "--gold": GOLD }}
+                  className="!bg-[var(--brand)] hover:!bg-[#0B63C7]"
+                  style={{ "--brand": BRAND }}
                   onClick={() => openApproveModal(r)}
                 >
                   Setujui
@@ -328,15 +288,11 @@ export default function TukarHariContent() {
               <div className="text-xs font-semibold text-slate-900 mb-0.5">
                 {vm.tab === "disetujui" ? "Tgl. Disetujui" : "Tgl. Ditolak"}
               </div>
-              <div className="text-sm text-slate-700">
-                {formatDateID(r.tglKeputusan)}
-              </div>
+              <div className="text-sm text-slate-700">{formatDateID(r.tglKeputusan)}</div>
 
               {r.alasan && (
                 <>
-                  <div className="text-xs font-semibold text-slate-900 mt-3">
-                    Catatan
-                  </div>
+                  <div className="text-xs font-semibold text-slate-900 mt-3">Catatan</div>
                   <div className="mt-1 flex items-start gap-1 text-[13px] text-slate-700">
                     <InfoCircleOutlined className="text-slate-400 mt-0.5" />
                     <Tooltip title={r.alasan}>
@@ -361,8 +317,8 @@ export default function TukarHariContent() {
                     type="primary"
                     size="small"
                     icon={<CheckOutlined />}
-                    className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
-                    style={{ "--gold": GOLD }}
+                    className="!bg-[var(--brand)] hover:!bg-[#0B63C7]"
+                    style={{ "--brand": BRAND }}
                     onClick={() => openApproveModal(r)}
                   >
                     Setujui
@@ -385,10 +341,18 @@ export default function TukarHariContent() {
           );
         },
       },
-    ];
-  }, [vm, expandedKeperluan, pagination, openApproveModal]);
+    ],
+    [vm, expandedKeperluan, pagination, openApproveModal]
+  );
 
-  const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
+  const sourceAll = vm.filteredData.map((d) => ({ key: d.id, ...d }));
+
+  const dataSource = useMemo(() => {
+    if (vm.tab === "pengajuan") return sourceAll.filter((x) => x.statusRaw === "pending");
+    if (vm.tab === "disetujui") return sourceAll.filter((x) => x.statusRaw === "disetujui");
+    if (vm.tab === "ditolak") return sourceAll.filter((x) => x.statusRaw === "ditolak");
+    return sourceAll;
+  }, [sourceAll, vm.tab]);
 
   const tabItems = [
     {
@@ -431,14 +395,14 @@ export default function TukarHariContent() {
       theme={{
         components: {
           Tabs: {
-            inkBarColor: GOLD,
-            itemActiveColor: GOLD,
-            itemHoverColor: GOLD,
-            itemSelectedColor: GOLD,
+            inkBarColor: BRAND,
+            itemActiveColor: BRAND,
+            itemHoverColor: BRAND,
+            itemSelectedColor: BRAND,
           },
           Card: { borderRadiusLG: 12 },
         },
-        token: { colorPrimary: GOLD, borderRadius: 8, colorBgContainer: "#ffffff" },
+        token: { colorPrimary: BRAND, borderRadius: 8, colorBgContainer: "#ffffff" },
       }}
     >
       <div className="min-h-screen bg-slate-50 p-6">
@@ -501,8 +465,7 @@ export default function TukarHariContent() {
                       pageSizeOptions: [10, 20, 50],
                       showSizeChanger: true,
                       showTotal: (t) => `${t} total`,
-                      onChange: (current, pageSize) =>
-                        setPagination({ current, pageSize }),
+                      onChange: (current, pageSize) => setPagination({ current, pageSize }),
                     }}
                     rowClassName={() => "align-top"}
                     scroll={{ x: 1200, y: 520 }}
@@ -524,7 +487,7 @@ export default function TukarHariContent() {
           }
           .custom-tabs :global(.ant-tabs-tab-active) {
             background: ${LIGHT_BLUE} !important;
-            border: 1px solid ${GOLD} !important;
+            border: 1px solid ${BRAND} !important;
           }
           .custom-tabs :global(.ant-tabs-nav) {
             margin-bottom: 0 !important;
@@ -535,61 +498,65 @@ export default function TukarHariContent() {
         `}</style>
       </div>
 
-      {/* Modal SETUJUI - pilih pola kerja untuk Hari Pengganti */}
+      {/* Modal SETUJUI - pola global untuk semua hari_pengganti */}
       <Modal
-        title="Setujui Pengajuan — Atur Pola Kerja di Hari Pengganti"
+        title="Setujui Pengajuan — Pilih Pola untuk Hari Pengganti"
         open={!!approveRow}
         okText="Setujui"
-        okButtonProps={{ disabled: !approvePola }}
+        okButtonProps={{
+          disabled: !approveRow, // pola opsional; kalau wajib, ganti ke: !approvePola
+        }}
         onOk={async () => {
-          await vm.approve(approveRow.id, null, approvePola);
+          await vm.approve(approveRow.id, null, approvePola || null);
           setApproveRow(null);
-          setApproveDate(null);
-          setApprovePola(undefined);
+          setApprovePola("");
         }}
         onCancel={() => {
           setApproveRow(null);
-          setApproveDate(null);
-          setApprovePola(undefined);
+          setApprovePola("");
         }}
       >
-        <div className="space-y-3">
-          <div className="text-sm text-slate-600">
-            Pilih <strong>pola kerja</strong> yang akan diterapkan pada{" "}
-            <strong>Hari Pengganti</strong> milik karyawan ini.
-          </div>
+        {!approveRow ? null : (
+          <div className="space-y-5">
+            <div className="text-sm text-slate-600">
+              Pengajuan ini memiliki {approveRow.pairs?.length || 0} pasangan tanggal. Pola yang dipilih di bawah akan
+              diterapkan untuk <b>semua</b> hari pengganti.
+            </div>
 
-          <div className="grid grid-cols-1 gap-3">
-            <div>
-              <div className="text-xs font-semibold text-slate-900 mb-1">
-                Tanggal Hari Pengganti
+            <div className="rounded-lg border border-slate-200 p-3">
+              <div className="text-xs font-semibold text-slate-900 mb-2">Ringkasan Tanggal</div>
+              <div className="space-y-1 text-[13px]">
+                {(approveRow.pairs || []).map((p, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Tag className="!m-0 !rounded-md">{idx + 1}</Tag>
+                    <span>izin: {formatDateOnlyID(p.izin)}</span>
+                    <span className="text-slate-400">→</span>
+                    <span>pengganti: {formatDateOnlyID(p.pengganti)}</span>
+                    {p.catatan ? <em className="text-slate-500">({p.catatan})</em> : null}
+                  </div>
+                ))}
               </div>
-              <DatePicker
-                className="w-full"
-                value={approveDate ? dayjs(approveDate) : null}
-                onChange={() => {}}
-                disabled
-                format="DD MMM YYYY"
-              />
             </div>
 
             <div>
-              <div className="text-xs font-semibold text-slate-900 mb-1">
-                Pola Kerja
-              </div>
+              <div className="text-xs font-semibold text-slate-900 mb-1">Pola Kerja Pengganti (opsional)</div>
               <Select
                 showSearch
+                allowClear
                 placeholder="Pilih pola kerja…"
                 optionFilterProp="label"
                 loading={vm.loadingPola}
-                value={approvePola}
-                onChange={(v) => setApprovePola(v)}
+                value={approvePola || undefined}
+                onChange={(v) => setApprovePola(v || "")}
                 options={vm.polaOptions}
                 className="w-full"
               />
+              <div className="text-xs text-slate-500 mt-2">
+                Jika dikosongkan, backend akan mempertahankan pola default/eksisting.
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </Modal>
 
       {/* Modal TOLAK */}

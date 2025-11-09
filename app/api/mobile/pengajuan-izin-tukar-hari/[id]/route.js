@@ -6,7 +6,6 @@ import storageClient from '@/app/api/_utils/storageClient';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
-const PENDING_SET = new Set(['pending', 'menunggu']);
 
 const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
   day: '2-digit',
@@ -55,6 +54,14 @@ function sanitizeHandoverIds(ids) {
   return Array.from(unique);
 }
 
+function safeJson(s) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return {};
+  }
+}
+
 /** Parser universal untuk pairs di PUT */
 function parsePairsFromBody(body) {
   if (!body) return undefined; // bedakan "tidak dikirim" vs "array kosong"
@@ -82,13 +89,6 @@ function parsePairsFromBody(body) {
   }
   return undefined; // benar-benar tidak ada input pairs di PUT
 }
-function safeJson(s) {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return {};
-  }
-}
 
 /** Validasi & normalisasi pairs untuk UPDATE (exclude pengajuan yang sedang diubah) */
 async function validateAndNormalizePairsForUpdate({ userId, currentId, pairsRaw }) {
@@ -96,7 +96,6 @@ async function validateAndNormalizePairsForUpdate({ userId, currentId, pairsRaw 
     return { ok: false, status: 400, message: 'pairs harus berupa array.' };
   }
   if (pairsRaw.length === 0) {
-    // izinkan kosong untuk "hapus semua pair"? Biasanya tidak. Di sini kita larang.
     return { ok: false, status: 400, message: 'pairs wajib diisi minimal 1 pasangan hari.' };
   }
 
@@ -137,7 +136,7 @@ async function validateAndNormalizePairsForUpdate({ userId, currentId, pairsRaw 
       izin_tukar_hari: {
         id_user: userId,
         deleted_at: null,
-        status: { in: ['pending', 'menunggu', 'disetujui'] },
+        status: { in: ['pending', 'disetujui'] }, // ❗ tanpa 'menunggu'
         NOT: { id_izin_tukar_hari: currentId },
       },
     },
@@ -162,35 +161,6 @@ async function validateAndNormalizePairsForUpdate({ userId, currentId, pairsRaw 
   }
 
   return { ok: true, value: normalized };
-}
-
-/** Parser approvals untuk replace total (opsional di PUT) */
-async function parseApprovalsForReplace(body) {
-  if (body.approvals === undefined) return undefined;
-  const raw = Array.isArray(body.approvals) ? body.approvals : [body.approvals];
-  const rows = raw
-    .map((a, idx) => (typeof a === 'string' ? safeJson(a) : a || {}))
-    .map((a, idx) => ({
-      level: Number.isFinite(+a.level) ? +a.level : idx + 1,
-      approver_user_id: a.approver_user_id ? String(a.approver_user_id) : null,
-      approver_role: a.approver_role ? String(a.approver_role) : null,
-    }))
-    .sort((x, y) => x.level - y.level);
-
-  const approverIds = rows.map((r) => r.approver_user_id).filter(Boolean);
-  if (approverIds.length) {
-    const users = await db.user.findMany({
-      where: { id_user: { in: approverIds }, deleted_at: null },
-      select: { id_user: true },
-    });
-    const okIds = new Set(users.map((u) => u.id_user));
-    const notFound = approverIds.filter((x) => !okIds.has(x));
-    if (notFound.length) {
-      return { ok: false, status: 400, message: 'Beberapa approver_user_id tidak ditemukan.' };
-    }
-  }
-
-  return { ok: true, value: rows };
 }
 
 /* ============================ GET (Detail) ============================ */
@@ -258,8 +228,8 @@ export async function PUT(req, { params }) {
     if (!owner && !isAdmin(role)) {
       return NextResponse.json({ ok: false, message: 'Forbidden.' }, { status: 403 });
     }
-    // Batasan status: hanya pending/menunggu yang bisa diubah
-    if (!PENDING_SET.has(existing.status)) {
+    // Hanya status 'pending' yang bisa diubah
+    if (existing.status !== 'pending') {
       return NextResponse.json({ ok: false, message: 'Pengajuan yang sudah diputus tidak dapat diubah.' }, { status: 409 });
     }
 
@@ -309,11 +279,29 @@ export async function PUT(req, { params }) {
     // Approvals (replace full) — hanya jika dikirim
     let approvalsReplace = undefined;
     if (body.approvals !== undefined) {
-      const parsedApprovals = await parseApprovalsForReplace(body);
-      if (!parsedApprovals.ok) {
-        return NextResponse.json({ ok: false, message: parsedApprovals.message }, { status: parsedApprovals.status || 400 });
+      const raw = Array.isArray(body.approvals) ? body.approvals : [body.approvals];
+      const rows = raw
+        .map((a, idx) => (typeof a === 'string' ? safeJson(a) : a || {}))
+        .map((a, idx) => ({
+          level: Number.isFinite(+a.level) ? +a.level : idx + 1,
+          approver_user_id: a.approver_user_id ? String(a.approver_user_id) : null,
+          approver_role: a.approver_role ? String(a.approver_role) : null,
+        }))
+        .sort((x, y) => x.level - y.level);
+
+      const approverIds = rows.map((r) => r.approver_user_id).filter(Boolean);
+      if (approverIds.length) {
+        const users = await db.user.findMany({
+          where: { id_user: { in: approverIds }, deleted_at: null },
+          select: { id_user: true },
+        });
+        const okIds = new Set(users.map((u) => u.id_user));
+        const notFound = approverIds.filter((x) => !okIds.has(x));
+        if (notFound.length) {
+          return { ok: false, status: 400, message: 'Beberapa approver_user_id tidak ditemukan.' };
+        }
       }
-      approvalsReplace = parsedApprovals.value;
+      approvalsReplace = rows;
     }
 
     const updated = await db.$transaction(async (tx) => {
@@ -363,7 +351,7 @@ export async function PUT(req, { params }) {
               level: a.level,
               approver_user_id: a.approver_user_id,
               approver_role: a.approver_role,
-              decision: 'pending',
+              decision: 'pending', // ❗ default sesuai enum
             })),
             skipDuplicates: true,
           });
@@ -405,9 +393,9 @@ export async function DELETE(req, { params }) {
     if (!owner && !isAdmin(role)) {
       return NextResponse.json({ ok: false, message: 'Forbidden.' }, { status: 403 });
     }
-    // Non-admin hanya boleh hapus yang pending/menunggu
-    if (!isAdmin(role) && !PENDING_SET.has(existing.status)) {
-      return NextResponse.json({ ok: false, message: 'Hanya pengajuan pending/menunggu yang dapat dihapus.' }, { status: 409 });
+    // Non-admin hanya boleh hapus yang 'pending'
+    if (!isAdmin(role) && existing.status !== 'pending') {
+      return NextResponse.json({ ok: false, message: 'Hanya pengajuan pending yang dapat dihapus.' }, { status: 409 });
     }
 
     await db.izinTukarHari.update({

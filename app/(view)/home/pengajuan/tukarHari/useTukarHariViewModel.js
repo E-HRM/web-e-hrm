@@ -6,51 +6,31 @@ import { message } from "antd";
 import { ApiEndpoints } from "@/constrainst/endpoints";
 import { fetcher } from "@/app/utils/fetcher";
 
-/* ===================== Utils Normalisasi ====================== */
+/* ===================== Utils ====================== */
 function norm(v) {
   return String(v ?? "").trim().toLowerCase();
 }
-
 function isPendingDecision(d) {
-  const v = norm(d);
-  // anggap null/kosong juga "pending"
-  return (
-    v === "" ||
-    v === "pending" ||
-    v === "menunggu" ||
-    v === "null" ||
-    v === "0" ||
-    v === "undefined"
-  );
+  return norm(d) === "pending";
 }
-
 function getApprovalsArray(item) {
-  const candidates = [
-    item?.approvals,
-    item?.approval_izin_tukar_hari,
-    item?.ApprovalIzinTukarHari,
-  ];
+  const candidates = [item?.approvals, item?.approval_izin_tukar_hari, item?.ApprovalIzinTukarHari];
   for (const c of candidates) if (Array.isArray(c)) return c;
   return [];
 }
-
+/** Ambil id approval yang masih pending terendah level-nya */
 function pickApprovalId(item) {
-  // kalau backend sudah bantu hitungkan id yang relevan untuk aktor saat ini
   if (item?.my_pending_approval_id) return item.my_pending_approval_id;
   if (item?.next_approval_id_for_me) return item.next_approval_id_for_me;
   if (item?.current_approval_id) return item.current_approval_id;
-
   const approvals = getApprovalsArray(item);
   if (!approvals.length) return null;
-
   const pending = approvals
     .filter((a) => !a?.deleted_at)
     .sort((a, b) => (a?.level ?? 0) - (b?.level ?? 0))
     .find((a) => isPendingDecision(a?.decision));
-
   return pending?.id_approval_izin_tukar_hari ?? pending?.id ?? null;
 }
-
 function toLabelStatus(s) {
   const v = norm(s);
   if (v === "disetujui") return "Disetujui";
@@ -59,15 +39,24 @@ function toLabelStatus(s) {
 }
 
 /* ===================== Mapper Row ====================== */
-
 function mapItemToRow(item) {
+  const pairsRaw = Array.isArray(item?.pairs) ? item.pairs : [];
+  const pairs = pairsRaw.map((p) => ({
+    izin: p?.hari_izin ?? null,
+    pengganti: p?.hari_pengganti ?? null,
+    catatan: p?.catatan_pair ?? null,
+  }));
+
   const hariIzin =
+    pairs[0]?.izin ||
     item?.hari_izin ||
     item?.tanggal_izin ||
     item?.tgl_izin ||
     item?.tanggal ||
     null;
+
   const hariPengganti =
+    pairs[0]?.pengganti ||
     item?.hari_pengganti ||
     item?.tanggal_pengganti ||
     item?.tgl_pengganti ||
@@ -83,15 +72,17 @@ function mapItemToRow(item) {
     hariIzin,
     hariPengganti,
 
-    kategori: item?.kategori?.nama_kategori ?? item?.kategori ?? "—",
+    kategori: item?.kategori ?? "—",
     keperluan: item?.keperluan ?? "—",
 
+    statusRaw: item?.status ?? "pending",
     status: toLabelStatus(item?.status),
     alasan: "",
     tempAlasan: "",
     tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
 
     approvalId: pickApprovalId(item),
+    pairs,
   };
 }
 
@@ -102,7 +93,6 @@ function statusFromTab(tab) {
 }
 
 /* ===================== Pola kerja options helper ====================== */
-// Coba tebak beberapa endpoint umum. Sesuaikan jika perlu.
 function guessPolaOptionsUrl() {
   try {
     if (typeof ApiEndpoints?.GetPolaKerjaOptions === "function")
@@ -119,21 +109,14 @@ function guessPolaOptionsUrl() {
   } catch {}
   return null;
 }
-
 function normalizePolaItems(json) {
-  const items =
-    (Array.isArray(json?.data) && json.data) ||
-    (Array.isArray(json) && json) ||
-    [];
+  const items = (Array.isArray(json?.data) && json.data) || (Array.isArray(json) && json) || [];
   return items.map((it) => {
-    const id =
-      it?.id_pola_kerja ?? it?.id ?? it?.polaId ?? it?.uuid ?? String(it?.value);
-    const nama =
-      it?.nama_pola_kerja ?? it?.nama ?? it?.label ?? it?.name ?? "Pola";
+    const id = it?.id_pola_kerja ?? it?.id ?? it?.polaId ?? it?.uuid ?? String(it?.value);
+    const nama = it?.nama_pola_kerja ?? it?.nama ?? it?.label ?? it?.name ?? "Pola";
     const jamMasuk = it?.jam_masuk ?? it?.jamIn ?? it?.start ?? it?.masuk;
     const jamPulang = it?.jam_pulang ?? it?.jamOut ?? it?.end ?? it?.pulang;
-    const jam =
-      jamMasuk && jamPulang ? `${String(jamMasuk).slice(0, 5)}-${String(jamPulang).slice(0, 5)}` : null;
+    const jam = jamMasuk && jamPulang ? `${String(jamMasuk).slice(0, 5)}-${String(jamPulang).slice(0, 5)}` : null;
 
     return {
       value: String(id),
@@ -144,7 +127,6 @@ function normalizePolaItems(json) {
 }
 
 /* ===================== Hook ViewModel ====================== */
-
 export default function useTukarHariViewModel() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState("pengajuan");
@@ -152,11 +134,11 @@ export default function useTukarHariViewModel() {
   const [pageSize, setPageSize] = useState(10);
   const [reasonDraft, setReasonDraft] = useState({});
 
-  // pola kerja options (untuk modal Setujui)
   const [polaOptions, setPolaOptions] = useState([]);
   const [loadingPola, setLoadingPola] = useState(false);
 
   const listKey = useMemo(() => {
+    // API kamu menerima ?status=pending|disetujui|ditolak, + paging
     const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
     return ApiEndpoints.GetPengajuanTukarHariMobile(qs);
   }, [tab, page, pageSize]);
@@ -185,7 +167,6 @@ export default function useTukarHariViewModel() {
     setReasonDraft((prev) => ({ ...prev, [id]: value }));
   }
 
-  // Fallback: kalau approvalId belum ada di list, coba fetch detail dulu.
   async function ensureApprovalId(row) {
     if (row?.approvalId) return row.approvalId;
 
@@ -210,9 +191,8 @@ export default function useTukarHariViewModel() {
     }
   }
 
-  // Loader opsi pola kerja untuk modal
   const fetchPolaOptions = useCallback(async () => {
-    if (polaOptions.length) return; // sudah ada
+    if (polaOptions.length) return;
     const url = guessPolaOptionsUrl();
     if (!url) return;
 
@@ -221,16 +201,18 @@ export default function useTukarHariViewModel() {
       const res = await fetch(url, { cache: "no-store" });
       const json = await res.json();
       setPolaOptions(normalizePolaItems(json));
-    } catch (_e) {
-      // Biarkan kosong; user masih bisa Setujui tanpa override jika perlu
+    } catch {
+      // opsi kosong tetap ok
     } finally {
       setLoadingPola(false);
     }
   }, [polaOptions.length]);
 
-  // Approve dengan optional override pola kerja hari_pengganti
+  /**
+   * Approve (global) — opsional: idPolaKerjaPengganti (berlaku untuk SEMUA hari_pengganti)
+   */
   const approve = useCallback(
-    async (id, note, overridePolaId) => {
+    async (id, note = null, idPolaKerjaPengganti = null) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
 
@@ -243,27 +225,16 @@ export default function useTukarHariViewModel() {
       }
 
       try {
-        const body = {
-          decision: "disetujui",
-          note: note ?? null,
-        };
-        if (overridePolaId) {
-          body.shift_overrides = {
-            hari_pengganti: { id_pola_kerja: String(overridePolaId) },
-          };
-        }
+        const body = { decision: "disetujui", note: note ?? null };
+        if (idPolaKerjaPengganti) body.id_pola_kerja_pengganti = String(idPolaKerjaPengganti);
 
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
         const json = await res.json();
-        if (!res.ok || json?.ok === false)
-          throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari disetujui");
         mutate();
       } catch (e) {
@@ -292,17 +263,13 @@ export default function useTukarHariViewModel() {
       }
 
       try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision: "ditolak", note: reason }),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "ditolak", note: reason }),
+        });
         const json = await res.json();
-        if (!res.ok || json?.ok === false)
-          throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari ditolak");
         mutate();
       } catch (e) {
