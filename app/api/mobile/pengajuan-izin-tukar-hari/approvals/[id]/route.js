@@ -45,112 +45,100 @@ function formatDateDisplay(value) {
   }
 }
 
-// ---------- Sinkronisasi shift: hari_izin → LIBUR, hari_pengganti → KERJA ----------
+// ---------- ▼▼▼ PERBAIKAN DI SINI (FUNGSI SYNC SHIFT) ▼▼▼ ----------
+
+/**
+ * Sinkronisasi shift menggunakan UPSERT untuk mengatasi konflik soft-delete.
+ * hari_izin -> LIBUR
+ * hari_pengganti -> KERJA
+ */
 async function syncShiftForSwapPairs(tx, { userId, pairs, idPolaKerjaPengganti = null }) {
   if (!tx || !userId || !Array.isArray(pairs) || pairs.length === 0) {
     return { updatedCount: 0, createdCount: 0, affectedDates: [], returnShift: null };
   }
 
-  const existing = await tx.shiftKerja.findMany({
-    where: {
-      id_user: userId,
-      deleted_at: null,
-      AND: [
-        { tanggal_mulai: { lte: toDateOnly(pairs.map((p) => p.hari_pengganti).sort((a, b) => new Date(b) - new Date(a))[0]) } },
-        { tanggal_selesai: { gte: toDateOnly(pairs.map((p) => p.hari_izin).sort((a, b) => new Date(a) - new Date(b))[0]) } },
-      ],
-    },
-    select: { id_shift_kerja: true, tanggal_mulai: true, tanggal_selesai: true, status: true, id_pola_kerja: true },
-  });
+  const upsertActions = [];
+  const affectedDates = new Set();
 
-  const updates = [];
-  const updatedIds = new Set();
-  const coverage = new Set();
-
-  const covered = (shift, d) => {
-    const s = toDateOnly(shift.tanggal_mulai);
-    const e = toDateOnly(shift.tanggal_selesai);
-    return s <= d && e >= d;
-  };
-
-  // Apply LIBUR on hari_izin
   for (const p of pairs) {
-    const d = toDateOnly(p.hari_izin);
-    const key = d.toISOString().slice(0, 10);
-    let found = false;
-    for (const sh of existing) {
-      if (covered(sh, d)) {
-        found = true;
-        if (sh.status !== 'LIBUR' && !updatedIds.has(sh.id_shift_kerja)) {
-          updates.push(tx.shiftKerja.update({ where: { id_shift_kerja: sh.id_shift_kerja }, data: { status: 'LIBUR' } }));
-          updatedIds.add(sh.id_shift_kerja);
-        }
-        coverage.add(key);
-        break;
-      }
-    }
-    if (!found) {
-      updates.push(
-        tx.shiftKerja.create({
-          data: {
+    const hariIzin = toDateOnly(p?.hari_izin);
+    const hariPengganti = toDateOnly(p?.hari_pengganti);
+
+    // 1. Set Hari Izin menjadi LIBUR
+    if (hariIzin) {
+      affectedDates.add(hariIzin.toISOString().slice(0, 10));
+      upsertActions.push(
+        tx.shiftKerja.upsert({
+          where: {
+            uniq_shift_per_user_per_date: {
+              id_user: userId,
+              tanggal_mulai: hariIzin,
+            },
+          },
+          create: {
             id_user: userId,
-            tanggal_mulai: d,
-            tanggal_selesai: d,
+            tanggal_mulai: hariIzin,
+            tanggal_selesai: hariIzin,
             hari_kerja: 'LIBUR',
             status: 'LIBUR',
             id_pola_kerja: null,
+            deleted_at: null,
+          },
+          update: {
+            tanggal_selesai: hariIzin, // Pastikan konsisten jika menimpa rentang
+            hari_kerja: 'LIBUR',
+            status: 'LIBUR',
+            id_pola_kerja: null,
+            deleted_at: null, // <-- PENTING: Menghidupkan (uns-soft-delete)
           },
         })
       );
-      coverage.add(key);
     }
-  }
 
-  // Apply KERJA on hari_pengganti
-  for (const p of pairs) {
-    const d = toDateOnly(p.hari_pengganti);
-    const key = d.toISOString().slice(0, 10);
-    let found = false;
-    for (const sh of existing) {
-      if (covered(sh, d)) {
-        found = true;
-        if (sh.status !== 'KERJA' && !updatedIds.has(sh.id_shift_kerja)) {
-          updates.push(
-            tx.shiftKerja.update({
-              where: { id_shift_kerja: sh.id_shift_kerja },
-              data: { status: 'KERJA', hari_kerja: 'KERJA', id_pola_kerja: idPolaKerjaPengganti ?? sh.id_pola_kerja ?? null },
-            })
-          );
-          updatedIds.add(sh.id_shift_kerja);
-        }
-        coverage.add(key);
-        break;
-      }
-    }
-    if (!found) {
-      updates.push(
-        tx.shiftKerja.create({
-          data: {
+    // 2. Set Hari Pengganti menjadi KERJA
+    if (hariPengganti) {
+      affectedDates.add(hariPengganti.toISOString().slice(0, 10));
+      upsertActions.push(
+        tx.shiftKerja.upsert({
+          where: {
+            uniq_shift_per_user_per_date: {
+              id_user: userId,
+              tanggal_mulai: hariPengganti,
+            },
+          },
+          create: {
             id_user: userId,
-            tanggal_mulai: d,
-            tanggal_selesai: d,
+            tanggal_mulai: hariPengganti,
+            tanggal_selesai: hariPengganti,
             hari_kerja: 'KERJA',
             status: 'KERJA',
             id_pola_kerja: idPolaKerjaPengganti ?? null,
+            deleted_at: null,
+          },
+          update: {
+            tanggal_selesai: hariPengganti,
+            hari_kerja: 'KERJA',
+            status: 'KERJA',
+            id_pola_kerja: idPolaKerjaPengganti ?? null, // Gunakan pola override jika ada
+            deleted_at: null, // <-- PENTING: Menghidupkan (uns-soft-delete)
           },
         })
       );
-      coverage.add(key);
     }
   }
 
-  const results = await Promise.all(updates);
-  const createdCount = results.filter((r) => r?.id_shift_kerja && !updatedIds.has(r.id_shift_kerja)).length;
-  const updatedCount = updatedIds.size;
+  const results = await Promise.all(upsertActions);
+  const totalOperations = results.length;
 
-  const affectedDates = Array.from(coverage).map((k) => new Date(k + 'T00:00:00Z'));
-  return { updatedCount, createdCount, affectedDates, returnShift: null };
+  return {
+    updatedCount: totalOperations, // Sederhanakan pelaporan
+    createdCount: 0,
+    affectedDates: Array.from(affectedDates).map((k) => new Date(k + 'T00:00:00Z')),
+    returnShift: null, // Tidak relevan untuk tukar hari
+  };
 }
+
+// ---------- ▲▲▲ AKHIR PERBAIKAN ▲▲▲ ----------
 
 /**
  * PATCH/PUT approval: /api/mobile/izin-tukar-hari/approvals/[id]
@@ -258,7 +246,9 @@ async function handleDecision(req, { params }) {
           where: { id_izin_tukar_hari: parent.id_izin_tukar_hari },
           data: parentUpdate,
           include: {
+            // Re-fetch pairs, karena relasi submission di atas tidak mengambilnya
             pairs: { select: { hari_izin: true, hari_pengganti: true }, orderBy: { hari_izin: 'asc' } },
+            user: { select: { id_user: true } }, // Pastikan id_user ada untuk sync
           },
         });
 
@@ -266,18 +256,23 @@ async function handleDecision(req, { params }) {
           try {
             shiftSync = await syncShiftForSwapPairs(tx, {
               userId: submission.id_user,
-              pairs: submission.pairs,
+              pairs: submission.pairs, // Gunakan pairs yang di-fetch
               idPolaKerjaPengganti,
             });
           } catch (e) {
             console.error('Gagal sinkron shift tukar-hari:', e);
+            // Lempar error agar transaksi di-rollback
+            if (e instanceof NextResponse) throw e;
             throw NextResponse.json({ ok: false, message: 'Gagal menyelaraskan shift untuk tukar hari.' }, { status: 500 });
           }
         }
       } else {
         submission = await tx.izinTukarHari.findUnique({
           where: { id_izin_tukar_hari: parent.id_izin_tukar_hari },
-          include: { pairs: true },
+          include: {
+            pairs: true,
+            user: { select: { id_user: true } }, // Include user
+          },
         });
       }
 
