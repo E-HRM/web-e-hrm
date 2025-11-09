@@ -4,7 +4,7 @@ import { ensureAuth, pengajuanInclude } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
-const PENDING_DECISIONS = new Set(['pending', 'menunggu']);
+const PENDING_DECISIONS = new Set(['pending']); // ❌ hapus 'menunggu'
 
 // --- (Fungsi-fungsi helper) ---
 
@@ -42,21 +42,15 @@ function normalizeRole(role) {
 }
 
 /**
- * Helper untuk mendapatkan tanggal cuti pertama (sebagai 'tanggal_mulai' turunan)
- * dari relasi tanggal_list.
- * @param {Array<{tanggal_cuti: Date}>} tanggalList - Array objek dari relasi
+ * Helper untuk tanggal_cuti pertama (turunan) dari relasi tanggal_list.
  */
 function getFirstDateFromList(tanggalList) {
-  if (!Array.isArray(tanggalList) || tanggalList.length === 0) {
-    return null;
-  }
-  // 'pengajuanInclude' sudah mengurutkan 'tanggal_list' asc
+  if (!Array.isArray(tanggalList) || tanggalList.length === 0) return null;
+
   const firstEntry = tanggalList[0];
   const firstDate = firstEntry?.tanggal_cuti;
 
-  if (firstDate instanceof Date) {
-    return firstDate;
-  }
+  if (firstDate instanceof Date) return firstDate;
   if (firstDate) {
     try {
       const d = new Date(firstDate);
@@ -64,22 +58,18 @@ function getFirstDateFromList(tanggalList) {
     } catch (_) {}
   }
 
-  // Fallback jika data tidak terurut atau formatnya aneh
   const dates = tanggalList
     .map((d) => (d?.tanggal_cuti ? (d.tanggal_cuti instanceof Date ? d.tanggal_cuti : new Date(d.tanggal_cuti)) : null))
     .filter(Boolean)
-    .sort((a, b) => a.getTime() - b.getTime()); // Gunakan .getTime() untuk perbandingan Date
+    .sort((a, b) => a.getTime() - b.getTime()); // sort by time
   return dates.length ? dates[0] : null;
 }
 
-/**
- * Memastikan 'tanggal_list' diambil saat memuat data pengajuan.
- */
 function buildInclude() {
   return {
-    ...pengajuanInclude, // 'pengajuanInclude' dari route.js sudah berisi 'tanggal_list'
+    ...pengajuanInclude,
     approvals: {
-      where: { deleted_at: null }, // konsisten dengan include lain
+      where: { deleted_at: null },
       orderBy: { level: 'asc' },
       select: {
         id_approval_pengajuan_cuti: true,
@@ -168,8 +158,8 @@ function getShiftOverlapRange(shift, rangeStart, rangeEnd) {
 }
 
 /**
- * Fungsi ini menerima 'startDate' (tanggal cuti pertama, turunan) dan
- * 'returnDate' (tanggal masuk kerja, dari skema).
+ * Mengubah shift menjadi LIBUR pada rentang dari tanggal_cuti pertama hingga
+ * sehari sebelum tanggal_masuk_kerja.
  */
 async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDate, returnShift }) {
   if (!tx || !userId || !startDate) return createDefaultShiftSyncResult();
@@ -178,7 +168,6 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
   if (!leaveStart) return createDefaultShiftSyncResult();
 
   const rawReturn = toDateOnly(returnDate);
-  // Tanggal cuti terakhir adalah 1 hari SEBELUM tanggal masuk kerja
   const leaveEnd = rawReturn && rawReturn > leaveStart ? addDays(rawReturn, -1) : leaveStart;
   const effectiveEnd = leaveEnd && leaveEnd >= leaveStart ? leaveEnd : leaveStart;
 
@@ -188,7 +177,6 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
   }
   if (!affectedDates.length) affectedDates.push(leaveStart);
 
-  // Cari shift yang tumpang tindih dengan rentang cuti
   const existingShifts = await tx.shiftKerja.findMany({
     where: {
       id_user: userId,
@@ -212,7 +200,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
       updates.push(
         tx.shiftKerja.update({
           where: { id_shift_kerja: shift.id_shift_kerja },
-          data: { status: 'LIBUR' }, // Set jadi LIBUR
+          data: { status: 'LIBUR' },
         })
       );
       updatedIds.push(shift.id_shift_kerja);
@@ -220,7 +208,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
   }
   if (updates.length) await Promise.all(updates);
 
-  // Cek tanggal cuti mana yang belum ter-cover oleh shift (misal: hari libur)
+  // coverage
   const coverage = new Set();
   for (const shift of existingShifts) {
     const overlap = getShiftOverlapRange(shift, leaveStart, effectiveEnd);
@@ -236,7 +224,6 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
     if (!coverage.has(key)) missingDates.push(new Date(date.getTime()));
   }
 
-  // Buat shift LIBUR baru untuk tanggal yang belum ada
   let createdCount = 0;
   if (missingDates.length) {
     const data = missingDates.map((date) => ({
@@ -251,7 +238,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
     createdCount = createResult?.count ?? data.length;
   }
 
-  // (Opsional) Sesuaikan shift pada HARI MASUK KERJA jika diminta
+  // (Opsional) Sesuaikan shift hari masuk kerja
   let returnShiftAdjustment = null;
   const effectiveReturnShift = returnShift?.date ? toDateOnly(returnShift.date) : toDateOnly(returnDate);
   const returnShiftIdPolaKerja = returnShift?.idPolaKerja || null;
@@ -316,7 +303,6 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, startDate, returnDat
 
 /**
  * Handle: PATCH /api/mobile/pengajuan-cuti/approvals/[id]
- * Mengubah status approval (disetujui/ditolak)
  */
 async function handleDecision(req, { params }) {
   const auth = await ensureAuth(req);
@@ -357,7 +343,6 @@ async function handleDecision(req, { params }) {
 
   try {
     const result = await db.$transaction(async (tx) => {
-      // Ambil data approval DAN data pengajuan terkait (termasuk relasi tanggal_list)
       const approvalRecord = await tx.approvalPengajuanCuti.findUnique({
         where: { id_approval_pengajuan_cuti: id },
         include: {
@@ -366,11 +351,10 @@ async function handleDecision(req, { params }) {
               id_pengajuan_cuti: true,
               id_user: true,
               status: true,
-              tanggal_masuk_kerja: true, // Field skema (dibutuhkan)
+              tanggal_masuk_kerja: true,
               current_level: true,
               deleted_at: true,
               tanggal_list: {
-                // Ambil relasi tanggal_list
                 select: { tanggal_cuti: true },
                 orderBy: { tanggal_cuti: 'asc' },
               },
@@ -387,7 +371,6 @@ async function handleDecision(req, { params }) {
         throw NextResponse.json({ ok: false, message: 'Pengajuan tidak ditemukan.' }, { status: 404 });
       }
 
-      // Validasi hak akses approver
       const matchesUser = approvalRecord.approver_user_id && approvalRecord.approver_user_id === actorId;
       const matchesRole = approvalRecord.approver_role && normalizeRole(approvalRecord.approver_role) === actorRole;
       if (!matchesUser && !matchesRole) {
@@ -398,7 +381,6 @@ async function handleDecision(req, { params }) {
         throw NextResponse.json({ ok: false, message: 'Approval sudah memiliki keputusan.' }, { status: 409 });
       }
 
-      // Update approval
       const updatedApproval = await tx.approvalPengajuanCuti.update({
         where: { id_approval_pengajuan_cuti: id },
         data: {
@@ -416,7 +398,6 @@ async function handleDecision(req, { params }) {
         },
       });
 
-      // Cek status agregat
       const approvals = await tx.approvalPengajuanCuti.findMany({
         where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti, deleted_at: null },
         orderBy: { level: 'asc' },
@@ -450,23 +431,20 @@ async function handleDecision(req, { params }) {
         submission = await tx.pengajuanCuti.update({
           where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti },
           data: parentUpdate,
-          include: buildInclude(), // 'buildInclude' memuat 'tanggal_list'
+          include: buildInclude(),
         });
 
-        // Jika status baru adalah 'disetujui', sinkronkan shift
         if (parentUpdate.status === 'disetujui') {
           const targetUserId = submission?.id_user;
 
-          // Ambil 'tanggal_list' dari data 'submission' yang baru di-fetch
           const tanggalList = submission?.tanggal_list;
-          const tanggalMulaiCuti = getFirstDateFromList(tanggalList); // Dihitung dari relasi
-
-          const tanggalMasukKerja = submission?.tanggal_masuk_kerja; // Diambil dari skema
+          const tanggalMulaiCuti = getFirstDateFromList(tanggalList);
+          const tanggalMasukKerja = submission?.tanggal_masuk_kerja;
 
           try {
             shiftSyncResult = await syncShiftLiburForApprovedLeave(tx, {
               userId: targetUserId,
-              startDate: tanggalMulaiCuti, // Gunakan tanggal yang sudah dihitung
+              startDate: tanggalMulaiCuti,
               returnDate: tanggalMasukKerja,
               returnShift,
             });
@@ -476,7 +454,6 @@ async function handleDecision(req, { params }) {
           }
         }
       } else {
-        // Jika status tidak berubah, ambil data terbaru
         submission = await tx.pengajuanCuti.findUnique({
           where: { id_pengajuan_cuti: approvalRecord.id_pengajuan_cuti },
           include: buildInclude(),
@@ -490,7 +467,7 @@ async function handleDecision(req, { params }) {
     const approval = result?.approval;
     const shiftSyncResult = result?.shiftSyncResult || createDefaultShiftSyncResult();
 
-    // Kirim notifikasi ke pemohon
+    // Notifikasi
     if (submission?.id_user) {
       const decisionDisplay = decision === 'disetujui' ? 'disetujui' : 'ditolak';
       const overrideTitle = `Pengajuan cuti ${decisionDisplay}`;
@@ -513,7 +490,6 @@ async function handleDecision(req, { params }) {
       );
     }
 
-    // Kirim notifikasi penyesuaian shift jika disetujui
     if (decision === 'disetujui' && submission?.id_user && shiftSyncResult && (shiftSyncResult.updatedCount > 0 || shiftSyncResult.createdCount > 0)) {
       const affectedDates = (shiftSyncResult.affectedDates || [])
         .map(toDateOnly)

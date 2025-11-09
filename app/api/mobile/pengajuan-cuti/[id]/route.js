@@ -4,7 +4,7 @@ import { ensureAuth, pengajuanInclude } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
-const PENDING_DECISIONS = new Set(['pending', 'menunggu']);
+const PENDING_DECISIONS = new Set(['pending']); // ❌ hapus 'menunggu'
 
 // --- (Fungsi-fungsi helper) ---
 
@@ -72,7 +72,7 @@ function getFirstDateFromList(tanggalList) {
  */
 function buildInclude() {
   return {
-    ...pengajuanInclude, // sudah memuat 'tanggal_list'
+    ...pengajuanInclude,
     approvals: {
       where: { deleted_at: null },
       orderBy: { level: 'asc' },
@@ -237,7 +237,7 @@ async function syncShiftLiburForApprovedLeave(tx, { userId, tanggalList, returnD
             id_user: userId,
             tanggal_mulai: date,
             tanggal_selesai: date,
-            hari_kerja: 'LIBUR', // atau 'CUTI'
+            hari_kerja: 'LIBUR',
             status: 'LIBUR',
             id_pola_kerja: null,
           },
@@ -535,10 +535,8 @@ async function handleDecision(req, { params }) {
         'SHIFT_LEAVE_ADJUSTMENT',
         submission.id_user,
         {
-          // ✅ rename: periode_mulai -> periode_cuti
           periode_cuti: affectedDates.length ? formatDateKey(affectedDates[0]) : undefined,
           periode_cuti_display: affectedDates.length ? formatDateDisplay(affectedDates[0]) : '-',
-          // sisakan "periode_selesai" apa adanya (bukan "mulai")
           periode_selesai: affectedDates.length ? formatDateKey(affectedDates[affectedDates.length - 1]) : undefined,
           periode_selesai_display: affectedDates.length ? formatDateDisplay(affectedDates[affectedDates.length - 1]) : '-',
           updated_shift: shiftSyncResult.updatedCount,
