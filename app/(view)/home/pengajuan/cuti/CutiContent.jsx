@@ -14,7 +14,6 @@ import {
   Button,
   Tag,
   Modal,
-  Popconfirm,
   Tooltip,
   Space,
   Card,
@@ -144,6 +143,14 @@ function formatDateID(d) {
   }
 }
 
+function formatDateShortID(d) {
+  try {
+    return dayjs(d).format("ddd, DD MMM YYYY");
+  } catch {
+    return String(d);
+  }
+}
+
 /* ===== Modal Setujui: pilih tanggal + pola kerja ===== */
 function ApproveModal({ openRow, polaOptions, onSubmit, onCancel }) {
   const [dateVal, setDateVal] = useState(() =>
@@ -151,21 +158,13 @@ function ApproveModal({ openRow, polaOptions, onSubmit, onCancel }) {
   );
   const [polaId, setPolaId] = useState();
 
-  // reset tiap kali row berubah
   React.useEffect(() => {
     setDateVal(openRow?.tglMasuk ? dayjs(openRow.tglMasuk) : dayjs());
     setPolaId(undefined);
   }, [openRow]);
 
   const handleOk = async () => {
-    if (!dateVal) {
-      // antd disable OK di parent, tapi jaga-jaga
-      return;
-    }
-    if (!polaId) {
-      // antd disable OK di parent, tapi jaga-jaga
-      return;
-    }
+    if (!dateVal || !polaId) return;
     await onSubmit({
       date: dateVal.format("YYYY-MM-DD"),
       id_pola_kerja: String(polaId),
@@ -320,18 +319,37 @@ export default function CutiContent() {
               <MiniField label="Jenis Cuti">
                 <span className="text-slate-700">{r.jenisCuti}</span>
               </MiniField>
+
               <MiniField label="Tgl. Pengajuan">
                 {formatDateID(r.tglPengajuan)}
               </MiniField>
-              <MiniField label="Tgl. Mulai Cuti">
-                {r.tglMulai
-                  ? new Date(r.tglMulai).toLocaleDateString("id-ID", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })
-                  : "—"}
+
+              {/* === UI BARU: Tanggal Cuti (bukan range) === */}
+              <MiniField label="Tanggal Cuti" span={2}>
+                {Array.isArray(r.tglCutiList) && r.tglCutiList.length ? (
+                  <div className="flex flex-wrap gap-6">
+                    {/* daftar tanggal sebagai chip kecil */}
+                    <div className="flex flex-wrap gap-6">
+                      {r.tglCutiList.map((d, idx) => (
+                        <Tag
+                          key={idx}
+                          className="!rounded-md !border-slate-200 !px-2 !py-1 !text-[12px] !bg-white"
+                        >
+                          {formatDateShortID(d)}
+                        </Tag>
+                      ))}
+                    </div>
+
+                    {/* info ringkas di ujung */}
+                    <div className="text-xs text-slate-500 self-center">
+                      {r.totalHariCuti} hari
+                    </div>
+                  </div>
+                ) : (
+                  "—"
+                )}
               </MiniField>
+
               <MiniField label="Tgl. Masuk Kerja">
                 {r.tglMasuk
                   ? new Date(r.tglMasuk).toLocaleDateString("id-ID", {
@@ -384,7 +402,6 @@ export default function CutiContent() {
           if (vm.tab === "pengajuan") {
             return (
               <Space size={8} wrap>
-                {/* Ganti Popconfirm -> buka modal approve */}
                 <Button
                   type="primary"
                   size="small"
@@ -451,7 +468,7 @@ export default function CutiContent() {
                     icon={<CheckOutlined />}
                     className="!bg-[var(--gold)] hover:!bg-[#0B63C7]"
                     style={{ ["--gold"]: GOLD }}
-                    onClick={() => setApproveRow(r)} // tetap buka modal approve
+                    onClick={() => setApproveRow(r)}
                   >
                     Setujui
                   </Button>
@@ -582,7 +599,7 @@ export default function CutiContent() {
                     <div className="flex items-center gap-2">
                       <Input
                         allowClear
-                        placeholder="Cari nama, jenis cuti, keterangan…"
+                        placeholder="Cari nama, jenis cuti, keterangan, atau tanggal…"
                         prefix={<SearchOutlined className="text-slate-400" />}
                         value={vm.search}
                         onChange={(e) => vm.setSearch(e.target.value)}

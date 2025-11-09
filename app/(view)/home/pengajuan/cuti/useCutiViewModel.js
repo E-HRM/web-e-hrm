@@ -29,7 +29,7 @@ function pickApprovalId(item) {
   const approvals = getApprovalsArray(item);
   const pending = approvals
     .filter((a) => !a?.deleted_at)
-    .find((a) => ["pending", "menunggu"].includes(norm(a?.decision)));
+    .find((a) => norm(a?.decision) === "pending"); // ← hanya pending
   return pending?.id_approval_pengajuan_cuti || pending?.id || null;
 }
 
@@ -50,9 +50,28 @@ function pickLatestDecisionInfo(item, want) {
   return { note: top?.note || "", decided_at: top?.decided_at || null };
 }
 
+function safeToDate(v) {
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function mapItemToRow(item) {
   const statusRaw = norm(item?.status);
   const latest = pickLatestDecisionInfo(item, statusRaw);
+
+  // Ambil list tanggal cuti (array Date)
+  const tglCutiList = Array.isArray(item?.tanggal_list)
+    ? item.tanggal_list
+        .map((d) => safeToDate(d?.tanggal_cuti))
+        .filter(Boolean)
+        .sort((a, b) => a.getTime() - b.getTime())
+    : [];
+
+  // First/last dari API (fallback ke turunan dari list)
+  const tglCutiFirst =
+    safeToDate(item?.tanggal_cuti) || tglCutiList[0] || null;
+  const tglCutiLast =
+    safeToDate(item?.tanggal_selesai) || tglCutiList[tglCutiList.length - 1] || null;
 
   return {
     id: item?.id_pengajuan_cuti,
@@ -61,8 +80,16 @@ function mapItemToRow(item) {
     foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
     jenisCuti: item?.kategori_cuti?.nama_kategori ?? "—",
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
-    tglMulai: item?.tanggal_mulai ?? null,
+
+    // —— UI baru pakai ini:
+    tglCutiList,               // array Date
+    tglCutiFirst,              // Date
+    tglCutiLast,               // Date
+    totalHariCuti: tglCutiList.length,
+
+    // tetap dipakai untuk approve modal:
     tglMasuk: item?.tanggal_masuk_kerja ?? null,
+
     keterangan: item?.keperluan ?? "—",
     handover: item?.handover ?? "—",
     buktiUrl: item?.lampiran_cuti_url ?? null,
@@ -83,8 +110,7 @@ function statusFromTab(tab) {
 function formatJam(hhmmss) {
   if (!hhmmss) return null;
   const s = String(hhmmss);
-  // ambil 5 digit "HH:MM"
-  return s.length >= 5 ? s.slice(0, 5) : s;
+  return s.length >= 5 ? s.slice(0, 5) : s; // "HH:MM"
 }
 function toPolaOptions(list) {
   const arr = Array.isArray(list) ? list : [];
@@ -126,24 +152,27 @@ export default function useCutiViewModel() {
     return items.map(mapItemToRow);
   }, [data]);
 
-  // Pencarian lokal
+  // Pencarian lokal (ikut tanggal-tanggal cuti)
   const filteredData = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((d) =>
-      [
+    return rows.filter((d) => {
+      const tanggalStr = (d.tglCutiList || [])
+        .map((t) => (t instanceof Date ? t.toISOString().slice(0, 10) : String(t)))
+        .join(" ");
+      return [
         d.nama,
         d.jabatan,
         d.jenisCuti,
         d.keterangan,
         d.handover,
-        d.tglMulai,
         d.tglMasuk,
+        tanggalStr,
       ]
         .join(" ")
         .toLowerCase()
-        .includes(term)
-    );
+        .includes(term);
+    });
   }, [rows, search]);
 
   // ==== Pola Kerja untuk modal "Setujui" ====
@@ -156,7 +185,6 @@ export default function useCutiViewModel() {
   }, [polaRes]);
 
   // ==== Actions ====
-  // Approve dengan optional return_shift
   const approve = useCallback(
     async (id, note, returnShift /* { date: 'YYYY-MM-DD', id_pola_kerja: '...' } */) => {
       const row = rows.find((r) => r.id === id);
@@ -169,10 +197,7 @@ export default function useCutiViewModel() {
         return;
       }
 
-      const body = {
-        decision: "disetujui",
-        note: note ?? null,
-      };
+      const body = { decision: "disetujui", note: note ?? null };
       if (returnShift && returnShift.date && returnShift.id_pola_kerja) {
         body.return_shift = {
           date: returnShift.date,
@@ -181,14 +206,11 @@ export default function useCutiViewModel() {
       }
 
       try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan cuti disetujui");
@@ -200,7 +222,6 @@ export default function useCutiViewModel() {
     [rows, mutate]
   );
 
-  // Reject (note wajib terisi)
   const reject = useCallback(
     async (id, note) => {
       const row = rows.find((r) => r.id === id);
@@ -220,14 +241,11 @@ export default function useCutiViewModel() {
       }
 
       try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision: "ditolak", note: reason }),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "ditolak", note: reason }),
+        });
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan cuti ditolak");

@@ -15,7 +15,6 @@ const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUB
 
 /**
  * Relasi yang di-include.
- * Catatan: kita kirim juga daftar tanggal dari relasi `tanggal_list` (PengajuanCutiTanggal).
  */
 export const pengajuanInclude = {
   user: {
@@ -58,7 +57,7 @@ export const pengajuanInclude = {
       note: true,
     },
   },
-  // Ambil daftar tanggal cuti dari relasi
+  // daftar tanggal cuti
   tanggal_list: {
     select: {
       tanggal_cuti: true,
@@ -136,14 +135,12 @@ export async function ensureAuth(req) {
 }
 
 /**
- * Normalisasi status (legacy 'menunggu' -> 'pending').
+ * Normalisasi status: tidak ada lagi 'menunggu' (legacy dihapus).
  */
 export function normalizeStatus(value) {
   if (!value) return null;
   const raw = String(value).trim().toLowerCase();
-  const mapped = raw === 'menunggu' ? 'pending' : raw;
-  if (!APPROVE_STATUSES.has(mapped)) return null;
-  return mapped;
+  return APPROVE_STATUSES.has(raw) ? raw : null;
 }
 
 export function parseDateQuery(value) {
@@ -211,12 +208,12 @@ export async function GET(req) {
 
     const kategoriId = (searchParams.get('id_kategori_cuti') || '').trim();
 
-    // ✅ GANTI PARAM QUERY: tanggal_mulai* -> tanggal_cuti* (tetap dukung legacy)
+    // Parameter tanggal (rename: tanggal_mulai* -> tanggal_cuti*)
     const tanggalCutiEqParam = searchParams.get('tanggal_cuti') ?? searchParams.get('tanggal_mulai');
     const tanggalCutiFromParam = searchParams.get('tanggal_cuti_from') ?? searchParams.get('tanggal_mulai_from');
     const tanggalCutiToParam = searchParams.get('tanggal_cuti_to') ?? searchParams.get('tanggal_mulai_to');
 
-    // Filter untuk field 'tanggal_masuk_kerja' (field skema tunggal)
+    // Filter field tunggal 'tanggal_masuk_kerja'
     const tanggalMasukEqParam = searchParams.get('tanggal_masuk_kerja');
     const tanggalMasukFromParam = searchParams.get('tanggal_masuk_kerja_from');
     const tanggalMasukToParam = searchParams.get('tanggal_masuk_kerja_to');
@@ -233,16 +230,13 @@ export async function GET(req) {
     }
 
     if (status) {
-      if (status === 'pending') {
-        where.status = { in: ['pending', 'menunggu'] };
-      } else {
-        where.status = status;
-      }
+      // ❌ tak ada lagi 'menunggu'
+      where.status = status; // 'pending' | 'disetujui' | 'ditolak'
     }
 
     if (kategoriId) where.id_kategori_cuti = kategoriId;
 
-    // Filter tanggal cuti via relasi tanggal_list
+    // Filter tanggal_cuti via relasi tanggal_list
     if (tanggalCutiEqParam) {
       const parsed = parseDateQuery(tanggalCutiEqParam);
       if (!parsed) {
@@ -301,9 +295,7 @@ export async function GET(req) {
       }),
     ]);
 
-    // Transformasi:
-    // - `tanggal_cuti` = tanggal pertama dari daftar `tanggal_list` (turunan, bukan kolom DB)
-    // - `tanggal_selesai` = tanggal terakhir (turunan, untuk kemudahan UI)
+    // Transformasi: kirim tanggal_cuti (awal turunan), tanggal_selesai (akhir turunan)
     const items = rawItems.map((item) => {
       const dates = (item.tanggal_list || []).map((d) => (d?.tanggal_cuti instanceof Date ? d.tanggal_cuti : new Date(d.tanggal_cuti))).sort((a, b) => a.getTime() - b.getTime());
 
@@ -314,10 +306,8 @@ export async function GET(req) {
 
       return {
         ...rest,
-        // ✅ rename field turunan: tanggal_mulai -> tanggal_cuti
         tanggal_cuti: tanggal_cuti_derived,
         tanggal_selesai: tanggal_selesai_derived,
-        // tetap kirim list tanggal mentah (Date[])
         tanggal_list: dates,
       };
     });
@@ -360,22 +350,15 @@ export async function POST(req) {
   try {
     const id_kategori_cuti = String(body?.id_kategori_cuti || '').trim();
 
-    // -----------------------------------------------------------------
-    // ✅ GANTI LOGIKA INPUT: tanggal_mulai[] -> tanggal_cuti[]
-    //    (tetap terima legacy, tetapi prefer yang baru)
-    // -----------------------------------------------------------------
-
-    // 1. Baca input tanggal_cuti[] (array tanggal cuti spesifik)
+    // Input: tanggal_cuti[] (prefer) / legacy tanggal_mulai[]
     const tanggalCutiInput =
       body?.['tanggal_cuti[]'] ??
       body?.tanggal_cuti ??
       body?.['tanggal_mulai[]'] ?? // legacy
       body?.tanggal_mulai; // legacy
 
-    // 2. Baca input tanggal_masuk_kerja (satu tanggal)
     const tanggalMasukInput = body?.tanggal_masuk_kerja;
 
-    // 3. Validasi input lainnya
     const keperluan = body?.keperluan === undefined || body?.keperluan === null ? null : String(body.keperluan);
     const handover = body?.handover === undefined || body?.handover === null ? null : String(body.handover);
 
@@ -389,7 +372,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: 'id_kategori_cuti wajib diisi.' }, { status: 400 });
     }
 
-    // 4. Validasi tanggal_masuk_kerja
+    // tanggal_masuk_kerja harus single
     if (Array.isArray(tanggalMasukInput)) {
       return NextResponse.json({ ok: false, message: 'tanggal_masuk_kerja harus berupa satu tanggal, bukan array.' }, { status: 400 });
     }
@@ -398,7 +381,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, message: 'tanggal_masuk_kerja tidak valid.' }, { status: 400 });
     }
 
-    // 5. Validasi tanggal_cuti[]
+    // tanggal_cuti[]
     const tanggalCutiArray = Array.isArray(tanggalCutiInput) ? tanggalCutiInput : [tanggalCutiInput];
     const parsedCutiDates = [];
 
@@ -524,10 +507,8 @@ export async function POST(req) {
       const basePayload = {
         nama_pemohon: fullPengajuan.user?.nama_pengguna || 'Rekan',
         kategori_cuti: fullPengajuan.kategori_cuti?.nama_kategori || '-',
-        // ✅ rename untuk notifikasi: tanggal_mulai -> tanggal_cuti
         tanggal_cuti: formatDateISO(tanggalCutiPertama),
         tanggal_cuti_display: formatDateDisplay(tanggalCutiPertama),
-        // Tetap: tanggal_masuk_kerja (field skema tunggal)
         tanggal_masuk_kerja: formatDateISO(fullPengajuan.tanggal_masuk_kerja),
         tanggal_masuk_kerja_display: formatDateDisplay(fullPengajuan.tanggal_masuk_kerja),
         keperluan: fullPengajuan.keperluan || '-',
@@ -568,7 +549,7 @@ export async function POST(req) {
         const overrideBody = `Pengajuan cuti ${basePayload.kategori_cuti} pada ${basePayload.tanggal_cuti_display} telah berhasil dibuat.`;
         notifPromises.push(
           sendNotification(
-            'LEAVE_HANDOVER_TAGGED', // memakai trigger yang sama
+            'LEAVE_HANDOVER_TAGGED',
             fullPengajuan.id_user,
             {
               ...basePayload,
