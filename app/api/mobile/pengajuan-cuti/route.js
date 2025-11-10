@@ -424,18 +424,19 @@ export async function POST(req) {
 
     const kategori = await db.kategoriCuti.findFirst({
       where: { id_kategori_cuti, deleted_at: null },
-      select: { id_kategori_cuti: true },
+      select: { id_kategori_cuti: true, pengurangan_kouta: true }, // ← [FIX]
     });
+
     if (!kategori) {
       return NextResponse.json({ ok: false, message: 'Kategori cuti tidak ditemukan.' }, { status: 404 });
     }
     const quotaAdjustments = kategori?.pengurangan_kouta ? summarizeDatesByMonth(parsedCutiDates) : [];
 
     if (handoverIds && handoverIds.length) {
-      const users = await db.user.findMany({
-        where: { id_user: { in: handoverIds }, deleted_at: null },
-        select: { id_kategori_cuti: true, pengurangan_kouta: true },
-      });
+    const users = await db.user.findMany({
+      where: { id_user: { in: handoverIds }, deleted_at: null },
+      select: { id_user: true }, // ← [FIX]
+    });
 
       const foundIds = new Set(users.map((u) => u.id_user));
       const missing = handoverIds.filter((id) => !foundIds.has(id));

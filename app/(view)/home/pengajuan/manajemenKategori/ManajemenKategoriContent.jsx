@@ -12,32 +12,39 @@ import {
   Modal,
   Form,
   Input,
+  Select, // [ADDED]
+  Tag,    // [ADDED]
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import useManajemenKategoriviewModel from "./useManajemenKategoriviewModel";
 
 const GOLD = "#003A6F";
 const LIGHT_BLUE = "#E8F6FF";
-const DEFAULT_PAGE_SIZE = 10;      // ukuran halaman default
-const DEFAULT_SCROLL_Y = 440;      // tinggi konten agar tabel tidak “mlompong”
+const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_SCROLL_Y = 440;
 
-// ==== Modal Form Reusable ====
+/** Modal form */
 function FormKategoriModal({
   open,
   mode,
   kind,
   initialName,
+  initialReduce = true, // [ADDED]
   onCancel,
   onSubmit,
 }) {
   const [form] = Form.useForm();
+
   React.useEffect(() => {
     if (open) {
-      form.setFieldsValue({ nama_kategori: initialName || "" });
+      form.setFieldsValue({
+        nama_kategori: initialName || "",
+        ...(kind === "cuti" ? { pengurangan_kouta: initialReduce } : {}), // [ADDED]
+      });
     } else {
       form.resetFields();
     }
-  }, [open, initialName, form]);
+  }, [open, initialName, initialReduce, kind, form]);
 
   const kindLabel =
     kind === "cuti" ? "Cuti" : kind === "sakit" ? "Izin Sakit" : "Izin Jam";
@@ -57,8 +64,24 @@ function FormKategoriModal({
           name="nama_kategori"
           rules={[{ required: true, message: "Nama kategori wajib diisi" }]}
         >
-          <Input placeholder="Contoh: Cuti Tahunan / Sakit Dokter / Jam Extra Hari Sama" />
+          <Input placeholder="Contoh: Cuti Tahunan" />
         </Form.Item>
+
+        {kind === "cuti" && (
+          <Form.Item
+            label="Pengurangan Kuota"
+            name="pengurangan_kouta"
+            tooltip="Tentukan apakah kategori ini mengurangi kuota cuti"
+            rules={[{ required: true, message: "Pilih status pengurangan kuota" }]}
+          >
+            <Select
+              options={[
+                { value: true, label: "Berkurang" },        // [ADDED]
+                { value: false, label: "Tidak berkurang" }, // [ADDED]
+              ]}
+            />
+          </Form.Item>
+        )}
       </Form>
     </Modal>
   );
@@ -67,15 +90,9 @@ function FormKategoriModal({
 export default function ManajemenKategoriContent() {
   const vm = useManajemenKategoriviewModel();
 
-  // ===== Pagination Helper (pakai data dari view model bila ada) =====
   const makePagination = (kind) => {
     const pag =
-      kind === "cuti"
-        ? vm.pagCuti
-        : kind === "sakit"
-        ? vm.pagSakit
-        : vm.pagIzinJam;
-
+      kind === "cuti" ? vm.pagCuti : kind === "sakit" ? vm.pagSakit : vm.pagIzinJam;
     const current = pag?.page ?? 1;
     const pageSize = pag?.pageSize ?? DEFAULT_PAGE_SIZE;
     const total = pag?.total ?? 0;
@@ -91,22 +108,40 @@ export default function ManajemenKategoriContent() {
     };
   };
 
-  const columns = (kind) => [
-    {
-      title: "No",
-      key: "no",
-      width: 60,
-      render: (_, __, index) => index + 1,
+  // [ADDED] kolom Tag status pengurangan kuota untuk tab Cuti
+  const colReduce = {
+    title: "Pengurangan Kuota",
+    key: "reduce",
+    width: 180,
+    render: (_, record) => {
+      const isReduce = !!record.reduce;
+      return (
+        <Tag color={isReduce ? "green" : "gold"} className="!rounded-md px-2 py-1">
+          {isReduce ? "Berkurang" : "Tidak berkurang"}
+        </Tag>
+      );
     },
-    {
-      title: "Nama Kategori",
-      dataIndex: "nama",
-      key: "nama",
-      render: (text) => (
-        <span className="font-medium text-slate-800">{text}</span>
-      ),
-    },
-    {
+  };
+
+  const columns = (kind) => {
+    const base = [
+      {
+        title: "No",
+        key: "no",
+        width: 60,
+        render: (_, __, index) => index + 1,
+      },
+      {
+        title: "Nama Kategori",
+        dataIndex: "nama",
+        key: "nama",
+        render: (text) => <span className="font-medium text-slate-800">{text}</span>,
+      },
+    ];
+
+    if (kind === "cuti") base.push(colReduce); // [ADDED]
+
+    base.push({
       title: "Aksi",
       key: "aksi",
       width: 120,
@@ -134,8 +169,10 @@ export default function ManajemenKategoriContent() {
           </Tooltip>
         </Space>
       ),
-    },
-  ];
+    });
+
+    return base;
+  };
 
   const tabItems = [
     {
@@ -199,9 +236,7 @@ export default function ManajemenKategoriContent() {
                 <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-0.5">
                   Izin Sakit
                 </h2>
-                <p className="text-slate-500 text-xs md:text-sm">
-                  Kelola kategori izin sakit
-                </p>
+                <p className="text-slate-500 text-xs md:text-sm">Kelola kategori izin sakit</p>
               </div>
               <Button
                 type="primary"
@@ -248,9 +283,7 @@ export default function ManajemenKategoriContent() {
                 <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-0.5">
                   Kategori Izin Jam
                 </h2>
-                <p className="text-slate-500 text-xs md:text-sm">
-                  Kelola kategori izin jam
-                </p>
+                <p className="text-slate-500 text-xs md:text-sm">Kelola kategori izin jam</p>
               </div>
               <Button
                 type="primary"
@@ -303,7 +336,6 @@ export default function ManajemenKategoriContent() {
       }}
     >
       <div className="min-h-screen bg-slate-50 p-6">
-        {/* HEADER kecil */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-[22px] font-semibold leading-tight text-slate-900 mb-1">
             Manajemen Kategori
@@ -313,7 +345,6 @@ export default function ManajemenKategoriContent() {
           </p>
         </div>
 
-        {/* TABS */}
         <Tabs
           activeKey={vm.activeTab}
           onChange={vm.setActiveTab}
@@ -334,12 +365,12 @@ export default function ManajemenKategoriContent() {
         />
       </div>
 
-      {/* Modal Form */}
       <FormKategoriModal
         open={vm.modalOpen}
         mode={vm.modalMode}
         kind={vm.modalKind}
         initialName={vm.editingItem?.nama}
+        initialReduce={vm.editingItem?.reduce ?? true} // [ADDED]
         onCancel={() => vm.setModalOpen(false)}
         onSubmit={vm.submitForm}
       />

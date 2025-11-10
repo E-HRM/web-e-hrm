@@ -7,14 +7,16 @@ import { ApiEndpoints } from "@/constrainst/endpoints";
 import { fetcher } from "@/app/utils/fetcher";
 import { crudService } from "@/app/utils/services/crudService";
 
-/** Util bikin key SWR */
+/** Buat key SWR list */
 function listKey(kind, { page, pageSize, search }) {
+  // [INFO] Pastikan ApiEndpoints.* mengarah ke /api/admin/*
   const base =
     kind === "cuti"
-      ? ApiEndpoints.GetKategoriCuti
+      ? ApiEndpoints.GetKategoriCuti      // harus balikin pengurangan_kouta di list
       : kind === "sakit"
       ? ApiEndpoints.GetKategoriSakit
-      : ApiEndpoints.GetKategoriIzinJam; // izinjam
+      : ApiEndpoints.GetKategoriIzinJam;
+
   const qs = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
@@ -29,32 +31,30 @@ export default function useManajemenKategoriviewModel() {
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
 
-  // modal state
+  // Modal
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("create"); // 'create' | 'edit'
-  const [modalKind, setModalKind] = useState("cuti");   // 'cuti' | 'sakit' | 'izinjam'
-  const [editingItem, setEditingItem] = useState(null); // { id, nama }
+  const [modalKind, setModalKind] = useState("cuti");
+  const [editingItem, setEditingItem] = useState(null); // { id, nama, reduce }
 
-  // SWR – CUTI
+  // SWR
   const swrCuti = useSWR(listKey("cuti", { page, pageSize, search }), fetcher, {
     revalidateOnFocus: false,
   });
-  // SWR – SAKIT
   const swrSakit = useSWR(listKey("sakit", { page, pageSize, search }), fetcher, {
     revalidateOnFocus: false,
   });
-  // SWR – IZIN JAM
-  const swrIzinJam = useSWR(
-    listKey("izinjam", { page, pageSize, search }),
-    fetcher,
-    { revalidateOnFocus: false }
-  );
+  const swrIzinJam = useSWR(listKey("izinjam", { page, pageSize, search }), fetcher, {
+    revalidateOnFocus: false,
+  });
 
+  // Map untuk tabel
   const itemsCuti = useMemo(() => {
     const arr = Array.isArray(swrCuti.data?.data) ? swrCuti.data.data : [];
     return arr.map((x) => ({
       id: x.id_kategori_cuti,
       nama: x.nama_kategori,
+      reduce: Boolean(x.pengurangan_kouta), // [ADDED] dipakai untuk tag UI
       raw: x,
     }));
   }, [swrCuti.data]);
@@ -83,27 +83,36 @@ export default function useManajemenKategoriviewModel() {
     await Promise.all([swrCuti.mutate(), swrSakit.mutate(), swrIzinJam.mutate()]);
   }, [swrCuti, swrSakit, swrIzinJam]);
 
-  // ACTIONS
+  // Actions
   const openCreate = useCallback((kind) => {
     setModalMode("create");
     setModalKind(kind);
-    setEditingItem(null);
+    setEditingItem(kind === "cuti" ? { id: null, nama: "", reduce: true } : null); // [ADDED] default reduce=true
     setModalOpen(true);
   }, []);
 
   const openEdit = useCallback((kind, item) => {
     setModalMode("edit");
     setModalKind(kind);
-    setEditingItem(item);
+    setEditingItem(item); // { id, nama, reduce }
     setModalOpen(true);
   }, []);
 
   const submitForm = useCallback(
     async (values) => {
-      const payload = { nama_kategori: String(values.nama_kategori || "").trim() };
+      // payload dasar
+      const payload = {
+        nama_kategori: String(values.nama_kategori || "").trim(),
+      };
       if (!payload.nama_kategori) {
         message.error("Nama kategori wajib diisi.");
         return;
+      }
+
+      // [ADDED] hanya untuk tab 'cuti', sertakan boolean pengurangan_kouta
+      if (modalKind === "cuti") {
+        payload.pengurangan_kouta =
+          typeof values.pengurangan_kouta === "boolean" ? values.pengurangan_kouta : true;
       }
 
       try {
@@ -113,7 +122,7 @@ export default function useManajemenKategoriviewModel() {
               ? ApiEndpoints.CreateKategoriCuti
               : modalKind === "sakit"
               ? ApiEndpoints.CreateKategoriSakit
-              : ApiEndpoints.CreateKategoriIzinJam; // izinjam
+              : ApiEndpoints.CreateKategoriIzinJam;
           await crudService.postAuth(ep, payload);
           message.success("Kategori berhasil dibuat.");
         } else {
@@ -141,11 +150,7 @@ export default function useManajemenKategoriviewModel() {
     (kind, item) => {
       Modal.confirm({
         title: "Hapus kategori?",
-        content: (
-          <>
-            Kategori <b>{item?.nama}</b> akan dihapus (soft delete).
-          </>
-        ),
+        content: <>Kategori <b>{item?.nama}</b> akan dihapus (soft delete).</>,
         okText: "Hapus",
         okButtonProps: { danger: true },
         cancelText: "Batal",
@@ -169,7 +174,6 @@ export default function useManajemenKategoriviewModel() {
     [mutateAll]
   );
 
-  // Pagination handler terpadu (dipakai Table)
   const onPageChange = useCallback((_kind, p, ps) => {
     setPage(p);
     setPageSize(ps);
@@ -206,7 +210,7 @@ export default function useManajemenKategoriviewModel() {
     submitForm,
     confirmDelete,
 
-    // table handlers
+    // table
     onPageChange,
   };
 }
