@@ -14,24 +14,21 @@ function toLabelStatus(s) {
   return "Menunggu"; // pending/menunggu
 }
 
-// Ambil approvalId pending (API sudah filter approvals relevan untuk aktor)
+// Ambil approvalId yang masih pending
 function pickApprovalId(item) {
   const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
   const pending = approvals.find((a) =>
     ["pending", "menunggu"].includes(String(a?.decision || "").toLowerCase())
   );
-  return (
-    pending?.id_approval_pengajuan_izin_sakit ||
-    pending?.id ||
-    null
-  );
+  // ← backend baru pakai 'id_approval_izin_sakit'
+  return pending?.id_approval_izin_sakit || pending?.id || null;
 }
 
-// Map item API → row UI
+// Map item API → row UI (sinkron dengan field backend BARU)
 function mapItemToRow(item) {
+  // tanggal_pengajuan opsional; fallback ke created_at
   const tanggal =
-    item?.tanggal_sakit ||
-    item?.tanggal ||
+    item?.tanggal_pengajuan ||
     item?.created_at ||
     item?.createdAt ||
     null;
@@ -42,13 +39,14 @@ function mapItemToRow(item) {
     nama: item?.user?.nama_pengguna ?? "—",
     jabatan: item?.user?.role ?? "—",
     kategori:
-      item?.kategori_sakit?.nama_kategori ??
       item?.kategori?.nama_kategori ??
+      item?.kategori_sakit?.nama_kategori ??
       "—",
     handover: item?.handover ?? "—",
-    buktiUrl: item?.lampiran_sakit_url ?? item?.lampiran_url ?? null,
+    // ← backend baru pakai 'lampiran_izin_sakit_url'
+    buktiUrl: item?.lampiran_izin_sakit_url ?? item?.lampiran_url ?? null,
     status: toLabelStatus(item?.status),
-    alasan: "", // biasanya ada di detail approval; list tidak wajib
+    alasan: "", // ringkas, biasanya detail approval di endpoint lain
     tempAlasan: "",
     foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
     tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
@@ -69,9 +67,9 @@ export default function useSakitViewModel() {
   const [pageSize, setPageSize] = useState(10);
   const [reasonDraft, setReasonDraft] = useState({});
 
-  // ===== LIST untuk tab aktif =====
+  // ===== LIST untuk tab aktif (pakai API BARU) =====
   const listKey = useMemo(() => {
-    const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
+    const qs = { status: statusFromTab(tab), page, pageSize };
     return ApiEndpoints.GetPengajuanIzinSakitMobile(qs);
   }, [tab, page, pageSize]);
 
@@ -79,7 +77,7 @@ export default function useSakitViewModel() {
     revalidateOnFocus: false,
   });
 
-  // ===== COUNTS per status (ringan: ambil 1 item untuk dapat pagination.total) =====
+  // ===== COUNTS per status (ambil meta.total dari API BARU) =====
   const countKey = useCallback(
     (status) =>
       ApiEndpoints.GetPengajuanIzinSakitMobile({
@@ -102,10 +100,11 @@ export default function useSakitViewModel() {
 
   const totalOf = (json) => {
     const r = json || {};
+    // API baru kirim meta: { total, page, pageSize, totalPages }
     return (
+      r.meta?.total ??
       r.pagination?.total ??
       r.total ??
-      r.meta?.total ??
       (Array.isArray(r.data) ? r.data.length : 0)
     );
   };
@@ -141,7 +140,7 @@ export default function useSakitViewModel() {
     setReasonDraft((prev) => ({ ...prev, [id]: value }));
   }
 
-  // ===== Actions =====
+  // ===== Actions (pakai endpoint approvals BARU) =====
   const approve = useCallback(
     async (id, note) => {
       const row = rows.find((r) => r.id === id);
@@ -236,7 +235,7 @@ export default function useSakitViewModel() {
     filteredData,
     loading: isLoading,
 
-    tabCounts, // << untuk badge tab
+    tabCounts,
 
     tab,
     setTab,
