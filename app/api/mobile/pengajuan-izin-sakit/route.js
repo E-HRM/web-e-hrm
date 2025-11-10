@@ -93,7 +93,7 @@ async function ensureAuth(req) {
   return { actor: { id, role: sessionOrRes?.user?.role, source: 'session', session: sessionOrRes } };
 }
 
-export function normalizeApprovals(payload) {
+function normalizeApprovals(payload) {
   if (!payload || typeof payload !== 'object') return undefined;
   const rawApprovals = payload.approvals ?? payload['approvals[]'] ?? payload.approval ?? payload['approval[]'];
   if (rawApprovals === undefined) return undefined;
@@ -429,5 +429,4 @@ export async function POST(req) {
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }
-
-export { ensureAuth, parseTagUserIds, baseInclude };
+export { ensureAuth, parseTagUserIds, baseInclude, normalizeApprovals };
