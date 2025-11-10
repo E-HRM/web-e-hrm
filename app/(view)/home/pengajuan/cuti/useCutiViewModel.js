@@ -81,7 +81,7 @@ function mapItemToRow(item) {
     jenisCuti: item?.kategori_cuti?.nama_kategori ?? "—",
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
 
-    // —— UI baru pakai ini:
+    // —— UI pakai ini:
     tglCutiList,               // array Date
     tglCutiFirst,              // Date
     tglCutiLast,               // Date
@@ -137,7 +137,7 @@ export default function useCutiViewModel() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // List pengajuan
+  // List pengajuan (tab aktif)
   const listKey = useMemo(() => {
     const qs = { status: statusFromTab(tab), page, perPage: pageSize, all: 1 };
     return ApiEndpoints.GetPengajuanCutiMobile(qs);
@@ -147,6 +147,33 @@ export default function useCutiViewModel() {
     revalidateOnFocus: false,
   });
 
+  // ===== COUNTS per status (ringan: ambil 1 item agar dapat total dari pagination) =====
+  const countKey = useCallback(
+    (status) => ApiEndpoints.GetPengajuanCutiMobile({ status, page: 1, perPage: 1 }),
+    []
+  );
+
+  const swrCntPending  = useSWR(countKey("pending"),   fetcher, { revalidateOnFocus: false });
+  const swrCntApproved = useSWR(countKey("disetujui"), fetcher, { revalidateOnFocus: false });
+  const swrCntRejected = useSWR(countKey("ditolak"),   fetcher, { revalidateOnFocus: false });
+
+  const totalOf = (json) => {
+    const r = json || {};
+    // Support beberapa bentuk response
+    return r.pagination?.total ?? r.total ?? r.meta?.total ??
+      (Array.isArray(r.data) ? r.data.length : 0);
+  };
+
+  const tabCounts = useMemo(
+    () => ({
+      pengajuan: totalOf(swrCntPending.data),
+      disetujui: totalOf(swrCntApproved.data),
+      ditolak:   totalOf(swrCntRejected.data),
+    }),
+    [swrCntPending.data, swrCntApproved.data, swrCntRejected.data]
+  );
+
+  // Mapping rows untuk tabel
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
     return items.map(mapItemToRow);
@@ -214,12 +241,17 @@ export default function useCutiViewModel() {
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan cuti disetujui");
-        mutate();
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, mutate]
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
   const reject = useCallback(
@@ -249,20 +281,35 @@ export default function useCutiViewModel() {
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan cuti ditolak");
-        mutate();
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, mutate]
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
-  const refresh = useCallback(() => mutate(), [mutate]);
+  const refresh = useCallback(
+    () =>
+      Promise.all([
+        mutate(),
+        swrCntPending.mutate(),
+        swrCntApproved.mutate(),
+        swrCntRejected.mutate(),
+      ]),
+    [mutate, swrCntPending, swrCntApproved, swrCntRejected]
+  );
 
   return {
     // data
     data: rows,
     filteredData,
+    tabCounts, // <<< untuk badge tab
     // filters
     tab,
     setTab,

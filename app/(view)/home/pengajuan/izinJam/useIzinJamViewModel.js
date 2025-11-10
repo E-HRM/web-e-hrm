@@ -21,14 +21,13 @@ function toLabelStatus(s) {
 }
 
 function toHM(value) {
-  if (!value) return null;
+  const s = String(value ?? "").trim();
+  if (!s) return null;
+  // dukung "HH:MM" / "HH:MM:SS"
+  if (/^\d{2}:\d{2}/.test(s)) return s.slice(0, 5);
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /* Ambil approval pending untuk aktor dari payload API list (kalau ada) */
@@ -38,7 +37,7 @@ function pickApprovalId(item) {
     const d = String(ap?.decision ?? "").trim().toLowerCase();
     return d === "" || d === "pending" || d === "menunggu";
   });
-  return a?.id_approval_pengajuan_izin_jam || null;
+  return a?.id_approval_pengajuan_izin_jam || a?.id || null;
 }
 
 /* Map item API → row tabel */
@@ -54,10 +53,10 @@ function mapItemToRow(item) {
     tglIzin: item?.tanggal_izin ?? null,
     jamMulai: toHM(item?.jam_mulai) ?? "—",
     jamSelesai: toHM(item?.jam_selesai) ?? "—",
-    // pengganti (opsional)
+    // pengganti (opsional; bisa lintas hari)
     pgTglMulai: item?.tanggal_pengganti ?? null,
     pgJamMulai: toHM(item?.jam_mulai_pengganti) ?? null,
-    pgTglSelesai: item?.tanggal_pengganti ?? null, // biasa sama dgn pgTglMulai
+    pgTglSelesai: item?.tanggal_pengganti ?? null, // sering sama dg mulai
     pgJamSelesai: toHM(item?.jam_selesai_pengganti) ?? null,
     // detail
     kategori: item?.kategori?.nama_kategori ?? "—",
@@ -81,7 +80,7 @@ export default function useIzinJamViewModel() {
   const [pageSize, setPageSize] = useState(10);
   const [reasonDraft, setReasonDraft] = useState({}); // catatan tolak per-id
 
-  // Key SWR
+  // ===== LIST untuk tab aktif =====
   const listKey = useMemo(() => {
     const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
     return ApiEndpoints.GetPengajuanIzinJamMobile(qs);
@@ -90,6 +89,28 @@ export default function useIzinJamViewModel() {
   const { data, isLoading, mutate } = useSWR(listKey, fetcher, {
     revalidateOnFocus: false,
   });
+
+  // ===== COUNTS per status (ringan: ambil 1 item untuk dapat pagination.total) =====
+  const countKey = useCallback(
+    (status) => ApiEndpoints.GetPengajuanIzinJamMobile({ status, page: 1, pageSize: 1 }),
+    []
+  );
+
+  const swrCntPending  = useSWR(countKey("pending"),   fetcher, { revalidateOnFocus: false });
+  const swrCntApproved = useSWR(countKey("disetujui"), fetcher, { revalidateOnFocus: false });
+  const swrCntRejected = useSWR(countKey("ditolak"),   fetcher, { revalidateOnFocus: false });
+
+  const totalOf = (json) => {
+    const r = json || {};
+    return r?.pagination?.total ?? r?.total ?? r?.meta?.total ??
+      (Array.isArray(r?.data) ? r.data.length : 0);
+  };
+
+  const tabCounts = useMemo(() => ({
+    pengajuan: totalOf(swrCntPending.data),
+    disetujui: totalOf(swrCntApproved.data),
+    ditolak:   totalOf(swrCntRejected.data),
+  }), [swrCntPending.data, swrCntApproved.data, swrCntRejected.data]);
 
   // rows dari API
   const rows = useMemo(() => {
@@ -122,16 +143,6 @@ export default function useIzinJamViewModel() {
     );
   }, [rows, search]);
 
-  // counts per tab (berbasis data halaman ini)
-  const counts = useMemo(() => {
-    const all = rows ?? [];
-    return {
-      pengajuan: all.filter((d) => d.status === "Menunggu").length,
-      disetujui: all.filter((d) => d.status === "Disetujui").length,
-      ditolak: all.filter((d) => d.status === "Ditolak").length,
-    };
-  }, [rows]);
-
   // catatan sementara penolakan
   const handleAlasanChange = useCallback((id, value) => {
     setReasonDraft((prev) => ({ ...prev, [id]: value }));
@@ -143,9 +154,7 @@ export default function useIzinJamViewModel() {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
       if (!row.approvalId) {
-        message.error(
-          "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
-        );
+        message.error("Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals.");
         return;
       }
       try {
@@ -154,21 +163,23 @@ export default function useIzinJamViewModel() {
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              decision: "disetujui",
-              note: note ?? null,
-            }),
+            body: JSON.stringify({ decision: "disetujui", note: note ?? null }),
           }
         );
         const json = await res.json();
         if (!res.ok) throw new Error(json?.message || "Gagal menyimpan keputusan.");
         message.success("Pengajuan izin jam disetujui");
-        mutate();
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, mutate]
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
   // Reject
@@ -182,9 +193,7 @@ export default function useIzinJamViewModel() {
         return;
       }
       if (!row.approvalId) {
-        message.error(
-          "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
-        );
+        message.error("Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals.");
         return;
       }
       try {
@@ -199,20 +208,37 @@ export default function useIzinJamViewModel() {
         const json = await res.json();
         if (!res.ok) throw new Error(json?.message || "Gagal menyimpan keputusan.");
         message.success("Pengajuan izin jam ditolak");
-        mutate();
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, reasonDraft, mutate]
+    [rows, reasonDraft, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
-  const refresh = useCallback(() => mutate(), [mutate]);
+  const refresh = useCallback(
+    () =>
+      Promise.all([
+        mutate(),
+        swrCntPending.mutate(),
+        swrCntApproved.mutate(),
+        swrCntRejected.mutate(),
+      ]),
+    [mutate, swrCntPending, swrCntApproved, swrCntRejected]
+  );
 
   return {
     // data
     rows,
     filteredData,
+
+    // counts “lengket”
+    tabCounts,
 
     // state UI
     tab,
@@ -235,7 +261,6 @@ export default function useIzinJamViewModel() {
     refresh,
 
     // misc
-    counts,
     loading: isLoading,
   };
 }

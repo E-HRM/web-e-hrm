@@ -240,14 +240,8 @@ export default function CutiContent() {
       return s;
     });
 
-  const counts = useMemo(() => {
-    const all = vm.data ?? [];
-    return {
-      pengajuan: all.filter((d) => d.status === "Menunggu").length,
-      disetujui: all.filter((d) => d.status === "Disetujui").length,
-      ditolak: all.filter((d) => d.status === "Ditolak").length,
-    };
-  }, [vm.data]);
+  // Gunakan counts dari view model (lengket antar tab)
+  const counts = vm.tabCounts || { pengajuan: 0, disetujui: 0, ditolak: 0 };
 
   const columns = useMemo(() => {
     return [
@@ -491,7 +485,7 @@ export default function CutiContent() {
         },
       },
     ];
-  }, [vm, expandedKeterangan, expandedHandover, pagination]);
+  }, [vm.tab, expandedKeterangan, expandedHandover, pagination]);
 
   const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
 

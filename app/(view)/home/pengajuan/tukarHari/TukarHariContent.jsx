@@ -12,7 +12,6 @@ import {
   Space,
   Card,
   Table,
-  DatePicker,
   Select,
 } from "antd";
 import {
@@ -156,19 +155,13 @@ export default function TukarHariContent() {
       return s;
     });
 
-  const counts = useMemo(() => {
-    const all = vm.data ?? [];
-    return {
-      pengajuan: all.filter((d) => d.statusRaw === "pending").length,
-      disetujui: all.filter((d) => d.statusRaw === "disetujui").length,
-      ditolak: all.filter((d) => d.statusRaw === "ditolak").length,
-    };
-  }, [vm.data]);
+  // counts “lengket” dari VM
+  const counts = vm.tabCounts || { pengajuan: 0, disetujui: 0, ditolak: 0 };
 
   const openApproveModal = useCallback(
     async (row) => {
       setApproveRow(row);
-      setApprovePola(""); // reset
+      setApprovePola("");
       vm.fetchPolaOptions();
     },
     [vm]
@@ -262,7 +255,7 @@ export default function TukarHariContent() {
                   size="small"
                   icon={<CheckOutlined />}
                   className="!bg-[var(--brand)] hover:!bg-[#0B63C7]"
-                  style={{ "--brand": BRAND }}
+                  style={{ ["--brand"]: BRAND }}
                   onClick={() => openApproveModal(r)}
                 >
                   Setujui
@@ -318,7 +311,7 @@ export default function TukarHariContent() {
                     size="small"
                     icon={<CheckOutlined />}
                     className="!bg-[var(--brand)] hover:!bg-[#0B63C7]"
-                    style={{ "--brand": BRAND }}
+                    style={{ ["--brand"]: BRAND }}
                     onClick={() => openApproveModal(r)}
                   >
                     Setujui
@@ -342,17 +335,11 @@ export default function TukarHariContent() {
         },
       },
     ],
-    [vm, expandedKeperluan, pagination, openApproveModal]
+    [vm.tab, expandedKeperluan, pagination, openApproveModal]
   );
 
-  const sourceAll = vm.filteredData.map((d) => ({ key: d.id, ...d }));
-
-  const dataSource = useMemo(() => {
-    if (vm.tab === "pengajuan") return sourceAll.filter((x) => x.statusRaw === "pending");
-    if (vm.tab === "disetujui") return sourceAll.filter((x) => x.statusRaw === "disetujui");
-    if (vm.tab === "ditolak") return sourceAll.filter((x) => x.statusRaw === "ditolak");
-    return sourceAll;
-  }, [sourceAll, vm.tab]);
+  // list untuk tab aktif sudah difilter dari server; cukup pakai filteredData
+  const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
 
   const tabItems = [
     {
@@ -417,7 +404,7 @@ export default function TukarHariContent() {
 
         <Tabs
           activeKey={vm.tab}
-          onChange={(k) => vm.setTab(k)}
+          onChange={vm.setTab}
           type="card"
           className="custom-tabs"
           items={tabItems.map((t) => ({
@@ -427,7 +414,7 @@ export default function TukarHariContent() {
               <Card className="shadow-lg border-0 mt-4" bodyStyle={{ padding: 0 }}>
                 <div
                   className="p-5 border-b border-slate-100 bg-[var(--header-bg)]"
-                  style={{ "--header-bg": HEADER_BLUE_BG }}
+                  style={{ ["--header-bg"]: HEADER_BLUE_BG }}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -503,9 +490,7 @@ export default function TukarHariContent() {
         title="Setujui Pengajuan — Pilih Pola untuk Hari Pengganti"
         open={!!approveRow}
         okText="Setujui"
-        okButtonProps={{
-          disabled: !approveRow, // pola opsional; kalau wajib, ganti ke: !approvePola
-        }}
+        okButtonProps={{ disabled: !approveRow /* ubah ke !approvePola bila wajib */ }}
         onOk={async () => {
           await vm.approve(approveRow.id, null, approvePola || null);
           setApproveRow(null);
@@ -565,9 +550,9 @@ export default function TukarHariContent() {
         open={!!rejectRow}
         okText="Tolak"
         okButtonProps={{ danger: true, disabled: !reason.trim() }}
-        onOk={() => {
+        onOk={async () => {
           vm.handleAlasanChange(rejectRow.id, reason.trim());
-          vm.reject(rejectRow.id);
+          await vm.reject(rejectRow.id);
           setRejectRow(null);
           setReason("");
         }}

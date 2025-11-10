@@ -154,14 +154,8 @@ export default function IzinJamContent() {
       return s;
     });
 
-  const counts = useMemo(() => {
-    const all = vm.data ?? [];
-    return {
-      pengajuan: all.filter((d) => d.status === "Menunggu").length,
-      disetujui: all.filter((d) => d.status === "Disetujui").length,
-      ditolak: all.filter((d) => d.status === "Ditolak").length,
-    };
-  }, [vm.data]);
+  // Gunakan counts “lengket” dari VM
+  const counts = vm.tabCounts || { pengajuan: 0, disetujui: 0, ditolak: 0 };
 
   const columns = useMemo(() => {
     return [
@@ -261,9 +255,7 @@ export default function IzinJamContent() {
 
               <MiniField label="Kategori">
                 <Tag className="!rounded-md !px-2 !py-0.5 !border-none !text-[12px] !font-medium !bg-[#E8F6FF] !text-[#003A6F]">
-                  {r.kategori === "Jam extra di hari sama"
-                    ? "Jam extra di hari sama"
-                    : "Mengganti dengan jam saat libur"}
+                  {r.kategori}
                 </Tag>
               </MiniField>
 
@@ -272,11 +264,13 @@ export default function IzinJamContent() {
               </MiniField>
 
               <MiniField label="Tgl. Izin">
-                {new Date(r.tglIzin).toLocaleDateString("id-ID", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                })}
+                {r.tglIzin
+                  ? new Date(r.tglIzin).toLocaleDateString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "—"}
               </MiniField>
 
               <MiniField label="Jam Izin">
@@ -311,9 +305,10 @@ export default function IzinJamContent() {
                   icon={<FileTextOutlined />}
                   size="small"
                   className="!rounded-md !border-none !bg-[#E8F6FF] !text-[#003A6F] hover:!bg-[#99D7FF]/40 hover:!text-[#184c81]"
-                  onClick={() => window.open(`/path/to/${r.bukti}`, "_blank")}
+                  disabled={!r.bukti}
+                  onClick={() => r.bukti && window.open(r.bukti, "_blank")}
                 >
-                  Lihat
+                  {r.bukti ? "Lihat" : "Tidak ada file"}
                 </Button>
               </MiniField>
             </div>
@@ -367,7 +362,15 @@ export default function IzinJamContent() {
                 {vm.tab === "disetujui" ? "Tgl. Disetujui" : "Tgl. Ditolak"}
               </div>
               <div className="text-sm text-slate-700">
-                {r.tglKeputusan ? formatDateTimeID(r.tglKeputusan) : "-"}
+                {r.tglKeputusan
+                  ? new Date(r.tglKeputusan).toLocaleString("id-ID", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "-"}
               </div>
 
               {r.alasan && (
@@ -430,7 +433,7 @@ export default function IzinJamContent() {
         },
       },
     ];
-  }, [vm, expandedKeperluan, expandedHandover, pagination]);
+  }, [vm.tab, expandedKeperluan, expandedHandover, pagination]);
 
   const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
 
@@ -496,7 +499,7 @@ export default function IzinJamContent() {
           </p>
         </div>
 
-        {/* TABS ala Manajemen Kategori – sama persis */}
+        {/* TABS */}
         <Tabs
           activeKey={vm.tab}
           onChange={vm.setTab}
@@ -587,9 +590,9 @@ export default function IzinJamContent() {
         open={!!rejectRow}
         okText="Tolak"
         okButtonProps={{ danger: true, disabled: !reason.trim() }}
-        onOk={() => {
+        onOk={async () => {
           vm.handleAlasanChange(rejectRow.id, reason.trim());
-          vm.reject(rejectRow.id);
+          await vm.reject(rejectRow.id);
           setRejectRow(null);
           setReason("");
         }}

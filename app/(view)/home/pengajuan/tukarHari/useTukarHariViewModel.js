@@ -38,6 +38,41 @@ function toLabelStatus(s) {
   return "Menunggu";
 }
 
+function statusFromTab(tab) {
+  if (tab === "disetujui") return "disetujui";
+  if (tab === "ditolak") return "ditolak";
+  return "pending";
+}
+
+/* ===================== Pola kerja options helper ====================== */
+function guessPolaOptionsUrl() {
+  try {
+    if (typeof ApiEndpoints?.GetPolaKerjaOptions === "function")
+      return ApiEndpoints.GetPolaKerjaOptions();
+    if (ApiEndpoints?.GetPolaKerjaOptions) return ApiEndpoints.GetPolaKerjaOptions;
+
+    if (typeof ApiEndpoints?.GetPolaKerja === "function")
+      return ApiEndpoints.GetPolaKerja({ page: 1, pageSize: 999 });
+    if (ApiEndpoints?.GetPolaKerja) return ApiEndpoints.GetPolaKerja;
+
+    if (typeof ApiEndpoints?.GetPolaOptions === "function")
+      return ApiEndpoints.GetPolaOptions();
+    if (ApiEndpoints?.GetPolaOptions) return ApiEndpoints.GetPolaOptions;
+  } catch {}
+  return null;
+}
+function normalizePolaItems(json) {
+  const items = (Array.isArray(json?.data) && json.data) || (Array.isArray(json) && json) || [];
+  return items.map((it) => {
+    const id = it?.id_pola_kerja ?? it?.id ?? it?.polaId ?? it?.uuid ?? String(it?.value);
+    const nama = it?.nama_pola_kerja ?? it?.nama ?? it?.label ?? it?.name ?? "Pola";
+    const jIn = (it?.jam_masuk ?? it?.jamIn ?? it?.start ?? it?.masuk) || "";
+    const jOut = (it?.jam_pulang ?? it?.jamOut ?? it?.end ?? it?.pulang) || "";
+    const jam = jIn && jOut ? `${String(jIn).slice(0, 5)}-${String(jOut).slice(0, 5)}` : null;
+    return { value: String(id), label: jam ? `${nama} (${jam})` : nama, raw: it };
+  });
+}
+
 /* ===================== Mapper Row ====================== */
 function mapItemToRow(item) {
   const pairsRaw = Array.isArray(item?.pairs) ? item.pairs : [];
@@ -86,46 +121,6 @@ function mapItemToRow(item) {
   };
 }
 
-function statusFromTab(tab) {
-  if (tab === "disetujui") return "disetujui";
-  if (tab === "ditolak") return "ditolak";
-  return "pending";
-}
-
-/* ===================== Pola kerja options helper ====================== */
-function guessPolaOptionsUrl() {
-  try {
-    if (typeof ApiEndpoints?.GetPolaKerjaOptions === "function")
-      return ApiEndpoints.GetPolaKerjaOptions();
-    if (ApiEndpoints?.GetPolaKerjaOptions) return ApiEndpoints.GetPolaKerjaOptions;
-
-    if (typeof ApiEndpoints?.GetPolaKerja === "function")
-      return ApiEndpoints.GetPolaKerja({ page: 1, pageSize: 999 });
-    if (ApiEndpoints?.GetPolaKerja) return ApiEndpoints.GetPolaKerja;
-
-    if (typeof ApiEndpoints?.GetPolaOptions === "function")
-      return ApiEndpoints.GetPolaOptions();
-    if (ApiEndpoints?.GetPolaOptions) return ApiEndpoints.GetPolaOptions;
-  } catch {}
-  return null;
-}
-function normalizePolaItems(json) {
-  const items = (Array.isArray(json?.data) && json.data) || (Array.isArray(json) && json) || [];
-  return items.map((it) => {
-    const id = it?.id_pola_kerja ?? it?.id ?? it?.polaId ?? it?.uuid ?? String(it?.value);
-    const nama = it?.nama_pola_kerja ?? it?.nama ?? it?.label ?? it?.name ?? "Pola";
-    const jamMasuk = it?.jam_masuk ?? it?.jamIn ?? it?.start ?? it?.masuk;
-    const jamPulang = it?.jam_pulang ?? it?.jamOut ?? it?.end ?? it?.pulang;
-    const jam = jamMasuk && jamPulang ? `${String(jamMasuk).slice(0, 5)}-${String(jamPulang).slice(0, 5)}` : null;
-
-    return {
-      value: String(id),
-      label: jam ? `${nama} (${jam})` : nama,
-      raw: it,
-    };
-  });
-}
-
 /* ===================== Hook ViewModel ====================== */
 export default function useTukarHariViewModel() {
   const [search, setSearch] = useState("");
@@ -137,8 +132,8 @@ export default function useTukarHariViewModel() {
   const [polaOptions, setPolaOptions] = useState([]);
   const [loadingPola, setLoadingPola] = useState(false);
 
+  /* ===== LIST: hanya data untuk tab aktif ===== */
   const listKey = useMemo(() => {
-    // API kamu menerima ?status=pending|disetujui|ditolak, + paging
     const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
     return ApiEndpoints.GetPengajuanTukarHariMobile(qs);
   }, [tab, page, pageSize]);
@@ -147,6 +142,29 @@ export default function useTukarHariViewModel() {
     revalidateOnFocus: false,
   });
 
+  /* ===== COUNTS: 3 SWR ringan agar badge tab selalu benar ===== */
+  const countKey = useCallback(
+    (status) => ApiEndpoints.GetPengajuanTukarHariMobile({ status, page: 1, pageSize: 1 }),
+    []
+  );
+
+  const swrCntPending  = useSWR(countKey("pending"),   fetcher, { revalidateOnFocus: false });
+  const swrCntApproved = useSWR(countKey("disetujui"), fetcher, { revalidateOnFocus: false });
+  const swrCntRejected = useSWR(countKey("ditolak"),   fetcher, { revalidateOnFocus: false });
+
+  const totalOf = (json) => {
+    const r = json || {};
+    return r?.pagination?.total ?? r?.total ?? r?.meta?.total ??
+      (Array.isArray(r?.data) ? r.data.length : 0);
+  };
+
+  const tabCounts = useMemo(() => ({
+    pengajuan: totalOf(swrCntPending.data),
+    disetujui: totalOf(swrCntApproved.data),
+    ditolak:   totalOf(swrCntRejected.data),
+  }), [swrCntPending.data, swrCntApproved.data, swrCntRejected.data]);
+
+  /* ===== Rows & filter client-side ===== */
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
     return items.map(mapItemToRow);
@@ -163,54 +181,50 @@ export default function useTukarHariViewModel() {
     );
   }, [rows, search]);
 
+  /* ===== Draft alasan ===== */
   function handleAlasanChange(id, value) {
     setReasonDraft((prev) => ({ ...prev, [id]: value }));
   }
 
+  /* ===== Ensure approvalId via detail saat list tidak menyertakan ===== */
   async function ensureApprovalId(row) {
     if (row?.approvalId) return row.approvalId;
-
     try {
       const detailUrl =
         typeof ApiEndpoints.GetPengajuanTukarHariDetail === "function"
           ? ApiEndpoints.GetPengajuanTukarHariDetail(row.id)
           : ApiEndpoints.GetPengajuanTukarHariMobile({ id: row.id, all: 1 });
-
       const res = await fetch(detailUrl, { cache: "no-store" });
       const json = await res.json();
-
       const raw =
         (json?.data && !Array.isArray(json.data) && json.data) ||
         (Array.isArray(json?.data) && json.data[0]) ||
         json?.result ||
         null;
-
       return raw ? pickApprovalId(raw) : null;
     } catch {
       return null;
     }
   }
 
+  /* ===== Pola kerja options ===== */
   const fetchPolaOptions = useCallback(async () => {
     if (polaOptions.length) return;
     const url = guessPolaOptionsUrl();
     if (!url) return;
-
     try {
       setLoadingPola(true);
       const res = await fetch(url, { cache: "no-store" });
       const json = await res.json();
       setPolaOptions(normalizePolaItems(json));
     } catch {
-      // opsi kosong tetap ok
+      // biarkan kosong
     } finally {
       setLoadingPola(false);
     }
   }, [polaOptions.length]);
 
-  /**
-   * Approve (global) — opsional: idPolaKerjaPengganti (berlaku untuk SEMUA hari_pengganti)
-   */
+  /* ===== Actions ===== */
   const approve = useCallback(
     async (id, note = null, idPolaKerjaPengganti = null) => {
       const row = rows.find((r) => r.id === id);
@@ -218,9 +232,7 @@ export default function useTukarHariViewModel() {
 
       const approvalId = await ensureApprovalId(row);
       if (!approvalId) {
-        message.error(
-          "Tidak menemukan id approval. Pastikan API mengembalikan approvals / my_pending_approval_id atau aktifkan endpoint detail."
-        );
+        message.error("Tidak menemukan id approval. Pastikan API mengembalikan approvals / my_pending_approval_id atau aktifkan endpoint detail.");
         return;
       }
 
@@ -236,12 +248,18 @@ export default function useTukarHariViewModel() {
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari disetujui");
-        mutate();
+
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, mutate]
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
   const reject = useCallback(
@@ -256,9 +274,7 @@ export default function useTukarHariViewModel() {
 
       const approvalId = await ensureApprovalId(row);
       if (!approvalId) {
-        message.error(
-          "Tidak menemukan id approval. Pastikan API mengembalikan approvals / my_pending_approval_id atau aktifkan endpoint detail."
-        );
+        message.error("Tidak menemukan id approval. Pastikan API mengembalikan approvals / my_pending_approval_id atau aktifkan endpoint detail.");
         return;
       }
 
@@ -271,20 +287,38 @@ export default function useTukarHariViewModel() {
         const json = await res.json();
         if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
         message.success("Pengajuan tukar hari ditolak");
-        mutate();
+
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, reasonDraft, mutate]
+    [rows, reasonDraft, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
-  const refresh = useCallback(() => mutate(), [mutate]);
+  const refresh = useCallback(
+    () =>
+      Promise.all([
+        mutate(),
+        swrCntPending.mutate(),
+        swrCntApproved.mutate(),
+        swrCntRejected.mutate(),
+      ]),
+    [mutate, swrCntPending, swrCntApproved, swrCntRejected]
+  );
 
   return {
     data: rows,
     filteredData,
     loading: isLoading,
+
+    // counts “lengket” untuk badge tab
+    tabCounts,
 
     tab,
     setTab,

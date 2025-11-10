@@ -24,7 +24,6 @@ import {
   SearchOutlined,
   FileTextOutlined,
   CalendarOutlined,
-  ReloadOutlined,
   CheckOutlined,
   CloseOutlined,
   InfoCircleOutlined,
@@ -67,8 +66,7 @@ function TextClampCell({ text, expanded, onToggle }) {
   useLayoutEffect(() => {
     recompute();
     const ro = new ResizeObserver(recompute);
-    if (ghostRef.current?.parentElement)
-      ro.observe(ghostRef.current.parentElement);
+    if (ghostRef.current?.parentElement) ro.observe(ghostRef.current.parentElement);
     return () => ro.disconnect();
   }, [recompute, text]);
 
@@ -156,14 +154,8 @@ export default function SakitContent() {
       return s;
     });
 
-  const counts = useMemo(() => {
-    const all = vm.data ?? [];
-    return {
-      pengajuan: all.filter((d) => d.status === "Menunggu").length,
-      disetujui: all.filter((d) => d.status === "Disetujui").length,
-      ditolak: all.filter((d) => d.status === "Ditolak").length,
-    };
-  }, [vm.data]);
+  // Gunakan counts dari VM (lengket antar tab)
+  const counts = vm.tabCounts || { pengajuan: 0, disetujui: 0, ditolak: 0 };
 
   const columns = useMemo(() => {
     return [
@@ -253,9 +245,10 @@ export default function SakitContent() {
                   icon={<FileTextOutlined />}
                   size="small"
                   className="!rounded-md !border-none !bg-[#E8F6FF] !text-[#003A6F] hover:!bg-[#99D7FF]/40 hover:!text-[#184c81]"
-                  onClick={() => window.open(r.buktiUrl, "_blank")}
+                  disabled={!r.buktiUrl}
+                  onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
                 >
-                  Lihat
+                  {r.buktiUrl ? "Lihat" : "Tidak ada file"}
                 </Button>
               </MiniField>
             </div>
@@ -374,7 +367,7 @@ export default function SakitContent() {
         },
       },
     ];
-  }, [vm, expandedHandover, pagination]);
+  }, [vm.tab, expandedHandover, pagination]);
 
   const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
 
@@ -430,7 +423,7 @@ export default function SakitContent() {
       }}
     >
       <div className="min-h-screen bg-slate-50 p-6">
-        {/* HEADER kecil – konsisten */}
+        {/* HEADER */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-[22px] font-semibold leading-tight text-slate-900 mb-1">
             Pengajuan Izin Sakit
@@ -440,7 +433,6 @@ export default function SakitContent() {
           </p>
         </div>
 
-        {/* TABS ala Manajemen Kategori – sama persis */}
         <Tabs
           activeKey={vm.tab}
           onChange={vm.setTab}
@@ -525,15 +517,15 @@ export default function SakitContent() {
         `}</style>
       </div>
 
-      {/* Modal alasan penolakan – sama dengan modul lain */}
+      {/* Modal alasan penolakan */}
       <Modal
         title="Tolak Pengajuan"
         open={!!rejectRow}
         okText="Tolak"
         okButtonProps={{ danger: true, disabled: !reason.trim() }}
-        onOk={() => {
+        onOk={async () => {
           vm.handleAlasanChange(rejectRow.id, reason.trim());
-          vm.reject(rejectRow.id);
+          await vm.reject(rejectRow.id);
           setRejectRow(null);
           setReason("");
         }}

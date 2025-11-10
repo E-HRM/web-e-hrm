@@ -20,7 +20,11 @@ function pickApprovalId(item) {
   const pending = approvals.find((a) =>
     ["pending", "menunggu"].includes(String(a?.decision || "").toLowerCase())
   );
-  return pending?.id_approval_pengajuan_izin_sakit || null;
+  return (
+    pending?.id_approval_pengajuan_izin_sakit ||
+    pending?.id ||
+    null
+  );
 }
 
 // Map item API → row UI
@@ -37,11 +41,14 @@ function mapItemToRow(item) {
     tanggal,
     nama: item?.user?.nama_pengguna ?? "—",
     jabatan: item?.user?.role ?? "—",
-    kategori: item?.kategori_sakit?.nama_kategori ?? item?.kategori?.nama_kategori ?? "—",
+    kategori:
+      item?.kategori_sakit?.nama_kategori ??
+      item?.kategori?.nama_kategori ??
+      "—",
     handover: item?.handover ?? "—",
     buktiUrl: item?.lampiran_sakit_url ?? item?.lampiran_url ?? null,
     status: toLabelStatus(item?.status),
-    alasan: "", // biasanya ada di detail approval; list ga wajib
+    alasan: "", // biasanya ada di detail approval; list tidak wajib
     tempAlasan: "",
     foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
     tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
@@ -62,7 +69,7 @@ export default function useSakitViewModel() {
   const [pageSize, setPageSize] = useState(10);
   const [reasonDraft, setReasonDraft] = useState({});
 
-  // Key SWR
+  // ===== LIST untuk tab aktif =====
   const listKey = useMemo(() => {
     const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
     return ApiEndpoints.GetPengajuanIzinSakitMobile(qs);
@@ -72,6 +79,47 @@ export default function useSakitViewModel() {
     revalidateOnFocus: false,
   });
 
+  // ===== COUNTS per status (ringan: ambil 1 item untuk dapat pagination.total) =====
+  const countKey = useCallback(
+    (status) =>
+      ApiEndpoints.GetPengajuanIzinSakitMobile({
+        status,
+        page: 1,
+        pageSize: 1,
+      }),
+    []
+  );
+
+  const swrCntPending = useSWR(countKey("pending"), fetcher, {
+    revalidateOnFocus: false,
+  });
+  const swrCntApproved = useSWR(countKey("disetujui"), fetcher, {
+    revalidateOnFocus: false,
+  });
+  const swrCntRejected = useSWR(countKey("ditolak"), fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  const totalOf = (json) => {
+    const r = json || {};
+    return (
+      r.pagination?.total ??
+      r.total ??
+      r.meta?.total ??
+      (Array.isArray(r.data) ? r.data.length : 0)
+    );
+  };
+
+  const tabCounts = useMemo(
+    () => ({
+      pengajuan: totalOf(swrCntPending.data),
+      disetujui: totalOf(swrCntApproved.data),
+      ditolak: totalOf(swrCntRejected.data),
+    }),
+    [swrCntPending.data, swrCntApproved.data, swrCntRejected.data]
+  );
+
+  // ===== Mapping rows + pencarian lokal =====
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
     return items.map(mapItemToRow);
@@ -88,16 +136,20 @@ export default function useSakitViewModel() {
     );
   }, [rows, search]);
 
+  // ===== Helpers =====
   function handleAlasanChange(id, value) {
     setReasonDraft((prev) => ({ ...prev, [id]: value }));
   }
 
+  // ===== Actions =====
   const approve = useCallback(
     async (id, note) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
       if (!row.approvalId) {
-        message.error("Tidak menemukan id approval. Pastikan API list mengembalikan approvals.");
+        message.error(
+          "Tidak menemukan id approval. Pastikan API list mengembalikan approvals."
+        );
         return;
       }
       try {
@@ -110,14 +162,20 @@ export default function useSakitViewModel() {
           }
         );
         const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false)
+          throw new Error(json?.message || "Gagal");
         message.success("Izin sakit disetujui");
-        mutate();
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, mutate]
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
   const reject = useCallback(
@@ -130,7 +188,9 @@ export default function useSakitViewModel() {
         return;
       }
       if (!row.approvalId) {
-        message.error("Tidak menemukan id approval. Pastikan API list mengembalikan approvals.");
+        message.error(
+          "Tidak menemukan id approval. Pastikan API list mengembalikan approvals."
+        );
         return;
       }
       try {
@@ -143,22 +203,40 @@ export default function useSakitViewModel() {
           }
         );
         const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false)
+          throw new Error(json?.message || "Gagal");
         message.success("Izin sakit ditolak");
-        mutate();
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
       }
     },
-    [rows, reasonDraft, mutate]
+    [rows, reasonDraft, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
-  const refresh = useCallback(() => mutate(), [mutate]);
+  const refresh = useCallback(
+    () =>
+      Promise.all([
+        mutate(),
+        swrCntPending.mutate(),
+        swrCntApproved.mutate(),
+        swrCntRejected.mutate(),
+      ]),
+    [mutate, swrCntPending, swrCntApproved, swrCntRejected]
+  );
 
+  // ===== Return API VM =====
   return {
     data: rows,
     filteredData,
     loading: isLoading,
+
+    tabCounts, // << untuk badge tab
 
     tab,
     setTab,
