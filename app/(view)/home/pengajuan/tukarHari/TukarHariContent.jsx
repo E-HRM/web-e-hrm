@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useMemo, useState, useRef, useCallback, useLayoutEffect } from "react";
+import React, {
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+} from "react";
 import {
   ConfigProvider,
   Tabs,
@@ -13,6 +19,8 @@ import {
   Card,
   Table,
   Select,
+  Avatar,
+  Badge,
 } from "antd";
 import {
   SearchOutlined,
@@ -20,6 +28,8 @@ import {
   CheckOutlined,
   CloseOutlined,
   InfoCircleOutlined,
+  UserOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
@@ -27,20 +37,50 @@ import useTukarHariViewModel from "./useTukarHariViewModel";
 
 dayjs.locale("id");
 
-const BRAND = "#003A6F";
-const LIGHT_BLUE = "#E8F6FF";
-const HEADER_BLUE_BG = "#F0F6FF";
+const PRIMARY_COLOR = "#003A6F";
 
-function MiniField({ label, children, span = 1 }) {
+/* ====== Komponen kecil ====== */
+function MiniField({ label, children, span = 1, className = "" }) {
   return (
-    <div className="min-w-0 relative" style={{ gridColumn: `span ${span} / span ${span}` }}>
-      <div className="text-xs font-semibold text-slate-900 mb-0.5">{label}</div>
-      <div className="text-[13px] text-slate-700 leading-5 break-words">{children}</div>
+    <div
+      className={`min-w-0 ${className}`}
+      style={{ gridColumn: `span ${span} / span ${span}` }}
+    >
+      <div className="text-xs font-semibold text-gray-600 mb-1">{label}</div>
+      <div className="text-sm text-gray-900 leading-5 break-words">
+        {children}
+      </div>
     </div>
   );
 }
 
-function KeperluanCell({ id, text, expanded, onToggle }) {
+function StatusBadge({ status }) {
+  const cfg = {
+    Disetujui: { color: "#52c41a", text: "Disetujui" },
+    Ditolak: { color: "#ff4d4f", text: "Ditolak" },
+    Menunggu: { color: "#faad14", text: "Menunggu" },
+  }[status] || { color: "#faad14", text: "Menunggu" };
+  return <Badge color={cfg.color} text={cfg.text} className="font-medium text-xs" />;
+}
+
+function formatDateTimeID(date) {
+  try {
+    return dayjs(date).format("DD MMM YYYY • HH:mm");
+  } catch {
+    return String(date);
+  }
+}
+function formatDateOnlyID(d) {
+  if (!d) return "—";
+  try {
+    return dayjs(d).format("DD MMM YYYY");
+  } catch {
+    return "—";
+  }
+}
+
+/* ===== Teks clamp dengan tombol rapi di bawah ===== */
+function TextClampCell({ text, expanded, onToggle }) {
   const ghostRef = useRef(null);
   const [showToggle, setShowToggle] = useState(false);
 
@@ -62,8 +102,9 @@ function KeperluanCell({ id, text, expanded, onToggle }) {
 
   return (
     <>
-      <Tooltip title={!expanded ? text : undefined}>
+      <Tooltip title={!expanded && text?.length > 100 ? text : undefined}>
         <span
+          className="block text-sm text-gray-900"
           style={
             expanded
               ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere" }
@@ -76,20 +117,24 @@ function KeperluanCell({ id, text, expanded, onToggle }) {
                 }
           }
         >
-          {text}
+          {text || "—"}
         </span>
       </Tooltip>
 
       {showToggle && (
-        <button onClick={onToggle} className="ml-2 text-[12px] font-medium" style={{ color: BRAND }}>
-          {expanded ? "Sembunyikan" : "Lihat selengkapnya"}
+        <button
+          onClick={onToggle}
+          className="mt-1 inline-block text-xs font-medium text-blue-600 hover:text-blue-800 transition-colors"
+          style={{ border: "none", background: "transparent", padding: 0 }}
+        >
+          {expanded ? "Sembunyikan" : "Selengkapnya"}
         </button>
       )}
 
       <div
         ref={ghostRef}
         aria-hidden
-        className="absolute invisible pointer-events-none text-[13px] leading-5"
+        className="absolute invisible pointer-events-none text-sm leading-5"
         style={{
           position: "absolute",
           left: 0,
@@ -106,34 +151,85 @@ function KeperluanCell({ id, text, expanded, onToggle }) {
   );
 }
 
-function formatDateID(d) {
-  try {
-    const dt = new Date(d);
-    return dt.toLocaleString("id-ID", {
-      weekday: "short",
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return d;
-  }
-}
-function formatDateOnlyID(d) {
-  if (!d) return "—";
-  try {
-    const dt = new Date(d);
-    if (Number.isNaN(dt.getTime())) return "—";
-    return dt.toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
+/* ===== Modal Setujui (pola opsional untuk semua hari_pengganti) ===== */
+function ApproveModal({ openRow, polaOptions, onSubmit, onCancel, loadingPola }) {
+  const [polaId, setPolaId] = useState();
+
+  React.useEffect(() => {
+    setPolaId(undefined);
+  }, [openRow]);
+
+  const handleOk = async () => {
+    await onSubmit(polaId ? String(polaId) : null);
+  };
+
+  return (
+    <Modal
+      title={
+        <div className="flex items-center gap-2">
+          <CheckOutlined className="text-green-600" />
+          <span>Setujui Pengajuan Tukar Hari</span>
+        </div>
+      }
+      open={!!openRow}
+      okText="Setujui Pengajuan"
+      onOk={handleOk}
+      onCancel={onCancel}
+      okButtonProps={{
+        type: "primary",
+        className: "bg-green-600 hover:bg-green-700 border-green-600",
+      }}
+      width={560}
+    >
+      {!openRow ? null : (
+        <div className="space-y-5">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="text-sm text-blue-900">
+              <span className="font-medium">{openRow.nama}</span> • {openRow.jabatanDivisi}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 p-3">
+            <div className="text-xs font-semibold text-gray-700 mb-2">Ringkasan Pasangan Tanggal</div>
+            <div className="space-y-1 text-sm">
+              {(openRow.pairs || []).map((p, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Tag className="!m-0 !rounded-md">{idx + 1}</Tag>
+                  <span>izin: {formatDateOnlyID(p.izin)}</span>
+                  <span className="text-gray-400">→</span>
+                  <span>pengganti: {formatDateOnlyID(p.pengganti)}</span>
+                  {p.catatan ? <em className="text-gray-500">({p.catatan})</em> : null}
+                </div>
+              ))}
+              {!openRow.pairs?.length && (
+                <div className="text-gray-500">Tidak ada pasangan tanggal di data.</div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Pola Kerja Pengganti <span className="text-gray-400 font-normal">(opsional)</span>
+            </label>
+            <Select
+              className="w-full"
+              showSearch
+              allowClear
+              placeholder="Pilih pola kerja"
+              optionFilterProp="label"
+              value={polaId}
+              onChange={setPolaId}
+              options={polaOptions}
+              loading={loadingPola}
+            />
+            <div className="mt-2 text-xs text-gray-500">
+              Jika dikosongkan, backend mempertahankan pola default/eksisting.
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
 }
 
 export default function TukarHariContent() {
@@ -141,11 +237,8 @@ export default function TukarHariContent() {
 
   const [rejectRow, setRejectRow] = useState(null);
   const [reason, setReason] = useState("");
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
-
-  // Modal Setujui (global pola untuk semua hari_pengganti)
   const [approveRow, setApproveRow] = useState(null);
-  const [approvePola, setApprovePola] = useState(""); // id_pola_kerja_pengganti global
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
   const [expandedKeperluan, setExpandedKeperluan] = useState(new Set());
   const toggleExpand = (id) =>
@@ -155,13 +248,11 @@ export default function TukarHariContent() {
       return s;
     });
 
-  // counts “lengket” dari VM
   const counts = vm.tabCounts || { pengajuan: 0, disetujui: 0, ditolak: 0 };
 
   const openApproveModal = useCallback(
     async (row) => {
       setApproveRow(row);
-      setApprovePola("");
       vm.fetchPolaOptions();
     },
     [vm]
@@ -170,105 +261,125 @@ export default function TukarHariContent() {
   const columns = useMemo(
     () => [
       {
-        title: "",
+        title: "NO",
         key: "no",
-        width: 30,
+        width: 60,
         fixed: "left",
-        render: (_, __, index) =>
-          (pagination.current - 1) * pagination.pageSize + index + 1,
+        align: "center",
+        render: (_, __, index) => (
+          <div className="text-sm font-medium text-gray-600">
+            {(pagination.current - 1) * pagination.pageSize + index + 1}
+          </div>
+        ),
       },
       {
-        title: "Karyawan",
+        title: "KARYAWAN",
         key: "karyawan",
-        width: 260,
+        width: 280,
         fixed: "left",
         render: (_, r) => (
-          <div className="flex items-start gap-3 min-w-0">
-            <img
+          <div className="flex items-start gap-3">
+            <Avatar
               src={r.foto}
-              alt="foto"
-              className="w-10 h-10 rounded-full object-cover ring-1 ring-slate-200"
+              size={48}
+              icon={<UserOutlined />}
+              className="border-2 border-gray-200"
             />
-            <div className="min-w-0">
-              <div className="font-medium text-slate-900 truncate">{r.nama}</div>
-              <div className="text-xs text-slate-600 truncate">{r.jabatan}</div>
-              <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-400">
-                <CalendarOutlined />
-                <span className="truncate">{formatDateID(r.tglPengajuan)}</span>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-gray-900 text-sm mb-1">
+                {r.nama}
               </div>
-              <div className="mt-1">
-                <Tag
-                  color={r.status === "Disetujui" ? "green" : r.status === "Ditolak" ? "red" : "blue"}
-                  className="!rounded-md"
-                >
-                  {r.status}
-                </Tag>
+              <div className="text-xs text-gray-600 mb-2">{r.jabatanDivisi}</div>
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <ClockCircleOutlined />
+                <span>{formatDateTimeID(r.tglPengajuan)}</span>
+              </div>
+              <div className="mt-2">
+                <StatusBadge status={r.status} />
               </div>
             </div>
           </div>
         ),
       },
       {
-        title: "Detail Pengajuan",
+        title: "DETAIL PENGAJUAN",
         key: "detail",
-        className: "align-top",
         render: (_, r) => {
           const expanded = expandedKeperluan.has(r.id);
           return (
-            <div className="grid gap-3 min-w-0" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-              <style jsx>{`
-                @media (min-width: 768px) {
-                  div[role='cell'] > div > div.grid {
-                    grid-template-columns: repeat(5, minmax(0, 1fr));
-                  }
-                }
-              `}</style>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
-              <MiniField label="Tgl. Pengajuan">{formatDateID(r.tglPengajuan)}</MiniField>
-              <MiniField label="Tgl. Izin">{formatDateOnlyID(r.hariIzin)}</MiniField>
-              <MiniField label="Kategori"><span className="text-slate-700">{r.kategori}</span></MiniField>
-              <MiniField label="Hari Pengganti">{formatDateOnlyID(r.hariPengganti)}</MiniField>
+              <MiniField label="Tanggal Izin → Tanggal Pengganti" className="lg:col-span-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  {Array.isArray(r.pairs) && r.pairs.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {r.pairs.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
+                        >
+                          <Tag className="!m-0 !rounded-md">{idx + 1}</Tag>
+                          <span className="text-sm text-gray-700">
+                            {formatDateOnlyID(p.izin)} <span className="text-gray-400">→</span> {formatDateOnlyID(p.pengganti)}
+                          </span>
+                          {p.catatan ? (
+                            <em className="text-xs text-gray-500">({p.catatan})</em>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-gray-500">—</span>
+                  )}
+                </div>
+              </MiniField>
 
-              <MiniField label="Keperluan" span={2}>
-                <KeperluanCell
-                  id={r.id}
-                  text={r.keperluan}
-                  expanded={expanded}
-                  onToggle={() => toggleExpand(r.id)}
-                />
+              
+              <MiniField label="Kategori">
+                <span className="font-medium">{r.kategori}</span>
+              </MiniField>
+
+              <MiniField label="Keperluan" className="lg:col-span-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <TextClampCell
+                    text={r.keperluan}
+                    expanded={expanded}
+                    onToggle={() => toggleExpand(r.id)}
+                  />
+                </div>
               </MiniField>
             </div>
           );
         },
       },
       {
-        title: "Keputusan",
+        title: "AKSI & KEPUTUSAN",
         key: "aksi",
-        width: 180,
+        width: 200,
         fixed: "right",
         render: (_, r) => {
+          // Tampilkan tombol hanya pada tab "pengajuan".
           if (vm.tab === "pengajuan") {
             return (
-              <Space size={8} wrap>
+              <Space direction="vertical" size={8} className="w-full">
                 <Button
                   type="primary"
-                  size="small"
                   icon={<CheckOutlined />}
-                  className="!bg-[var(--brand)] hover:!bg-[#0B63C7]"
-                  style={{ ["--brand"]: BRAND }}
+                  className="w-full bg-green-600 hover:bg-green-700 border-green-600"
                   onClick={() => openApproveModal(r)}
+                  size="small"
                 >
                   Setujui
                 </Button>
-
                 <Button
                   danger
-                  size="small"
                   icon={<CloseOutlined />}
+                  className="w-full"
                   onClick={() => {
                     setRejectRow(r);
-                    setReason(r.tempAlasan || "");
+                    setReason("");
                   }}
+                  size="small"
                 >
                   Tolak
                 </Button>
@@ -276,60 +387,28 @@ export default function TukarHariContent() {
             );
           }
 
+          // Di tab "disetujui" / "ditolak": info keputusan saja, tanpa tombol lawan.
           return (
-            <div className="min-w-0">
-              <div className="text-xs font-semibold text-slate-900 mb-0.5">
-                {vm.tab === "disetujui" ? "Tgl. Disetujui" : "Tgl. Ditolak"}
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs font-semibold text-gray-600 mb-1">
+                  {vm.tab === "disetujui" ? "Disetujui Pada" : "Ditolak Pada"}
+                </div>
+                <div className="text-sm font-medium text-gray-900">
+                  {formatDateTimeID(r.tglKeputusan)}
+                </div>
               </div>
-              <div className="text-sm text-slate-700">{formatDateID(r.tglKeputusan)}</div>
 
               {r.alasan && (
-                <>
-                  <div className="text-xs font-semibold text-slate-900 mt-3">Catatan</div>
-                  <div className="mt-1 flex items-start gap-1 text-[13px] text-slate-700">
-                    <InfoCircleOutlined className="text-slate-400 mt-0.5" />
-                    <Tooltip title={r.alasan}>
-                      <span
-                        style={{
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        {r.alasan}
-                      </span>
-                    </Tooltip>
+                <div>
+                  <div className="text-xs font-semibold text-gray-600 mb-1">
+                    Catatan
                   </div>
-                </>
+                  <div className="text-sm text-gray-700 bg-gray-50 rounded p-2">
+                    {r.alasan}
+                  </div>
+                </div>
               )}
-
-              <div className="mt-3">
-                {vm.tab === "ditolak" ? (
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<CheckOutlined />}
-                    className="!bg-[var(--brand)] hover:!bg-[#0B63C7]"
-                    style={{ ["--brand"]: BRAND }}
-                    onClick={() => openApproveModal(r)}
-                  >
-                    Setujui
-                  </Button>
-                ) : (
-                  <Button
-                    danger
-                    size="small"
-                    icon={<CloseOutlined />}
-                    onClick={() => {
-                      setRejectRow(r);
-                      setReason(r.tempAlasan || r.alasan || "");
-                    }}
-                  >
-                    Tolak
-                  </Button>
-                )}
-              </div>
             </div>
           );
         },
@@ -338,16 +417,15 @@ export default function TukarHariContent() {
     [vm.tab, expandedKeperluan, pagination, openApproveModal]
   );
 
-  // list untuk tab aktif sudah difilter dari server; cukup pakai filteredData
   const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
 
   const tabItems = [
     {
       key: "pengajuan",
       label: (
-        <div className="flex items-center gap-2 px-2 py-1 text-[13px]">
-          <span>Pengajuan</span>
-          <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 text-[11px] min-w-6 text-center">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <span className="font-medium">Pengajuan</span>
+          <span className="bg-orange-100 text-orange-800 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
             {counts.pengajuan}
           </span>
         </div>
@@ -356,9 +434,9 @@ export default function TukarHariContent() {
     {
       key: "disetujui",
       label: (
-        <div className="flex items-center gap-2 px-2 py-1 text-[13px]">
-          <span>Disetujui</span>
-          <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 text-[11px] min-w-6 text-center">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <span className="font-medium">Disetujui</span>
+          <span className="bg-green-100 text-green-800 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
             {counts.disetujui}
           </span>
         </div>
@@ -367,9 +445,9 @@ export default function TukarHariContent() {
     {
       key: "ditolak",
       label: (
-        <div className="flex items-center gap-2 px-2 py-1 text-[13px]">
-          <span>Ditolak</span>
-          <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-0.5 text-[11px] min-w-6 text-center">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <span className="font-medium">Ditolak</span>
+          <span className="bg-red-100 text-red-800 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
             {counts.ditolak}
           </span>
         </div>
@@ -382,68 +460,81 @@ export default function TukarHariContent() {
       theme={{
         components: {
           Tabs: {
-            inkBarColor: BRAND,
-            itemActiveColor: BRAND,
-            itemHoverColor: BRAND,
-            itemSelectedColor: BRAND,
+            inkBarColor: PRIMARY_COLOR,
+            itemActiveColor: PRIMARY_COLOR,
+            itemHoverColor: PRIMARY_COLOR,
+            itemSelectedColor: PRIMARY_COLOR,
           },
-          Card: { borderRadiusLG: 12 },
+          Card: {
+            borderRadiusLG: 12,
+            boxShadowTertiary: "0 4px 12px rgba(0, 0, 0, 0.1)",
+          },
+          Table: {
+            headerBg: "#f8fafc",
+            headerColor: "#374151",
+            headerSplitColor: "transparent",
+            rowHoverBg: "transparent", // hilangkan hover bg
+          },
         },
-        token: { colorPrimary: BRAND, borderRadius: 8, colorBgContainer: "#ffffff" },
+        token: {
+          colorPrimary: PRIMARY_COLOR,
+          borderRadius: 8,
+          colorBgContainer: "#ffffff",
+          colorBorder: "#e5e7eb",
+        },
       }}
     >
-      <div className="min-h-screen bg-slate-50 p-6">
+      <div className="min-h-screen bg-gray-50 p-6">
+        {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl md:text-[22px] font-semibold leading-tight text-slate-900 mb-1">
-            Pengajuan Izin Tukar Hari
-          </h1>
-          <p className="text-slate-500 text-sm">
-            Kelola pengajuan tukar hari kerja. Gunakan tab untuk melihat status.
-          </p>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                Pengajuan Izin Tukar Hari
+              </h1>
+              <p className="text-gray-600 text-sm">
+                Kelola pengajuan tukar hari kerja. Gunakan tab untuk melihat status.
+              </p>
+            </div>
+          </div>
         </div>
 
-        <Tabs
-          activeKey={vm.tab}
-          onChange={vm.setTab}
-          type="card"
-          className="custom-tabs"
-          items={tabItems.map((t) => ({
-            key: t.key,
-            label: t.label,
-            children: (
-              <Card className="shadow-lg border-0 mt-4" bodyStyle={{ padding: 0 }}>
-                <div
-                  className="p-5 border-b border-slate-100 bg-[var(--header-bg)]"
-                  style={{ ["--header-bg"]: HEADER_BLUE_BG }}
-                >
-                  <div className="flex items-center justify-between gap-3">
+        {/* Konten */}
+        <Card className="shadow-sm border-0">
+          <Tabs
+            activeKey={vm.tab}
+            onChange={vm.setTab}
+            type="line"
+            size="large"
+            items={tabItems.map((t) => ({
+              key: t.key,
+              label: t.label,
+              children: (
+                <div className="mt-6">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
                     <div>
-                      <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-0.5">
-                        Daftar {String(t.key).charAt(0).toUpperCase() + String(t.key).slice(1)}
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        Daftar {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
                       </h2>
-                      <p className="text-slate-500 text-xs md:text-sm">
-                        Menampilkan {dataSource.length} item pada tab ini
+                      <p className="text-gray-500 text-sm mt-1">
+                        Menampilkan {dataSource.length} dari {counts[t.key]} pengajuan
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        allowClear
-                        placeholder="Cari nama, kategori, keperluan…"
-                        prefix={<SearchOutlined className="text-slate-400" />}
-                        value={vm.search}
-                        onChange={(e) => vm.setSearch(e.target.value)}
-                        className="w-72 rounded-xl"
-                        size="middle"
-                      />
-                    </div>
+                    <Input
+                      allowClear
+                      placeholder="Cari nama, jabatan, divisi, kategori, keperluan…"
+                      prefix={<SearchOutlined className="text-gray-400" />}
+                      value={vm.search}
+                      onChange={(e) => vm.setSearch(e.target.value)}
+                      className="w-full lg:w-80"
+                      size="large"
+                    />
                   </div>
-                </div>
 
-                <div className="p-4">
                   <Table
                     columns={columns}
                     dataSource={dataSource}
-                    size="small"
+                    size="middle"
                     tableLayout="fixed"
                     sticky
                     pagination={{
@@ -451,126 +542,99 @@ export default function TukarHariContent() {
                       pageSize: pagination.pageSize,
                       pageSizeOptions: [10, 20, 50],
                       showSizeChanger: true,
-                      showTotal: (t) => `${t} total`,
-                      onChange: (current, pageSize) => setPagination({ current, pageSize }),
+                      showTotal: (total, range) =>
+                        `${range[0]}-${range[1]} dari ${total} data`,
+                      onChange: (current, pageSize) =>
+                        setPagination({ current, pageSize }),
                     }}
-                    rowClassName={() => "align-top"}
-                    scroll={{ x: 1200, y: 520 }}
+                    scroll={{ x: 1200, y: 600 }}
+                    loading={vm.loading}
+                    rowClassName={() => "no-hover-row"} // kelas untuk matikan hover via CSS
                   />
                 </div>
-              </Card>
-            ),
-          }))}
-        />
+              ),
+            }))}
+          />
+        </Card>
 
-        <style jsx>{`
-          .custom-tabs :global(.ant-tabs-tab) {
-            border: none !important;
-            background: white !important;
-            border-radius: 8px !important;
-            margin-right: 8px !important;
-            padding: 6px 14px !important;
-            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        {/* Matikan efek hover abu-abu Antd (fallback CSS) */}
+        <style jsx global>{`
+          .no-hover-row:hover > td {
+            background: transparent !important;
           }
-          .custom-tabs :global(.ant-tabs-tab-active) {
-            background: ${LIGHT_BLUE} !important;
-            border: 1px solid ${BRAND} !important;
-          }
-          .custom-tabs :global(.ant-tabs-nav) {
-            margin-bottom: 0 !important;
-          }
-          .custom-tabs :global(.ant-tabs-content) {
-            margin-top: 12px;
+          .ant-table-tbody > tr.ant-table-row:hover > td {
+            background: transparent !important;
           }
         `}</style>
-      </div>
 
-      {/* Modal SETUJUI - pola global untuk semua hari_pengganti */}
-      <Modal
-        title="Setujui Pengajuan — Pilih Pola untuk Hari Pengganti"
-        open={!!approveRow}
-        okText="Setujui"
-        okButtonProps={{ disabled: !approveRow /* ubah ke !approvePola bila wajib */ }}
-        onOk={async () => {
-          await vm.approve(approveRow.id, null, approvePola || null);
-          setApproveRow(null);
-          setApprovePola("");
-        }}
-        onCancel={() => {
-          setApproveRow(null);
-          setApprovePola("");
-        }}
-      >
-        {!approveRow ? null : (
-          <div className="space-y-5">
-            <div className="text-sm text-slate-600">
-              Pengajuan ini memiliki {approveRow.pairs?.length || 0} pasangan tanggal. Pola yang dipilih di bawah akan
-              diterapkan untuk <b>semua</b> hari pengganti.
+        {/* Modal TOLAK */}
+        <Modal
+          title={
+            <div className="flex items-center gap-2">
+              <CloseOutlined className="text-red-600" />
+              <span>Tolak Pengajuan</span>
             </div>
-
-            <div className="rounded-lg border border-slate-200 p-3">
-              <div className="text-xs font-semibold text-slate-900 mb-2">Ringkasan Tanggal</div>
-              <div className="space-y-1 text-[13px]">
-                {(approveRow.pairs || []).map((p, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Tag className="!m-0 !rounded-md">{idx + 1}</Tag>
-                    <span>izin: {formatDateOnlyID(p.izin)}</span>
-                    <span className="text-slate-400">→</span>
-                    <span>pengganti: {formatDateOnlyID(p.pengganti)}</span>
-                    {p.catatan ? <em className="text-slate-500">({p.catatan})</em> : null}
-                  </div>
-                ))}
+          }
+          open={!!rejectRow}
+          okText="Tolak Pengajuan"
+          okButtonProps={{
+            danger: true,
+            disabled: !reason.trim(),
+            icon: <CloseOutlined />,
+          }}
+          onOk={async () => {
+            vm.handleAlasanChange(rejectRow.id, reason.trim());
+            await vm.reject(rejectRow.id);
+            setRejectRow(null);
+            setReason("");
+          }}
+          onCancel={() => {
+            setRejectRow(null);
+            setReason("");
+          }}
+          width={500}
+        >
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-red-900">
+                <InfoCircleOutlined />
+                Konfirmasi Penolakan
+              </div>
+              <div className="text-sm text-red-700 mt-1">
+                Anda akan menolak pengajuan dari <strong>{rejectRow?.nama}</strong>
               </div>
             </div>
 
             <div>
-              <div className="text-xs font-semibold text-slate-900 mb-1">Pola Kerja Pengganti (opsional)</div>
-              <Select
-                showSearch
-                allowClear
-                placeholder="Pilih pola kerja…"
-                optionFilterProp="label"
-                loading={vm.loadingPola}
-                value={approvePola || undefined}
-                onChange={(v) => setApprovePola(v || "")}
-                options={vm.polaOptions}
-                className="w-full"
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Alasan Penolakan *
+              </label>
+              <Input.TextArea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={4}
+                placeholder="Berikan alasan penolakan yang jelas…"
+                className="resize-none"
               />
-              <div className="text-xs text-slate-500 mt-2">
-                Jika dikosongkan, backend akan mempertahankan pola default/eksisting.
+              <div className="text-xs text-gray-500 mt-2">
+                Alasan penolakan wajib diisi dan akan dikirimkan kepada karyawan.
               </div>
             </div>
           </div>
-        )}
-      </Modal>
+        </Modal>
 
-      {/* Modal TOLAK */}
-      <Modal
-        title="Tolak Pengajuan"
-        open={!!rejectRow}
-        okText="Tolak"
-        okButtonProps={{ danger: true, disabled: !reason.trim() }}
-        onOk={async () => {
-          vm.handleAlasanChange(rejectRow.id, reason.trim());
-          await vm.reject(rejectRow.id);
-          setRejectRow(null);
-          setReason("");
-        }}
-        onCancel={() => {
-          setRejectRow(null);
-          setReason("");
-        }}
-      >
-        <div className="text-sm text-slate-600 mb-2">
-          Tulis alasan penolakan singkat. (Wajib diisi saat menolak.)
-        </div>
-        <Input.TextArea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={4}
-          placeholder="Contoh: Jadwal pengganti belum sesuai."
+        {/* Modal SETUJUI */}
+        <ApproveModal
+          openRow={approveRow}
+          polaOptions={vm.polaOptions}
+          loadingPola={vm.loadingPola}
+          onCancel={() => setApproveRow(null)}
+          onSubmit={async (idPolaKerjaPengganti) => {
+            await vm.approve(approveRow.id, null, idPolaKerjaPengganti);
+            setApproveRow(null);
+          }}
         />
-      </Modal>
+      </div>
     </ConfigProvider>
   );
 }

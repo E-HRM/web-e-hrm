@@ -59,11 +59,31 @@ function mapItemToRow(item) {
   const statusRaw = norm(item?.status);
   const latest = pickLatestDecisionInfo(item, statusRaw);
 
-  // Ambil list tanggal cuti (array Date)
+  // Ambil daftar user yang ditag sebagai handover (nama + foto saja)
+  const handoverUsers = Array.isArray(item?.handover_users)
+    ? item.handover_users
+        .map((h) => {
+          const u = h?.user;
+          if (!u) return null;
+          return {
+            id: u.id_user,
+            name: u.nama_pengguna ?? "—",
+            photo: u.foto_profil_user || "/avatar-placeholder.jpg",
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  // Ambil list tanggal cuti (array Date) — dukung 2 bentuk payload
   const tglCutiList = Array.isArray(item?.tanggal_list)
     ? item.tanggal_list
-        .map((d) => safeToDate(d?.tanggal_cuti))
+        .map((d) =>
+          (d instanceof Date || typeof d === "string" || typeof d === "number")
+            ? safeToDate(d)
+            : safeToDate(d?.tanggal_cuti ?? d?.tanggal ?? d?.date)
+        )
         .filter(Boolean)
+        .filter((v, i, a) => a.findIndex(x => x.getTime() === v.getTime()) === i) // dedup
         .sort((a, b) => a.getTime() - b.getTime())
     : [];
 
@@ -73,11 +93,20 @@ function mapItemToRow(item) {
   const tglCutiLast =
     safeToDate(item?.tanggal_selesai) || tglCutiList[tglCutiList.length - 1] || null;
 
+  // Gabung Jabatan | Divisi (fallback ke role bila belum ada)
+  const user = item?.user || {};
+  const jabatan =
+    user.jabatan ?? user.nama_jabatan ?? user.title ?? null;
+  const divisi =
+    user.divisi ?? user.nama_divisi ?? user.department ?? null;
+  const jabatanDivisi =
+    [jabatan, divisi].filter(Boolean).join(" | ") || user.role || "—";
+
   return {
     id: item?.id_pengajuan_cuti,
-    nama: item?.user?.nama_pengguna ?? "—",
-    jabatan: item?.user?.role ?? "—",
-    foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
+    nama: user?.nama_pengguna ?? "—",
+    jabatanDivisi,
+    foto: user?.foto_profil_user || "/avatar-placeholder.jpg",
     jenisCuti: item?.kategori_cuti?.nama_kategori ?? "—",
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
 
@@ -87,11 +116,12 @@ function mapItemToRow(item) {
     tglCutiLast,               // Date
     totalHariCuti: tglCutiList.length,
 
-    // tetap dipakai untuk approve modal:
+    // approve modal:
     tglMasuk: item?.tanggal_masuk_kerja ?? null,
 
     keterangan: item?.keperluan ?? "—",
     handover: item?.handover ?? "—",
+    handoverUsers,
     buktiUrl: item?.lampiran_cuti_url ?? null,
     status: toLabelStatus(item?.status),
     alasan: latest?.note || "",
@@ -179,7 +209,7 @@ export default function useCutiViewModel() {
     return items.map(mapItemToRow);
   }, [data]);
 
-  // Pencarian lokal (ikut tanggal-tanggal cuti)
+  // Pencarian lokal (ikut tanggal-tanggal cuti + penerima handover)
   const filteredData = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
@@ -187,12 +217,14 @@ export default function useCutiViewModel() {
       const tanggalStr = (d.tglCutiList || [])
         .map((t) => (t instanceof Date ? t.toISOString().slice(0, 10) : String(t)))
         .join(" ");
+      const handoverNames = (d.handoverUsers || []).map((u) => u.name).join(" ");
       return [
         d.nama,
-        d.jabatan,
+        d.jabatanDivisi,
         d.jenisCuti,
         d.keterangan,
         d.handover,
+        handoverNames,
         d.tglMasuk,
         tanggalStr,
       ]
@@ -306,10 +338,9 @@ export default function useCutiViewModel() {
   );
 
   return {
-    // data
     data: rows,
     filteredData,
-    tabCounts, // <<< untuk badge tab
+    tabCounts, // untuk badge tab
     // filters
     tab,
     setTab,

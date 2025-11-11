@@ -97,11 +97,20 @@ function mapItemToRow(item) {
     item?.tgl_pengganti ||
     null;
 
+  // Gabung Jabatan | Divisi (fallback ke role bila belum ada)
+  const user = item?.user || {};
+  const jabatan =
+    user.jabatan ?? user.nama_jabatan ?? user.title ?? null;
+  const divisi =
+    user.divisi ?? user.nama_divisi ?? user.department ?? null;
+  const jabatanDivisi =
+    [jabatan, divisi].filter(Boolean).join(" | ") || user.role || "—";
+
   return {
     id: item?.id_izin_tukar_hari,
-    nama: item?.user?.nama_pengguna ?? "—",
-    jabatan: item?.user?.role ?? "—",
-    foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
+    nama: user?.nama_pengguna ?? "—",
+    jabatanDivisi,
+    foto: user?.foto_profil_user || "/avatar-placeholder.jpg",
 
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
     hariIzin,
@@ -142,7 +151,7 @@ export default function useTukarHariViewModel() {
     revalidateOnFocus: false,
   });
 
-  /* ===== COUNTS: 3 SWR ringan agar badge tab selalu benar ===== */
+  /* ===== COUNTS untuk badge tab ===== */
   const countKey = useCallback(
     (status) => ApiEndpoints.GetPengajuanTukarHariMobile({ status, page: 1, pageSize: 1 }),
     []
@@ -174,7 +183,14 @@ export default function useTukarHariViewModel() {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((d) =>
-      [d.nama, d.jabatan, d.kategori, d.keperluan, d.hariIzin, d.hariPengganti]
+      [
+        d.nama,
+        d.jabatanDivisi,
+        d.kategori,
+        d.keperluan,
+        d.hariIzin,
+        d.hariPengganti,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(term)
@@ -317,7 +333,6 @@ export default function useTukarHariViewModel() {
     filteredData,
     loading: isLoading,
 
-    // counts “lengket” untuk badge tab
     tabCounts,
 
     tab,
