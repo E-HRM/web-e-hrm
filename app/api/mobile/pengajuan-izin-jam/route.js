@@ -12,7 +12,22 @@ const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']); // selara
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
 const baseInclude = {
-  user: { select: { id_user: true, nama_pengguna: true, email: true, role: true } },
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+      foto_profil_user: true,
+      divisi: true,
+      jabatan: {
+        select: {
+          id_jabatan: true,
+          nama_jabatan: true,
+        },
+      },
+    },
+  },
   kategori: { select: { id_kategori_izin_jam: true, nama_kategori: true } },
   handover_users: {
     include: { user: { select: { id_user: true, nama_pengguna: true, email: true, role: true, foto_profil_user: true } } },
@@ -120,16 +135,6 @@ function parseTagUserIds(raw) {
     if (s) set.add(s);
   }
   return Array.from(set);
-}
-
-function resolveJenisPengajuan(input, expected) {
-  const fallback = expected;
-  if (input === undefined || input === null) return { ok: true, value: fallback };
-  const trimmed = String(input).trim();
-  if (!trimmed) return { ok: true, value: fallback };
-  const normalized = trimmed.toLowerCase().replace(/[-\s]+/g, '_');
-  if (normalized !== expected) return { ok: false, message: `jenis_pengajuan harus bernilai '${expected}'.` };
-  return { ok: true, value: fallback };
 }
 
 async function validateTaggedUsers(userIds) {
@@ -338,9 +343,7 @@ export async function POST(req) {
     const tagUserIds = parseTagUserIds(body.tag_user_ids);
     await validateTaggedUsers(tagUserIds);
 
-    const jenisPengajuanResult = resolveJenisPengajuan(body.jenis_pengajuan, 'izin_jam');
-    if (!jenisPengajuanResult.ok) return NextResponse.json({ message: jenisPengajuanResult.message }, { status: 400 });
-    const jenis_pengajuan = jenisPengajuanResult.value;
+    const jenis_pengajuan = 'jam';
 
     const targetUser = await db.user.findFirst({ where: { id_user: targetUserId, deleted_at: null }, select: { id_user: true } });
     if (!targetUser) return NextResponse.json({ message: 'User tujuan tidak ditemukan.' }, { status: 404 });
