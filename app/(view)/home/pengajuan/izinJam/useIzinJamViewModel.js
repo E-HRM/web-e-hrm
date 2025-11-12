@@ -10,27 +10,35 @@ import { fetcher } from "@/app/utils/fetcher";
 function statusFromTab(tab) {
   if (tab === "disetujui") return "disetujui";
   if (tab === "ditolak") return "ditolak";
-  return "pending"; // tab "pengajuan"
+  return "pending";
 }
 
 function toLabelStatus(s) {
   const v = String(s || "").toLowerCase();
   if (v === "disetujui") return "Disetujui";
   if (v === "ditolak") return "Ditolak";
-  return "Menunggu"; // treat pending/menunggu/null/""
+  return "Menunggu";
 }
 
+/**
+ * Ambil jam apa adanya dari string DB TANPA konversi timezone.
+ * Menangkap pola "HH:MM" atau "HH:MM:SS" (termasuk jika tertanam di ISO "2025-01-01T08:00:00Z").
+ * Output DISESUAIKAN ke "HH:MM" saja.
+ */
 function toHM(value) {
   const s = String(value ?? "").trim();
   if (!s) return null;
-  // dukung "HH:MM" / "HH:MM:SS"
-  if (/^\d{2}:\d{2}/.test(s)) return s.slice(0, 5);
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  // Tangkap "H:MM", "HH:MM" atau "HH:MM:SS"
+  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?/);
+  if (!m) return null;
+
+  const hh = String(m[1]).padStart(2, "0");
+  const mm = m[2];
+  return `${hh}:${mm}`;
 }
 
-/* Ambil approval pending untuk aktor dari payload API list (kalau ada) */
+/* Ambil approval id pending/menunggu */
 function pickApprovalId(item) {
   const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
   const a = approvals.find((ap) => {
@@ -42,45 +50,72 @@ function pickApprovalId(item) {
 
 /* Map item API → row tabel */
 function mapItemToRow(item) {
+  const u = item?.user || {};
+  const jabatan = u.jabatan ?? u.nama_jabatan ?? u.title ?? null;
+  const divisi  = u.divisi  ?? u.nama_divisi  ?? u.department ?? null;
+  const jabatanDivisi = [jabatan, divisi].filter(Boolean).join(" | ") || u.role || "—";
+
+  // Daftar penerima handover (nama + foto)
+  const handoverUsers = Array.isArray(item?.handover_users)
+    ? item.handover_users
+        .map((h) => {
+          const usr = h?.user;
+          if (!usr) return null;
+          return {
+            id: usr.id_user,
+            name: usr.nama_pengguna ?? "—",
+            photo: usr.foto_profil_user || "/avatar-placeholder.jpg",
+          };
+        })
+        .filter(Boolean)
+    : [];
+
   return {
     id: item?.id_pengajuan_izin_jam,
+
     // user
-    nama: item?.user?.nama_pengguna ?? "—",
-    jabatan: item?.user?.role ?? "—",
-    foto: item?.user?.foto_profil_user || "/avatar-placeholder.jpg",
+    nama: u?.nama_pengguna ?? "—",
+    jabatanDivisi,
+    foto: u?.foto_profil_user || "/avatar-placeholder.jpg",
+
     // waktu
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
     tglIzin: item?.tanggal_izin ?? null,
-    jamMulai: toHM(item?.jam_mulai) ?? "—",
-    jamSelesai: toHM(item?.jam_selesai) ?? "—",
+    jamMulai:   toHM(item?.jam_mulai)           ?? "—",
+    jamSelesai: toHM(item?.jam_selesai)         ?? "—",
+
     // pengganti (opsional; bisa lintas hari)
     pgTglMulai: item?.tanggal_pengganti ?? null,
     pgJamMulai: toHM(item?.jam_mulai_pengganti) ?? null,
-    pgTglSelesai: item?.tanggal_pengganti ?? null, // sering sama dg mulai
+    pgTglSelesai: item?.tanggal_pengganti ?? null,
     pgJamSelesai: toHM(item?.jam_selesai_pengganti) ?? null,
+
     // detail
     kategori: item?.kategori?.nama_kategori ?? "—",
     keperluan: item?.keperluan ?? "—",
     handover: item?.handover ?? "—",
-    bukti: item?.lampiran_izin_jam_url ?? null,
+    buktiUrl: item?.lampiran_izin_jam_url ?? null,
+    handoverUsers, // << ditambahkan
+
     // status
     status: toLabelStatus(item?.status),
     alasan: "",
     tempAlasan: "",
     tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
-    // untuk approve/reject
+
+    // approval
     approvalId: pickApprovalId(item),
   };
 }
 
 export default function useIzinJamViewModel() {
-  const [tab, setTab] = useState("pengajuan"); // 'pengajuan' | 'disetujui' | 'ditolak'
+  const [tab, setTab] = useState("pengajuan");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [reasonDraft, setReasonDraft] = useState({}); // catatan tolak per-id
+  const [reasonDraft, setReasonDraft] = useState({});
 
-  // ===== LIST untuk tab aktif =====
+  // LIST untuk tab aktif
   const listKey = useMemo(() => {
     const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
     return ApiEndpoints.GetPengajuanIzinJamMobile(qs);
@@ -90,7 +125,7 @@ export default function useIzinJamViewModel() {
     revalidateOnFocus: false,
   });
 
-  // ===== COUNTS per status (ringan: ambil 1 item untuk dapat pagination.total) =====
+  // COUNTS ringan
   const countKey = useCallback(
     (status) => ApiEndpoints.GetPengajuanIzinJamMobile({ status, page: 1, pageSize: 1 }),
     []
@@ -112,20 +147,21 @@ export default function useIzinJamViewModel() {
     ditolak:   totalOf(swrCntRejected.data),
   }), [swrCntPending.data, swrCntApproved.data, swrCntRejected.data]);
 
-  // rows dari API
+  // rows
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
     return items.map(mapItemToRow);
   }, [data]);
 
-  // pencarian client-side
+  // pencarian client-side (ikut nama penerima handover)
   const filteredData = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((d) =>
-      [
+    return rows.filter((d) => {
+      const handoverNames = (d.handoverUsers || []).map((u) => u.name).join(" ");
+      return [
         d.nama,
-        d.jabatan,
+        d.jabatanDivisi,
         d.kategori,
         d.keperluan,
         d.handover,
@@ -136,11 +172,12 @@ export default function useIzinJamViewModel() {
         d.pgTglSelesai,
         d.pgJamMulai,
         d.pgJamSelesai,
+        handoverNames, // << penting
       ]
         .join(" ")
         .toLowerCase()
-        .includes(term)
-    );
+        .includes(term);
+    });
   }, [rows, search]);
 
   // catatan sementara penolakan
@@ -167,7 +204,7 @@ export default function useIzinJamViewModel() {
           }
         );
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.message || "Gagal menyimpan keputusan.");
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal menyimpan keputusan.");
         message.success("Pengajuan izin jam disetujui");
         await Promise.all([
           mutate(),
@@ -206,7 +243,7 @@ export default function useIzinJamViewModel() {
           }
         );
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.message || "Gagal menyimpan keputusan.");
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal menyimpan keputusan.");
         message.success("Pengajuan izin jam ditolak");
         await Promise.all([
           mutate(),
@@ -233,20 +270,15 @@ export default function useIzinJamViewModel() {
   );
 
   return {
-    // data
     rows,
     filteredData,
-
-    // counts “lengket”
     tabCounts,
 
-    // state UI
     tab,
     setTab,
     search,
     setSearch,
 
-    // pagination
     page,
     pageSize,
     changePage: (p, ps) => {
@@ -254,13 +286,11 @@ export default function useIzinJamViewModel() {
       setPageSize(ps);
     },
 
-    // actions
     handleAlasanChange,
     approve,
     reject,
     refresh,
 
-    // misc
     loading: isLoading,
   };
 }

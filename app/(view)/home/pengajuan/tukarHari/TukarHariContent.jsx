@@ -30,6 +30,7 @@ import {
   InfoCircleOutlined,
   UserOutlined,
   ClockCircleOutlined,
+  FileTextOutlined, // ✨ untuk tombol lampiran
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
@@ -77,6 +78,14 @@ function formatDateOnlyID(d) {
   } catch {
     return "—";
   }
+}
+
+/* Ellipsis nama jadi 2 kata */
+function ellipsisWords(str, maxWords = 2) {
+  const s = String(str ?? "").trim();
+  if (!s) return "—";
+  const parts = s.split(/\s+/);
+  return parts.length <= maxWords ? s : `${parts.slice(0, maxWords).join(" ")}…`;
 }
 
 /* ===== Teks clamp dengan tombol rapi di bawah ===== */
@@ -241,8 +250,16 @@ export default function TukarHariContent() {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
   const [expandedKeperluan, setExpandedKeperluan] = useState(new Set());
+  const [expandedHandover, setExpandedHandover] = useState(new Set()); // ✨
+
   const toggleExpand = (id) =>
     setExpandedKeperluan((prev) => {
+      const s = new Set(prev);
+      s.has(id) ? s.delete(id) : s.add(id);
+      return s;
+    });
+  const toggleHandover = (id) => // ✨
+    setExpandedHandover((prev) => {
       const s = new Set(prev);
       s.has(id) ? s.delete(id) : s.add(id);
       return s;
@@ -306,6 +323,7 @@ export default function TukarHariContent() {
         key: "detail",
         render: (_, r) => {
           const expanded = expandedKeperluan.has(r.id);
+          const expHan = expandedHandover.has(r.id); // ✨
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 
@@ -334,7 +352,6 @@ export default function TukarHariContent() {
                 </div>
               </MiniField>
 
-              
               <MiniField label="Kategori">
                 <span className="font-medium">{r.kategori}</span>
               </MiniField>
@@ -347,6 +364,71 @@ export default function TukarHariContent() {
                     onToggle={() => toggleExpand(r.id)}
                   />
                 </div>
+              </MiniField>
+
+              {/* ✨ Handover - sama seperti di Cuti */}
+              <MiniField label="Handover Pekerjaan" className="lg:col-span-3">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <TextClampCell
+                    text={r.handover}
+                    expanded={expHan}
+                    onToggle={() => toggleHandover(r.id)}
+                  />
+
+                  {Array.isArray(r.handoverUsers) && r.handoverUsers.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-xs font-semibold text-gray-700 mb-2">
+                        Daftar Penerima Handover :
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {r.handoverUsers.map((u) => (
+                          <div
+                            key={u.id}
+                            className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
+                          >
+                            <Avatar src={u.photo} size={24} icon={<UserOutlined />} />
+                            <Tooltip title={u.name}>
+                              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                                {ellipsisWords(u.name, 2)}
+                              </span>
+                            </Tooltip>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </MiniField>
+
+              {/* ✨ Dokumen Pendukung */}
+              <MiniField label="Dokumen Pendukung">
+                {Array.isArray(r.attachments) && r.attachments.length > 0 ? (
+                  <Space wrap>
+                    {r.attachments.map((f, i) => (
+                      <Button
+                        key={i}
+                        icon={<FileTextOutlined />}
+                        size="small"
+                        type="primary"
+                        onClick={() => window.open(f.url, "_blank")}
+                        className="flex items-center gap-1"
+                      >
+                        {f.name || `Lampiran ${i + 1}`}
+                      </Button>
+                    ))}
+                  </Space>
+                ) : (
+                  <Button
+                    icon={<FileTextOutlined />}
+                    size="small"
+                    type={r.buktiUrl ? "primary" : "default"}
+                    disabled={!r.buktiUrl}
+                    onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
+                    className="flex items-center gap-1"
+                  >
+                    {r.buktiUrl ? "Lihat Dokumen" : "Tidak Ada File"}
+                  </Button>
+                )}
               </MiniField>
             </div>
           );
@@ -414,7 +496,7 @@ export default function TukarHariContent() {
         },
       },
     ],
-    [vm.tab, expandedKeperluan, pagination, openApproveModal]
+    [vm.tab, expandedKeperluan, expandedHandover, pagination, openApproveModal]
   );
 
   const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
@@ -426,7 +508,7 @@ export default function TukarHariContent() {
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="font-medium">Pengajuan</span>
           <span className="bg-orange-100 text-orange-800 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-            {counts.pengajuan}
+            {vm.tabCounts.pengajuan}
           </span>
         </div>
       ),
@@ -437,7 +519,7 @@ export default function TukarHariContent() {
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="font-medium">Disetujui</span>
           <span className="bg-green-100 text-green-800 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-            {counts.disetujui}
+            {vm.tabCounts.disetujui}
           </span>
         </div>
       ),
@@ -448,7 +530,7 @@ export default function TukarHariContent() {
         <div className="flex items-center gap-2 px-3 py-2">
           <span className="font-medium">Ditolak</span>
           <span className="bg-red-100 text-red-800 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-            {counts.ditolak}
+            {vm.tabCounts.ditolak}
           </span>
         </div>
       ),
@@ -517,12 +599,12 @@ export default function TukarHariContent() {
                         Daftar {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
                       </h2>
                       <p className="text-gray-500 text-sm mt-1">
-                        Menampilkan {dataSource.length} dari {counts[t.key]} pengajuan
+                        Menampilkan {dataSource.length} dari {vm.tabCounts[t.key]} pengajuan
                       </p>
                     </div>
                     <Input
                       allowClear
-                      placeholder="Cari nama, jabatan, divisi, kategori, keperluan…"
+                      placeholder="Cari nama, jabatan, divisi, kategori, keperluan, handover…"
                       prefix={<SearchOutlined className="text-gray-400" />}
                       value={vm.search}
                       onChange={(e) => vm.setSearch(e.target.value)}

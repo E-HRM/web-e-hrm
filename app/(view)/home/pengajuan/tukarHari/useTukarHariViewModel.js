@@ -73,6 +73,42 @@ function normalizePolaItems(json) {
   });
 }
 
+/* ===================== Attachments normalizer ====================== */
+function normalizeAttachments(item) {
+  const result = [];
+
+  const pushUrl = (url, nameFallback = "Lampiran") => {
+    const s = String(url ?? "").trim();
+    if (!s) return;
+    const fileName = s.split("/").pop()?.split("?")[0] || nameFallback;
+    result.push({ url: s, name: fileName });
+  };
+
+  // Kandidat array
+  const arrCands = [item?.attachments, item?.lampiran, item?.berkas, item?.files];
+  for (const arr of arrCands) {
+    if (Array.isArray(arr)) {
+      for (const it of arr) {
+        const url = it?.url ?? it?.link ?? it?.path ?? it?.file_url ?? it;
+        const name = it?.name ?? it?.filename ?? undefined;
+        pushUrl(url, name);
+      }
+    }
+  }
+
+  // Kandidat string tunggal
+  const strCands = [
+    item?.lampiran_tukar_hari_url,
+    item?.lampiran_url,
+    item?.bukti_url,
+    item?.file_kelengkapan_url,
+    item?.file_url,
+  ];
+  for (const s of strCands) pushUrl(s);
+
+  return result;
+}
+
 /* ===================== Mapper Row ====================== */
 function mapItemToRow(item) {
   const pairsRaw = Array.isArray(item?.pairs) ? item.pairs : [];
@@ -106,6 +142,40 @@ function mapItemToRow(item) {
   const jabatanDivisi =
     [jabatan, divisi].filter(Boolean).join(" | ") || user.role || "—";
 
+  // Handover text
+  const handover =
+    item?.handover ??
+    item?.handover_text ??
+    item?.handover_desc ??
+    item?.handover_description ??
+    item?.keterangan_handover ??
+    "—";
+
+  // Handover users (toleran berbagai bentuk)
+  const rawHandoverUsers =
+    item?.handover_users ??
+    item?.handoverUsers ??
+    item?.penerima_handover ??
+    item?.handover_assignments ??
+    [];
+
+  const handoverUsers = Array.isArray(rawHandoverUsers)
+    ? rawHandoverUsers
+        .map((h) => {
+          const u = h?.user ?? h;
+          const id = u?.id_user ?? u?.id ?? u?.uuid ?? null;
+          const name = u?.nama_pengguna ?? u?.name ?? u?.nama ?? u?.full_name ?? null;
+          const photo = u?.foto_profil_user ?? u?.photo ?? u?.avatar ?? "/avatar-placeholder.jpg";
+          if (!id && !name) return null;
+          return { id: id ?? String(name), name: name ?? "—", photo };
+        })
+        .filter(Boolean)
+    : [];
+
+  // Attachments
+  const attachments = normalizeAttachments(item);
+  const buktiUrl = attachments[0]?.url ?? null;
+
   return {
     id: item?.id_izin_tukar_hari,
     nama: user?.nama_pengguna ?? "—",
@@ -118,6 +188,12 @@ function mapItemToRow(item) {
 
     kategori: item?.kategori ?? "—",
     keperluan: item?.keperluan ?? "—",
+
+    // ✨ tambahan
+    handover,
+    handoverUsers,
+    attachments,
+    buktiUrl,
 
     statusRaw: item?.status ?? "pending",
     status: toLabelStatus(item?.status),
@@ -182,19 +258,24 @@ export default function useTukarHariViewModel() {
   const filteredData = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((d) =>
-      [
+    return rows.filter((d) => {
+      const handoverNames = (d.handoverUsers || []).map((u) => u.name).join(" ");
+      const attNames = (d.attachments || []).map((a) => a.name).join(" ");
+      return [
         d.nama,
         d.jabatanDivisi,
         d.kategori,
         d.keperluan,
         d.hariIzin,
         d.hariPengganti,
+        d.handover,       // ✨ cari di deskripsi handover
+        handoverNames,    // ✨ cari di nama penerima
+        attNames,         // ✨ cari di nama file
       ]
         .join(" ")
         .toLowerCase()
-        .includes(term)
-    );
+        .includes(term);
+    });
   }, [rows, search]);
 
   /* ===== Draft alasan ===== */

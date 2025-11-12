@@ -61,6 +61,14 @@ function MiniField({ label, children, span = 1, className = "" }) {
   );
 }
 
+function ellipsisWords(str, maxWords = 2) {
+  const s = String(str ?? "").trim();
+  if (!s) return "—";
+  const parts = s.split(/\s+/);
+  return parts.length <= maxWords ? s : `${parts.slice(0, maxWords).join(" ")}…`;
+}
+
+
 function StatusBadge({ status }) {
   const statusConfig = {
     Disetujui: { color: SUCCESS_COLOR, text: "Disetujui" },
@@ -282,6 +290,7 @@ export default function CutiContent() {
         key: "no",
         width: 60,
         fixed: "left",
+        onCell: () => ({ style: { verticalAlign: "top" } }),
         align: "center",
         render: (_, __, index) => (
           <div className="text-sm font-medium text-gray-600">
@@ -294,6 +303,7 @@ export default function CutiContent() {
         key: "karyawan",
         width: 280,
         fixed: "left",
+        onCell: () => ({ style: { verticalAlign: "top" } }),
         render: (_, r) => (
           <div className="flex items-start gap-3">
             <Avatar
@@ -408,11 +418,14 @@ export default function CutiContent() {
                             className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
                           >
                             <Avatar src={u.photo} size={24} icon={<UserOutlined />} />
-                            <div className="text-sm font-medium text-gray-900">
-                              {u.name}
-                            </div>
+                            <Tooltip title={u.name}>
+                              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                                {ellipsisWords(u.name, 2)}
+                              </span>
+                            </Tooltip>
                           </div>
                         ))}
+
                       </div>
                     </div>
                   )}
@@ -440,6 +453,7 @@ export default function CutiContent() {
         key: "aksi",
         width: 200,
         fixed: "right",
+        onCell: () => ({ style: { verticalAlign: "top" } }),
         render: (_, r) => {
           // Tampilkan tombol hanya pada tab "pengajuan".
           if (vm.tab === "pengajuan") {
