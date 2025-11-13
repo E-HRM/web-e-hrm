@@ -53,8 +53,21 @@ function mapItemToRow(item) {
   const u = item?.user || {};
   const jabatan = u.jabatan ?? u.nama_jabatan ?? u.title ?? null;
   const divisi  = u.divisi  ?? u.nama_divisi  ?? u.department ?? null;
-  const jabatanDivisi = [jabatan, divisi].filter(Boolean).join(" | ") || u.role || "—";
 
+  const user = item?.user || {};
+
+  const jabatanName =
+    user?.jabatan?.nama_jabatan ?? null;
+
+  const divisiName =
+    user?.departement?.nama_departement ??
+    user?.divisi ??                        
+    null;
+
+  const jabatanDivisi =
+    [jabatanName, divisiName].filter(Boolean).join(" | ") ||
+    user?.role ||
+    "—";
   // Daftar penerima handover (nama + foto)
   const handoverUsers = Array.isArray(item?.handover_users)
     ? item.handover_users
@@ -220,43 +233,53 @@ export default function useIzinJamViewModel() {
   );
 
   // Reject
-  const reject = useCallback(
-    async (id, note) => {
-      const row = rows.find((r) => r.id === id);
-      if (!row) return;
-      const reason = (note ?? reasonDraft[id] ?? "").trim();
-      if (!reason) {
-        message.error("Alasan wajib diisi saat menolak.");
-        return;
-      }
-      if (!row.approvalId) {
-        message.error("Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals.");
-        return;
-      }
-      try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanIzinJamMobile(row.approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision: "ditolak", note: reason }),
-          }
-        );
-        const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal menyimpan keputusan.");
-        message.success("Pengajuan izin jam ditolak");
-        await Promise.all([
-          mutate(),
-          swrCntPending.mutate(),
-          swrCntApproved.mutate(),
-          swrCntRejected.mutate(),
-        ]);
-      } catch (e) {
-        message.error(e?.message || "Gagal menyimpan keputusan.");
-      }
-    },
-    [rows, reasonDraft, mutate, swrCntPending, swrCntApproved, swrCntRejected]
-  );
+const reject = useCallback(
+  async (id, note) => {
+    const row = rows.find((r) => r.id === id);
+    if (!row) return false;
+
+    const reason = String(note ?? "").trim();
+    if (!reason) {
+      message.error("Alasan wajib diisi saat menolak.");
+      return false; // <- penting: biar caller tahu gagal
+    }
+
+    if (!row.approvalId) {
+      message.error(
+        "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
+      );
+      return false;
+    }
+
+    try {
+      const res = await fetch(
+        ApiEndpoints.DecidePengajuanIzinJamMobile(row.approvalId),
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decision: "ditolak", note: reason }),
+        }
+      );
+      const json = await res.json();
+      if (!res.ok || json?.ok === false)
+        throw new Error(json?.message || "Gagal");
+
+      message.success("Pengajuan izin jam ditolak");
+      await Promise.all([
+        mutate(),
+        swrCntPending.mutate(),
+        swrCntApproved.mutate(),
+        swrCntRejected.mutate(),
+      ]);
+      return true; // <- sukses
+    } catch (e) {
+      message.error(e?.message || "Gagal menyimpan keputusan.");
+      return false;
+    }
+  },
+  [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
+);
+
 
   const refresh = useCallback(
     () =>

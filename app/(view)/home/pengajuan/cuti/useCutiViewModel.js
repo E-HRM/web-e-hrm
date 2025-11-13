@@ -93,27 +93,15 @@ function mapItemToRow(item) {
   const tglCutiLast =
     safeToDate(item?.tanggal_selesai) || tglCutiList[tglCutiList.length - 1] || null;
 
-  // Gabung Jabatan | Divisi (fallback ke role bila belum ada)
   // support variasi struktur Prisma/string untuk jabatan & divisi
   const user = item?.user || {};
 
   const jabatanName =
-    user?.jabatan?.nama_jabatan ??
-    user?.jabatan_name ??
-    user?.nama_jabatan ??
-    (typeof user?.jabatan === "string" ? user.jabatan : null) ??
-    user?.title ??
-    user?.role_jabatan ??
-    null;
+    user?.jabatan?.nama_jabatan ?? null;
 
   const divisiName =
-    user?.divisi?.nama_divisi ??
-    user?.divisi?.nama ??
-    user?.divisi_name ??
-    user?.nama_divisi ??
-    user?.departemen ??       
-    user?.department ??
-    (typeof user?.divisi === "string" ? user.divisi : null) ??
+    user?.departement?.nama_departement ??
+    user?.divisi ??                        
     null;
 
   const jabatanDivisi =
@@ -181,8 +169,16 @@ function toPolaOptions(list) {
 }
 
 export default function useCutiViewModel() {
-  const [search, setSearch] = useState("");
-  const [tab, setTab] = useState("pengajuan");
+  const [search, _setSearch] = useState("");
+ const setSearch = useCallback((s) => {
+   _setSearch(s);
+   setPage(1);         
+ }, []);
+  const [tab, _setTab] = useState("pengajuan");
+ const setTab = useCallback((t) => {
+   _setTab(t);
+   setPage(1);         
+ }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -305,45 +301,54 @@ export default function useCutiViewModel() {
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
-  const reject = useCallback(
-    async (id, note) => {
-      const row = rows.find((r) => r.id === id);
-      if (!row) return;
+// REPLACE seluruh fungsi reject dengan ini:
+const reject = useCallback(
+  async (id, note) => {
+    const row = rows.find((r) => r.id === id);
+    if (!row) return false;
 
-      const reason = String(note ?? "").trim();
-      if (!reason) {
-        message.error("Alasan wajib diisi saat menolak.");
-        return;
-      }
+    const reason = String(note ?? "").trim();
+    if (!reason) {
+      message.error("Alasan wajib diisi saat menolak.");
+      return false; // <- penting: biar caller tahu gagal
+    }
 
-      if (!row.approvalId) {
-        message.error(
-          "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
-        );
-        return;
-      }
+    if (!row.approvalId) {
+      message.error(
+        "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
+      );
+      return false;
+    }
 
-      try {
-        const res = await fetch(ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId), {
+    try {
+      const res = await fetch(
+        ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId),
+        {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ decision: "ditolak", note: reason }),
-        });
-        const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
-        message.success("Pengajuan cuti ditolak");
-        await Promise.all([
-          mutate(),
-          swrCntPending.mutate(),
-          swrCntApproved.mutate(),
-          swrCntRejected.mutate(),
-        ]);
-      } catch (e) {
-        message.error(e?.message || "Gagal menyimpan keputusan.");
-      }
-    },
-    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
-  );
+        }
+      );
+      const json = await res.json();
+      if (!res.ok || json?.ok === false)
+        throw new Error(json?.message || "Gagal");
+
+      message.success("Pengajuan cuti ditolak");
+      await Promise.all([
+        mutate(),
+        swrCntPending.mutate(),
+        swrCntApproved.mutate(),
+        swrCntRejected.mutate(),
+      ]);
+      return true; // <- sukses
+    } catch (e) {
+      message.error(e?.message || "Gagal menyimpan keputusan.");
+      return false;
+    }
+  },
+  [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
+);
+
 
   const refresh = useCallback(
     () =>

@@ -218,11 +218,14 @@ export default function IzinJamContent() {
               className="border-2 border-gray-200"
             />
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-gray-900 text-sm mb-1">
+              <div className="font-semibold text-gray-900 text-sm mb-0.5 truncate">
                 {r.nama}
               </div>
-              <div className="text-xs text-gray-600 mb-2">{r.jabatanDivisi}</div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <div className="text-xs text-gray-600 truncate">
+                {r.jabatanDivisi}
+              </div>
+
+              <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
                 <ClockCircleOutlined />
                 <span>{formatDateTimeID(r.tglPengajuan)}</span>
               </div>
@@ -375,22 +378,37 @@ export default function IzinJamContent() {
               </Space>
             );
           }
-
+          const isApproved = vm.tab === "disetujui";
           return (
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs font-semibold text-gray-600 mb-1">
-                  {vm.tab === "disetujui" ? "Disetujui Pada" : "Ditolak Pada"}
-                </div>
-                <div className="text-sm font-medium text-gray-900">
-                  {formatDateTimeID(r.tglKeputusan)}
-                </div>
+            <div
+              className={`rounded-lg p-3 border ${
+                isApproved
+                  ? "bg-green-50 border-green-200"
+                  : "bg-red-50 border-red-200"
+              }`}
+            >
+              <div className={`text-xs font-semibold mb-1 ${
+                isApproved ? "text-green-700" : "text-red-700"
+              }`}>
+                {isApproved ? "Disetujui Pada" : "Ditolak Pada"}
+              </div>
+
+              <div className={`text-sm font-medium ${
+                isApproved ? "text-green-900" : "text-red-900"
+              }`}>
+                {formatDateTimeID(r.tglKeputusan)}
               </div>
 
               {r.alasan && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-600 mb-1">Catatan</div>
-                  <div className="text-sm text-gray-700 bg-gray-50 rounded p-2">
+                <div className="mt-3">
+                  <div className={`text-xs font-semibold mb-1 ${
+                    isApproved ? "text-green-700" : "text-red-700"
+                  }`}>
+                    Catatan
+                  </div>
+                  <div className={`text-sm rounded p-2 ${
+                    isApproved ? "bg-white/60 text-green-900" : "bg-white/60 text-red-900"
+                  }`}>
                     {r.alasan}
                   </div>
                 </div>
@@ -562,10 +580,18 @@ export default function IzinJamContent() {
             icon: <CloseOutlined />,
           }}
           onOk={async () => {
-            await vm.reject(rejectRow.id, reason.trim());
-            setRejectRow(null);
-            setReason("");
+            const r = String(reason || "").trim();
+            if (!r) { // guard lokal biar gak memanggil VM ketika kosong
+              message.error("Alasan wajib diisi saat menolak.");
+              return;
+            }
+            const ok = await vm.reject(rejectRow.id, r);
+            if (ok) {
+              setRejectRow(null);
+              setReason("");
+            }
           }}
+
           onCancel={() => {
             setRejectRow(null);
             setReason("");

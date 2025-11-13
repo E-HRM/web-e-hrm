@@ -135,12 +135,19 @@ function mapItemToRow(item) {
 
   // Gabung Jabatan | Divisi (fallback ke role bila belum ada)
   const user = item?.user || {};
-  const jabatan =
-    user.jabatan ?? user.nama_jabatan ?? user.title ?? null;
-  const divisi =
-    user.divisi ?? user.nama_divisi ?? user.department ?? null;
+
+  const jabatanName =
+    user?.jabatan?.nama_jabatan ?? null;
+
+  const divisiName =
+    user?.departement?.nama_departement ??
+    user?.divisi ??                        
+    null;
+
   const jabatanDivisi =
-    [jabatan, divisi].filter(Boolean).join(" | ") || user.role || "—";
+    [jabatanName, divisiName].filter(Boolean).join(" | ") ||
+    user?.role ||
+    "—";
 
   // Handover text
   const handover =
@@ -359,44 +366,53 @@ export default function useTukarHariViewModel() {
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
+  // REPLACE seluruh fungsi reject dengan ini:
   const reject = useCallback(
     async (id, note) => {
       const row = rows.find((r) => r.id === id);
-      if (!row) return;
-      const reason = (note ?? reasonDraft[id] ?? "").trim();
+      if (!row) return false;
+
+      const reason = String(note ?? "").trim();
       if (!reason) {
         message.error("Alasan wajib diisi saat menolak.");
-        return;
+        return false; 
       }
 
-      const approvalId = await ensureApprovalId(row);
+      const approvalId = row.approvalId || (await ensureApprovalId(row));
       if (!approvalId) {
-        message.error("Tidak menemukan id approval. Pastikan API mengembalikan approvals / my_pending_approval_id atau aktifkan endpoint detail.");
-        return;
+        message.error("Tidak menemukan id approval pada pengajuan ini.");
+        return false;
       }
 
       try {
-        const res = await fetch(ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId), {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ decision: "ditolak", note: reason }),
-        });
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanTukarHariMobile(approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision: "ditolak", note: reason }),
+          }
+        );
         const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
-        message.success("Pengajuan tukar hari ditolak");
+        if (!res.ok || json?.ok === false)
+          throw new Error(json?.message || "Gagal");
 
+        message.success("Pengajuan tukar hari ditolak");
         await Promise.all([
           mutate(),
           swrCntPending.mutate(),
           swrCntApproved.mutate(),
           swrCntRejected.mutate(),
         ]);
+        return true; // <- sukses
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
+        return false;
       }
     },
-    [rows, reasonDraft, mutate, swrCntPending, swrCntApproved, swrCntRejected]
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
+
 
   const refresh = useCallback(
     () =>

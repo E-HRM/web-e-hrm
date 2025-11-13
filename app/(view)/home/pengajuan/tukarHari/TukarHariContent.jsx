@@ -282,6 +282,7 @@ export default function TukarHariContent() {
         key: "no",
         width: 60,
         fixed: "left",
+        onCell: () => ({ style: { verticalAlign: "top" } }),
         align: "center",
         render: (_, __, index) => (
           <div className="text-sm font-medium text-gray-600">
@@ -294,6 +295,7 @@ export default function TukarHariContent() {
         key: "karyawan",
         width: 280,
         fixed: "left",
+        onCell: () => ({ style: { verticalAlign: "top" } }),
         render: (_, r) => (
           <div className="flex items-start gap-3">
             <Avatar
@@ -303,11 +305,14 @@ export default function TukarHariContent() {
               className="border-2 border-gray-200"
             />
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-gray-900 text-sm mb-1">
+              <div className="font-semibold text-gray-900 text-sm mb-0.5 truncate">
                 {r.nama}
               </div>
-              <div className="text-xs text-gray-600 mb-2">{r.jabatanDivisi}</div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <div className="text-xs text-gray-600 truncate">
+                {r.jabatanDivisi}
+              </div>
+
+              <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
                 <ClockCircleOutlined />
                 <span>{formatDateTimeID(r.tglPengajuan)}</span>
               </div>
@@ -439,6 +444,7 @@ export default function TukarHariContent() {
         key: "aksi",
         width: 200,
         fixed: "right",
+        onCell: () => ({ style: { verticalAlign: "top" } }),
         render: (_, r) => {
           // Tampilkan tombol hanya pada tab "pengajuan".
           if (vm.tab === "pengajuan") {
@@ -468,31 +474,44 @@ export default function TukarHariContent() {
               </Space>
             );
           }
+        const isApproved = vm.tab === "disetujui";
+        return (
+          <div
+            className={`rounded-lg p-3 border ${
+              isApproved
+                ? "bg-green-50 border-green-200"
+                : "bg-red-50 border-red-200"
+            }`}
+          >
+            <div className={`text-xs font-semibold mb-1 ${
+              isApproved ? "text-green-700" : "text-red-700"
+            }`}>
+              {isApproved ? "Disetujui Pada" : "Ditolak Pada"}
+            </div>
 
-          // Di tab "disetujui" / "ditolak": info keputusan saja, tanpa tombol lawan.
-          return (
-            <div className="space-y-3">
-              <div>
-                <div className="text-xs font-semibold text-gray-600 mb-1">
-                  {vm.tab === "disetujui" ? "Disetujui Pada" : "Ditolak Pada"}
+            <div className={`text-sm font-medium ${
+              isApproved ? "text-green-900" : "text-red-900"
+            }`}>
+              {formatDateTimeID(r.tglKeputusan)}
+            </div>
+
+            {r.alasan && (
+              <div className="mt-3">
+                <div className={`text-xs font-semibold mb-1 ${
+                  isApproved ? "text-green-700" : "text-red-700"
+                }`}>
+                  Catatan
                 </div>
-                <div className="text-sm font-medium text-gray-900">
-                  {formatDateTimeID(r.tglKeputusan)}
+                <div className={`text-sm rounded p-2 ${
+                  isApproved ? "bg-white/60 text-green-900" : "bg-white/60 text-red-900"
+                }`}>
+                  {r.alasan}
                 </div>
               </div>
+            )}
+          </div>
+        );
 
-              {r.alasan && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-600 mb-1">
-                    Catatan
-                  </div>
-                  <div className="text-sm text-gray-700 bg-gray-50 rounded p-2">
-                    {r.alasan}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
         },
       },
     ],
@@ -665,11 +684,18 @@ export default function TukarHariContent() {
             icon: <CloseOutlined />,
           }}
           onOk={async () => {
-            vm.handleAlasanChange(rejectRow.id, reason.trim());
-            await vm.reject(rejectRow.id);
-            setRejectRow(null);
-            setReason("");
+            const r = String(reason || "").trim();
+            if (!r) { 
+              message.error("Alasan wajib diisi saat menolak.");
+              return;
+            }
+            const ok = await vm.reject(rejectRow.id, r);
+            if (ok) {
+              setRejectRow(null);
+              setReason("");
+            }
           }}
+
           onCancel={() => {
             setRejectRow(null);
             setReason("");
