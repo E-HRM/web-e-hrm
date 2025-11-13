@@ -109,10 +109,7 @@ export async function GET(req) {
     const datasetWhere = {
       ...baseWhere,
       status: statusFilter,
-      AND: [
-        { tanggal_mulai:   { lte: targetDate } },
-        { tanggal_selesai: { gte: targetDate } },
-      ],
+      AND: [{ tanggal_mulai: { lte: targetDate } }, { tanggal_selesai: { gte: targetDate } }],
     };
 
     const data = await db.shiftKerja.findMany({
@@ -146,7 +143,7 @@ export async function GET(req) {
     });
 
     const total = data.length;
-    const statusCounts = SHIFT_STATUS.reduce((acc, k) => (acc[k] = 0, acc), {});
+    const statusCounts = SHIFT_STATUS.reduce((acc, k) => ((acc[k] = 0), acc), {});
     for (const row of data) statusCounts[row.status] = (statusCounts[row.status] || 0) + 1;
 
     const activeDate = targetDate.toISOString().slice(0, 10);

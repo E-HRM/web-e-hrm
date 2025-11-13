@@ -25,6 +25,14 @@ export const pengajuanInclude = {
       nama_pengguna: true,
       email: true,
       role: true,
+      foto_profil_user: true,
+      divisi: true,
+      jabatan: {
+        select: {
+          id_jabatan: true,
+          nama_jabatan: true,
+        },
+      },
     },
   },
   kategori_cuti: {
@@ -163,23 +171,6 @@ export function sanitizeHandoverIds(ids) {
     unique.add(val);
   }
   return Array.from(unique);
-}
-
-function resolveJenisPengajuan(input, expected) {
-  const fallback = expected;
-  if (input === undefined || input === null) return { ok: true, value: fallback };
-
-  const trimmed = String(input).trim();
-  if (!trimmed) return { ok: true, value: fallback };
-
-  const normalized = trimmed.toLowerCase().replace(/[-\s]+/g, '_');
-  if (normalized !== expected) {
-    return {
-      ok: false,
-      message: `jenis_pengajuan harus bernilai '${expected}'.`,
-    };
-  }
-  return { ok: true, value: fallback };
 }
 
 export function summarizeDatesByMonth(dates) {
@@ -381,11 +372,7 @@ export async function POST(req) {
     const keperluan = body?.keperluan === undefined || body?.keperluan === null ? null : String(body.keperluan);
     const handover = body?.handover === undefined || body?.handover === null ? null : String(body.handover);
 
-    const jenisPengajuanResult = resolveJenisPengajuan(body?.jenis_pengajuan, 'cuti');
-    if (!jenisPengajuanResult.ok) {
-      return NextResponse.json({ ok: false, message: jenisPengajuanResult.message }, { status: 400 });
-    }
-    const jenis_pengajuan = jenisPengajuanResult.value;
+    const jenis_pengajuan = 'cuti';
 
     if (!id_kategori_cuti) {
       return NextResponse.json({ ok: false, message: 'id_kategori_cuti wajib diisi.' }, { status: 400 });

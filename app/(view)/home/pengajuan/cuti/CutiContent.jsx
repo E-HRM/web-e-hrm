@@ -313,11 +313,14 @@ export default function CutiContent() {
               className="border-2 border-gray-200"
             />
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-gray-900 text-sm mb-1">
+              <div className="font-semibold text-gray-900 text-sm mb-0.5 truncate">
                 {r.nama}
               </div>
-              <div className="text-xs text-gray-600 mb-2">{r.jabatanDivisi}</div>
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <div className="text-xs text-gray-600 truncate">
+                {r.jabatanDivisi}
+              </div>
+
+              <div className="mt-2 flex items-center gap-1 text-xs text-gray-500">
                 <ClockCircleOutlined />
                 <span>{formatDateTimeID(r.tglPengajuan)}</span>
               </div>
@@ -327,6 +330,7 @@ export default function CutiContent() {
             </div>
           </div>
         ),
+
       },
       {
         title: "DETAIL PENGAJUAN",

@@ -236,14 +236,12 @@ export default function SakitContent() {
 
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* 1) Kategori Sakit */}
               <MiniField label="Kategori Sakit">
                 <span className="font-medium">{r.kategori}</span>
               </MiniField>
 
-              <MiniField label="Tanggal Pengajuan">
-                {formatDateTimeID(r.tglPengajuan)}
-              </MiniField>
-
+              {/* 2) Handover Pekerjaan (tepat di bawah Kategori) */}
               <MiniField label="Handover Pekerjaan" className="lg:col-span-3">
                 <div className="bg-gray-50 rounded-lg p-3">
                   <TextClampCell
@@ -277,7 +275,13 @@ export default function SakitContent() {
                 </div>
               </MiniField>
 
-              <MiniField label="Dokumen Pendukung">
+              {/* 3) Tanggal Pengajuan (full width agar "Dokumen" berada tepat di bawahnya) */}
+              <MiniField label="Tanggal Pengajuan" className="lg:col-span-3">
+                {formatDateTimeID(r.tglPengajuan)}
+              </MiniField>
+
+              {/* 4) Dokumen Pendukung (di bawah Tanggal Pengajuan) */}
+              <MiniField label="Dokumen Pendukung" className="lg:col-span-3">
                 {Array.isArray(r.attachments) && r.attachments.length > 0 ? (
                   <Space wrap>
                     {r.attachments.map((f, i) => (
@@ -289,10 +293,20 @@ export default function SakitContent() {
                         onClick={() => window.open(f.url, "_blank")}
                         className="flex items-center gap-1"
                       >
-                        {f.name || `Lampiran ${i + 1}`}
+                        Lihat Dokumen
                       </Button>
                     ))}
                   </Space>
+                ) : r.buktiUrl ? (
+                  <Button
+                    icon={<FileTextOutlined />}
+                    size="small"
+                    type="primary"
+                    onClick={() => window.open(r.buktiUrl, "_blank")}
+                    className="flex items-center gap-1"
+                  >
+                    Lihat Dokumen
+                  </Button>
                 ) : (
                   <Button
                     icon={<FileTextOutlined />}

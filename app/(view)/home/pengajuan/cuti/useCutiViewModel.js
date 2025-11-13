@@ -94,18 +94,37 @@ function mapItemToRow(item) {
     safeToDate(item?.tanggal_selesai) || tglCutiList[tglCutiList.length - 1] || null;
 
   // Gabung Jabatan | Divisi (fallback ke role bila belum ada)
+  // support variasi struktur Prisma/string untuk jabatan & divisi
   const user = item?.user || {};
-  const jabatan =
-    user.jabatan ?? user.nama_jabatan ?? user.title ?? null;
-  const divisi =
-    user.divisi ?? user.nama_divisi ?? user.department ?? null;
+
+  const jabatanName =
+    user?.jabatan?.nama_jabatan ??
+    user?.jabatan_name ??
+    user?.nama_jabatan ??
+    (typeof user?.jabatan === "string" ? user.jabatan : null) ??
+    user?.title ??
+    user?.role_jabatan ??
+    null;
+
+  const divisiName =
+    user?.divisi?.nama_divisi ??
+    user?.divisi?.nama ??
+    user?.divisi_name ??
+    user?.nama_divisi ??
+    user?.departemen ??       
+    user?.department ??
+    (typeof user?.divisi === "string" ? user.divisi : null) ??
+    null;
+
   const jabatanDivisi =
-    [jabatan, divisi].filter(Boolean).join(" | ") || user.role || "—";
+    [jabatanName, divisiName].filter(Boolean).join(" | ") ||
+    user?.role ||
+    "—";
 
   return {
     id: item?.id_pengajuan_cuti,
     nama: user?.nama_pengguna ?? "—",
-    jabatanDivisi,
+    jabatanDivisi,              
     foto: user?.foto_profil_user || "/avatar-placeholder.jpg",
     jenisCuti: item?.kategori_cuti?.nama_kategori ?? "—",
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
