@@ -27,6 +27,13 @@ export const pengajuanInclude = {
       role: true,
       foto_profil_user: true,
       divisi: true,
+      id_departement: true,
+      departement: {
+        select: {
+          id_departement: true,
+          nama_departement: true,
+        },
+      },
       jabatan: {
         select: {
           id_jabatan: true,
