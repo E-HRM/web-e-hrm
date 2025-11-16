@@ -173,14 +173,8 @@ async function syncShiftForSwapPairs(tx, { userId, pairs, idPolaKerjaPengganti =
 function summarizeApprovalStatus(approvals) {
   const approved = approvals.filter((item) => item.decision === 'disetujui');
   const anyApproved = approved.length > 0;
-  const allRejected =
-    approvals.length > 0 && approvals.every((item) => item.decision === 'ditolak');
-  const highestApprovedLevel = anyApproved
-    ? approved.reduce(
-        (acc, curr) => (curr.level > acc ? curr.level : acc),
-        approved[0].level
-      )
-    : null;
+  const allRejected = approvals.length > 0 && approvals.every((item) => item.decision === 'ditolak');
+  const highestApprovedLevel = anyApproved ? approved.reduce((acc, curr) => (curr.level > acc ? curr.level : acc), approved[0].level) : null;
 
   return { anyApproved, allRejected, highestApprovedLevel };
 }
@@ -221,11 +215,8 @@ async function handleDecision(req, { params }) {
     );
   }
 
-  const note =
-    body?.note === undefined || body?.note === null ? null : String(body.note);
-  const idPolaKerjaPengganti = body?.id_pola_kerja_pengganti
-    ? String(body.id_pola_kerja_pengganti)
-    : null;
+  const note = body?.note === undefined || body?.note === null ? null : String(body.note);
+  const idPolaKerjaPengganti = body?.id_pola_kerja_pengganti ? String(body.id_pola_kerja_pengganti) : null;
 
   try {
     const result = await db.$transaction(async (tx) => {
@@ -265,26 +256,17 @@ async function handleDecision(req, { params }) {
       }
 
       const normalizedActorRole = normalizeRole(actorRole);
-      const matchesUser =
-        approval.approver_user_id && approval.approver_user_id === actorId;
-      const matchesRole =
-        approval.approver_role &&
-        normalizeRole(approval.approver_role) === normalizedActorRole;
+      const matchesUser = approval.approver_user_id && approval.approver_user_id === actorId;
+      const matchesRole = approval.approver_role && normalizeRole(approval.approver_role) === normalizedActorRole;
       const isAdmin = canManageAll(actorRole);
 
       // DI SINI SUMBER 403 SEBELUMNYA
       if (!isAdmin && !matchesUser && !matchesRole) {
-        throw NextResponse.json(
-          { ok: false, message: 'Anda tidak memiliki akses untuk approval ini.' },
-          { status: 403 }
-        );
+        throw NextResponse.json({ ok: false, message: 'Anda tidak memiliki akses untuk approval ini.' }, { status: 403 });
       }
 
       if (!PENDING_DECISIONS.has(approval.decision)) {
-        throw NextResponse.json(
-          { ok: false, message: 'Approval sudah memiliki keputusan.' },
-          { status: 409 }
-        );
+        throw NextResponse.json({ ok: false, message: 'Approval sudah memiliki keputusan.' }, { status: 409 });
       }
 
       const updatedApproval = await tx.approvalIzinTukarHari.update({
@@ -311,8 +293,7 @@ async function handleDecision(req, { params }) {
         select: { level: true, decision: true },
       });
 
-      const { anyApproved, allRejected, highestApprovedLevel } =
-        summarizeApprovalStatus(approvals);
+      const { anyApproved, allRejected, highestApprovedLevel } = summarizeApprovalStatus(approvals);
 
       const parentUpdate = {};
       if (anyApproved) {
