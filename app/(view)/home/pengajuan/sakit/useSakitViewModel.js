@@ -5,11 +5,14 @@ import useSWR from "swr";
 import { message } from "antd";
 import { ApiEndpoints } from "@/constrainst/endpoints";
 import { fetcher } from "@/app/utils/fetcher";
+import {
+  handoverPlainText,
+  extractHandoverTags,
+  mergeUsers,
+} from "@/app/api/mobile/tag-users/helpers/tagged-text";
 
-/* ===================== Helpers ====================== */
-function norm(v) {
-  return String(v ?? "").trim().toLowerCase();
-}
+/* ============ Helpers ============ */
+const norm = (v) => String(v ?? "").trim().toLowerCase();
 
 function toLabelStatus(s) {
   const v = norm(s);
@@ -17,26 +20,63 @@ function toLabelStatus(s) {
   if (v === "ditolak") return "Ditolak";
   return "Menunggu";
 }
-
 function statusFromTab(tab) {
   if (tab === "disetujui") return "disetujui";
   if (tab === "ditolak") return "ditolak";
   return "pending";
 }
 
-/* ===== approvals ===== */
-function pickApprovalId(item) {
-  const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
-  const pending = approvals.find((a) =>
-    ["pending", "menunggu", ""].includes(norm(a?.decision))
-  );
-  return pending?.id_approval_izin_sakit || pending?.id || null;
+function getApprovalsArray(item) {
+  const candidates = [
+    item?.approvals,
+    item?.approval_izin_sakit,
+    item?.approvalIzinSakit,
+  ];
+  for (const c of candidates) if (Array.isArray(c)) return c;
+  return [];
 }
 
-/* ===== attachments normalizer (toleran banyak bentuk) ===== */
+function pickApprovalId(item) {
+  const approvals = getApprovalsArray(item);
+  const pending = approvals
+    .filter((a) => !a?.deleted_at)
+    .find((a) => ["", "pending", "menunggu"].includes(norm(a?.decision)));
+  return pending?.id_approval_izin_sakit ?? pending?.id ?? null;
+}
+
+function pickLatestDecisionInfo(item, want) {
+  const approvals = getApprovalsArray(item);
+  if (!approvals.length) return null;
+
+  const desired = ["disetujui", "ditolak"].includes(norm(want))
+    ? norm(want)
+    : null;
+
+  const filtered = approvals
+    .filter((a) => !a?.deleted_at)
+    .filter((a) => {
+      const d = norm(a?.decision);
+      return desired ? d === desired : Boolean(a?.decided_at || a?.updated_at);
+    });
+
+  if (!filtered.length) return null;
+
+  const top = filtered
+    .sort((a, b) => {
+      const tb = new Date(b?.decided_at ?? b?.updated_at ?? 0).getTime();
+      const ta = new Date(a?.decided_at ?? a?.updated_at ?? 0).getTime();
+      return tb - ta;
+    })[0];
+
+  return {
+    note: top?.note ?? top?.catatan ?? top?.comment ?? "",
+    decided_at: top?.decided_at ?? top?.updated_at ?? null,
+  };
+}
+
+/* attachments normalizer */
 function normalizeAttachments(item) {
   const out = [];
-
   const pushUrl = (url, nameFallback = "Lampiran") => {
     const s = String(url ?? "").trim();
     if (!s) return;
@@ -44,7 +84,6 @@ function normalizeAttachments(item) {
     out.push({ url: s, name: fileName });
   };
 
-  // Array-based candidates
   const arrCands = [item?.attachments, item?.lampiran, item?.files, item?.berkas];
   for (const arr of arrCands) {
     if (Array.isArray(arr)) {
@@ -56,7 +95,6 @@ function normalizeAttachments(item) {
     }
   }
 
-  // Single fields (utama: lampiran_izin_sakit_url)
   const single = [
     item?.lampiran_izin_sakit_url,
     item?.lampiran_url,
@@ -69,63 +107,69 @@ function normalizeAttachments(item) {
   return out;
 }
 
-/* ===== handover users normalizer ===== */
-function normalizeHandoverUsers(item) {
-  const raw =
-    item?.handover_users ??
-    item?.handoverUsers ??
-    item?.penerima_handover ??
-    item?.handover_assignments ??
-    [];
-  if (!Array.isArray(raw)) return [];
+/* handover users (API + tag) */
+function buildHandoverUsers(item, rawText) {
+  const fromApi = Array.isArray(item?.handover_users)
+    ? item.handover_users
+        .map((h) => {
+          const u = h?.user ?? h;
+          const id =
+            h?.id_user_tagged ??
+            u?.id_user ??
+            u?.id ??
+            u?.uuid ??
+            null;
+          const name =
+            u?.nama_pengguna ??
+            h?.nama_pengguna_tagged ??
+            u?.name ??
+            u?.nama ??
+            u?.full_name ??
+            null;
+          const photo =
+            u?.foto_profil_user ??
+            h?.foto_profil_user ??
+            u?.photo ??
+            u?.avatar ??
+            "/avatar-placeholder.jpg";
+          if (!id && !name) return null;
+          return { id: String(id ?? name), name: name ?? "—", photo };
+        })
+        .filter(Boolean)
+    : [];
 
-  return raw
-    .map((h) => {
-      const u = h?.user ?? h;
-      const id =
-        h?.id_user_tagged ??
-        u?.id_user ??
-        u?.id ??
-        u?.uuid ??
-        null;
-      const name =
-        u?.nama_pengguna ??
-        h?.nama_pengguna_tagged ??
-        u?.name ??
-        u?.nama ??
-        u?.full_name ??
-        null;
-      const photo =
-        u?.foto_profil_user ??
-        h?.foto_profil_user ??
-        u?.photo ??
-        u?.avatar ??
-        "/avatar-placeholder.jpg";
-      if (!id && !name) return null;
-      return { id: String(id ?? name), name: name ?? "—", photo };
-    })
-    .filter(Boolean);
+  const fromTags = extractHandoverTags(rawText).map((t) => ({
+    id: t.id,
+    name: t.name,
+    photo: "/avatar-placeholder.jpg",
+  }));
+
+  return mergeUsers(fromApi, fromTags);
 }
 
-/* ===== map item → row UI (gaya konsisten dengan Cuti) ===== */
+/* ============ Map API item -> Row ============ */
 function mapItemToRow(item) {
   const user = item?.user || {};
 
-  const jabatanName =
-    user?.jabatan?.nama_jabatan ?? null;
-
+  const jabatanName = user?.jabatan?.nama_jabatan ?? null;
   const divisiName =
-    user?.departement?.nama_departement ??
-    user?.divisi ??                        
-    null;
+    user?.departement?.nama_departement ?? user?.divisi ?? null;
 
   const jabatanDivisi =
     [jabatanName, divisiName].filter(Boolean).join(" | ") ||
     user?.role ||
     "—";
 
+  const rawHandover =
+    item?.handover ?? item?.handover_text ?? item?.keterangan_handover ?? "—";
+
+  // approvals → ambil note & tanggal keputusan
+  const statusRaw = norm(item?.status);
+  const latest = pickLatestDecisionInfo(item, statusRaw);
+
+  const handover = handoverPlainText(rawHandover);
+  const handoverUsers = buildHandoverUsers(item, rawHandover);
   const attachments = normalizeAttachments(item);
-  const handoverUsers = normalizeHandoverUsers(item);
 
   return {
     id: item?.id_pengajuan_izin_sakit,
@@ -136,68 +180,80 @@ function mapItemToRow(item) {
     foto: user?.foto_profil_user || "/avatar-placeholder.jpg",
 
     // waktu
-    tglPengajuan: item?.tanggal_pengajuan ?? item?.created_at ?? item?.createdAt ?? null,
+    tglPengajuan:
+      item?.tanggal_pengajuan ?? item?.created_at ?? item?.createdAt ?? null,
 
     // konten
     kategori:
       item?.kategori?.nama_kategori ??
       item?.kategori_sakit?.nama_kategori ??
       "—",
-    handover:
-      item?.handover ??
-      item?.handover_text ??
-      item?.keterangan_handover ??
-      "—",
+    handover, // @nama rapi
+    handoverUsers,
 
-    // status
+    // status & keputusan
     statusRaw: item?.status ?? "pending",
     status: toLabelStatus(item?.status),
-    alasan: "", // catatan keputusan (jika ada) bisa dilengkapi di detail endpoint bila dibutuhkan
-    tempAlasan: "",
-    tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
+    alasan: latest?.note ?? "",
+    tglKeputusan:
+      latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
 
     // approvals
     approvalId: pickApprovalId(item),
 
     // files
     attachments,
-    buktiUrl:
-      item?.lampiran_izin_sakit_url ??
-      item?.lampiran_url ??
-      null,
-
-    // handover users
-    handoverUsers,
+    buktiUrl: item?.lampiran_izin_sakit_url ?? item?.lampiran_url ?? null,
   };
 }
 
+/* ============ Hook ============ */
 export default function useSakitViewModel() {
-  const [search, setSearch] = useState("");
-  const [tab, setTab] = useState("pengajuan");
+  const [search, _setSearch] = useState("");
+  const [tab, _setTab] = useState("pengajuan");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [reasonDraft, setReasonDraft] = useState({});
+  const [perPage, setPerPage] = useState(10);
 
-  /* ===== LIST (tab aktif) ===== */
+  const setTab = useCallback((t) => {
+    _setTab(t);
+    setPage(1);
+  }, []);
+  const setSearch = useCallback((s) => {
+    _setSearch(s);
+    setPage(1);
+  }, []);
+
+  // list (tab aktif)
   const listKey = useMemo(() => {
-    const qs = { status: statusFromTab(tab), page, pageSize };
+    const qs = { status: statusFromTab(tab), page, perPage, all: 1 };
     return ApiEndpoints.GetPengajuanIzinSakitMobile(qs);
-  }, [tab, page, pageSize]);
+  }, [tab, page, perPage]);
 
   const { data, isLoading, mutate } = useSWR(listKey, fetcher, {
     revalidateOnFocus: false,
   });
 
-  /* ===== COUNTS ===== */
+  // counts
   const countKey = useCallback(
     (status) =>
-      ApiEndpoints.GetPengajuanIzinSakitMobile({ status, page: 1, pageSize: 1 }),
+      ApiEndpoints.GetPengajuanIzinSakitMobile({
+        status,
+        page: 1,
+        perPage: 1,
+        all: 1,
+      }),
     []
   );
 
-  const swrCntPending  = useSWR(countKey("pending"),   fetcher, { revalidateOnFocus: false });
-  const swrCntApproved = useSWR(countKey("disetujui"), fetcher, { revalidateOnFocus: false });
-  const swrCntRejected = useSWR(countKey("ditolak"),   fetcher, { revalidateOnFocus: false });
+  const swrCntPending = useSWR(countKey("pending"), fetcher, {
+    revalidateOnFocus: false,
+  });
+  const swrCntApproved = useSWR(countKey("disetujui"), fetcher, {
+    revalidateOnFocus: false,
+  });
+  const swrCntRejected = useSWR(countKey("ditolak"), fetcher, {
+    revalidateOnFocus: false,
+  });
 
   const totalOf = (json) => {
     const r = json || {};
@@ -213,19 +269,19 @@ export default function useSakitViewModel() {
     () => ({
       pengajuan: totalOf(swrCntPending.data),
       disetujui: totalOf(swrCntApproved.data),
-      ditolak:   totalOf(swrCntRejected.data),
+      ditolak: totalOf(swrCntRejected.data),
     }),
     [swrCntPending.data, swrCntApproved.data, swrCntRejected.data]
   );
 
-  /* ===== Rows & filter ===== */
+  // rows + filter
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
     return items.map(mapItemToRow);
   }, [data]);
 
   const filteredData = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = String(search).trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((d) =>
       [
@@ -234,7 +290,12 @@ export default function useSakitViewModel() {
         d.kategori,
         d.handover,
         d.tglPengajuan,
-        ...(Array.isArray(d.attachments) ? d.attachments.map((a) => a.name) : []),
+        ...(Array.isArray(d.attachments)
+          ? d.attachments.map((a) => a.name)
+          : []),
+        ...(Array.isArray(d.handoverUsers)
+          ? d.handoverUsers.map((u) => u.name)
+          : []),
       ]
         .join(" ")
         .toLowerCase()
@@ -242,19 +303,16 @@ export default function useSakitViewModel() {
     );
   }, [rows, search]);
 
-  /* ===== Alasan draft ===== */
-  function handleAlasanChange(id, value) {
-    setReasonDraft((prev) => ({ ...prev, [id]: value }));
-  }
-
-  /* ===== Actions ===== */
+  // actions
   const approve = useCallback(
     async (id, note) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
 
       if (!row.approvalId) {
-        message.error("Tidak menemukan id approval. Pastikan API list mengembalikan approvals.");
+        message.error(
+          "Tidak menemukan id approval. Pastikan API list mengembalikan approvals."
+        );
         return;
       }
 
@@ -268,7 +326,8 @@ export default function useSakitViewModel() {
           }
         );
         const json = await res.json();
-        if (!res.ok || json?.ok === false) throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false)
+          throw new Error(json?.message || "Gagal");
         message.success("Izin sakit disetujui");
 
         await Promise.all([
@@ -292,7 +351,7 @@ export default function useSakitViewModel() {
       const reason = String(note ?? "").trim();
       if (!reason) {
         message.error("Alasan wajib diisi saat menolak.");
-        return false; 
+        return false;
       }
 
       if (!row.approvalId) {
@@ -322,7 +381,7 @@ export default function useSakitViewModel() {
           swrCntApproved.mutate(),
           swrCntRejected.mutate(),
         ]);
-        return true; // <- sukses
+        return true;
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
         return false;
@@ -331,6 +390,10 @@ export default function useSakitViewModel() {
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
+  const changePage = useCallback((p, ps) => {
+    setPage(p);
+    setPerPage(ps);
+  }, []);
 
   const refresh = useCallback(
     () =>
@@ -356,13 +419,9 @@ export default function useSakitViewModel() {
     setSearch,
 
     page,
-    pageSize,
-    changePage: (p, ps) => {
-      setPage(p);
-      setPageSize(ps);
-    },
+    pageSize: perPage,
+    changePage,
 
-    handleAlasanChange,
     approve,
     reject,
     refresh,

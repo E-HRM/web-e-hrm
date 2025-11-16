@@ -19,7 +19,6 @@ const baseInclude = {
       email: true,
       role: true,
       foto_profil_user: true,
-      divisi: true,
       id_departement: true,
       departement: {
         select: {

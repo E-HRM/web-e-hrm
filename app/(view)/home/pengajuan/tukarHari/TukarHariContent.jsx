@@ -405,36 +405,19 @@ export default function TukarHariContent() {
                 </div>
               </MiniField>
 
-              {/* ✨ Dokumen Pendukung */}
               <MiniField label="Dokumen Pendukung">
-                {Array.isArray(r.attachments) && r.attachments.length > 0 ? (
-                  <Space wrap>
-                    {r.attachments.map((f, i) => (
-                      <Button
-                        key={i}
-                        icon={<FileTextOutlined />}
-                        size="small"
-                        type="primary"
-                        onClick={() => window.open(f.url, "_blank")}
-                        className="flex items-center gap-1"
-                      >
-                        {f.name || `Lampiran ${i + 1}`}
-                      </Button>
-                    ))}
-                  </Space>
-                ) : (
-                  <Button
-                    icon={<FileTextOutlined />}
-                    size="small"
-                    type={r.buktiUrl ? "primary" : "default"}
-                    disabled={!r.buktiUrl}
-                    onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
-                    className="flex items-center gap-1"
-                  >
-                    {r.buktiUrl ? "Lihat Dokumen" : "Tidak Ada File"}
-                  </Button>
-                )}
+                <Button
+                  icon={<FileTextOutlined />}
+                  size="small"
+                  type={r.buktiUrl ? "primary" : "default"}
+                  disabled={!r.buktiUrl}
+                  onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
+                  className="flex items-center gap-1"
+                >
+                  {r.buktiUrl ? "Lihat Dokumen" : "Tidak Ada File"}
+                </Button>
               </MiniField>
+
             </div>
           );
         },

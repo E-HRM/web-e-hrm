@@ -6,6 +6,7 @@ import React, {
   useRef,
   useCallback,
   useLayoutEffect,
+  useEffect,
 } from "react";
 import {
   ConfigProvider,
@@ -20,6 +21,7 @@ import {
   Table,
   Avatar,
   Badge,
+  message,
 } from "antd";
 import {
   SearchOutlined,
@@ -84,16 +86,7 @@ function formatDateTimeID(date) {
   }
 }
 
-function formatDateOnlyID(d) {
-  if (!d) return "—";
-  try {
-    return dayjs(d).format("DD MMM YYYY");
-  } catch {
-    return "—";
-  }
-}
-
-/* ===== Clamp cell (konsisten dgn Cuti) ===== */
+/* ===== Clamp cell ===== */
 function TextClampCell({ text, expanded, onToggle }) {
   const ghostRef = useRef(null);
   const [showToggle, setShowToggle] = useState(false);
@@ -168,10 +161,17 @@ function TextClampCell({ text, expanded, onToggle }) {
 export default function SakitContent() {
   const vm = useSakitViewModel();
 
+  // sinkronkan pagination lokal (untuk kolom NO) dengan VM
+  const [pagination, setPagination] = useState({
+    current: vm.page,
+    pageSize: vm.pageSize,
+  });
+  useEffect(() => {
+    setPagination({ current: vm.page, pageSize: vm.pageSize });
+  }, [vm.page, vm.pageSize, vm.tab, vm.search]);
+
   const [rejectRow, setRejectRow] = useState(null);
   const [reason, setReason] = useState("");
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
-
   const [expandedHandover, setExpandedHandover] = useState(new Set());
   const toggleHandover = (id) =>
     setExpandedHandover((prev) => {
@@ -239,12 +239,12 @@ export default function SakitContent() {
 
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* 1) Kategori Sakit */}
+              {/* Kategori */}
               <MiniField label="Kategori Sakit">
                 <span className="font-medium">{r.kategori}</span>
               </MiniField>
 
-              {/* 2) Handover Pekerjaan (tepat di bawah Kategori) */}
+              {/* Handover */}
               <MiniField label="Handover Pekerjaan" className="lg:col-span-3">
                 <div className="bg-gray-50 rounded-lg p-3">
                   <TextClampCell
@@ -278,12 +278,12 @@ export default function SakitContent() {
                 </div>
               </MiniField>
 
-              {/* 3) Tanggal Pengajuan (full width agar "Dokumen" berada tepat di bawahnya) */}
+              {/* Tanggal Pengajuan */}
               <MiniField label="Tanggal Pengajuan" className="lg:col-span-3">
                 {formatDateTimeID(r.tglPengajuan)}
               </MiniField>
 
-              {/* 4) Dokumen Pendukung (di bawah Tanggal Pengajuan) */}
+              {/* Dokumen */}
               <MiniField label="Dokumen Pendukung" className="lg:col-span-3">
                 {Array.isArray(r.attachments) && r.attachments.length > 0 ? (
                   <Space wrap>
@@ -350,7 +350,7 @@ export default function SakitContent() {
                   className="w-full"
                   onClick={() => {
                     setRejectRow(r);
-                    setReason(r.tempAlasan || "");
+                    setReason("");
                   }}
                   size="small"
                 >
@@ -369,35 +369,44 @@ export default function SakitContent() {
                   : "bg-red-50 border-red-200"
               }`}
             >
-              <div className={`text-xs font-semibold mb-1 ${
-                isApproved ? "text-green-700" : "text-red-700"
-              }`}>
+              <div
+                className={`text-xs font-semibold mb-1 ${
+                  isApproved ? "text-green-700" : "text-red-700"
+                }`}
+              >
                 {isApproved ? "Disetujui Pada" : "Ditolak Pada"}
               </div>
 
-              <div className={`text-sm font-medium ${
-                isApproved ? "text-green-900" : "text-red-900"
-              }`}>
+              <div
+                className={`text-sm font-medium ${
+                  isApproved ? "text-green-900" : "text-red-900"
+                }`}
+              >
                 {formatDateTimeID(r.tglKeputusan)}
               </div>
 
               {r.alasan && (
                 <div className="mt-3">
-                  <div className={`text-xs font-semibold mb-1 ${
-                    isApproved ? "text-green-700" : "text-red-700"
-                  }`}>
+                  <div
+                    className={`text-xs font-semibold mb-1 ${
+                      isApproved ? "text-green-700" : "text-red-700"
+                    }`}
+                  >
                     Catatan
                   </div>
-                  <div className={`text-sm rounded p-2 ${
-                    isApproved ? "bg-white/60 text-green-900" : "bg-white/60 text-red-900"
-                  }`}>
+                  <div
+                    className={`text-sm rounded p-2 ${
+                      isApproved
+                        ? "bg-white/60 text-green-900"
+                        : "bg-white/60 text-red-900"
+                    }`}
+                  >
                     {r.alasan}
                   </div>
                 </div>
               )}
             </div>
           );
-
         },
       },
     ],
@@ -490,7 +499,11 @@ export default function SakitContent() {
         <Card className="shadow-sm border-0">
           <Tabs
             activeKey={vm.tab}
-            onChange={vm.setTab}
+            onChange={(k) => {
+              vm.setTab(k);
+              // nomor baris (NO) ikut reset halaman
+              setPagination((p) => ({ ...p, current: 1 }));
+            }}
             type="line"
             size="large"
             items={tabItems.map((t) => ({
@@ -516,14 +529,17 @@ export default function SakitContent() {
                     tableLayout="fixed"
                     sticky
                     pagination={{
-                      current: pagination.current,
-                      pageSize: pagination.pageSize,
+                      current: vm.page,            // pakai VM
+                      pageSize: vm.pageSize,
+                      total: counts[t.key] ?? 0,   // total server (tiap tab)
                       pageSizeOptions: [10, 20, 50],
                       showSizeChanger: true,
                       showTotal: (total, range) =>
                         `${range[0]}-${range[1]} dari ${total} data`,
-                      onChange: (current, pageSize) =>
-                        setPagination({ current, pageSize }),
+                      onChange: (current, pageSize) => {
+                        vm.changePage(current, pageSize);
+                        setPagination({ current, pageSize }); // sinkron NO
+                      },
                     }}
                     scroll={{ x: 1200, y: 600 }}
                     loading={vm.loading}
@@ -572,7 +588,6 @@ export default function SakitContent() {
               setReason("");
             }
           }}
-
           onCancel={() => {
             setRejectRow(null);
             setReason("");

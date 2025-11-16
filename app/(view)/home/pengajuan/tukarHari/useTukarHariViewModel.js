@@ -5,32 +5,19 @@ import useSWR from "swr";
 import { message } from "antd";
 import { ApiEndpoints } from "@/constrainst/endpoints";
 import { fetcher } from "@/app/utils/fetcher";
+import {
+  handoverPlainText,
+  extractHandoverTags,
+  mergeUsers,
+} from "@/app/api/mobile/tag-users/helpers/tagged-text";
 
 /* ===================== Utils ====================== */
-function norm(v) {
-  return String(v ?? "").trim().toLowerCase();
-}
+const norm = (v) => String(v ?? "").trim().toLowerCase();
+
 function isPendingDecision(d) {
-  return norm(d) === "pending";
+  return ["", "pending", "menunggu"].includes(norm(d));
 }
-function getApprovalsArray(item) {
-  const candidates = [item?.approvals, item?.approval_izin_tukar_hari, item?.ApprovalIzinTukarHari];
-  for (const c of candidates) if (Array.isArray(c)) return c;
-  return [];
-}
-/** Ambil id approval yang masih pending terendah level-nya */
-function pickApprovalId(item) {
-  if (item?.my_pending_approval_id) return item.my_pending_approval_id;
-  if (item?.next_approval_id_for_me) return item.next_approval_id_for_me;
-  if (item?.current_approval_id) return item.current_approval_id;
-  const approvals = getApprovalsArray(item);
-  if (!approvals.length) return null;
-  const pending = approvals
-    .filter((a) => !a?.deleted_at)
-    .sort((a, b) => (a?.level ?? 0) - (b?.level ?? 0))
-    .find((a) => isPendingDecision(a?.decision));
-  return pending?.id_approval_izin_tukar_hari ?? pending?.id ?? null;
-}
+
 function toLabelStatus(s) {
   const v = norm(s);
   if (v === "disetujui") return "Disetujui";
@@ -44,6 +31,98 @@ function statusFromTab(tab) {
   return "pending";
 }
 
+/* === URL publik untuk file (samakan dengan menu lain) === */
+function toPublicUrl(input) {
+  const raw = String(input ?? "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  // 1) Jika ada builder resmi
+  if (typeof ApiEndpoints?.PublicFile === "function") {
+    try {
+      const built = ApiEndpoints.PublicFile(raw);
+      if (built) return built;
+    } catch {}
+  }
+
+  // 2) Jika punya baseURL (di endpoints/env)
+  const base =
+    (typeof ApiEndpoints?.FileBaseURL === "string" && ApiEndpoints.FileBaseURL) ||
+    (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_FILE_BASE_URL) ||
+    "";
+
+  if (base) {
+    return `${base.replace(/\/$/, "")}/${raw.replace(/^\//, "")}`;
+  }
+
+  // 3) Fallback: origin aplikasi
+  try {
+    const { origin } = window.location;
+    return `${origin}/${raw.replace(/^\//, "")}`;
+  } catch {
+    return `/${raw.replace(/^\//, "")}`;
+  }
+}
+
+function getApprovalsArray(item) {
+  const candidates = [
+    item?.approvals,
+    item?.approval_izin_tukar_hari,
+    item?.ApprovalIzinTukarHari,
+    item?.approvalPengajuanTukarHari,
+  ];
+  for (const c of candidates) if (Array.isArray(c)) return c;
+  return [];
+}
+
+/** Ambil id approval pending level terendah (atau berbagai shortcut field umum) */
+function pickApprovalId(item) {
+  if (item?.my_pending_approval_id) return item.my_pending_approval_id;
+  if (item?.next_approval_id_for_me) return item.next_approval_id_for_me;
+  if (item?.current_approval_id) return item.current_approval_id;
+
+  const approvals = getApprovalsArray(item);
+  if (!approvals.length) return null;
+
+  const pending = approvals
+    .filter((a) => !a?.deleted_at)
+    .sort((a, b) => (a?.level ?? 0) - (b?.level ?? 0))
+    .find((a) => isPendingDecision(a?.decision));
+
+  return pending?.id_approval_izin_tukar_hari ?? pending?.id ?? null;
+}
+
+/** Ambil note & tanggal keputusan dari approval terbaru (bisa difilter by status) */
+function pickLatestDecisionInfo(item, want) {
+  const approvals = getApprovalsArray(item);
+  if (!approvals.length) return null;
+
+  const desired = ["disetujui", "ditolak"].includes(norm(want))
+    ? norm(want)
+    : null;
+
+  const filtered = approvals
+    .filter((a) => !a?.deleted_at)
+    .filter((a) => {
+      const d = norm(a?.decision);
+      return desired ? d === desired : Boolean(a?.decided_at || a?.updated_at);
+    });
+
+  if (!filtered.length) return null;
+
+  const top = filtered
+    .sort((a, b) => {
+      const tb = new Date(b?.decided_at ?? b?.updated_at ?? 0).getTime();
+      const ta = new Date(a?.decided_at ?? a?.updated_at ?? 0).getTime();
+      return tb - ta;
+    })[0];
+
+  return {
+    note: top?.note ?? top?.catatan ?? top?.comment ?? "",
+    decided_at: top?.decided_at ?? top?.updated_at ?? null,
+  };
+}
+
 /* ===================== Pola kerja options helper ====================== */
 function guessPolaOptionsUrl() {
   try {
@@ -52,7 +131,7 @@ function guessPolaOptionsUrl() {
     if (ApiEndpoints?.GetPolaKerjaOptions) return ApiEndpoints.GetPolaKerjaOptions;
 
     if (typeof ApiEndpoints?.GetPolaKerja === "function")
-      return ApiEndpoints.GetPolaKerja({ page: 1, pageSize: 999 });
+      return ApiEndpoints.GetPolaKerja({ page: 1, perPage: 999 });
     if (ApiEndpoints?.GetPolaKerja) return ApiEndpoints.GetPolaKerja;
 
     if (typeof ApiEndpoints?.GetPolaOptions === "function")
@@ -62,9 +141,13 @@ function guessPolaOptionsUrl() {
   return null;
 }
 function normalizePolaItems(json) {
-  const items = (Array.isArray(json?.data) && json.data) || (Array.isArray(json) && json) || [];
+  const items =
+    (Array.isArray(json?.data) && json.data) ||
+    (Array.isArray(json) && json) ||
+    [];
   return items.map((it) => {
-    const id = it?.id_pola_kerja ?? it?.id ?? it?.polaId ?? it?.uuid ?? String(it?.value);
+    const id =
+      it?.id_pola_kerja ?? it?.id ?? it?.polaId ?? it?.uuid ?? String(it?.value);
     const nama = it?.nama_pola_kerja ?? it?.nama ?? it?.label ?? it?.name ?? "Pola";
     const jIn = (it?.jam_masuk ?? it?.jamIn ?? it?.start ?? it?.masuk) || "";
     const jOut = (it?.jam_pulang ?? it?.jamOut ?? it?.end ?? it?.pulang) || "";
@@ -73,38 +156,72 @@ function normalizePolaItems(json) {
   });
 }
 
-/* ===================== Attachments normalizer ====================== */
+/* ===================== Attachments normalizer (super-kompatibel) ====================== */
 function normalizeAttachments(item) {
   const result = [];
 
-  const pushUrl = (url, nameFallback = "Lampiran") => {
-    const s = String(url ?? "").trim();
-    if (!s) return;
-    const fileName = s.split("/").pop()?.split("?")[0] || nameFallback;
-    result.push({ url: s, name: fileName });
+  const pushUrl = (maybeUrl, nameFallback = "Lampiran") => {
+    const raw = String(maybeUrl ?? "").trim();
+    if (!raw) return;
+    const url = toPublicUrl(raw);
+    const fileName =
+      raw.split("/").pop()?.split("?")[0] ||
+      nameFallback;
+    result.push({ url, name: fileName });
   };
 
-  // Kandidat array
-  const arrCands = [item?.attachments, item?.lampiran, item?.berkas, item?.files];
-  for (const arr of arrCands) {
+  // Kandidat ARRAY yang sering dipakai backend
+  const arrayCandidates = [
+    item?.attachments,
+    item?.lampiran,
+    item?.berkas,
+    item?.files,
+    item?.file_kelengkapan,     // ← banyak backend pakai ini
+    item?.kelengkapan,          // ← atau ini
+    item?.kelengkapan_files,    // ← atau ini
+    item?.dokumen_kelengkapan,  // ← atau ini
+    item?.dokumen,
+    item?.documents,
+  ];
+
+  for (const arr of arrayCandidates) {
     if (Array.isArray(arr)) {
       for (const it of arr) {
-        const url = it?.url ?? it?.link ?? it?.path ?? it?.file_url ?? it;
-        const name = it?.name ?? it?.filename ?? undefined;
-        pushUrl(url, name);
+        const rawUrl =
+          (typeof it === "string" && it) ||
+          it?.url ||
+          it?.link ||
+          it?.path ||
+          it?.file_url ||
+          it?.file ||
+          it?.lokasi_file ||
+          it?.filepath ||
+          "";
+        const name =
+          it?.name ||
+          it?.filename ||
+          it?.original_name ||
+          it?.originalName ||
+          it?.nama_file ||
+          it?.file_name ||
+          undefined;
+        pushUrl(rawUrl, name);
       }
     }
   }
 
-  // Kandidat string tunggal
-  const strCands = [
+  // Kandidat STRING tunggal (1 file saja)
+  const singleCandidates = [
+    item?.file_kelengkapan,     // ← string path langsung
+    item?.file_kelengkapan_url,
     item?.lampiran_tukar_hari_url,
     item?.lampiran_url,
     item?.bukti_url,
-    item?.file_kelengkapan_url,
     item?.file_url,
+    item?.kelengkapan_url,
+    item?.dokumen_url,
   ];
-  for (const s of strCands) pushUrl(s);
+  for (const s of singleCandidates) pushUrl(s);
 
   return result;
 }
@@ -133,24 +250,17 @@ function mapItemToRow(item) {
     item?.tgl_pengganti ||
     null;
 
-  // Gabung Jabatan | Divisi (fallback ke role bila belum ada)
   const user = item?.user || {};
-
-  const jabatanName =
-    user?.jabatan?.nama_jabatan ?? null;
-
+  const jabatanName = user?.jabatan?.nama_jabatan ?? null;
   const divisiName =
-    user?.departement?.nama_departement ??
-    user?.divisi ??                        
-    null;
-
+    user?.departement?.nama_departement ?? user?.divisi ?? null;
   const jabatanDivisi =
     [jabatanName, divisiName].filter(Boolean).join(" | ") ||
     user?.role ||
     "—";
 
-  // Handover text
-  const handover =
+  // ===== Handover (tetap seperti sebelumnya) =====
+  const rawHandover =
     item?.handover ??
     item?.handover_text ??
     item?.handover_desc ??
@@ -158,30 +268,40 @@ function mapItemToRow(item) {
     item?.keterangan_handover ??
     "—";
 
-  // Handover users (toleran berbagai bentuk)
-  const rawHandoverUsers =
-    item?.handover_users ??
-    item?.handoverUsers ??
-    item?.penerima_handover ??
-    item?.handover_assignments ??
-    [];
+  const handoverClean = handoverPlainText(rawHandover);
 
-  const handoverUsers = Array.isArray(rawHandoverUsers)
-    ? rawHandoverUsers
+  const apiHandoverUsers = Array.isArray(item?.handover_users)
+    ? item.handover_users
         .map((h) => {
           const u = h?.user ?? h;
           const id = u?.id_user ?? u?.id ?? u?.uuid ?? null;
-          const name = u?.nama_pengguna ?? u?.name ?? u?.nama ?? u?.full_name ?? null;
-          const photo = u?.foto_profil_user ?? u?.photo ?? u?.avatar ?? "/avatar-placeholder.jpg";
+          const name =
+            u?.nama_pengguna ?? u?.name ?? u?.nama ?? u?.full_name ?? null;
+          const photo =
+            u?.foto_profil_user ?? u?.photo ?? u?.avatar ?? "/avatar-placeholder.jpg";
           if (!id && !name) return null;
-          return { id: id ?? String(name), name: name ?? "—", photo };
+          return { id: String(id ?? name), name: name ?? "—", photo };
         })
         .filter(Boolean)
     : [];
 
-  // Attachments
-  const attachments = normalizeAttachments(item);
-  const buktiUrl = attachments[0]?.url ?? null;
+  const tagUsers = extractHandoverTags(rawHandover).map((t) => ({
+    id: t.id,
+    name: t.name,
+    photo: "/avatar-placeholder.jpg",
+  }));
+
+  const handoverUsers = mergeUsers(apiHandoverUsers, tagUsers);
+
+  // ===== approvals =====
+  const statusRaw = norm(item?.status);
+  const latest = pickLatestDecisionInfo(item, statusRaw);
+
+  // ===== FILE PENDUKUNG (INI YANG PENTING) =====
+  const buktiUrl =
+    item?.lampiran_izin_tukar_hari_url ??
+    item?.lampiran_izin_tukar_hari ??
+    null;
 
   return {
     id: item?.id_izin_tukar_hari,
@@ -196,39 +316,39 @@ function mapItemToRow(item) {
     kategori: item?.kategori ?? "—",
     keperluan: item?.keperluan ?? "—",
 
-    // ✨ tambahan
-    handover,
+    handover: handoverClean,
     handoverUsers,
-    attachments,
     buktiUrl,
 
     statusRaw: item?.status ?? "pending",
     status: toLabelStatus(item?.status),
-    alasan: "",
+    alasan: latest?.note ?? "",
     tempAlasan: "",
-    tglKeputusan: item?.updated_at ?? item?.updatedAt ?? null,
+    tglKeputusan:
+      latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
 
     approvalId: pickApprovalId(item),
     pairs,
   };
 }
 
+
 /* ===================== Hook ViewModel ====================== */
 export default function useTukarHariViewModel() {
-  const [search, setSearch] = useState("");
-  const [tab, setTab] = useState("pengajuan");
+  const [search, _setSearch] = useState("");
+  const [tab, _setTab] = useState("pengajuan");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [reasonDraft, setReasonDraft] = useState({});
+  const [perPage, setPerPage] = useState(10); // konsisten pakai perPage
 
-  const [polaOptions, setPolaOptions] = useState([]);
-  const [loadingPola, setLoadingPola] = useState(false);
+  // reset halaman saat ganti tab / keyword
+  const setTab = useCallback((t) => { _setTab(t); setPage(1); }, []);
+  const setSearch = useCallback((s) => { _setSearch(s); setPage(1); }, []);
 
   /* ===== LIST: hanya data untuk tab aktif ===== */
   const listKey = useMemo(() => {
-    const qs = { status: statusFromTab(tab), page, pageSize, all: 1 };
+    const qs = { status: statusFromTab(tab), page, perPage, all: 1 };
     return ApiEndpoints.GetPengajuanTukarHariMobile(qs);
-  }, [tab, page, pageSize]);
+  }, [tab, page, perPage]);
 
   const { data, isLoading, mutate } = useSWR(listKey, fetcher, {
     revalidateOnFocus: false,
@@ -236,7 +356,8 @@ export default function useTukarHariViewModel() {
 
   /* ===== COUNTS untuk badge tab ===== */
   const countKey = useCallback(
-    (status) => ApiEndpoints.GetPengajuanTukarHariMobile({ status, page: 1, pageSize: 1 }),
+    (status) =>
+      ApiEndpoints.GetPengajuanTukarHariMobile({ status, page: 1, perPage: 1, all: 1 }),
     []
   );
 
@@ -263,7 +384,7 @@ export default function useTukarHariViewModel() {
   }, [data]);
 
   const filteredData = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = String(search).trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((d) => {
       const handoverNames = (d.handoverUsers || []).map((u) => u.name).join(" ");
@@ -275,20 +396,15 @@ export default function useTukarHariViewModel() {
         d.keperluan,
         d.hariIzin,
         d.hariPengganti,
-        d.handover,       // ✨ cari di deskripsi handover
-        handoverNames,    // ✨ cari di nama penerima
-        attNames,         // ✨ cari di nama file
+        d.handover,
+        handoverNames,
+        attNames,
       ]
         .join(" ")
         .toLowerCase()
         .includes(term);
     });
   }, [rows, search]);
-
-  /* ===== Draft alasan ===== */
-  function handleAlasanChange(id, value) {
-    setReasonDraft((prev) => ({ ...prev, [id]: value }));
-  }
 
   /* ===== Ensure approvalId via detail saat list tidak menyertakan ===== */
   async function ensureApprovalId(row) {
@@ -312,6 +428,8 @@ export default function useTukarHariViewModel() {
   }
 
   /* ===== Pola kerja options ===== */
+  const [polaOptions, setPolaOptions] = useState([]);
+  const [loadingPola, setLoadingPola] = useState(false);
   const fetchPolaOptions = useCallback(async () => {
     if (polaOptions.length) return;
     const url = guessPolaOptionsUrl();
@@ -322,7 +440,7 @@ export default function useTukarHariViewModel() {
       const json = await res.json();
       setPolaOptions(normalizePolaItems(json));
     } catch {
-      // biarkan kosong
+      // ignore
     } finally {
       setLoadingPola(false);
     }
@@ -366,7 +484,6 @@ export default function useTukarHariViewModel() {
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
-  // REPLACE seluruh fungsi reject dengan ini:
   const reject = useCallback(
     async (id, note) => {
       const row = rows.find((r) => r.id === id);
@@ -375,7 +492,7 @@ export default function useTukarHariViewModel() {
       const reason = String(note ?? "").trim();
       if (!reason) {
         message.error("Alasan wajib diisi saat menolak.");
-        return false; 
+        return false;
       }
 
       const approvalId = row.approvalId || (await ensureApprovalId(row));
@@ -404,7 +521,7 @@ export default function useTukarHariViewModel() {
           swrCntApproved.mutate(),
           swrCntRejected.mutate(),
         ]);
-        return true; // <- sukses
+        return true;
       } catch (e) {
         message.error(e?.message || "Gagal menyimpan keputusan.");
         return false;
@@ -412,7 +529,6 @@ export default function useTukarHariViewModel() {
     },
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
-
 
   const refresh = useCallback(
     () =>
@@ -438,13 +554,12 @@ export default function useTukarHariViewModel() {
     setSearch,
 
     page,
-    pageSize,
+    pageSize: perPage,
     changePage: (p, ps) => {
       setPage(p);
-      setPageSize(ps);
+      setPerPage(ps);
     },
 
-    handleAlasanChange,
     approve,
     reject,
     refresh,

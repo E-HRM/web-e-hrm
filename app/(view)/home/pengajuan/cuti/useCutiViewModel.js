@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { message } from "antd";
 import { ApiEndpoints } from "@/constrainst/endpoints";
 import { fetcher } from "@/app/utils/fetcher";
+import { handoverPlainText, extractHandoverTags, mergeUsers } from "@/app/api/mobile/tag-users/helpers/tagged-text";
 
 /* ===== Utils kecil ===== */
 const norm = (v) => String(v ?? "").trim().toLowerCase();
@@ -59,22 +60,40 @@ function mapItemToRow(item) {
   const statusRaw = norm(item?.status);
   const latest = pickLatestDecisionInfo(item, statusRaw);
 
-  // Ambil daftar user yang ditag sebagai handover (nama + foto saja)
-  const handoverUsers = Array.isArray(item?.handover_users)
+  // === 1) Ambil teks handover mentah & rapikan jadi @nama ===
+  const rawHandover =
+    item?.handover ??
+    item?.handover_text ??
+    item?.keterangan_handover ??
+    "—";
+  const handoverClean = handoverPlainText(rawHandover); // ← jadi "@nama" saja
+
+  // === 2) Normalisasi handover_users dari API (kalau ada) ===
+  const apiHandoverUsers = Array.isArray(item?.handover_users)
     ? item.handover_users
         .map((h) => {
-          const u = h?.user;
+          const u = h?.user ?? h;
           if (!u) return null;
           return {
-            id: u.id_user,
-            name: u.nama_pengguna ?? "—",
-            photo: u.foto_profil_user || "/avatar-placeholder.jpg",
+            id: u.id_user ?? u.id ?? u.uuid ?? null,
+            name: u.nama_pengguna ?? u.name ?? "—",
+            photo: u.foto_profil_user ?? u.photo ?? "/avatar-placeholder.jpg",
           };
         })
         .filter(Boolean)
     : [];
 
-  // Ambil list tanggal cuti (array Date) — dukung 2 bentuk payload
+  // === 3) Fallback: ambil user langsung dari tag di teks ===
+  const tagUsers = extractHandoverTags(rawHandover).map((t) => ({
+    id: t.id,                       // UUID dari tag
+    name: t.name,                   // Nama dari tag
+    photo: "/avatar-placeholder.jpg",
+  }));
+
+  // === 4) Gabungkan & deduplikasi (by id atau name) ===
+  const handoverUsers = mergeUsers(apiHandoverUsers, tagUsers);
+
+  // === 5) Tanggal cuti (tetap seperti semula) ===
   const tglCutiList = Array.isArray(item?.tanggal_list)
     ? item.tanggal_list
         .map((d) =>
@@ -83,27 +102,19 @@ function mapItemToRow(item) {
             : safeToDate(d?.tanggal_cuti ?? d?.tanggal ?? d?.date)
         )
         .filter(Boolean)
-        .filter((v, i, a) => a.findIndex(x => x.getTime() === v.getTime()) === i) // dedup
+        .filter((v, i, a) => a.findIndex((x) => x.getTime() === v.getTime()) === i)
         .sort((a, b) => a.getTime() - b.getTime())
     : [];
-
-  // First/last dari API (fallback ke turunan dari list)
   const tglCutiFirst =
     safeToDate(item?.tanggal_cuti) || tglCutiList[0] || null;
   const tglCutiLast =
     safeToDate(item?.tanggal_selesai) || tglCutiList[tglCutiList.length - 1] || null;
 
-  // support variasi struktur Prisma/string untuk jabatan & divisi
+  // === 6) Jabatan | Divisi (tetap) ===
   const user = item?.user || {};
-
-  const jabatanName =
-    user?.jabatan?.nama_jabatan ?? null;
-
+  const jabatanName = user?.jabatan?.nama_jabatan ?? null;
   const divisiName =
-    user?.departement?.nama_departement ??
-    user?.divisi ??                        
-    null;
-
+    user?.departement?.nama_departement ?? user?.divisi ?? null;
   const jabatanDivisi =
     [jabatanName, divisiName].filter(Boolean).join(" | ") ||
     user?.role ||
@@ -112,30 +123,31 @@ function mapItemToRow(item) {
   return {
     id: item?.id_pengajuan_cuti,
     nama: user?.nama_pengguna ?? "—",
-    jabatanDivisi,              
+    jabatanDivisi,
     foto: user?.foto_profil_user || "/avatar-placeholder.jpg",
     jenisCuti: item?.kategori_cuti?.nama_kategori ?? "—",
     tglPengajuan: item?.created_at ?? item?.createdAt ?? null,
 
-    // —— UI pakai ini:
-    tglCutiList,               // array Date
-    tglCutiFirst,              // Date
-    tglCutiLast,               // Date
+    // UI
+    tglCutiList,
+    tglCutiFirst,
+    tglCutiLast,
     totalHariCuti: tglCutiList.length,
 
-    // approve modal:
     tglMasuk: item?.tanggal_masuk_kerja ?? null,
 
     keterangan: item?.keperluan ?? "—",
-    handover: item?.handover ?? "—",
-    handoverUsers,
+    handover: handoverClean,       // ← sudah rapi: hanya @nama
+    handoverUsers,                 // ← chip “penerima handover” tetap jalan
     buktiUrl: item?.lampiran_cuti_url ?? null,
+
     status: toLabelStatus(item?.status),
     alasan: latest?.note || "",
     tglKeputusan: latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
     approvalId: pickApprovalId(item),
   };
 }
+
 
 function statusFromTab(tab) {
   if (tab === "disetujui") return "disetujui";
@@ -169,18 +181,20 @@ function toPolaOptions(list) {
 }
 
 export default function useCutiViewModel() {
-  const [search, _setSearch] = useState("");
- const setSearch = useCallback((s) => {
-   _setSearch(s);
-   setPage(1);         
- }, []);
-  const [tab, _setTab] = useState("pengajuan");
- const setTab = useCallback((t) => {
-   _setTab(t);
-   setPage(1);         
- }, []);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  // reset halaman saat ganti tab / keyword
+  const [tab, _setTab] = useState("pengajuan");
+  const setTab = useCallback((t) => {
+    _setTab(t);
+    setPage(1);
+  }, []);
+  const [search, _setSearch] = useState("");
+  const setSearch = useCallback((s) => {
+    _setSearch(s);
+    setPage(1);
+  }, []);
 
   // List pengajuan (tab aktif)
   const listKey = useMemo(() => {
@@ -301,54 +315,52 @@ export default function useCutiViewModel() {
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
-// REPLACE seluruh fungsi reject dengan ini:
-const reject = useCallback(
-  async (id, note) => {
-    const row = rows.find((r) => r.id === id);
-    if (!row) return false;
+  const reject = useCallback(
+    async (id, note) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) return false;
 
-    const reason = String(note ?? "").trim();
-    if (!reason) {
-      message.error("Alasan wajib diisi saat menolak.");
-      return false; // <- penting: biar caller tahu gagal
-    }
+      const reason = String(note ?? "").trim();
+      if (!reason) {
+        message.error("Alasan wajib diisi saat menolak.");
+        return false; // <- penting: biar caller tahu gagal
+      }
 
-    if (!row.approvalId) {
-      message.error(
-        "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
-      );
-      return false;
-    }
+      if (!row.approvalId) {
+        message.error(
+          "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
+        );
+        return false;
+      }
 
-    try {
-      const res = await fetch(
-        ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId),
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ decision: "ditolak", note: reason }),
-        }
-      );
-      const json = await res.json();
-      if (!res.ok || json?.ok === false)
-        throw new Error(json?.message || "Gagal");
+      try {
+        const res = await fetch(
+          ApiEndpoints.DecidePengajuanCutiMobile(row.approvalId),
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision: "ditolak", note: reason }),
+          }
+        );
+        const json = await res.json();
+        if (!res.ok || json?.ok === false)
+          throw new Error(json?.message || "Gagal");
 
-      message.success("Pengajuan cuti ditolak");
-      await Promise.all([
-        mutate(),
-        swrCntPending.mutate(),
-        swrCntApproved.mutate(),
-        swrCntRejected.mutate(),
-      ]);
-      return true; // <- sukses
-    } catch (e) {
-      message.error(e?.message || "Gagal menyimpan keputusan.");
-      return false;
-    }
-  },
-  [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
-);
-
+        message.success("Pengajuan cuti ditolak");
+        await Promise.all([
+          mutate(),
+          swrCntPending.mutate(),
+          swrCntApproved.mutate(),
+          swrCntRejected.mutate(),
+        ]);
+        return true; // <- sukses
+      } catch (e) {
+        message.error(e?.message || "Gagal menyimpan keputusan.");
+        return false;
+      }
+    },
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
+  );
 
   const refresh = useCallback(
     () =>
@@ -365,7 +377,8 @@ const reject = useCallback(
     data: rows,
     filteredData,
     tabCounts, // untuk badge tab
-    // filters
+
+    // filters & pagination (terkontrol)
     tab,
     setTab,
     search,
@@ -376,12 +389,15 @@ const reject = useCallback(
       setPage(p);
       setPageSize(ps);
     },
+
     // actions
     approve,
     reject,
     refresh,
+
     // pola kerja
     polaOptions,
+
     loading: isLoading,
   };
 }

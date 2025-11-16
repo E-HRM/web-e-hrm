@@ -68,7 +68,6 @@ function ellipsisWords(str, maxWords = 2) {
   return parts.length <= maxWords ? s : `${parts.slice(0, maxWords).join(" ")}…`;
 }
 
-
 function StatusBadge({ status }) {
   const statusConfig = {
     Disetujui: { color: SUCCESS_COLOR, text: "Disetujui" },
@@ -261,7 +260,6 @@ export default function CutiContent() {
   const [rejectRow, setRejectRow] = useState(null);
   const [reason, setReason] = useState("");
   const [approveRow, setApproveRow] = useState(null);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [expandedKeterangan, setExpandedKeterangan] = useState(new Set());
   const [expandedHandover, setExpandedHandover] = useState(new Set());
 
@@ -294,7 +292,7 @@ export default function CutiContent() {
         align: "center",
         render: (_, __, index) => (
           <div className="text-sm font-medium text-gray-600">
-            {(pagination.current - 1) * pagination.pageSize + index + 1}
+            {(vm.page - 1) * vm.pageSize + index + 1}
           </div>
         ),
       },
@@ -529,7 +527,7 @@ export default function CutiContent() {
         },
       },
     ];
-  }, [vm.tab, expandedKeterangan, expandedHandover, pagination]);
+  }, [vm.tab, expandedKeterangan, expandedHandover, vm.page, vm.pageSize]);
 
   const dataSource = vm.filteredData.map((d) => ({ key: d.id, ...d }));
 
@@ -619,7 +617,7 @@ export default function CutiContent() {
                   size="middle"
                   className="border-gray-300 text-gray-700 hover:border-blue-500 hover:text-blue-600"
                 >
-                  Konfigurasi
+                  Konfigurasi Kuota Cuti
                 </Button>
               </Link>
             </div>
@@ -656,14 +654,15 @@ export default function CutiContent() {
                     tableLayout="fixed"
                     sticky
                     pagination={{
-                      current: pagination.current,
-                      pageSize: pagination.pageSize,
+                      current: vm.page,
+                      pageSize: vm.pageSize,
+                      total: counts[vm.tab],
                       pageSizeOptions: [10, 20, 50],
                       showSizeChanger: true,
                       showTotal: (total, range) =>
                         `${range[0]}-${range[1]} dari ${total} data`,
                       onChange: (current, pageSize) =>
-                        setPagination({ current, pageSize }),
+                        vm.changePage(current, pageSize),
                     }}
                     scroll={{ x: 1200, y: 600 }}
                     loading={vm.loading}
