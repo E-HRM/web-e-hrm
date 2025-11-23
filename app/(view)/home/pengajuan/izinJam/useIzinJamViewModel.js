@@ -133,7 +133,7 @@ function mapItemToRow(item) {
 
   return {
     id: item?.id_pengajuan_izin_jam,
-
+    
     // user
     nama: u?.nama_pengguna ?? "—",
     jabatanDivisi,
@@ -306,6 +306,7 @@ export default function useIzinJamViewModel() {
     },
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
+
 
   const reject = useCallback(
     async (id, note) => {

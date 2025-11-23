@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, pengajuanInclude } from '../../route';
+import { ensureAuth, pengajuanInclude } from '../../pengajuan-cuti/route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
@@ -21,7 +21,7 @@ function createDefaultShiftSyncResult() {
     affectedDates: [],
     returnShift: null,
   };
-}
+}0
 
 const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
   day: '2-digit',

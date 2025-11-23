@@ -172,6 +172,8 @@ export default function SakitContent() {
 
   const [rejectRow, setRejectRow] = useState(null);
   const [reason, setReason] = useState("");
+  const [approveRow, setApproveRow] = useState(null);
+
   const [expandedHandover, setExpandedHandover] = useState(new Set());
   const toggleHandover = (id) =>
     setExpandedHandover((prev) => {
@@ -339,11 +341,12 @@ export default function SakitContent() {
                   type="primary"
                   icon={<CheckOutlined />}
                   className="w-full bg-green-600 hover:bg-green-700 border-green-600"
-                  onClick={() => vm.approve(r.id)}
+                  onClick={() => setApproveRow(r)}
                   size="small"
                 >
                   Setujui
                 </Button>
+
                 <Button
                   danger
                   icon={<CloseOutlined />}
@@ -622,6 +625,47 @@ export default function SakitContent() {
             </div>
           </div>
         </Modal>
+        <Modal
+        title={
+          <div className="flex items-center gap-2">
+            <CheckOutlined className="text-green-600" />
+            <span>Setujui Pengajuan Izin Sakit</span>
+          </div>
+        }
+        open={!!approveRow}
+        okText="Setujui Pengajuan"
+        okButtonProps={{
+          type: "primary",
+          icon: <CheckOutlined />,
+        }}
+        onOk={async () => {
+          if (!approveRow) return;
+          await vm.approve(approveRow.id); // tanpa note
+          setApproveRow(null);
+        }}
+        onCancel={() => {
+          setApproveRow(null);
+        }}
+        width={480}
+      >
+        <div className="space-y-3">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-green-900">
+              <InfoCircleOutlined />
+              Konfirmasi Persetujuan
+            </div>
+            <div className="text-sm text-green-700 mt-1">
+              Anda akan menyetujui pengajuan izin sakit dari{" "}
+              <strong>{approveRow?.nama}</strong>.
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Tindakan ini tidak dapat dibatalkan dari halaman ini. Pastikan data
+            pengajuan sudah benar.
+          </p>
+        </div>
+      </Modal>
+
       </div>
     </ConfigProvider>
   );

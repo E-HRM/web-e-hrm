@@ -106,6 +106,12 @@ export default function AgendaCalendarContent() {
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [agendaForm] = Form.useForm(); // (disiapkan bila dipakai)
 
+  const [createProgress, setCreateProgress] = useState({
+    running: false,
+    sent: 0,
+    total: 0,
+  });
+
   /* ===== Detail Modal ===== */
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState(null);
@@ -158,25 +164,52 @@ export default function AgendaCalendarContent() {
       status: v.status,
       id_agenda: v.id_agenda || null,
     };
+
     try {
       if (editId) {
+        // edit satu agenda saja
+        setCreateProgress({ running: true, sent: 0, total: 1 });
         await vm.updateEvent(editId, payload);
         notification.success({ message: "Agenda diperbarui" });
       } else {
+        // create ke banyak karyawan
         if (!Array.isArray(v.users) || v.users.length === 0) {
           notification.warning({ message: "Pilih setidaknya satu karyawan" });
           return;
         }
-        await vm.createEvents({ ...payload, userIds: v.users });
+
+        const total = v.users.length;
+        setCreateProgress({ running: true, sent: 0, total });
+
+        await vm.createEvents({
+          ...payload,
+          userIds: v.users,
+          onProgress: ({ sent, total }) => {
+            // progress realtime: (1/17), (2/17), dst
+            setCreateProgress((prev) => ({
+              ...prev,
+              running: true,
+              sent,
+              total,
+            }));
+          },
+        });
+
         notification.success({ message: "Agenda dibuat" });
       }
+
       setFormOpen(false);
       form.resetFields();
     } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Gagal menyimpan agenda";
+      const msg =
+        e?.response?.data?.message || e?.message || "Gagal menyimpan agenda";
       notification.error({ message: msg });
+    } finally {
+      // selesai / error -> matikan loading
+      setCreateProgress({ running: false, sent: 0, total: 0 });
     }
   };
+
 
   const confirmDelete = (id) => {
     Modal.confirm({
@@ -557,6 +590,7 @@ export default function AgendaCalendarContent() {
         onCancel={() => setFormOpen(false)}
         onOk={handleSubmitForm}
         okText={editId ? "Simpan" : "Buat"}
+        confirmLoading={createProgress.running}   // <-- loading di tombol OK
         destroyOnClose
         styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
       >
@@ -637,6 +671,64 @@ export default function AgendaCalendarContent() {
           </Form.Item>
           <Form.Item label="Selesai" name="end">
             <DatePicker showTime className="w-full" />
+          </Form.Item>
+        </Form>
+          {createProgress.running && !editId && (
+            <div className="mt-3 flex items-center gap-2 rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
+              <span className="inline-block h-3 w-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+              <span>
+                Mengirim agenda ke karyawan (
+                {createProgress.sent}/{createProgress.total})
+              </span>
+            </div>
+          )}
+            {createProgress.running && editId && (
+            <div className="mt-3 flex items-center gap-2 rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
+              <span className="inline-block h-3 w-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+              <span>Menyimpan perubahan agenda...</span>
+            </div>
+          )}
+      </Modal>
+      <Modal
+        title="Tambah Proyek"
+        open={agendaOpen}
+        onCancel={() => {
+          setAgendaOpen(false);
+          agendaForm.resetFields();
+        }}
+        onOk={async () => {
+          const v = await agendaForm.validateFields();
+          const nama = String(v.nama_agenda || "").trim();
+          if (!nama) return;
+
+          try {
+            const newId = await vm.createAgendaMaster(nama);  // call hook
+            if (newId) {
+              // auto pilih di form utama
+              form.setFieldsValue({ id_agenda: newId });
+            }
+            notification.success({ message: "Proyek/agenda berhasil ditambahkan" });
+            setAgendaOpen(false);
+            agendaForm.resetFields();
+          } catch (e) {
+            const msg =
+              e?.response?.data?.message ||
+              e?.message ||
+              "Gagal menambah proyek/agenda";
+            notification.error({ message: msg });
+          }
+        }}
+        okText="Simpan"
+        destroyOnClose
+        maskClosable={false}
+      >
+        <Form form={agendaForm} layout="vertical">
+          <Form.Item
+            label="Nama Proyek / Agenda"
+            name="nama_agenda"
+            rules={[{ required: true, message: "Nama proyek wajib diisi" }]}
+          >
+            <Input placeholder="Contoh: Implementasi Client X" />
           </Form.Item>
         </Form>
       </Modal>

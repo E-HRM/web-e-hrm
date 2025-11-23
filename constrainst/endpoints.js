@@ -68,6 +68,12 @@ const API_MOBILE_IZIN_SAKIT_APPROVALS = "/api/mobile/pengajuan-izin-sakit/approv
 const API_MOBILE_TUKAR_HARI = "/api/mobile/pengajuan-izin-tukar-hari";
 const API_MOBILE_TUKAR_HARI_APPROVALS = "/api/mobile/pengajuan-izin-tukar-hari/approvals";
 
+// === Notifications ===
+const API_NOTIFICATIONS = "/api/notifications";
+const API_NOTIFICATIONS_RECENT = "/api/notifications/recent";
+const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-as-read";
+
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -215,4 +221,11 @@ export const ApiEndpoints = {
   UpdatePengajuanTukarHariMobile: (id) => `${API_MOBILE_TUKAR_HARI}/${id}`,
   DeletePengajuanTukarHariMobile: (id) => `${API_MOBILE_TUKAR_HARI}/${id}`,
   DecidePengajuanTukarHariMobile: (approvalId) => `${API_MOBILE_TUKAR_HARI_APPROVALS}/${approvalId}`,
+
+  // ===== NOTIFICATIONS 
+  GetNotifications: (qsObj = {}) => `${API_NOTIFICATIONS}${buildQS(qsObj)}`,
+  GetNotificationsRecent: (qsObj = {}) => `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
+  MarkAllNotificationsRead: API_NOTIFICATIONS_MARK_ALL,
+  MarkNotificationRead: (id) => `${API_NOTIFICATIONS}/${id}`,
+
 };

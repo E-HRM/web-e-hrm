@@ -3,7 +3,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import React, { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import {
   TeamOutlined,
@@ -18,14 +17,31 @@ import {
   NotificationOutlined,
   AuditOutlined,
 } from "@ant-design/icons";
+import React, { useEffect, useRef, useState } from "react";
+import useSidebarBadgesViewModel from "./useSidebarBadgesViewModel";
 
 /** ===== MENU dasar ===== */
 const MENU = [
   { href: "/home/dashboard", label: "Dashboard", icon: ProductOutlined },
-  { href: "/home/absensi", match: ["/home/absensi", "/absensi-karyawan"], label: "Absensi Karyawan", icon: CalendarOutlined },
+  {
+    href: "/home/absensi",
+    match: ["/home/absensi", "/absensi-karyawan"],
+    label: "Absensi Karyawan",
+    icon: CalendarOutlined,
+  },
   // { href: "/home/approve_absensi", match: ["/home/approve_absensi"], label: "Aprrove", icon: ScheduleOutlined },
-  { href: "/home/lokasi", match: ["/home/lokasi"], label: "Lokasi", icon: EnvironmentOutlined },
-  { href: "/home/pola/shift", match: ["/home/pola/shift"], label: "Pola Kerja", icon: FieldTimeOutlined },
+  {
+    href: "/home/lokasi",
+    match: ["/home/lokasi"],
+    label: "Lokasi",
+    icon: EnvironmentOutlined,
+  },
+  {
+    href: "/home/pola/shift",
+    match: ["/home/pola/shift"],
+    label: "Pola Kerja",
+    icon: FieldTimeOutlined,
+  },
   {
     key: "karyawan",
     href: "/karyawan",
@@ -34,10 +50,26 @@ const MENU = [
     icon: TeamOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/kelola_karyawan/departement", match: ["/home/kelola_karyawan/departement"], label: "Divisi" },
-      { href: "/home/kelola_karyawan/jabatan", match: ["/home/kelola_karyawan/jabatan"], label: "Jabatan" },
-      { href: "/home/kelola_karyawan/karyawan", match: ["/home/kelola_karyawan/karyawan"], label: "Karyawan" },
-      { href: "/home/kelola_karyawan/shift_schedule", match: ["/home/kelola_karyawan/shift_schedule"], label: "Penjadwalan Shift" },
+      {
+        href: "/home/kelola_karyawan/departement",
+        match: ["/home/kelola_karyawan/departement"],
+        label: "Divisi",
+      },
+      {
+        href: "/home/kelola_karyawan/jabatan",
+        match: ["/home/kelola_karyawan/jabatan"],
+        label: "Jabatan",
+      },
+      {
+        href: "/home/kelola_karyawan/karyawan",
+        match: ["/home/kelola_karyawan/karyawan"],
+        label: "Karyawan",
+      },
+      {
+        href: "/home/kelola_karyawan/shift_schedule",
+        match: ["/home/kelola_karyawan/shift_schedule"],
+        label: "Penjadwalan Shift",
+      },
     ],
   },
   {
@@ -48,9 +80,21 @@ const MENU = [
     icon: UserOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/kunjungan/kunjungan_rekapan", match: ["/home/kunjungan/kunjungan_rekapan"], label: "Review Kunjungan" },
-      { href: "/home/kunjungan/kategori_kunjungan", match: ["/home/kunjungan/kategori_kunjungan"], label: "Kategori" },
-      { href: "/home/kunjungan/kunjungan_kalender", match: ["/home/kunjungan/kunjungan_kalender"], label: "Kalender Kunjungan" },
+      {
+        href: "/home/kunjungan/kunjungan_rekapan",
+        match: ["/home/kunjungan/kunjungan_rekapan"],
+        label: "Review Kunjungan",
+      },
+      {
+        href: "/home/kunjungan/kategori_kunjungan",
+        match: ["/home/kunjungan/kategori_kunjungan"],
+        label: "Kategori",
+      },
+      {
+        href: "/home/kunjungan/kunjungan_kalender",
+        match: ["/home/kunjungan/kunjungan_kalender"],
+        label: "Kalender Kunjungan",
+      },
     ],
   },
   {
@@ -61,28 +105,69 @@ const MENU = [
     icon: FileTextOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/agenda/proyek", match: ["/home/agenda/proyek"], label: "Proyek" },
-      { href: "/home/agenda/aktivitas", match: ["/home/agenda/aktivitas"], label: "Aktivitas" },
-      { href: "/home/agenda/agenda_kerja", match: ["/home/agenda/agenda_kerja"], label: "Agenda Kerja" },
-      { href: "/home/agenda/agenda_calendar", match: ["/home/agenda/agenda_calendar"], label: "Kalender Agenda" },
+      {
+        href: "/home/agenda/proyek",
+        match: ["/home/agenda/proyek"],
+        label: "Proyek",
+      },
+      {
+        href: "/home/agenda/aktivitas",
+        match: ["/home/agenda/aktivitas"],
+        label: "Aktivitas",
+      },
+      {
+        href: "/home/agenda/agenda_kerja",
+        match: ["/home/agenda/agenda_kerja"],
+        label: "Agenda Kerja",
+      },
+      {
+        href: "/home/agenda/agenda_calendar",
+        match: ["/home/agenda/agenda_calendar"],
+        label: "Kalender Agenda",
+      },
     ],
   },
   {
     key: "cuti",
     href: "/home/pengajuan",
     match: ["/home/pengajuan"],
-    label: "Pengajuan Cuti/Izin",
+    label: "Cuti & Izin",
     icon: AuditOutlined,
     hasCaret: true,
     children: [
-      { href: "/home/pengajuan/manajemenKategori", match: ["/home/pengajuan/manajemenKategori"], label: "Management Kategori" },
-      { href: "/home/pengajuan/cuti", match: ["/home/pengajuan/cuti"], label: "Cuti" },
-      { href: "/home/pengajuan/sakit", match: ["/home/pengajuan/sakit"], label: "Izin Sakit" },
-      { href: "/home/pengajuan/tukarHari", match: ["/home/pengajuan/tukarHari"], label: "Izin Tukar Hari" },
-      { href: "/home/pengajuan/izinJam", match: ["/home/pengajuan/izinJam"], label: "Izin Jam" },
+      {
+        href: "/home/pengajuan/manajemenKategori",
+        match: ["/home/pengajuan/manajemenKategori"],
+        label: "Management Kategori",
+      },
+      {
+        href: "/home/pengajuan/cuti",
+        match: ["/home/pengajuan/cuti"],
+        label: "Cuti",
+      },
+      {
+        href: "/home/pengajuan/sakit",
+        match: ["/home/pengajuan/sakit"],
+        label: "Izin Sakit",
+      },
+      {
+        href: "/home/pengajuan/tukarHari",
+        match: ["/home/pengajuan/tukarHari"],
+        label: "Izin Tukar Hari",
+      },
+      {
+        href: "/home/pengajuan/izinJam",
+        match: ["/home/pengajuan/izinJam"],
+        label: "Izin Jam",
+      },
     ],
   },
-  { href: "/home/broadcast", match: ["/home/broadcast"], label: "Broadcast", icon: NotificationOutlined },
+  {
+    href: "/home/broadcast",
+    match: ["/home/broadcast"],
+    label: "Broadcast",
+    icon: NotificationOutlined,
+  },
 ];
 
 /** ===== RBAC Sidebar ===== */
@@ -141,12 +226,19 @@ export default function Sidebar() {
   const menuRoleAware = roleAwareDashboard(MENU, role);
   const MENU_FOR_ROLE = filterMenuForRole(menuRoleAware, role);
 
+  // Badge pengajuan (cuti / izin jam / tukar hari / sakit)
+  const { counts: pendingPengajuan, hasAnyPending } =
+    useSidebarBadgesViewModel(role);
+
   const [openSections, setOpenSections] = useState({});
 
   const isActive = (item) => {
     const prefixes = item.match?.length ? item.match : [item.href];
-    return prefixes.some((p) => pathname === p || (pathname && pathname.startsWith(`${p}/`)));
+    return prefixes.some(
+      (p) => pathname === p || (pathname && pathname.startsWith(`${p}/`))
+    );
   };
+
   const isExactActive = (item) => {
     const prefixes = item.match?.length ? item.match : [item.href];
     return prefixes.some((p) => pathname === p);
@@ -222,7 +314,10 @@ export default function Sidebar() {
   return (
     // font sidebar dikecilkan (responsif)
     <aside className="flex flex-col h-full bg-[#003A6F] text-white text-xs sm:text-sm md:text-[13px]">
-      <nav ref={scrollRef} className="flex-1 py-4 px-3 sider-scroll overflow-y-auto">
+      <nav
+        ref={scrollRef}
+        className="flex-1 py-4 px-3 sider-scroll overflow-y-auto"
+      >
         <ul className="space-y-1">
           {MENU_FOR_ROLE.map((m) => {
             const Icon = m.icon;
@@ -234,12 +329,19 @@ export default function Sidebar() {
               const displayOpen = (openSections[key] ?? anyChildActive) === true;
               const highlightParent = selfExactActive && !anyChildActive;
 
+              const cutiCount = pendingPengajuan.cuti || 0;
+              const izinJamCount = pendingPengajuan.izinJam || 0;
+              const tukarHariCount = pendingPengajuan.tukarHari || 0;
+              const sakitCount = pendingPengajuan.sakit || 0;
+
               return (
                 <li key={m.href}>
                   <button
                     type="button"
                     onClick={() => toggleGroup(key)}
-                    className={[baseItem, highlightParent ? activeItem : ""].join(" ")}
+                    className={[baseItem, highlightParent ? activeItem : ""].join(
+                      " "
+                    )}
                     aria-expanded={displayOpen}
                     aria-controls={`submenu-${key}`}
                   >
@@ -247,7 +349,26 @@ export default function Sidebar() {
                       <span className={iconBox}>
                         <Icon className={iconCls} />
                       </span>
-                      <span className="leading-none transition-colors font-semibold">{m.label}</span>
+                      <span className="leading-none transition-colors font-semibold flex items-center gap-2">
+                        {m.label}
+                        {/* Badge di parent menu "Cuti & Izin" */}
+                        {m.key === "cuti" && hasAnyPending && (
+                          <span className="ml-1 inline-flex items-center gap-1">
+                            <span
+                              className="
+                                text-[10px] font-semibold leading-none
+                                bg-rose-500 text-white
+                                rounded-full px-1.5 py-[1px]
+                                shadow-sm
+                              "
+                            >
+                              {pendingPengajuan.total > 99
+                                ? "99+"
+                                : pendingPengajuan.total}
+                            </span>
+                          </span>
+                        )}
+                      </span>
                     </span>
                     <span className={rightSlot}>
                       <DownOutlined
@@ -269,17 +390,76 @@ export default function Sidebar() {
                     <ul className="pt-1 space-y-1">
                       {m.children.map((c) => {
                         const active = isActive(c);
+
                         return (
                           <li key={c.href}>
                             <Link
                               href={c.href}
-                              className={[subItem, active ? subActive : ""].join(" ")}
+                              className={[subItem, active ? subActive : ""].join(
+                                " "
+                              )}
                               aria-current={active ? "page" : undefined}
                             >
                               <span className={iconBox}>
                                 <StripBullet active={active} />
                               </span>
-                              <span className="leading-none transition-colors font-semibold">{c.label}</span>
+                              <span className="leading-none transition-colors font-semibold flex items-center gap-2">
+                                {c.label}
+                                {/* Badge per jenis pengajuan */}
+                                {c.href === "/home/pengajuan/cuti" &&
+                                  cutiCount > 0 && (
+                                    <span
+                                      className="
+                                        text-[10px] font-semibold
+                                        bg-rose-100 text-rose-700
+                                        rounded-full px-1.5 py-[1px]
+                                      "
+                                    >
+                                      {cutiCount > 99 ? "99+" : cutiCount}
+                                    </span>
+                                  )}
+
+                                {c.href === "/home/pengajuan/izinJam" &&
+                                  izinJamCount > 0 && (
+                                    <span
+                                      className="
+                                        text-[10px] font-semibold
+                                        bg-rose-100 text-rose-700
+                                        rounded-full px-1.5 py-[1px]
+                                      "
+                                    >
+                                      {izinJamCount > 99 ? "99+" : izinJamCount}
+                                    </span>
+                                  )}
+
+                                {c.href === "/home/pengajuan/tukarHari" &&
+                                  tukarHariCount > 0 && (
+                                    <span
+                                      className="
+                                        text-[10px] font-semibold
+                                        bg-rose-100 text-rose-700
+                                        rounded-full px-1.5 py-[1px]
+                                      "
+                                    >
+                                      {tukarHariCount > 99
+                                        ? "99+"
+                                        : tukarHariCount}
+                                    </span>
+                                  )}
+
+                                {c.href === "/home/pengajuan/sakit" &&
+                                  sakitCount > 0 && (
+                                    <span
+                                      className="
+                                        text-[10px] font-semibold
+                                        bg-rose-100 text-rose-700
+                                        rounded-full px-1.5 py-[1px]
+                                      "
+                                    >
+                                      {sakitCount > 99 ? "99+" : sakitCount}
+                                    </span>
+                                  )}
+                              </span>
                             </Link>
                           </li>
                         );
@@ -302,7 +482,9 @@ export default function Sidebar() {
                     <span className={iconBox}>
                       <Icon className={iconCls} />
                     </span>
-                    <span className="leading-none transition-colors font-semibold">{m.label}</span>
+                    <span className="leading-none transition-colors font-semibold">
+                      {m.label}
+                    </span>
                   </span>
                   <span className={rightSlot} aria-hidden="true" />
                 </Link>

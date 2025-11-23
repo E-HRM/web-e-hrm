@@ -355,7 +355,18 @@ export default function useAgendaCalendarViewModel() {
   /* ===== CRUD ===== */
 
   const createEvents = useCallback(
-    async ({ title, start, end, status = "teragenda", userIds = [], id_agenda }) => {
+    async ({
+      title,
+      start,
+      end,
+      status = "teragenda",
+      userIds = [],
+      id_agenda,
+      onProgress,               // <-- callback opsional
+    }) => {
+      const total = userIds.length || 0;
+      let sent = 0;
+
       for (const uid of userIds) {
         const payload = {
           id_user: uid,
@@ -365,8 +376,20 @@ export default function useAgendaCalendarViewModel() {
           start_date: serializeLocalWallTime(start),
           end_date: serializeLocalWallTime(end || start),
         };
+
         await crudService.post(ApiEndpoints.CreateAgendaKerja, payload);
+
+        // update progress tiap 1 user
+        sent += 1;
+        if (typeof onProgress === "function") {
+          onProgress({
+            sent,
+            total,
+            userId: uid,
+          });
+        }
       }
+
       await mutate();
     },
     [mutate]

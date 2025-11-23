@@ -1,7 +1,8 @@
+// app/components/notifications/NotificationContent.jsx
 "use client";
 
 import React from "react";
-import { Button, Dropdown, Badge, Tabs, Empty } from "antd";
+import { Button, Dropdown, Badge, Tabs, Empty, Spin, Alert } from "antd";
 import {
   BellOutlined,
   CheckCircleOutlined,
@@ -16,6 +17,17 @@ function renderTypeIcon(type) {
   return <ClockCircleOutlined />;
 }
 
+// map related_table -> type (buat warna & icon)
+function getTypeFor(it) {
+  const tbl = it.related_table;
+  if (!tbl) return "info";
+  if (tbl === "pengajuan_cuti") return "absensi";
+  if (tbl === "izin_tukar_hari") return "shift";
+  if (tbl === "pengajuan_izin_sakit") return "info";
+  if (tbl === "pengajuan_izin_jam") return "info";
+  return "info";
+}
+
 export default function NotificationContent() {
   const {
     items,
@@ -26,51 +38,61 @@ export default function NotificationContent() {
     markAllRead,
     markOneRead,
     formatRelativeTime,
+    isLoading,
+    apiError,
   } = useNotificationViewModel();
 
-  const renderItem = (it) => (
-    <button
-      key={it.id}
-      onClick={() => markOneRead(it.id)}
-      className={`w-full text-left px-3 py-2 rounded-xl transition
-        ${
-          it.read
-            ? "bg-white hover:bg-slate-50"
-            : "bg-amber-50 hover:bg-amber-100"
-        }`}
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className={`mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full
-            ${
-              it.type === "absensi"
-                ? "bg-emerald-100 text-emerald-700"
-                : it.type === "shift"
-                ? "bg-sky-100 text-sky-700"
-                : "bg-slate-100 text-slate-700"
-            }`}
-        >
-          {renderTypeIcon(it.type)}
-        </div>
+  const renderItem = (it) => {
+    const key = it.id_notification || it.id; // dari DB
+    const read = it.status === "read";       // status: 'read' | 'unread'
+    const type = getTypeFor(it);
+    const desc = it.body || it.desc || "";
+    const timeVal = it.created_at || it.time;
 
-        <div className="min-w-0">
-          <div className="font-medium text-slate-800 line-clamp-1">
-            {it.title}
+    return (
+      <button
+        key={key}
+        onClick={() => markOneRead(key)}
+        className={`w-full text-left px-3 py-2 rounded-xl transition
+          ${
+            read
+              ? "bg-white hover:bg-slate-50"
+              : "bg-amber-50 hover:bg-amber-100"
+          }`}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className={`mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full
+              ${
+                type === "absensi"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : type === "shift"
+                  ? "bg-sky-100 text-sky-700"
+                  : "bg-slate-100 text-slate-700"
+              }`}
+          >
+            {renderTypeIcon(type)}
           </div>
-          <div className="text-xs text-slate-600 line-clamp-2">
-            {it.desc}
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1">
-            {formatRelativeTime(it.time)}
-          </div>
-        </div>
 
-        {!it.read && (
-          <span className="ml-auto mt-1 inline-block h-2 w-2 rounded-full bg-red-500" />
-        )}
-      </div>
-    </button>
-  );
+          <div className="min-w-0">
+            <div className="font-medium text-slate-800 line-clamp-1">
+              {it.title}
+            </div>
+            <div className="text-xs text-slate-600 line-clamp-2">
+              {desc}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              {timeVal ? formatRelativeTime(timeVal) : ""}
+            </div>
+          </div>
+
+          {!read && (
+            <span className="ml-auto mt-1 inline-block h-2 w-2 rounded-full bg-red-500" />
+          )}
+        </div>
+      </button>
+    );
+  };
 
   const dropdownWithTabs = (
     <div
@@ -106,8 +128,24 @@ export default function NotificationContent() {
         />
       </div>
 
+      {/* Error state */}
+      {apiError && (
+        <div className="px-3 pb-2">
+          <Alert
+            type="error"
+            showIcon
+            message="Gagal memuat notifikasi"
+            banner={false}
+          />
+        </div>
+      )}
+
       {/* List */}
-      {filteredItems?.length ? (
+      {isLoading ? (
+        <div className="px-4 py-8 text-center">
+          <Spin size="small" />
+        </div>
+      ) : filteredItems?.length ? (
         <div className="px-2 pb-2 max-h-[60vh] overflow-auto space-y-2">
           {filteredItems.map(renderItem)}
         </div>

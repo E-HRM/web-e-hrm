@@ -16,7 +16,7 @@ import {
 } from "@ant-design/icons";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import NotificationContent from "@/components/notifications/NotificationContent";
+import NotificationContent from "@/app/components/notifications/NotificationContent";
 
 /* ======= Profile Dropdown ======= */
 function ProfileDropdown({ onLogout }) {

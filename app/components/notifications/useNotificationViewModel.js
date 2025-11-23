@@ -1,69 +1,155 @@
+// app/components/notifications/useNotificationViewModel.js
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-// nanti kalau sudah ada API, bisa pakai useSWR di sini
-
-// Sementara: data dummy
-const initialDummyItems = [
-  {
-    id: "n1",
-    title: "Persetujuan Cuti",
-    desc: "Segera hadir, nantikan V2.",
-    time: new Date(Date.now() - 2 * 60 * 1000),
-    read: false,
-    type: "absensi",
-  },
-  {
-    id: "n2",
-    title: "Persetujuan Tukar Hari",
-    desc: "Segera hadir.",
-    time: new Date(Date.now() - 45 * 60 * 1000),
-    read: false,
-    type: "shift",
-  },
-  {
-    id: "n3",
-    title: "Pengumuman",
-    desc: "Maintenance sistem Jumat 21:00–22:00.",
-    time: new Date(Date.now() - 6 * 60 * 60 * 1000),
-    read: true,
-    type: "info",
-  },
-];
+import useSWR from "swr";
+import Cookies from "js-cookie";
+import { message } from "antd";
+// import { fetcher } from "@/app/utils/fetcher"; // sudah tidak dipakai
+import { ApiEndpoints } from "@/constrainst/endpoints";
 
 export default function useNotificationViewModel() {
-  const [items, setItems] = useState(initialDummyItems);
-  const [activeTabKey, setActiveTabKey] = useState("all"); // "all" | "unread"
+  // ambil 7 hari terakhir untuk 4 jenis pengajuan
+  const swrKey = ApiEndpoints.GetNotificationsRecent({
+    days: 7,
+    types: [
+      "pengajuan_cuti",
+      "izin_tukar_hari",
+      "pengajuan_izin_sakit",
+      "pengajuan_izin_jam",
+    ].join(","),
+  });
+
+  // === SWR dengan Authorization header ===
+  const {
+    data: apiResponse,
+    error: apiError,
+    isLoading,
+    mutate,
+  } = useSWR(
+    swrKey,
+    async (url) => {
+      const token = Cookies.get("token");
+      const res = await fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (_) {}
+
+      if (!res.ok) {
+        const err = new Error(data?.message || `Error ${res.status}`);
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    },
+    {
+      refreshInterval: 30000, // polling tiap 30 detik
+    }
+  );
+
+  const items = useMemo(
+    () => (Array.isArray(apiResponse?.data) ? apiResponse.data : []),
+    [apiResponse]
+  );
+
+  const [activeTabKey, setActiveTabKey] = useState("all");
 
   const unreadCount = useMemo(
-    () => items.filter((i) => !i.read).length,
+    () => items.filter((it) => it.status === "unread").length,
     [items]
   );
 
   const filteredItems = useMemo(() => {
     if (activeTabKey === "unread") {
-      return items.filter((i) => !i.read);
+      return items.filter((it) => it.status === "unread");
     }
     return items;
   }, [items, activeTabKey]);
 
-  const markAllRead = useCallback(() => {
-    setItems((arr) => arr.map((it) => ({ ...it, read: true })));
-    // TODO: nanti panggil API PATCH /notifications/mark-all
-  }, []);
+  // ==== mark all read ====
+  const markAllRead = useCallback(async () => {
+    try {
+      const token = Cookies.get("token");
+      const res = await fetch(ApiEndpoints.MarkAllNotificationsRead, {
+        method: "PUT",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || `Error ${res.status}`);
+      }
 
-  const markOneRead = useCallback((id) => {
-    setItems((arr) =>
-      arr.map((it) => (it.id === id ? { ...it, read: true } : it))
-    );
-    // TODO: nanti panggil API PATCH /notifications/:id
-  }, []);
+      const nowIso = new Date().toISOString();
+      mutate(
+        (current) => {
+          if (!current || !Array.isArray(current.data)) return current;
+          const updated = current.data.map((it) => ({
+            ...it,
+            status: "read",
+            read_at: it.read_at || nowIso,
+            seen_at: it.seen_at || nowIso,
+          }));
+          return { ...current, data: updated };
+        },
+        false
+      );
+      mutate();
+    } catch (err) {
+      console.error("Failed to mark all notifications as read", err);
+      message.error("Gagal menandai semua notifikasi");
+    }
+  }, [mutate]);
 
-  // Helper kecil untuk format waktu relatif
+  // ==== mark one read ====
+  const markOneRead = useCallback(
+    async (id) => {
+      if (!id) return;
+      try {
+        const token = Cookies.get("token");
+        const res = await fetch(ApiEndpoints.MarkNotificationRead(id), {
+          method: "PUT",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.message || `Error ${res.status}`);
+        }
+        const nowIso = new Date().toISOString();
+        mutate(
+          (current) => {
+            if (!current || !Array.isArray(current.data)) return current;
+            const updated = current.data.map((it) => {
+              const key = it.id_notification || it.id;
+              if (key === id) {
+                return {
+                  ...it,
+                  status: "read",
+                  read_at: nowIso,
+                  seen_at: nowIso,
+                };
+              }
+              return it;
+            });
+            return { ...current, data: updated };
+          },
+          false
+        );
+        mutate();
+      } catch (err) {
+        console.error("Failed to mark notification as read", err);
+        message.error("Gagal menandai notifikasi");
+      }
+    },
+    [mutate]
+  );
+
   const formatRelativeTime = useCallback((time) => {
     const d = time instanceof Date ? time : new Date(time);
     const diff = Math.floor((Date.now() - d.getTime()) / 1000);
-
     if (diff < 60) return `${diff}s lalu`;
     if (diff < 3600) return `${Math.floor(diff / 60)}m lalu`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}j lalu`;
@@ -71,20 +157,15 @@ export default function useNotificationViewModel() {
   }, []);
 
   return {
-    // data
     items,
     unreadCount,
     filteredItems,
-
-    // tab
+    isLoading,
+    apiError,
     activeTabKey,
     setActiveTabKey,
-
-    // actions
     markAllRead,
     markOneRead,
-
-    // helpers
     formatRelativeTime,
   };
 }

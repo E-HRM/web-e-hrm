@@ -171,6 +171,7 @@ export default function IzinJamContent() {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [expandedKeperluan, setExpandedKeperluan] = useState(new Set());
   const [expandedHandover, setExpandedHandover] = useState(new Set());
+  const [approveRow, setApproveRow] = useState(null);
 
   const toggleKeperluan = (id) =>
     setExpandedKeperluan((prev) => {
@@ -358,11 +359,12 @@ export default function IzinJamContent() {
                   type="primary"
                   icon={<CheckOutlined />}
                   className="w-full bg-green-600 hover:bg-green-700 border-green-600"
-                  onClick={() => vm.approve(r.id)}
+                  onClick={() => setApproveRow(r)}
                   size="small"
                 >
                   Setujui
                 </Button>
+
                 <Button
                   danger
                   icon={<CloseOutlined />}
@@ -626,6 +628,46 @@ export default function IzinJamContent() {
             </div>
           </div>
         </Modal>
+        <Modal
+        title={
+          <div className="flex items-center gap-2">
+            <CheckOutlined className="text-green-600" />
+            <span>Setujui Pengajuan Izin Jam</span>
+          </div>
+        }
+        open={!!approveRow}
+        okText="Setujui Pengajuan"
+        okButtonProps={{
+          type: "primary",
+          icon: <CheckOutlined />,
+        }}
+        onOk={async () => {
+          if (!approveRow) return;
+          await vm.approve(approveRow.id); // tanpa note
+          setApproveRow(null);
+        }}
+        onCancel={() => {
+          setApproveRow(null);
+        }}
+        width={480}
+      >
+        <div className="space-y-3">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-green-900">
+              <InfoCircleOutlined />
+              Konfirmasi Persetujuan
+            </div>
+            <div className="text-sm text-green-700 mt-1">
+              Anda akan menyetujui pengajuan izin jam dari{" "}
+              <strong>{approveRow?.nama}</strong>.
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Pastikan tanggal & jam izin sudah sesuai sebelum melanjutkan.
+          </p>
+        </div>
+      </Modal>
+
       </div>
     </ConfigProvider>
   );
