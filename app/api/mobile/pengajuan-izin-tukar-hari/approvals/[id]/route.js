@@ -201,12 +201,18 @@ async function handleDecision(req, { params }) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, message: 'Body request harus berupa JSON.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, message: 'Body request harus berupa JSON.' },
+      { status: 400 }
+    );
   }
 
   const decision = normalizeDecision(body?.decision);
   if (!decision) {
-    return NextResponse.json({ ok: false, message: 'decision harus diisi dengan nilai disetujui atau ditolak.' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, message: 'decision harus diisi dengan nilai disetujui atau ditolak.' },
+      { status: 400 }
+    );
   }
 
   const note = body?.note === undefined || body?.note === null ? null : String(body.note);
@@ -235,12 +241,18 @@ async function handleDecision(req, { params }) {
       });
 
       if (!approval || approval.deleted_at) {
-        throw NextResponse.json({ ok: false, message: 'Approval tidak ditemukan.' }, { status: 404 });
+        throw NextResponse.json(
+          { ok: false, message: 'Approval tidak ditemukan.' },
+          { status: 404 }
+        );
       }
 
       const parent = approval.izin_tukar_hari;
       if (!parent || parent.deleted_at) {
-        throw NextResponse.json({ ok: false, message: 'Pengajuan tidak ditemukan.' }, { status: 404 });
+        throw NextResponse.json(
+          { ok: false, message: 'Pengajuan tidak ditemukan.' },
+          { status: 404 }
+        );
       }
 
       const normalizedActorRole = normalizeRole(actorRole);
@@ -317,7 +329,10 @@ async function handleDecision(req, { params }) {
           } catch (e) {
             console.error('Gagal sinkron shift tukar-hari:', e);
             if (e instanceof NextResponse) throw e;
-            throw NextResponse.json({ ok: false, message: 'Gagal menyelaraskan shift untuk tukar hari.' }, { status: 500 });
+            throw NextResponse.json(
+              { ok: false, message: 'Gagal menyelaraskan shift untuk tukar hari.' },
+              { status: 500 }
+            );
           }
         }
       } else {
@@ -358,7 +373,11 @@ async function handleDecision(req, { params }) {
     }
 
     // Notifikasi sinkronisasi shift
-    if (approval.decision === 'disetujui' && submission?.id_user && (shiftSync.updatedCount > 0 || shiftSync.createdCount > 0)) {
+    if (
+      approval.decision === 'disetujui' &&
+      submission?.id_user &&
+      (shiftSync.updatedCount > 0 || shiftSync.createdCount > 0)
+    ) {
       const ds = (shiftSync.affectedDates || [])
         .map(toDateOnly)
         .filter(Boolean)
@@ -404,7 +423,10 @@ async function handleDecision(req, { params }) {
   } catch (err) {
     if (err instanceof NextResponse) return err;
     console.error('PATCH/PUT /mobile/izin-tukar-hari/approvals error:', err);
-    return NextResponse.json({ ok: false, message: 'Terjadi kesalahan saat memproses approval.' }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, message: 'Terjadi kesalahan saat memproses approval.' },
+      { status: 500 }
+    );
   }
 }
 
