@@ -418,7 +418,7 @@ export async function POST(req) {
       if (finalLampiranUrl) {
         sendIzinSakitImage(finalLampiranUrl, whatsappMessage).catch((err) => console.error('Gagal kirim WA Image (Sakit):', err));
       } else {
-        sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal kirim WA Text (Sakit):', err));
+        sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal kirim notif teks di latar belakang:', err));
       }
 
       const notifiedUsers = new Set();
