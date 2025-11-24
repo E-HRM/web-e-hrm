@@ -17,7 +17,11 @@ const keyFromServerDate = (v) => new Date(v).toISOString().slice(0, 10);
 /** Dari “hari lokal” UI → 'YYYY-MM-DD' UTC konsisten */
 const keyFromLocalDay = (dLike) => {
   const d = dayjs(dLike);
-  return new Date(Date.UTC(d.year(), d.month(), d.date())).toISOString().slice(0, 10);
+  return new Date(
+    Date.UTC(d.year(), d.month(), d.date())
+  )
+    .toISOString()
+    .slice(0, 10);
 };
 /** Untuk querystring ke server */
 const toISO = (d) => dayjs(d).format("YYYY-MM-DD");
@@ -46,19 +50,104 @@ async function loadShiftMapForRange(startDate, endDate) {
   const res = await fetcher(`${ApiEndpoints.GetShiftKerja}?${qs}`);
   const map = new Map();
   // keep-first (data desc → pertama = paling baru)
-  for (const it of res?.data || []) {
+  const list = (res && res.data) || [];
+  list.forEach((it) => {
     const dateKey = keyFromServerDate(it.tanggal_mulai);
     const k = `${it.id_user}|${dateKey}`;
     if (!map.has(k)) {
       map.set(k, {
         rawId: it.id_shift_kerja,
         status: it.status,
-        polaId: it.id_pola_kerja == null ? null : String(it.id_pola_kerja),
+        polaId:
+          it.id_pola_kerja == null ? null : String(it.id_pola_kerja),
       });
     }
-  }
+  });
   return map;
 }
+
+async function loadStoryMapForRange(startDate, endDate, userId) {
+  if (dayjs(startDate).isAfter(endDate)) return new Map();
+
+  const p = new URLSearchParams();
+  p.set("page", "1");
+  p.set("pageSize", "5000");
+  p.set("countTimeFrom", toISO(startDate));
+  p.set("countTimeTo", toISO(endDate));
+  if (userId) p.set("id_user", String(userId));
+
+  const res = await fetcher(
+    `${ApiEndpoints.GetStoryPlanner}?${p.toString()}`
+  );
+
+  const map = new Map();
+  const list = (res && res.data) || [];
+
+  list.forEach(function (it) {
+    if (!it.count_time) return;
+    const dateKey = keyFromServerDate(it.count_time);
+    const key = it.id_user + "|" + dateKey;
+    if (!map.has(key)) {
+      map.set(key, {
+        rawId: it.id_story,
+        status: it.status,
+        deskripsi_kerja: it.deskripsi_kerja,
+      });
+    }
+  });
+
+  return map;
+}
+
+async function repeatStorySameWeekdayUntilEndOfMonth(
+  userId,
+  baseDateKey,
+  basePayload
+) {
+  const source = dayjs(baseDateKey);         // contoh: Sabtu, 22
+  const monthEnd = source.endOf("month");    // akhir bulan
+  const existingMap = await loadStoryMapForRange(
+    source.toDate(),
+    monthEnd.toDate(),
+    userId
+  );
+
+  const jobFns = [];
+  let cursor = source.add(1, "week");        // mulai Sabtu minggu depan
+
+  while (
+    cursor.isBefore(monthEnd, "day") ||
+    cursor.isSame(monthEnd, "day")
+  ) {
+    const targetDateKey = keyFromLocalDay(cursor); // 'YYYY-MM-DD'
+    const key = userId + "|" + targetDateKey;
+
+    // kalau belum ada story di tanggal itu → buat
+    if (!existingMap.has(key)) {
+      const payload = Object.assign({}, basePayload, {
+        count_time: targetDateKey,
+      });
+
+      jobFns.push(function () {
+        return crudService.post(
+          ApiEndpoints.CreateStoryPlanner,
+          payload
+        );
+      });
+    }
+
+    cursor = cursor.add(1, "week"); // lompat ke minggu depannya lagi
+  }
+
+  if (jobFns.length === 0) return;
+
+  await runJobsWithRetry(jobFns, {
+    concurrency: 4,
+    retries: 2,
+    delayMs: 300,
+  });
+}
+
 
 function isPastDate(dateKey) {
   return dayjs(dateKey).isBefore(dayjs().startOf("day"), "day");
@@ -73,7 +162,7 @@ function hhmmFromDb(v) {
     if (CLOCK_HHMM.test(v)) return v;
     if (CLOCK_HHMMSS.test(v)) return v.slice(0, 5);
     const m = v.match(/(\d{2}):(\d{2})(?::\d{2})?/);
-    if (m) return `${m[1]}:${m[2]}`;
+    if (m) return m[1] + ":" + m[2];
   }
   const d = dayjs(v);
   return d.isValid() ? d.format("HH:mm") : "";
@@ -86,19 +175,35 @@ function endOfWeekInclusive(d) {
 }
 
 /* =============== EXECUTOR DENGAN LIMIT & RETRY =============== */
-async function runJobsWithRetry(jobFns, { concurrency = 6, retries = 2, delayMs = 350 } = {}) {
+async function runJobsWithRetry(
+  jobFns,
+  options
+) {
+  const concurrency =
+    options && options.concurrency != null ? options.concurrency : 6;
+  const retries =
+    options && options.retries != null ? options.retries : 2;
+  const delayMs =
+    options && options.delayMs != null ? options.delayMs : 350;
+
   const queue = jobFns.slice();
   let running = 0;
   const results = [];
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const sleep = (ms) =>
+    new Promise(function (r) {
+      setTimeout(r, ms);
+    });
 
-  return await new Promise((resolve) => {
-    const next = () => {
-      if (queue.length === 0 && running === 0) return resolve(results);
+  return new Promise(function (resolve) {
+    function next() {
+      if (queue.length === 0 && running === 0) {
+        resolve(results);
+        return;
+      }
       while (running < concurrency && queue.length > 0) {
         const fn = queue.shift();
         running++;
-        (async () => {
+        (async function () {
           let attempt = 0;
           let lastErr = null;
           while (attempt <= retries) {
@@ -109,16 +214,20 @@ async function runJobsWithRetry(jobFns, { concurrency = 6, retries = 2, delayMs 
             } catch (e) {
               lastErr = e;
               attempt++;
-              if (attempt <= retries) await sleep(delayMs * attempt);
+              if (attempt <= retries) {
+                await sleep(delayMs * attempt);
+              }
             }
           }
-          if (attempt > retries) results.push({ ok: false, error: lastErr });
-        })().finally(() => {
+          if (attempt > retries) {
+            results.push({ ok: false, error: lastErr });
+          }
+        })().finally(function () {
           running--;
           next();
         });
       }
-    };
+    }
     next();
   });
 }
@@ -129,16 +238,19 @@ export default function UseShiftScheduleViewModel() {
   /* ===== state waktu ===== */
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
   const weekEnd = useMemo(
-    () => dayjs(weekStart).add(6, "day").endOf("day").toDate(),
+    () =>
+      dayjs(weekStart).add(6, "day").endOf("day").toDate(),
     [weekStart]
   );
 
   const nextWeekStart = useMemo(
-    () => dayjs(weekStart).add(1, "week").startOf("day").toDate(),
+    () =>
+      dayjs(weekStart).add(1, "week").startOf("day").toDate(),
     [weekStart]
   );
   const nextWeekEnd = useMemo(
-    () => dayjs(nextWeekStart).add(6, "day").endOf("day").toDate(),
+    () =>
+      dayjs(nextWeekStart).add(6, "day").endOf("day").toDate(),
     [nextWeekStart]
   );
 
@@ -147,15 +259,18 @@ export default function UseShiftScheduleViewModel() {
 
   const monthOptions = useMemo(
     () =>
-      Array.from({ length: 12 }).map((_, i) => ({
-        label: dayjs().month(i).format("MMMM"),
-        value: i,
-      })),
+      Array.from({ length: 12 }).map(function (_, i) {
+        return {
+          label: dayjs().month(i).format("MMMM"),
+          value: i,
+        };
+      }),
     []
   );
+
   const yearOptions = useMemo(() => {
     const base = dayjs().year();
-    return Array.from({ length: 7 }).map((_, k) => {
+    return Array.from({ length: 7 }).map(function (_, k) {
       const y = base - 2 + k;
       return { label: String(y), value: y };
     });
@@ -168,7 +283,7 @@ export default function UseShiftScheduleViewModel() {
 
   const days = useMemo(
     () =>
-      Array.from({ length: 7 }).map((_, i) => {
+      Array.from({ length: 7 }).map(function (_, i) {
         const d = dayjs(weekStart).add(i, "day");
         return {
           key: d.format("YYYYMMDD"),
@@ -184,31 +299,27 @@ export default function UseShiftScheduleViewModel() {
   /* ===== filter & users ===== */
   const [deptId, setDeptId] = useState(null);
   const { data: deptRes, isLoading: loadingDept } = useSWR(
-    `${ApiEndpoints.GetDepartement}?page=1&pageSize=200`,
+    ApiEndpoints.GetDepartement + "?page=1&pageSize=200",
     fetcher
   );
-  const deptOptions = useMemo(
-    () =>
-      (deptRes?.data || []).map((d) => ({
-        value: d.id_departement,
-        label: d.nama_departement,
-      })),
-    [deptRes]
-  );
+  const deptOptions = useMemo(() => {
+    const list = (deptRes && deptRes.data) || [];
+    return list.map(function (d) {
+      return { value: d.id_departement, label: d.nama_departement };
+    });
+  }, [deptRes]);
 
   const [jabatanId, setJabatanId] = useState(null);
   const { data: jabRes, isLoading: loadingJab } = useSWR(
-    `${ApiEndpoints.GetJabatan}?page=1&pageSize=500`,
+    ApiEndpoints.GetJabatan + "?page=1&pageSize=500",
     fetcher
   );
-  const jabatanOptions = useMemo(
-    () =>
-      (jabRes?.data || []).map((j) => ({
-        value: j.id_jabatan,
-        label: j.nama_jabatan,
-      })),
-    [jabRes]
-  );
+  const jabatanOptions = useMemo(() => {
+    const list = (jabRes && jabRes.data) || [];
+    return list.map(function (j) {
+      return { value: j.id_jabatan, label: j.nama_jabatan };
+    });
+  }, [jabRes]);
 
   const usersQS = useMemo(() => {
     const p = new URLSearchParams();
@@ -222,33 +333,55 @@ export default function UseShiftScheduleViewModel() {
     return p.toString();
   }, [deptId, jabatanId]);
 
-  const { data: usersRes, isLoading: loadingUsers, mutate: mutUsers } = useSWR(
-    `${ApiEndpoints.GetUsers}?${usersQS}`,
+  const {
+    data: usersRes,
+    isLoading: loadingUsers,
+    mutate: mutUsers,
+  } = useSWR(
+    ApiEndpoints.GetUsers + "?" + usersQS,
     fetcher
   );
+
   const users = useMemo(() => {
-    let arr = usersRes?.data || [];
-    if (deptId) arr = arr.filter((u) => u.id_departement === deptId);
+    let arr = (usersRes && usersRes.data) || [];
+    if (deptId) {
+      arr = arr.filter(function (u) {
+        return u.id_departement === deptId;
+      });
+    }
     return arr;
   }, [usersRes, deptId]);
 
   const rows = useMemo(() => {
-    return (users || []).map((u) => {
-      const name = u.nama_pengguna || u.nama || u.name || u.email || "—";
+    const list = users || [];
+    return list.map(function (u) {
+      const name =
+        u.nama_pengguna || u.nama || u.name || u.email || "—";
       const email = u.email || "—";
       const jabatan =
-        u.jabatan?.nama_jabatan || u.nama_jabatan || (u.jabatan && u.jabatan.nama) || "";
+        (u.jabatan && u.jabatan.nama_jabatan) ||
+        u.nama_jabatan ||
+        (u.jabatan && u.jabatan.nama) ||
+        "";
       const departemen =
-        u.departement?.nama_departement || u.nama_departement || u.divisi || "";
+        (u.departement && u.departement.nama_departement) ||
+        u.nama_departement ||
+        u.divisi ||
+        "";
       const foto =
-        u.foto_profil_user || u.foto_url || u.foto || u.avatarUrl || u.photoUrl || null;
+        u.foto_profil_user ||
+        u.foto_url ||
+        u.foto ||
+        u.avatarUrl ||
+        u.photoUrl ||
+        null;
 
       return {
         id: u.id_user || u.id || u.uuid,
-        name,
-        email,
-        jabatan,
-        departemen,
+        name: name,
+        email: email,
+        jabatan: jabatan,
+        departemen: departemen,
         foto_profil_user: foto,
         avatarUrl: foto,
         foto_url: foto,
@@ -258,17 +391,21 @@ export default function UseShiftScheduleViewModel() {
 
   /* ===== pola kerja ===== */
   const { data: polaRes, isLoading: loadingPola } = useSWR(
-    `${ApiEndpoints.GetPolaKerja}?page=1&pageSize=500`,
+    ApiEndpoints.GetPolaKerja + "?page=1&pageSize=500",
     fetcher
   );
   const polaMap = useMemo(() => {
     const map = new Map();
-    for (const p of polaRes?.data || []) {
-      const mulai = p.jam_mulai ?? p.jamMulai ?? "";
-      const selesai = p.jam_selesai ?? p.jamSelesai ?? "";
-      const jam = `${hhmmFromDb(mulai)} - ${hhmmFromDb(selesai)}`;
-      map.set(String(p.id_pola_kerja), { nama: p.nama_pola_kerja, jam });
-    }
+    const list = (polaRes && polaRes.data) || [];
+    list.forEach(function (p) {
+      const mulai = p.jam_mulai || p.jamMulai || "";
+      const selesai = p.jam_selesai || p.jamSelesai || "";
+      const jam = hhmmFromDb(mulai) + " - " + hhmmFromDb(selesai);
+      map.set(String(p.id_pola_kerja), {
+        nama: p.nama_pola_kerja,
+        jam: jam,
+      });
+    });
     return map;
   }, [polaRes]);
 
@@ -284,8 +421,12 @@ export default function UseShiftScheduleViewModel() {
     return p.toString();
   }, [weekStart, weekEnd]);
 
-  const { data: shiftRes, isLoading: loadingShift, mutate } = useSWR(
-    `${ApiEndpoints.GetShiftKerja}?${qs}`,
+  const {
+    data: shiftRes,
+    isLoading: loadingShift,
+    mutate,
+  } = useSWR(
+    ApiEndpoints.GetShiftKerja + "?" + qs,
     fetcher
   );
 
@@ -305,11 +446,17 @@ export default function UseShiftScheduleViewModel() {
     data: nextShiftRes,
     isLoading: loadingNextWeek,
     mutate: mutateNextWeek,
-  } = useSWR(`${ApiEndpoints.GetShiftKerja}?${nextQs}`, fetcher);
+  } = useSWR(
+    ApiEndpoints.GetShiftKerja + "?" + nextQs,
+    fetcher
+  );
 
   const nextWeekUserHasAny = useMemo(() => {
     const s = new Set();
-    for (const it of nextShiftRes?.data || []) s.add(it.id_user);
+    const list = (nextShiftRes && nextShiftRes.data) || [];
+    list.forEach(function (it) {
+      s.add(it.id_user);
+    });
     return s;
   }, [nextShiftRes]);
 
@@ -320,59 +467,113 @@ export default function UseShiftScheduleViewModel() {
 
   const cellMap = useMemo(() => {
     const map = new Map();
-    for (const it of shiftRes?.data || []) {
+    const list = (shiftRes && shiftRes.data) || [];
+    list.forEach(function (it) {
       const dateKey = keyFromServerDate(it.tanggal_mulai);
-      const key = `${it.id_user}|${dateKey}`;
+      const key = it.id_user + "|" + dateKey;
       if (!map.has(key)) {
         map.set(key, {
           userId: it.id_user,
           date: dateKey,
           status: it.status,
-          polaId: it.id_pola_kerja == null ? null : String(it.id_pola_kerja),
+          polaId:
+            it.id_pola_kerja == null ? null : String(it.id_pola_kerja),
           rawId: it.id_shift_kerja,
         });
       }
-    }
+    });
     return map;
   }, [shiftRes]);
 
   const getCell = useCallback(
-    (userId, dateKey) => cellMap.get(`${userId}|${dateKey}`),
+    (userId, dateKey) => cellMap.get(userId + "|" + dateKey),
     [cellMap]
+  );
+
+  /* ===== data Story Planner minggu aktif ===== */
+  const storyQs = useMemo(() => {
+    const p = new URLSearchParams();
+    p.set("page", "1");
+    p.set("pageSize", "5000");
+    p.set("countTimeFrom", toISO(weekStart));
+    p.set("countTimeTo", toISO(weekEnd));
+    return p.toString();
+  }, [weekStart, weekEnd]);
+
+  const {
+    data: storyRes,
+    isLoading: loadingStory,
+    mutate: mutateStory,
+  } = useSWR(
+    ApiEndpoints.GetStoryPlanner + "?" + storyQs,
+    fetcher
+  );
+
+  const storyMap = useMemo(() => {
+    const map = new Map();
+    const list = (storyRes && storyRes.data) || [];
+    list.forEach(function (it) {
+      if (!it.count_time) return;
+      const dateKey = keyFromServerDate(it.count_time);
+      const key = it.id_user + "|" + dateKey;
+      if (!map.has(key)) {
+        map.set(key, {
+          userId: it.id_user,
+          date: dateKey,
+          rawId: it.id_story,
+          status: it.status,
+          deskripsi_kerja: it.deskripsi_kerja,
+          id_departement: it.id_departement || null,
+        });
+      }
+    });
+    return map;
+  }, [storyRes]);
+
+  const getStoryCell = useCallback(
+    (userId, dateKey) => storyMap.get(userId + "|" + dateKey),
+    [storyMap]
   );
 
   /* ===== payload helpers ===== */
   const assignPayload = (userId, dateKey, value) => {
     const hari = dayjs(dateKey).format("dddd");
-    return value === "LIBUR"
-      ? {
-          id_user: userId,
-          status: "LIBUR",
-          hari_kerja: hari,
-          tanggal_mulai: dateKey,
-          tanggal_selesai: dateKey,
-          id_pola_kerja: null,
-        }
-      : {
-          id_user: userId,
-          status: "KERJA",
-          hari_kerja: hari,
-          tanggal_mulai: dateKey,
-          tanggal_selesai: dateKey,
-          id_pola_kerja: String(value),
-        };
+    if (value === "LIBUR") {
+      return {
+        id_user: userId,
+        status: "LIBUR",
+        hari_kerja: hari,
+        tanggal_mulai: dateKey,
+        tanggal_selesai: dateKey,
+        id_pola_kerja: null,
+      };
+    }
+    return {
+      id_user: userId,
+      status: "KERJA",
+      hari_kerja: hari,
+      tanggal_mulai: dateKey,
+      tanggal_selesai: dateKey,
+      id_pola_kerja: String(value),
+    };
   };
 
-  /* ===== assign / delete ===== */
+  /* ===== assign / delete shift ===== */
   const assignCell = useCallback(
     async (userId, dateKey, value) => {
       if (isPastDate(dateKey)) return;
       const existing = getCell(userId, dateKey);
       const payload = assignPayload(userId, dateKey, value);
-      if (existing?.rawId) {
-        await crudService.put(ApiEndpoints.UpdateShiftKerja(existing.rawId), payload);
+      if (existing && existing.rawId) {
+        await crudService.put(
+          ApiEndpoints.UpdateShiftKerja(existing.rawId),
+          payload
+        );
       } else {
-        await crudService.post(ApiEndpoints.CreateShiftKerja, payload);
+        await crudService.post(
+          ApiEndpoints.CreateShiftKerja,
+          payload
+        );
       }
       await Promise.all([mutate(), mutateNextWeek()]);
     },
@@ -383,68 +584,184 @@ export default function UseShiftScheduleViewModel() {
     async (userId, dateKey) => {
       if (isPastDate(dateKey)) return;
       const existing = getCell(userId, dateKey);
-      if (!existing?.rawId) return;
-      await crudService.delete(ApiEndpoints.DeleteShiftKerja(existing.rawId));
+      if (!existing || !existing.rawId) return;
+      await crudService.delete(
+        ApiEndpoints.DeleteShiftKerja(existing.rawId)
+      );
       await Promise.all([mutate(), mutateNextWeek()]);
     },
     [getCell, mutate, mutateNextWeek]
   );
 
-  /* ===== repeat sampai akhir bulan (default: kosong di sumber → hapus target) ===== */
+  /* ===== toggle Story Planner per hari ===== */
+  const toggleStoryForDay = useCallback(
+  async (userId, dateKey, checked) => {
+    if (isPastDate(dateKey)) return;
+
+    const existing = getStoryCell(userId, dateKey);
+
+    if (checked) {
+      // kalau sudah ada, nggak usah bikin lagi
+      if (existing) return;
+
+      const user = rows.find(function (r) {
+        return r.id === userId;
+      });
+
+      const defaultDesc =
+        "Story planner - " +
+        (user && user.name ? user.name : "Karyawan") +
+        " - " +
+        dayjs(dateKey).format("DD MMM YYYY");
+
+      // basePayload yang dipakai untuk hari ini + copy ke depan
+      const basePayload = {
+        id_user: userId,
+        deskripsi_kerja: defaultDesc,
+        status: "berjalan",
+      };
+
+      try {
+        // 1) buat untuk hari yang dicentang
+        await crudService.post(
+          ApiEndpoints.CreateStoryPlanner,
+          Object.assign({}, basePayload, {
+            count_time: dateKey,
+          })
+        );
+
+        // 2) otomatis ulangi ke weekday yang sama sampai akhir bulan
+        await repeatStorySameWeekdayUntilEndOfMonth(
+          userId,
+          dateKey,
+          basePayload
+        );
+      } catch (e) {
+        notification.error({
+          message: "Gagal membuat Story Planner",
+        });
+        return;
+      }
+    } else {
+      // uncheck → hapus story pada hari ini saja
+      if (!existing || !existing.rawId) return;
+      try {
+        await crudService.delete(
+          ApiEndpoints.DeleteStoryPlanner(existing.rawId)
+        );
+      } catch (e) {
+        notification.error({
+          message: "Gagal menghapus Story Planner",
+        });
+        return;
+      }
+    }
+
+    // refresh minggu aktif
+    await mutateStory();
+  },
+  [getStoryCell, rows, mutateStory, notification]
+);
+
+
+  /* ===== repeat sampai akhir bulan (SHIFT, bukan Story Planner) ===== */
   const applyRepetition = useCallback(
     async (userId) => {
-      const sourceWeek = days.map((d) => getCell(userId, d.dateStr) || null);
-      const rangeStart = dayjs(weekStart).add(1, "week").startOf("day").toDate();
+      const sourceWeek = days.map(function (d) {
+        return getCell(userId, d.dateStr) || null;
+      });
+
+      const rangeStart = dayjs(weekStart)
+        .add(1, "week")
+        .startOf("day")
+        .toDate();
       const monthEnd = dayjs(weekStart).endOf("month");
       const rangeEnd = endOfWeekInclusive(monthEnd);
 
-      const globalTargetMap = await loadShiftMapForRange(rangeStart, rangeEnd);
+      const globalTargetMap = await loadShiftMapForRange(
+        rangeStart,
+        rangeEnd
+      );
 
       let cursor = dayjs(rangeStart);
       const jobFns = [];
 
-      while (cursor.isBefore(rangeEnd) || cursor.isSame(rangeEnd, "day")) {
-        const weekKeys = Array.from({ length: 7 }).map((_, i) =>
-          keyFromLocalDay(cursor.add(i, "day"))
-        );
+      while (
+        cursor.isBefore(rangeEnd) ||
+        cursor.isSame(rangeEnd, "day")
+      ) {
+        const weekKeys = Array.from({ length: 7 }).map(function (_, i) {
+          return keyFromLocalDay(cursor.add(i, "day"));
+        });
 
         for (let i = 0; i < 7; i++) {
           const src = sourceWeek[i];
           const dateKey = weekKeys[i];
           if (dayjs(dateKey).isAfter(rangeEnd)) continue;
-          const k = `${userId}|${dateKey}`;
+
+          const k = userId + "|" + dateKey;
           const existingTarget = globalTargetMap.get(k);
 
           if (src) {
-            const val = src.status === "LIBUR" ? "LIBUR" : src.polaId;
+            const val =
+              src.status === "LIBUR"
+                ? "LIBUR"
+                : src.polaId;
             const payload = assignPayload(userId, dateKey, val);
-            if (existingTarget?.rawId) {
-              jobFns.push(() => crudService.put(ApiEndpoints.UpdateShiftKerja(existingTarget.rawId), payload));
+            if (existingTarget && existingTarget.rawId) {
+              jobFns.push(function () {
+                return crudService.put(
+                  ApiEndpoints.UpdateShiftKerja(existingTarget.rawId),
+                  payload
+                );
+              });
             } else {
-              jobFns.push(() => crudService.post(ApiEndpoints.CreateShiftKerja, payload));
+              jobFns.push(function () {
+                return crudService.post(
+                  ApiEndpoints.CreateShiftKerja,
+                  payload
+                );
+              });
             }
-          } else if (existingTarget?.rawId) {
-            // default destruktif: sumber kosong → hapus target
-            jobFns.push(() => crudService.delete(ApiEndpoints.DeleteShiftKerja(existingTarget.rawId)));
+          } else if (existingTarget && existingTarget.rawId) {
+            jobFns.push(function () {
+              return crudService.delete(
+                ApiEndpoints.DeleteShiftKerja(
+                  existingTarget.rawId
+                )
+              );
+            });
           }
         }
+
         cursor = cursor.add(1, "week");
       }
 
-      const results = await runJobsWithRetry(jobFns, { concurrency: 6, retries: 2, delayMs: 400 });
-      const failed = results.filter((r) => !r.ok).length;
+      const results = await runJobsWithRetry(jobFns, {
+        concurrency: 6,
+        retries: 2,
+        delayMs: 400,
+      });
+      const failed = results.filter(function (r) {
+        return !r.ok;
+      }).length;
 
       if (failed === 0) {
         notification.success({
           message: "Jadwal berulang diterapkan",
-          description: "Minggu sumber disalin. Hari kosong di sumber menghapus target.",
+          description:
+            "Minggu sumber disalin. Hari kosong di sumber menghapus target.",
         });
       } else {
         notification.warning({
           message: "Jadwal berulang sebagian gagal",
-          description: `Sebagian tanggal gagal diproses (${failed}). Coba ulangi.`,
+          description:
+            "Sebagian tanggal gagal diproses (" +
+            failed +
+            "). Coba ulangi.",
         });
       }
+
       await Promise.all([mutate(), mutateNextWeek()]);
     },
     [days, getCell, weekStart, mutate, mutateNextWeek, notification]
@@ -452,28 +769,51 @@ export default function UseShiftScheduleViewModel() {
 
   const clearRepetition = useCallback(
     async (userId) => {
-      const rangeStart = dayjs(weekStart).add(1, "week").startOf("day").toDate();
+      const rangeStart = dayjs(weekStart)
+        .add(1, "week")
+        .startOf("day")
+        .toDate();
       const monthEnd = dayjs(weekStart).endOf("month");
       const rangeEnd = endOfWeekInclusive(monthEnd);
 
-      const targetMap = await loadShiftMapForRange(rangeStart, rangeEnd);
+      const targetMap = await loadShiftMapForRange(
+        rangeStart,
+        rangeEnd
+      );
       const jobFns = [];
-      targetMap.forEach((v, key) => {
-        if (key.startsWith(`${userId}|`) && v.rawId) {
-          jobFns.push(() => crudService.delete(ApiEndpoints.DeleteShiftKerja(v.rawId)));
+      targetMap.forEach(function (v, key) {
+        if (key.startsWith(userId + "|") && v.rawId) {
+          jobFns.push(function () {
+            return crudService.delete(
+              ApiEndpoints.DeleteShiftKerja(v.rawId)
+            );
+          });
         }
       });
 
-      const results = await runJobsWithRetry(jobFns, { concurrency: 8, retries: 2, delayMs: 300 });
-      const failed = results.filter((r) => !r.ok).length;
+      const results = await runJobsWithRetry(jobFns, {
+        concurrency: 8,
+        retries: 2,
+        delayMs: 300,
+      });
+      const failed = results.filter(function (r) {
+        return !r.ok;
+      }).length;
+
       if (failed === 0) {
-        notification.success({ message: "Jadwal mendatang di bulan ini dihapus." });
+        notification.success({
+          message: "Jadwal mendatang di bulan ini dihapus.",
+        });
       } else {
         notification.warning({
           message: "Penghapusan sebagian gagal",
-          description: `Sebagian tanggal gagal dihapus (${failed}). Coba ulangi.`,
+          description:
+            "Sebagian tanggal gagal dihapus (" +
+            failed +
+            "). Coba ulangi.",
         });
       }
+
       await Promise.all([mutate(), mutateNextWeek()]);
     },
     [weekStart, mutate, mutateNextWeek, notification]
@@ -481,20 +821,33 @@ export default function UseShiftScheduleViewModel() {
 
   const toggleRepeatSchedule = useCallback(
     (userId, isRepeating) => {
-      const userName = rows.find((r) => r.id === userId)?.name || "pengguna ini";
+      const user = rows.find(function (r) {
+        return r.id === userId;
+      });
+      const userName = (user && user.name) || "pengguna ini";
+
       modal.confirm({
         title: "Konfirmasi",
         content: isRepeating
-          ? `Pola minggu ini untuk ${userName} akan disalin tiap minggu hingga akhir bulan.`
-          : `Semua jadwal mendatang ${userName} (mulai minggu depan) pada bulan ini akan dihapus.`,
+          ? "Pola minggu ini untuk " +
+            userName +
+            " akan disalin tiap minggu hingga akhir bulan."
+          : "Semua jadwal mendatang " +
+            userName +
+            " (mulai minggu depan) pada bulan ini akan dihapus.",
         okText: "Lanjut",
         cancelText: "Batal",
-        onOk: async () => {
+        onOk: async function () {
           try {
-            if (isRepeating) await applyRepetition(userId);
-            else await clearRepetition(userId);
+            if (isRepeating) {
+              await applyRepetition(userId);
+            } else {
+              await clearRepetition(userId);
+            }
           } catch (e) {
-            notification.error({ message: "Gagal memproses jadwal." });
+            notification.error({
+              message: "Gagal memproses jadwal.",
+            });
           }
         },
       });
@@ -504,19 +857,38 @@ export default function UseShiftScheduleViewModel() {
 
   /* ===== navigasi & refresh ===== */
   const prevWeek = useCallback(
-    () => setWeekStart(dayjs(weekStart).add(-1, "week").toDate()),
+    () =>
+      setWeekStart(
+        dayjs(weekStart).add(-1, "week").toDate()
+      ),
     [weekStart]
   );
   const nextWeek = useCallback(
-    () => setWeekStart(dayjs(weekStart).add(1, "week").toDate()),
+    () =>
+      setWeekStart(
+        dayjs(weekStart).add(1, "week").toDate()
+      ),
     [weekStart]
   );
 
   const refresh = useCallback(async () => {
-    await Promise.all([mutate(), mutateNextWeek(), mutUsers()]);
-  }, [mutate, mutateNextWeek, mutUsers]);
+    await Promise.all([
+      mutate(),
+      mutateNextWeek(),
+      mutUsers(),
+      mutateStory(),
+    ]);
+  }, [mutate, mutateNextWeek, mutUsers, mutateStory]);
 
-  const loading = !!(loadingDept || loadingJab || loadingUsers || loadingPola || loadingShift || loadingNextWeek);
+  const loading = !!(
+    loadingDept ||
+    loadingJab ||
+    loadingUsers ||
+    loadingPola ||
+    loadingShift ||
+    loadingNextWeek ||
+    loadingStory
+  );
 
   return {
     weekStart,
@@ -531,8 +903,10 @@ export default function UseShiftScheduleViewModel() {
     rows,
     polaMap,
     getCell,
+    getStoryCell,
     assignCell,
     deleteCell,
+    toggleStoryForDay,
 
     deptId,
     setDeptId,

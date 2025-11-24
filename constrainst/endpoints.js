@@ -73,6 +73,9 @@ const API_NOTIFICATIONS = "/api/notifications";
 const API_NOTIFICATIONS_RECENT = "/api/notifications/recent";
 const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-as-read";
 
+// === Story Planner
+const API_STORY_PLANNER = "/api/admin/story-planner";
+
 
 export const ApiEndpoints = {
   // Location
@@ -227,5 +230,13 @@ export const ApiEndpoints = {
   GetNotificationsRecent: (qsObj = {}) => `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
   MarkAllNotificationsRead: API_NOTIFICATIONS_MARK_ALL,
   MarkNotificationRead: (id) => `${API_NOTIFICATIONS}/${id}`,
+
+    // Story Planner
+  GetStoryPlanner: API_STORY_PLANNER,
+  CreateStoryPlanner: API_STORY_PLANNER,
+  GetStoryPlannerById: (id) => `${API_STORY_PLANNER}/${id}`,
+  UpdateStoryPlanner: (id) => `${API_STORY_PLANNER}/${id}`,
+  DeleteStoryPlanner: (id) => `${API_STORY_PLANNER}/${id}`,
+
 
 };

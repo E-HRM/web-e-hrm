@@ -32,26 +32,31 @@ const BRAND = "#003A6F";
 /** Ambil URL foto dari row */
 function getPhotoUrl(row) {
   return (
-    row?.foto_profil_user ||
-    row?.avatarUrl ||
-    row?.foto ||
-    row?.foto_url ||
-    row?.photoUrl ||
-    row?.photo ||
-    row?.avatar ||
-    row?.gambar ||
-    null
-  );
+    row &&
+    (
+      row.foto_profil_user ||
+      row.avatarUrl ||
+      row.foto ||
+      row.foto_url ||
+      row.photoUrl ||
+      row.photo ||
+      row.avatar ||
+      row.gambar
+    )
+  ) || null;
 }
 
 /** Gambar bulat anti-gepeng */
-function CircleImg({ src, size = 48, alt = "Foto" }) {
+function CircleImg(props) {
+  const src = props.src;
+  const size = props.size || 48;
+  const alt = props.alt || "Foto";
   const s = {
     width: size,
     height: size,
     borderRadius: "9999px",
     overflow: "hidden",
-    border: `1px solid ${BRAND}22`,
+    border: "1px solid " + BRAND + "22",
     background: "#E6F0FA",
     flexShrink: 0,
     display: "inline-block",
@@ -62,8 +67,13 @@ function CircleImg({ src, size = 48, alt = "Foto" }) {
       <img
         src={src || "/avatar-placeholder.jpg"}
         alt={alt}
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-        onError={(e) => {
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+        onError={function (e) {
           e.currentTarget.src = "/avatar-placeholder.jpg";
           e.currentTarget.onerror = null;
         }}
@@ -76,7 +86,16 @@ function isPastDate(dateStr) {
   return dayjs(dateStr).isBefore(dayjs().startOf("day"), "day");
 }
 
-function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
+/* === Cell: sekarang juga punya checkbox Story Planner === */
+function Cell(props) {
+  const cell = props.cell;
+  const polaMap = props.polaMap;
+  const onAssign = props.onAssign;
+  const onDelete = props.onDelete;
+  const disabled = props.disabled;
+  const story = props.story;
+  const onToggleStory = props.onToggleStory;
+
   const value = cell
     ? cell.status === "LIBUR"
       ? "LIBUR"
@@ -84,27 +103,43 @@ function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
     : undefined;
 
   const options = useMemo(() => {
-    const arr = [{ value: "LIBUR", label: "Libur — (tidak bekerja)" }];
-    polaMap.forEach((p, id) => {
-      arr.push({ value: String(id), label: `${p.nama} (${p.jam})` });
+    const arr = [
+      { value: "LIBUR", label: "Libur — (tidak bekerja)" },
+    ];
+    polaMap.forEach(function (p, id) {
+      arr.push({
+        value: String(id),
+        label: p.nama + " (" + p.jam + ")",
+      });
     });
     return arr;
   }, [polaMap]);
 
   const safeAssign = (val) => {
     if (disabled) return;
-    onAssign(cell.userId, cell.date, val === "LIBUR" ? "LIBUR" : String(val));
+    onAssign(
+      cell.userId,
+      cell.date,
+      val === "LIBUR" ? "LIBUR" : String(val)
+    );
   };
+
   const safeDelete = () => {
     if (disabled) return;
     onDelete(cell.userId, cell.date);
   };
 
+  const checkedStory = !!story;
+
   return (
     <div className="p-2">
       <div
         className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
-        style={disabled ? { opacity: 0.6, pointerEvents: "none" } : undefined}
+        style={
+          disabled
+            ? { opacity: 0.6, pointerEvents: "none" }
+            : undefined
+        }
       >
         <div className="text-xs mb-1 text-slate-500">
           {disabled ? "Jadwal (riwayat)" : "Pilih jadwal"}
@@ -127,13 +162,15 @@ function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
             {value === "LIBUR"
               ? "Libur"
               : value
-              ? (() => {
+              ? (function () {
                   const p = polaMap.get(String(value));
-                  return p ? `${p.nama} • ${p.jam}` : "Kerja";
+                  return p
+                    ? p.nama + " • " + p.jam
+                    : "Kerja";
                 })()
               : "Belum diatur"}
           </div>
-          {cell?.rawId && !disabled && (
+          {cell && cell.rawId && !disabled && (
             <Tooltip title="Hapus jadwal tanggal ini">
               <Button
                 size="small"
@@ -145,6 +182,21 @@ function Cell({ cell, polaMap, onAssign, onDelete, disabled }) {
             </Tooltip>
           )}
         </div>
+
+        {/* Checkbox Story Planner */}
+        <label className="mt-2 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+          <input
+            type="checkbox"
+            className="accent-[#004A9F]"
+            disabled={disabled}
+            checked={checkedStory}
+            onChange={function (e) {
+              if (!onToggleStory) return;
+              onToggleStory(e.target.checked);
+            }}
+          />
+          Story Planner
+        </label>
       </div>
     </div>
   );
@@ -155,91 +207,153 @@ export default function ShiftScheduleContent() {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.sm;
 
-  const dayColumns = vm.days.map((d) => ({
-    title: (
-      <div className="font-semibold text-slate-800 text-center">
-        {d.labelDay}, {d.labelDate}
-      </div>
-    ),
-    dataIndex: d.key,
-    key: d.key,
-    width: 280,
-    render: (_, record) => {
-      const cell = vm.getCell(record.id, d.dateStr) || {
-        userId: record.id,
-        date: d.dateStr,
-      };
-      const disabled = isPastDate(d.dateStr);
-      return (
-        <Cell
-          cell={cell}
-          polaMap={vm.polaMap}
-          onAssign={vm.assignCell}
-          onDelete={vm.deleteCell}
-          disabled={disabled}
-        />
-      );
-    },
-  }));
+  const dayColumns = vm.days.map(function (d) {
+    return {
+      title: (
+        <div className="font-semibold text-slate-800 text-center">
+          {d.labelDay}, {d.labelDate}
+        </div>
+      ),
+      dataIndex: d.key,
+      key: d.key,
+      width: 280,
+      render: function (_, record) {
+        const cell =
+          vm.getCell(record.id, d.dateStr) || {
+            userId: record.id,
+            date: d.dateStr,
+          };
+        const story = vm.getStoryCell(
+          record.id,
+          d.dateStr
+        );
+        const disabled = isPastDate(d.dateStr);
+
+        return (
+          <Cell
+            cell={cell}
+            polaMap={vm.polaMap}
+            onAssign={vm.assignCell}
+            onDelete={vm.deleteCell}
+            disabled={disabled}
+            story={story}
+            onToggleStory={function (checked) {
+              vm.toggleStoryForDay(
+                record.id,
+                d.dateStr,
+                checked
+              );
+            }}
+          />
+        );
+      },
+    };
+  });
 
   const nameColumn = {
-    title: <div className="text-left font-medium">Nama Karyawan</div>,
+    title: (
+      <div className="text-left font-medium">Nama Karyawan</div>
+    ),
     dataIndex: "name",
     key: "name",
     fixed: "left",
     width: isMobile ? 220 : 380,
-    render: (_, r) => {
+    render: function (_, r) {
       const photo = getPhotoUrl(r) || "/avatar-placeholder.jpg";
       return (
         <div className="p-1">
           <Link
-            href={`/home/kelola_karyawan/karyawan/${r.id}`}
+            href={
+              "/home/kelola_karyawan/karyawan/" + r.id
+            }
             className="no-underline text-inherit hover:text-inherit"
           >
             <div className="flex items-center gap-3">
-              <CircleImg src={photo} alt={r.name} size={48} />
+              <CircleImg
+                src={photo}
+                alt={r.name}
+                size={48}
+              />
               <div className="min-w-0">
-                <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
+                <div
+                  style={{
+                    fontWeight: 600,
+                    color: "#0f172a",
+                  }}
+                  className="truncate"
+                >
                   {r.name}
                 </div>
-                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#475569",
+                  }}
+                  className="truncate"
+                >
                   {r.jabatan || "—"}
                   {r.jabatan && r.departemen && " "}
-                  {r.departemen ? `| ${r.departemen}` : r.jabatan ? "" : "—"}
+                  {r.departemen
+                    ? "| " + r.departemen
+                    : r.jabatan
+                    ? ""
+                    : "—"}
                 </div>
               </div>
             </div>
           </Link>
 
-          {/* Checkbox terkontrol oleh data minggu berikutnya */}
+          {/* Checkbox terkontrol oleh data minggu berikutnya (repeat shift) */}
           <label className="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
             <input
               type="checkbox"
               className="accent-[#004A9F]"
               checked={vm.isRepeatVisualOn(r.id)}
-              onChange={(e) => vm.toggleRepeatSchedule(r.id, e.target.checked)}
+              onChange={function (e) {
+                vm.toggleRepeatSchedule(
+                  r.id,
+                  e.target.checked
+                );
+              }}
             />
             Ulangi minggu ini sampai akhir bulan
           </label>
 
           <div className="mt-3 space-y-1 text-xs hidden sm:block">
-            <div className="font-semibold text-slate-600 mb-1">Ringkasan Minggu Ini:</div>
-            {vm.days.map((d) => {
+            <div className="font-semibold text-slate-600 mb-1">
+              Ringkasan Minggu Ini:
+            </div>
+            {vm.days.map(function (d) {
               const c = vm.getCell(r.id, d.dateStr);
               let label = "—";
               let color = "text-slate-500";
-              if (c?.status === "LIBUR") {
+
+              if (c && c.status === "LIBUR") {
                 label = "Libur";
                 color = "text-red-500";
-              } else if (c?.polaId) {
-                const p = vm.polaMap.get(String(c?.polaId));
-                label = p ? `${p.nama} ${p.jam}` : "Kerja";
+              } else if (c && c.polaId) {
+                const p = vm.polaMap.get(
+                  String(c.polaId)
+                );
+                label = p
+                  ? p.nama + " " + p.jam
+                  : "Kerja";
                 color = "text-blue-600";
               }
+
               return (
-                <div key={d.key} className={`${color} flex justify-between`}>
-                  <span className="w-16">{d.short}:</span>
-                  <span className="font-medium truncate">{label}</span>
+                <div
+                  key={d.key}
+                  className={
+                    color + " flex justify-between"
+                  }
+                >
+                  <span className="w-16">
+                    {d.short}:
+                  </span>
+                  <span className="font-medium truncate">
+                    {label}
+                  </span>
                 </div>
               );
             })}
@@ -249,8 +363,10 @@ export default function ShiftScheduleContent() {
     },
   };
 
-  const columns = [nameColumn, ...dayColumns];
-  const dataSource = vm.rows.map((r) => ({ ...r, key: r.id }));
+  const columns = [nameColumn].concat(dayColumns);
+  const dataSource = vm.rows.map(function (r) {
+    return Object.assign({}, r, { key: r.id });
+  });
 
   return (
     <ConfigProvider
@@ -268,7 +384,8 @@ export default function ShiftScheduleContent() {
         components: {
           Button: {
             borderRadius: 12,
-            primaryShadow: "0 0 0 2px rgba(0,74,159,0.15)",
+            primaryShadow:
+              "0 0 0 2px rgba(0,74,159,0.15)",
             colorPrimary: BRAND_BLUE,
             colorPrimaryHover: BRAND_BLUE_HOVER,
             colorPrimaryActive: BRAND_BLUE_ACTIVE,
@@ -308,37 +425,53 @@ export default function ShiftScheduleContent() {
             placeholder="Filter Jabatan"
             optionFilterProp="label"
             value={vm.jabatanId || undefined}
-            onChange={(v) => vm.setJabatanId(v ?? null)}
+            onChange={function (v) {
+              vm.setJabatanId(v || null);
+            }}
             options={vm.jabatanOptions}
             className="min-w-[220px]"
           />
           <Select
             className="min-w-[160px]"
             value={vm.currentMonthIdx}
-            onChange={(m) => vm.setMonthYear(vm.currentYear, m)}
+            onChange={function (m) {
+              vm.setMonthYear(vm.currentYear, m);
+            }}
             options={vm.monthOptions}
           />
 
           <div className="flex-grow-0 ml-auto flex items-center gap-2">
-            <Button type="primary" icon={<LeftOutlined />} onClick={vm.prevWeek}>
+            <Button
+              type="primary"
+              icon={<LeftOutlined />}
+              onClick={vm.prevWeek}
+            >
               Minggu sebelumnya
             </Button>
-            <Button type="primary" icon={<RightOutlined />} onClick={vm.nextWeek}>
+            <Button
+              type="primary"
+              icon={<RightOutlined />}
+              onClick={vm.nextWeek}
+            >
               Minggu berikutnya
             </Button>
 
             <DatePicker
               picker="month"
               value={dayjs(vm.weekStart)}
-              onChange={(d) => d && vm.setMonthYear(d.year(), d.month())}
+              onChange={function (d) {
+                if (!d) return;
+                vm.setMonthYear(d.year(), d.month());
+              }}
             />
           </div>
         </div>
 
         <div className="text-xs text-slate-500 mb-3">
-          * Centang “Ulangi minggu ini sampai akhir bulan” → sistem menyalin pola minggu ini.
-          Hari kosong di minggu sumber akan menghapus jadwal di minggu target.
-          Checkbox tetap nyala jika minggu berikutnya ada minimal 1 jadwal.
+          * Centang “Ulangi minggu ini sampai akhir bulan” → sistem
+          menyalin pola minggu ini. Hari kosong di minggu sumber akan
+          menghapus jadwal di minggu target. Checkbox tetap nyala jika
+          minggu berikutnya ada minimal 1 jadwal.
         </div>
 
         <Table
@@ -352,9 +485,9 @@ export default function ShiftScheduleContent() {
           size="middle"
           bordered={false}
           className="rounded-2xl overflow-hidden shadow-xl border border-slate-200"
-          rowClassName={(record, index) =>
-            index % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]"
-          }
+          rowClassName={function (record, index) {
+            return index % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]";
+          }}
         />
       </div>
     </ConfigProvider>
