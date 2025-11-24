@@ -41,7 +41,7 @@ const baseInclude = {
     where: { deleted_at: null },
     orderBy: { level: 'asc' },
     select: {
-      id_approval_pengajuan_izin_jam: true,
+      id_approval_izin_sakit: true,
       level: true,
       approver_user_id: true,
       approver_role: true,
