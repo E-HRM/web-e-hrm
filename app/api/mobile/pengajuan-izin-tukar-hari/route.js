@@ -52,13 +52,6 @@ function formatDateDisplay(value) {
   }
 }
 
-export function getNamaPenggunaApprovals(approvals) {
-  if (!Array.isArray(approvals)) return [];
-  return approvals
-    .map((item) => (typeof item?.approver?.nama_pengguna === 'string' ? item.approver.nama_pengguna.trim() : ''))
-    .filter((nama) => nama);
-}
-
 export async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
@@ -371,14 +364,9 @@ export async function GET(req) {
       }),
     ]);
 
-    const data = items.map((item) => ({
-      ...item,
-      nama_pengguna_approvals: getNamaPenggunaApprovals(item.approvals),
-    }));
-
     return NextResponse.json({
       ok: true,
-      data,
+      data: items,
       meta: { page, perPage, total, totalPages: Math.ceil(total / perPage) },
     });
   } catch (err) {
@@ -605,7 +593,7 @@ export async function POST(req) {
     return NextResponse.json({
       ok: true,
       message: 'Pengajuan izin tukar hari berhasil dibuat.',
-      data: full ? { ...full, nama_pengguna_approvals: getNamaPenggunaApprovals(full.approvals) } : full,
+      data: full,
       upload: uploadMeta || undefined,
     });
   } catch (err) {

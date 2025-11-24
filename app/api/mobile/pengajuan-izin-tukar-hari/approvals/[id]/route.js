@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, getNamaPenggunaApprovals, izinInclude } from '../../route';
+import { ensureAuth, izinInclude } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
@@ -420,14 +420,10 @@ async function handleDecision(req, { params }) {
       );
     }
 
-    const responseData = submissionFull
-      ? { ...submissionFull, nama_pengguna_approvals: getNamaPenggunaApprovals(submissionFull.approvals) }
-      : submissionFull;
-
     return NextResponse.json({
       ok: true,
       message: 'Keputusan approval tersimpan.',
-      data: responseData,
+      data: submissionFull,
       shift_adjustment: shiftSync,
     });
   } catch (err) {
