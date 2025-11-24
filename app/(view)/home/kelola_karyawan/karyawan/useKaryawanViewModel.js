@@ -132,7 +132,10 @@ export default function useKaryawanViewModel() {
   }, [mappedRows, showDeleted]);
 
   // total untuk pagination disesuaikan dengan hasil filter client
-  const total = filteredRows.length;
+  const total =
+    !showDeleted && listRes?.pagination?.total != null
+      ? listRes.pagination.total
+      : filteredRows.length;
 
   /* ====== actions (CRUD) ====== */
   const changePage = useCallback((p, ps) => {

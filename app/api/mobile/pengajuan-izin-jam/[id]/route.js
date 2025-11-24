@@ -20,7 +20,26 @@ const baseInclude = {
   handover_users: {
     include: {
       user: {
-        select: { id_user: true, nama_pengguna: true, email: true, role: true, foto_profil_user: true },
+        select: {
+          id_user: true,
+          nama_pengguna: true,
+          email: true,
+          role: true,
+          foto_profil_user: true,
+          id_departement: true,
+          departement: {
+            select: {
+              id_departement: true,
+              nama_departement: true,
+            },
+          },
+          jabatan: {
+            select: {
+              id_jabatan: true,
+              nama_jabatan: true,
+            },
+          },
+        },
       },
     },
   },

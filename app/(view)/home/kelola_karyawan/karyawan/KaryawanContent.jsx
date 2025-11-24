@@ -386,14 +386,14 @@ export default function KaryawanContent() {
               loading={vm.loading}
               columns={columns}
               dataSource={vm.rows}
-              pagination={{
-                current: vm.page,
-                pageSize: vm.pageSize,
-                total: vm.total,
-                showSizeChanger: true,
-                onChange: vm.changePage,
-                size: "small",
-              }}
+                pagination={{
+                  current: vm.page,
+                  pageSize: vm.pageSize,
+                  total: vm.total,        
+                  showSizeChanger: true,
+                  onChange: vm.changePage,
+                  size: "small",
+                }}
               bordered
               size="middle"
               scroll={{ x: 900 }}
