@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, baseInclude } from '../../route';
+import { ensureAuth, baseInclude, getNamaPenggunaApprovals } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
@@ -31,6 +31,15 @@ function buildInclude() {
         decision: true,
         decided_at: true,
         note: true,
+        approver: {
+          select: {
+            id_user: true,
+            nama_pengguna: true,
+            email: true,
+            role: true,
+            foto_profil_user: true,
+          },
+        },
       },
     },
   };
@@ -99,7 +108,24 @@ async function handleDecision(req, { params }) {
       const approvals = await tx.approvalIzinSakit.findMany({
         where: { id_pengajuan_izin_sakit: approvalRecord.id_pengajuan_izin_sakit, deleted_at: null },
         orderBy: { level: 'asc' },
-        select: { id_approval_izin_sakit: true, level: true, approver_user_id: true, approver_role: true, decision: true, decided_at: true, note: true },
+        select: {
+          id_approval_izin_sakit: true,
+          level: true,
+          approver_user_id: true,
+          approver_role: true,
+          decision: true,
+          decided_at: true,
+          note: true,
+          approver: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              email: true,
+              role: true,
+              foto_profil_user: true,
+            },
+          },
+        },
       });
 
       const { anyApproved, allRejected, highestApprovedLevel } = summarizeApprovalStatus(approvals);
@@ -151,7 +177,11 @@ async function handleDecision(req, { params }) {
       );
     }
 
-    return NextResponse.json({ message: 'Keputusan approval berhasil disimpan.', data: submission });
+    const responseData = submission
+      ? { ...submission, nama_pengguna_approvals: getNamaPenggunaApprovals(submission.approvals) }
+      : submission;
+
+    return NextResponse.json({ message: 'Keputusan approval berhasil disimpan.', data: responseData });
   } catch (err) {
     if (err instanceof NextResponse) return err;
     console.error('PATCH /mobile/pengajuan-izin-sakit/approvals error:', err);

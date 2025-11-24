@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth } from '../../route';
+import { ensureAuth, getNamaPenggunaApprovals, izinInclude } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
@@ -348,23 +348,29 @@ async function handleDecision(req, { params }) {
     });
 
     const { submission, approval, shiftSync } = result;
+    const submissionFull = submission
+      ? await db.izinTukarHari.findUnique({
+          where: { id_izin_tukar_hari: submission.id_izin_tukar_hari },
+          include: izinInclude,
+        })
+      : submission;
 
     // Notifikasi keputusan
-    if (submission?.id_user) {
+    if (submissionFull?.id_user) {
       const decisionDisplay = approval.decision === 'disetujui' ? 'disetujui' : 'ditolak';
       const overrideTitle = `Izin tukar hari ${decisionDisplay}`;
       const overrideBody = `Pengajuan izin tukar hari Anda telah ${decisionDisplay}.`;
-      const deeplink = `/izin-tukar-hari/${submission.id_izin_tukar_hari}`;
+      const deeplink = `/izin-tukar-hari/${submissionFull.id_izin_tukar_hari}`;
 
       await sendNotification(
         'SWAP_DECIDED',
-        submission.id_user,
+        submissionFull.id_user,
         {
           decision: approval.decision,
           note: approval?.note || undefined,
           approval_level: approval?.level,
           related_table: 'izin_tukar_hari',
-          related_id: submission.id_izin_tukar_hari,
+          related_id: submissionFull.id_izin_tukar_hari,
           overrideTitle,
           overrideBody,
         },
@@ -375,7 +381,7 @@ async function handleDecision(req, { params }) {
     // Notifikasi sinkronisasi shift
     if (
       approval.decision === 'disetujui' &&
-      submission?.id_user &&
+      submissionFull?.id_user &&
       (shiftSync.updatedCount > 0 || shiftSync.createdCount > 0)
     ) {
       const ds = (shiftSync.affectedDates || [])
@@ -397,7 +403,7 @@ async function handleDecision(req, { params }) {
 
       await sendNotification(
         'SHIFT_SWAP_ADJUSTMENT',
-        submission.id_user,
+        submissionFull.id_user,
         {
           periode_awal: ds.length ? formatDateISO(ds[0]) : undefined,
           periode_awal_display: ds.length ? formatDateDisplay(ds[0]) : '-',
@@ -406,7 +412,7 @@ async function handleDecision(req, { params }) {
           updated_shift: shiftSync.updatedCount,
           created_shift: shiftSync.createdCount,
           related_table: 'izin_tukar_hari',
-          related_id: submission.id_izin_tukar_hari,
+          related_id: submissionFull.id_izin_tukar_hari,
           overrideTitle,
           overrideBody,
         },
@@ -414,10 +420,14 @@ async function handleDecision(req, { params }) {
       );
     }
 
+    const responseData = submissionFull
+      ? { ...submissionFull, nama_pengguna_approvals: getNamaPenggunaApprovals(submissionFull.approvals) }
+      : submissionFull;
+
     return NextResponse.json({
       ok: true,
       message: 'Keputusan approval tersimpan.',
-      data: submission,
+      data: responseData,
       shift_adjustment: shiftSync,
     });
   } catch (err) {

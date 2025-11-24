@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, baseInclude } from '../../route';
+import { ensureAuth, baseInclude, getNamaPenggunaApprovals } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
@@ -31,6 +31,15 @@ function buildInclude() {
         decision: true,
         decided_at: true,
         note: true,
+        approver: {
+          select: {
+            id_user: true,
+            nama_pengguna: true,
+            email: true,
+            role: true,
+            foto_profil_user: true,
+          },
+        },
       },
     },
   };
@@ -114,6 +123,15 @@ async function handleDecision(req, { params }) {
           decision: true,
           decided_at: true,
           note: true,
+          approver: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              email: true,
+              role: true,
+              foto_profil_user: true,
+            },
+          },
         },
       });
 
@@ -169,7 +187,11 @@ async function handleDecision(req, { params }) {
       );
     }
 
-    return NextResponse.json({ message: 'Keputusan approval berhasil disimpan.', data: submission });
+    const responseData = submission
+      ? { ...submission, nama_pengguna_approvals: getNamaPenggunaApprovals(submission.approvals) }
+      : submission;
+
+    return NextResponse.json({ message: 'Keputusan approval berhasil disimpan.', data: responseData });
   } catch (err) {
     if (err instanceof NextResponse) return err;
     console.error('PATCH /mobile/pengajuan-izin-jam/approvals error:', err);

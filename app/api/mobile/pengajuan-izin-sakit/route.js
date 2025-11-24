@@ -41,13 +41,22 @@ const baseInclude = {
     where: { deleted_at: null },
     orderBy: { level: 'asc' },
     select: {
-      id_approval_izin_sakit: true,
+      id_approval_pengajuan_izin_jam: true,
       level: true,
       approver_user_id: true,
       approver_role: true,
       decision: true,
       decided_at: true,
       note: true,
+      approver: {
+        select: {
+          id_user: true,
+          nama_pengguna: true,
+          email: true,
+          role: true,
+          foto_profil_user: true,
+        },
+      },
     },
   },
 };
@@ -65,6 +74,13 @@ const normRole = (role) =>
     .trim()
     .toUpperCase();
 const canManageAll = (role) => ADMIN_ROLES.has(normRole(role));
+
+export function getNamaPenggunaApprovals(approvals) {
+  if (!Array.isArray(approvals)) return [];
+  return approvals
+    .map((item) => (typeof item?.approver?.nama_pengguna === 'string' ? item.approver.nama_pengguna.trim() : ''))
+    .filter((nama) => nama);
+}
 
 function isNullLike(value) {
   if (value === null || value === undefined) return true;
@@ -224,9 +240,14 @@ export async function GET(req) {
       }),
     ]);
 
+    const data = items.map((item) => ({
+      ...item,
+      nama_pengguna_approvals: getNamaPenggunaApprovals(item.approvals),
+    }));
+
     return NextResponse.json({
       message: 'Data pengajuan izin sakit berhasil diambil.',
-      data: items,
+      data,
       meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
     });
   } catch (err) {
@@ -430,7 +451,9 @@ export async function POST(req) {
       if (notifPromises.length) await Promise.allSettled(notifPromises);
     }
 
-    return NextResponse.json({ message: 'Pengajuan izin sakit berhasil dibuat.', data: result, upload: uploadMeta || undefined }, { status: 201 });
+    const responseData = result ? { ...result, nama_pengguna_approvals: getNamaPenggunaApprovals(result.approvals) } : result;
+
+    return NextResponse.json({ message: 'Pengajuan izin sakit berhasil dibuat.', data: responseData, upload: uploadMeta || undefined }, { status: 201 });
   } catch (err) {
     if (err instanceof NextResponse) return err;
     if (err?.code === 'P2003') return NextResponse.json({ message: 'Data referensi tidak valid.' }, { status: 400 });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, parseTagUserIds, normalizeApprovals, baseInclude } from '../route';
+import { ensureAuth, parseTagUserIds, normalizeApprovals, baseInclude, getNamaPenggunaApprovals } from '../route';
 import storageClient from '@/app/api/_utils/storageClient';
 import { parseRequestBody, findFileInBody, hasOwn } from '@/app/api/_utils/requestBody';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
@@ -66,7 +66,10 @@ export async function GET(_req, { params }) {
   try {
     const pengajuan = await getPengajuanOr404(params?.id);
     if (pengajuan instanceof NextResponse) return pengajuan;
-    return NextResponse.json({ message: 'Detail pengajuan izin sakit berhasil diambil.', data: pengajuan });
+    const responseData = pengajuan
+      ? { ...pengajuan, nama_pengguna_approvals: getNamaPenggunaApprovals(pengajuan.approvals) }
+      : pengajuan;
+    return NextResponse.json({ message: 'Detail pengajuan izin sakit berhasil diambil.', data: responseData });
   } catch (err) {
     if (err instanceof NextResponse) return err;
     console.error('GET /mobile/pengajuan-izin-sakit/:id error:', err);
@@ -275,7 +278,9 @@ export async function PUT(req, { params }) {
       });
     });
 
-    return NextResponse.json({ message: 'Pengajuan izin sakit berhasil diperbarui.', data: updated, upload: uploadMeta || undefined });
+    const responseData = updated ? { ...updated, nama_pengguna_approvals: getNamaPenggunaApprovals(updated.approvals) } : updated;
+
+    return NextResponse.json({ message: 'Pengajuan izin sakit berhasil diperbarui.', data: responseData, upload: uploadMeta || undefined });
   } catch (err) {
     if (err instanceof NextResponse) return err;
     if (err?.code === 'P2003') return NextResponse.json({ message: 'Data referensi tidak valid.' }, { status: 400 });
