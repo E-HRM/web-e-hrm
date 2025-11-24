@@ -208,11 +208,6 @@ export function summarizeDatesByMonth(dates) {
   return Array.from(monthCounts.entries());
 }
 
-export function getNamaPenggunaApprovals(approvals) {
-  if (!Array.isArray(approvals)) return [];
-  return approvals.map((item) => (typeof item?.approver?.nama_pengguna === 'string' ? item.approver.nama_pengguna.trim() : '')).filter((nama) => nama);
-}
-
 /* ============================ GET (List) ============================ */
 export async function GET(req) {
   const auth = await ensureAuth(req);
@@ -333,14 +328,12 @@ export async function GET(req) {
       const tanggal_selesai_derived = dates.length ? dates[dates.length - 1] : null;
 
       const { tanggal_list: _unused, ...rest } = item;
-      const nama_pengguna_approvals = getNamaPenggunaApprovals(item.approvals);
 
       return {
         ...rest,
         tanggal_cuti: tanggal_cuti_derived,
         tanggal_selesai: tanggal_selesai_derived,
         tanggal_list: dates,
-        nama_pengguna_approvals,
       };
     });
 
@@ -599,7 +592,7 @@ export async function POST(req) {
       }
     }
 
-    const responseData = fullPengajuan ? { ...fullPengajuan, nama_pengguna_approvals: getNamaPenggunaApprovals(fullPengajuan.approvals) } : fullPengajuan;
+    const responseData = fullPengajuan || null;
 
     return NextResponse.json({
       ok: true,

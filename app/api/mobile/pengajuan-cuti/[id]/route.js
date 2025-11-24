@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, getNamaPenggunaApprovals, pengajuanInclude } from '@/app/api/mobile/pengajuan-cuti/route';
+import { ensureAuth, pengajuanInclude } from '@/app/api/mobile/pengajuan-cuti/route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
@@ -562,9 +562,7 @@ async function handleDecision(req, { params }) {
       );
     }
 
-    const responseData = submission
-      ? { ...submission, nama_pengguna_approvals: getNamaPenggunaApprovals(submission.approvals) }
-      : submission;
+    const responseData = submission || null;
 
     return NextResponse.json({
       ok: true,
