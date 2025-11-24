@@ -434,6 +434,7 @@ export async function POST(req) {
       const finalLampiranUrl = result.lampiran_izin_sakit_url;
 
       if (finalLampiranUrl) {
+        await new Promise((resolve) => setTimeout(resolve, 6000));
         sendIzinSakitImage(finalLampiranUrl, whatsappMessage).catch((err) => console.error('Gagal kirim WA Image (Sakit):', err));
       } else {
         sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal kirim notif teks di latar belakang:', err));
