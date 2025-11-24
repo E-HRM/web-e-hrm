@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { ensureAuth, getNamaPenggunaApprovals, izinInclude } from '../route';
+import { ensureAuth, izinInclude } from '../route';
 import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 import storageClient from '@/app/api/_utils/storageClient';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
@@ -186,9 +186,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ ok: false, message: 'Forbidden.' }, { status: 403 });
     }
 
-    const responseData = data ? { ...data, nama_pengguna_approvals: getNamaPenggunaApprovals(data.approvals) } : data;
-
-    return NextResponse.json({ ok: true, data: responseData });
+    return NextResponse.json({ ok: true, data });
   } catch (err) {
     console.error('GET /mobile/izin-tukar-hari/[id] error:', err);
     return NextResponse.json({ ok: false, message: 'Gagal mengambil detail pengajuan.' }, { status: 500 });
@@ -363,9 +361,7 @@ export async function PUT(req, { params }) {
       return tx.izinTukarHari.findUnique({ where: { id_izin_tukar_hari: id }, include: izinInclude });
     });
 
-    const responseData = updated ? { ...updated, nama_pengguna_approvals: getNamaPenggunaApprovals(updated.approvals) } : updated;
-
-    return NextResponse.json({ ok: true, message: 'Pengajuan izin tukar hari diperbarui.', data: responseData });
+    return NextResponse.json({ ok: true, message: 'Pengajuan izin tukar hari diperbarui.', data: updated });
   } catch (err) {
     console.error('PUT /mobile/izin-tukar-hari/[id] error:', err);
     return NextResponse.json({ ok: false, message: 'Gagal memperbarui pengajuan.' }, { status: 500 });
