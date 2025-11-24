@@ -114,15 +114,19 @@ export default function AgendaCalendarContent() {
   const [form] = Form.useForm();
   const [editId, setEditId] = useState(null);
 
-  /* ===== Modal Tambah Proyek (opsional) ===== */
-  const [agendaOpen, setAgendaOpen] = useState(false);
-  const [agendaForm] = Form.useForm();
+  // === Watch field users untuk hitung jumlah dipilih ===
+  const usersSelected = Form.useWatch("users", form) || [];
+  const totalUsers = vm.userOptions?.length || 0;
 
   const [createProgress, setCreateProgress] = useState({
     running: false,
     sent: 0,
     total: 0,
   });
+
+  /* ===== Modal Tambah Proyek (opsional) ===== */
+  const [agendaOpen, setAgendaOpen] = useState(false);
+  const [agendaForm] = Form.useForm();
 
   /* ===== Detail Modal ===== */
   const [detailOpen, setDetailOpen] = useState(false);
@@ -166,6 +170,25 @@ export default function AgendaCalendarContent() {
     });
     setFormOpen(true);
   };
+
+  // === Helper Pilih Semua / Bersihkan Karyawan ===
+  const handleSelectAllUsers = () => {
+    const allIds = (vm.userOptions || []).map((opt) => opt.value);
+    form.setFieldsValue({ users: allIds });
+  };
+
+  const handleClearUsers = () => {
+    form.setFieldsValue({ users: [] });
+  };
+
+  const usersLabelNode = (
+    <div className="flex items-center justify-between gap-2">
+      <span>Karyawan</span>
+      <span className="text-[11px] text-slate-500">
+        Dipilih: {usersSelected.length}/{totalUsers}
+      </span>
+    </div>
+  );
 
   const handleSubmitForm = async () => {
     const v = await form.validateFields();
@@ -525,6 +548,7 @@ export default function AgendaCalendarContent() {
         destroyOnClose
         maskClosable={false}
         zIndex={11000}
+        centered
         styles={{ body: { maxHeight: "72vh", overflowY: "auto" } }}
       >
         {!detailEvent ? null : (
@@ -668,6 +692,7 @@ export default function AgendaCalendarContent() {
         destroyOnClose
         maskClosable
         zIndex={11100}
+        centered
         styles={{ body: { maxHeight: "60vh", overflowY: "auto" } }}
       >
         <div style={{ display: "grid", rowGap: 8, fontSize: 14 }}>
@@ -692,16 +717,62 @@ export default function AgendaCalendarContent() {
         </div>
       </Modal>
 
-      {/* Modal Buat / Edit Agenda */}
+      {/* Modal Buat / Edit Agenda — Fixed center, scroll cuma di dalam form */}
       <Modal
         title={editId ? "Edit Agenda" : "Agenda Baru"}
         open={formOpen}
         onCancel={() => setFormOpen(false)}
-        onOk={handleSubmitForm}
-        okText={editId ? "Simpan" : "Buat"}
-        confirmLoading={createProgress.running}
+        centered
+        footer={
+          <div className="flex items-center justify-between gap-3">
+            {/* Info progress di kiri */}
+            <div>
+              {createProgress.running && !editId && (
+                <span className="text-xs text-slate-500">
+                  Sedang memproses agenda (
+                  {createProgress.sent}/{createProgress.total})
+                </span>
+              )}
+              {createProgress.running && editId && (
+                <span className="text-xs text-slate-500">
+                  Menyimpan perubahan agenda...
+                </span>
+              )}
+            </div>
+
+            {/* Tombol di kanan */}
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setFormOpen(false)}
+                disabled={createProgress.running}
+              >
+                Batal
+              </Button>
+              <Button
+                type="primary"
+                onClick={handleSubmitForm}
+                loading={createProgress.running}
+              >
+                {createProgress.running && !editId
+                  ? `Buat (${createProgress.sent}/${createProgress.total})`
+                  : createProgress.running && editId
+                  ? "Menyimpan..."
+                  : editId
+                  ? "Simpan"
+                  : "Buat"}
+              </Button>
+            </div>
+          </div>
+        }
         destroyOnClose
-        styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+        // Scroll cuma di body, modal-nya tetap center & fixed
+        styles={{
+          body: {
+            maxHeight: "60vh",
+            overflowY: "auto",
+          },
+        }}
+        maskClosable={false}
       >
         <Form form={form} layout="vertical">
           <Form.Item label="Proyek/Agenda" required>
@@ -718,6 +789,7 @@ export default function AgendaCalendarContent() {
                   options={vm.agendaOptions}
                   showSearch
                   optionFilterProp="label"
+                  dropdownStyle={{ maxHeight: 320, overflowY: "auto" }}
                 />
               </Form.Item>
               <Button
@@ -742,7 +814,7 @@ export default function AgendaCalendarContent() {
 
           {!editId && (
             <Form.Item
-              label="Karyawan"
+              label={usersLabelNode}
               name="users"
               rules={[
                 {
@@ -757,16 +829,59 @@ export default function AgendaCalendarContent() {
                 options={vm.userOptions}
                 showSearch
                 optionFilterProp="label"
-                listHeight={400}
+                listHeight={256}
                 virtual
                 loading={!vm.userOptions?.length}
+                maxTagCount="responsive"
+                dropdownStyle={{ maxHeight: 360 }}
+                dropdownRender={(menu) => (
+                  <div>
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+                      <span className="text-[11px] text-slate-600">
+                        Dipilih: {usersSelected.length}/{totalUsers}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSelectAllUsers();
+                          }}
+                        >
+                          Pilih semua
+                        </Button>
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleClearUsers();
+                          }}
+                        >
+                          Bersihkan
+                        </Button>
+                      </div>
+                    </div>
+                    <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                      {menu}
+                    </div>
+                  </div>
+                )}
               />
             </Form.Item>
           )}
 
           {editId && (
-            <Form.Item label="Karyawan" name="users">
-              <Select mode="multiple" disabled options={vm.userOptions} />
+            <Form.Item label={usersLabelNode} name="users">
+              <Select
+                mode="multiple"
+                disabled
+                options={vm.userOptions}
+                maxTagCount="responsive"
+              />
             </Form.Item>
           )}
 
@@ -794,25 +909,6 @@ export default function AgendaCalendarContent() {
             <DatePicker showTime className="w-full" />
           </Form.Item>
         </Form>
-
-        {/* Progress saat kirim ke banyak karyawan */}
-        {createProgress.running && !editId && (
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
-            <span className="inline-block h-3 w-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-            <span>
-              Sedang memproses agenda (
-              {createProgress.sent}/{createProgress.total})
-            </span>
-          </div>
-        )}
-
-        {/* Progress saat edit satu agenda */}
-        {createProgress.running && editId && (
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-800">
-            <span className="inline-block h-3 w-3 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
-            <span>Menyimpan perubahan agenda...</span>
-          </div>
-        )}
       </Modal>
 
       {/* Modal Tambah Proyek */}
@@ -848,7 +944,9 @@ export default function AgendaCalendarContent() {
         }}
         okText="Simpan"
         destroyOnClose
+        centered
         maskClosable={false}
+        styles={{ body: { maxHeight: "60vh", overflowY: "auto" } }}
       >
         <Form form={agendaForm} layout="vertical">
           <Form.Item
