@@ -417,7 +417,25 @@ export async function POST(req) {
         `Handover Tag: ${handoverTaggedNames.length ? handoverTaggedNames.join(', ') : '-'}`,
       ];
 
-      const whatsappMessage = whatsappPayloadLines.join('\n');
+ const whatsappMessage = whatsappPayloadLines.join('\n');
+
+      console.log('[DEBUG-WA] Menyiapkan pesan WhatsApp:', whatsappMessage);
+
+      // Panggil fungsi dengan penanganan error yang lebih detail
+      sendIzinSakitMessage(whatsappMessage)
+        .then((resp) => {
+          console.log('[DEBUG-WA] Sukses terkirim ke fungsi helper. Respons:', JSON.stringify(resp, null, 2));
+        })
+        .catch((err) => {
+          console.error('[DEBUG-WA] GAGAL mengirim notifikasi WhatsApp!');
+          console.error('[DEBUG-WA] Pesan Error:', err.message);
+          if (err.response) {
+            console.error('[DEBUG-WA] Status HTTP:', err.response.status);
+            console.error('[DEBUG-WA] Data Respons API:', JSON.stringify(err.response.data, null, 2));
+          } else {
+            console.error('[DEBUG-WA] Stack Trace:', err.stack);
+          }
+        });
 
       sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal mengirim notifikasi WhatsApp izin sakit:', err));
 
