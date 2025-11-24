@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
-import db from "../../../../lib/prisma";
-import { verifyAuthToken } from '@/lib/jwt'
-import { authenticateRequest } from "../../../utils/auth/authUtils";
-import { parseDateTimeToUTC } from "../../../../helpers/date-helper";
+import { NextResponse } from 'next/server';
+import db from '../../../../lib/prisma';
+import { verifyAuthToken } from '@/lib/jwt';
+import { authenticateRequest } from '../../../utils/auth/authUtils';
+import { parseDateTimeToUTC } from '../../../../helpers/date-helper';
 
 async function ensureAuth(req) {
   const auth = req.headers.get("authorization") || "";
@@ -18,8 +18,7 @@ async function ensureAuth(req) {
 }
 
 function parseRequiredString(value, field) {
-  const str =
-    value !== undefined && value !== null ? String(value).trim() : "";
+  const str = value !== undefined && value !== null ? String(value).trim() : '';
   if (!str) {
     throw new Error(`Field '${field}' wajib diisi.`);
   }
@@ -44,8 +43,7 @@ function parseOptionalDateTime(value, field) {
 const VALID_WORK_STATUS = new Set(["berjalan", "berhenti", "selesai"]);
 
 function parseStatus(value) {
-  const status =
-    value !== undefined && value !== null ? String(value).trim() : "";
+  const status = value !== undefined && value !== null ? String(value).trim() : '';
   if (!status) return undefined;
   if (!VALID_WORK_STATUS.has(status)) {
     throw new Error(
@@ -63,55 +61,28 @@ export async function GET(req) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const page = Math.max(
-      parseInt(searchParams.get("page") || "1", 10),
-      1
-    );
-    const pageSize = Math.min(
-      Math.max(parseInt(searchParams.get("pageSize") || "10", 10), 1),
-      100
-    );
-    const search = (searchParams.get("search") || "").trim();
-    const includeDeleted = searchParams.get("includeDeleted") === "1";
-    const status = parseStatus(searchParams.get("status"));
-    const idUser = (searchParams.get("id_user") || "").trim();
-    const idDepartement = (searchParams.get("id_departement") || "").trim();
+    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
+    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
+    const search = (searchParams.get('search') || '').trim();
+    const includeDeleted = searchParams.get('includeDeleted') === '1';
+    const status = parseStatus(searchParams.get('status'));
+    const idUser = (searchParams.get('id_user') || '').trim();
+    const idDepartement = (searchParams.get('id_departement') || '').trim();
 
     // NEW: filter range count_time (per minggu)
     let countTimeFrom;
     let countTimeTo;
     try {
-      countTimeFrom = parseOptionalDateTime(
-        searchParams.get("countTimeFrom"),
-        "countTimeFrom"
-      );
-      countTimeTo = parseOptionalDateTime(
-        searchParams.get("countTimeTo"),
-        "countTimeTo"
-      );
+      countTimeFrom = parseOptionalDateTime(searchParams.get('countTimeFrom'), 'countTimeFrom');
+      countTimeTo = parseOptionalDateTime(searchParams.get('countTimeTo'), 'countTimeTo');
     } catch (parseErr) {
-      return NextResponse.json(
-        { message: parseErr.message },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: parseErr.message }, { status: 400 });
     }
 
-    const allowedOrder = new Set([
-      "deskripsi_kerja",
-      "count_time",
-      "status",
-      "created_at",
-      "updated_at",
-      "deleted_at",
-    ]);
-    const orderByParam = (searchParams.get("orderBy") || "created_at").trim();
-    const orderByField = allowedOrder.has(orderByParam)
-      ? orderByParam
-      : "created_at";
-    const sort =
-      (searchParams.get("sort") || "desc").toLowerCase() === "asc"
-        ? "asc"
-        : "desc";
+    const allowedOrder = new Set(['deskripsi_kerja', 'count_time', 'status', 'created_at', 'updated_at', 'deleted_at']);
+    const orderByParam = (searchParams.get('orderBy') || 'created_at').trim();
+    const orderByField = allowedOrder.has(orderByParam) ? orderByParam : 'created_at';
+    const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
     const where = {
       ...(includeDeleted ? {} : { deleted_at: null }),
@@ -119,7 +90,7 @@ export async function GET(req) {
         ? {
             deskripsi_kerja: {
               contains: search,
-              mode: "insensitive",
+              mode: 'insensitive',
             },
           }
         : {}),
@@ -185,8 +156,8 @@ export async function GET(req) {
       },
     });
   } catch (err) {
-    console.error("GET /story-planner error:", err && err.code ? err.code : err);
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    console.error('GET /story-planner error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
@@ -199,7 +170,7 @@ export async function POST(req) {
 
     let idUser;
     try {
-      idUser = parseRequiredString(body.id_user, "id_user");
+      idUser = parseRequiredString(body.id_user, 'id_user');
     } catch (parseErr) {
       return NextResponse.json({ message: parseErr.message }, { status: 400 });
     }
@@ -209,10 +180,7 @@ export async function POST(req) {
       select: { id_user: true },
     });
     if (!userExists) {
-      return NextResponse.json(
-        { message: "User tidak ditemukan." },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });
     }
 
     let idDepartement = undefined;
@@ -237,10 +205,7 @@ export async function POST(req) {
 
     let deskripsi;
     try {
-      deskripsi = parseRequiredString(
-        body.deskripsi_kerja,
-        "deskripsi_kerja"
-      );
+      deskripsi = parseRequiredString(body.deskripsi_kerja, 'deskripsi_kerja');
     } catch (parseErr) {
       return NextResponse.json({ message: parseErr.message }, { status: 400 });
     }
@@ -252,9 +217,9 @@ export async function POST(req) {
       return NextResponse.json({ message: parseErr.message }, { status: 400 });
     }
 
-    let status = "berjalan";
+    let status = 'berjalan';
     try {
-      status = parseStatus(body.status) || "berjalan";
+      status = parseStatus(body.status) || 'berjalan';
     } catch (parseErr) {
       return NextResponse.json({ message: parseErr.message }, { status: 400 });
     }
@@ -278,12 +243,9 @@ export async function POST(req) {
       },
     });
 
-    return NextResponse.json(
-      { message: "Story planner dibuat.", data: created },
-      { status: 201 }
-    );
+    return NextResponse.json({ message: 'Story planner dibuat.', data: created }, { status: 201 });
   } catch (err) {
-    console.error("POST /story-planner error:", err && err.code ? err.code : err);
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    console.error('POST /story-planner error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }

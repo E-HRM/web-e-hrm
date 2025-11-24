@@ -41,16 +41,7 @@ function combineDateTime(date, timeValue) {
   if (!date || !timeValue) return null;
   const base = new Date(date);
   const time = new Date(timeValue);
-  return new Date(
-    Date.UTC(
-      base.getUTCFullYear(),
-      base.getUTCMonth(),
-      base.getUTCDate(),
-      time.getUTCHours(),
-      time.getUTCMinutes(),
-      time.getUTCSeconds()
-    )
-  );
+  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), time.getUTCHours(), time.getUTCMinutes(), time.getUTCSeconds()));
 }
 function findShiftForDate(shifts, date) {
   if (!Array.isArray(shifts)) return null;
@@ -88,9 +79,7 @@ function buildCalendarEventsFromLeaves(leaves, year, monthIndex) {
 
   // batas bulan di kalender (UTC)
   const monthStart = new Date(Date.UTC(year, monthIndex, 1));
-  const monthEnd = new Date(
-    Date.UTC(year, monthIndex + 1, 0, 23, 59, 59, 999)
-  );
+  const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59, 999));
 
   for (const leave of leaves || []) {
     // Ambil semua tanggal cuti dari relasi tanggal_list
@@ -112,24 +101,21 @@ function buildCalendarEventsFromLeaves(leaves, year, monthIndex) {
     const last = dates[dates.length - 1];
 
     // Label rentang (mis: "1–3 Nov 2025")
-    const sameDay =
-      first.getUTCFullYear() === last.getUTCFullYear() &&
-      first.getUTCMonth() === last.getUTCMonth() &&
-      first.getUTCDate() === last.getUTCDate();
+    const sameDay = first.getUTCFullYear() === last.getUTCFullYear() && first.getUTCMonth() === last.getUTCMonth() && first.getUTCDate() === last.getUTCDate();
 
     const rangeLabel = sameDay
-      ? first.toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
+      ? first.toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
         })
-      : `${first.toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "short",
-        })} – ${last.toLocaleDateString("id-ID", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
+      : `${first.toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+        })} – ${last.toLocaleDateString('id-ID', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
         })}`;
 
     // Isi tiap hari cuti yang jatuh di bulan ini
@@ -140,20 +126,18 @@ function buildCalendarEventsFromLeaves(leaves, year, monthIndex) {
 
       if (!eventsByDay[day]) {
         eventsByDay[day] = {
-          color: "bg-teal-400",
-          tip: "",
+          color: 'bg-teal-400',
+          tip: '',
           items: [],
         };
       }
 
       eventsByDay[day].items.push({
         id: leave.id_pengajuan_cuti,
-        name: leave.user ? leave.user.nama_pengguna : "Karyawan",
-        categoryName:
-          (leave.kategori_cuti &&
-            leave.kategori_cuti.nama_kategori) || "Cuti",
+        name: leave.user ? leave.user.nama_pengguna : 'Karyawan',
+        categoryName: (leave.kategori_cuti && leave.kategori_cuti.nama_kategori) || 'Cuti',
         rangeLabel,
-        note: leave.keperluan || "",
+        note: leave.keperluan || '',
       });
     }
   }
@@ -332,12 +316,8 @@ export async function GET(req) {
     const perfDateEnd = toUtcEnd(performanceDate);
 
     // range bulan untuk kalender di dashboard
-    const calendarMonthStart = toUtcStart(
-      new Date(calendarYear, calendarMonth, 1)
-    );
-    const calendarMonthEnd = toUtcEnd(
-      new Date(calendarYear, calendarMonth + 1, 0)
-    );
+    const calendarMonthStart = toUtcStart(new Date(calendarYear, calendarMonth, 1));
+    const calendarMonthEnd = toUtcEnd(new Date(calendarYear, calendarMonth + 1, 0));
 
     // untuk "cuti hari ini"
     const todayStart = toUtcStart(now);
@@ -525,6 +505,79 @@ export async function GET(req) {
         },
       }),
 
+      // ====== CUTI HARI INI (untuk card "Karyawan Cuti") ======
+      db.pengajuanCuti.findMany({
+        where: {
+          deleted_at: null,
+          status: 'disetujui',
+          ...(divisionId && {
+            user: { id_departement: divisionId },
+          }),
+          tanggal_list: {
+            some: {
+              tanggal_cuti: {
+                gte: todayStart,
+                lte: todayEnd,
+              },
+            },
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              foto_profil_user: true,
+              departement: {
+                select: { nama_departement: true },
+              },
+            },
+          },
+          kategori_cuti: {
+            select: { nama_kategori: true },
+          },
+        },
+      }),
+
+      // ====== CUTI UNTUK KALENDER (bulan yang sedang dilihat) ======
+      db.pengajuanCuti.findMany({
+        where: {
+          deleted_at: null,
+          status: 'disetujui',
+          ...(divisionId && {
+            user: { id_departement: divisionId },
+          }),
+          // ▶️ filter via relasi tanggal_list
+          tanggal_list: {
+            some: {
+              tanggal_cuti: {
+                gte: calendarMonthStart,
+                lte: calendarMonthEnd,
+              },
+            },
+          },
+        },
+        include: {
+          user: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              foto_profil_user: true,
+              departement: {
+                select: { nama_departement: true },
+              },
+            },
+          },
+          kategori_cuti: {
+            select: { nama_kategori: true },
+          },
+          // ▶️ kita perlu tanggal_list buat build event per hari
+          tanggal_list: {
+            select: { tanggal_cuti: true },
+          },
+        },
+      }),
+
 
       // ====== CUTI HARI INI (untuk card "Karyawan Cuti") ======
       db.pengajuanCuti.findMany({
@@ -648,11 +701,7 @@ export async function GET(req) {
     }));
 
     // ====== Build kalender dari cuti disetujui ======
-    const calendarEvents = buildCalendarEventsFromLeaves(
-      calendarLeavesRaw,
-      calendarYear,
-      calendarMonth
-    );
+    const calendarEvents = buildCalendarEventsFromLeaves(calendarLeavesRaw, calendarYear, calendarMonth);
 
     // ====== Karyawan cuti HARI INI ======
     const todayLeaveList = (todayLeavesRaw || []).map((row) => {
@@ -660,12 +709,8 @@ export async function GET(req) {
       return {
         id: row.id_pengajuan_cuti,
         name: user.nama_pengguna || 'Karyawan',
-        division:
-          (user.departement &&
-            user.departement.nama_departement) || '-',
-        categoryName:
-          (row.kategori_cuti &&
-            row.kategori_cuti.nama_kategori) || 'Cuti',
+        division: (user.departement && user.departement.nama_departement) || '-',
+        categoryName: (row.kategori_cuti && row.kategori_cuti.nama_kategori) || 'Cuti',
       };
     });
 

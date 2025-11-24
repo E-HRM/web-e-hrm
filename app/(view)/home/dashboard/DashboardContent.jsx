@@ -1,6 +1,7 @@
 "use client";
 
-import { Select } from "antd";
+import { useState } from "react";
+import { Modal } from "antd";
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,6 +16,7 @@ import {
 import useDashboardViewModel from "./useDashboardViewModel";
 import PerformanceSection from "../../../components/dashboard/PerfomanceSection";
 import Top5Section from "../../../components/dashboard/Top5Section";
+
 
 /* Mini avatar untuk list cuti */
 function Avatar({ name = "", bg = "#E5E7EB" }) {
@@ -35,7 +37,15 @@ function Avatar({ name = "", bg = "#E5E7EB" }) {
 }
 
 /* Mini calendar (unchanged) */
-function MiniCalendar({ year, monthIndex, today, eventsByDay, onPrevMonth, onNextMonth }) {
+function MiniCalendar({
+  year,
+  monthIndex,
+  today,
+  eventsByDay,
+  onPrevMonth,
+  onNextMonth,
+  onSelectDay, // <— baru
+}) {
   const first = new Date(year, monthIndex, 1);
   const startOffset = (first.getDay() + 6) % 7; // Senin=0
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -65,18 +75,36 @@ function MiniCalendar({ year, monthIndex, today, eventsByDay, onPrevMonth, onNex
         ))}
       </div>
 
-      <div className="mt-1 grid grid-cols-7 gap-y-3 text-sm">
+            <div className="mt-1 grid grid-cols-7 gap-y-3 text-sm">
         {cells.map((day, idx) => {
           if (!day) return <div key={idx} className="h-10" />;
-          const isToday = (
-            today.getFullYear()===year &&
-            today.getMonth()===monthIndex &&
-            today.getDate()===day
-          );
+          const isToday =
+            today.getFullYear() === year &&
+            today.getMonth() === monthIndex &&
+            today.getDate() === day;
+
           const ev = eventsByDay[day];
+
+          const handleClick = () => {
+            if (!ev || !ev.items || ev.items.length === 0) return;
+            if (onSelectDay) {
+              // Date lokal (bukan UTC, ini buat tampilan saja)
+              const dateObj = new Date(year, monthIndex, day);
+              onSelectDay(dateObj, ev);
+            }
+          };
+
           return (
             <div key={idx} className="h-10 relative group">
-              <div className={`mx-auto h-7 w-7 flex items-center justify-center rounded-full ${isToday ? "bg-violet-100 text-violet-700":"text-gray-700"}`} title={ev?.tip || undefined}>
+              <div
+                className={`mx-auto h-7 w-7 flex items-center justify-center rounded-full ${
+                  isToday
+                    ? "bg-violet-100 text-violet-700"
+                    : "text-gray-700"
+                } ${ev ? "cursor-pointer hover:bg-white/80" : ""}`}
+                title={ev?.tip || undefined}
+                onClick={handleClick}
+              >
                 {day}
               </div>
               {ev?.color && (

@@ -35,6 +35,15 @@ const baseInclude = {
       decision: true,
       decided_at: true,
       note: true,
+      approver: {
+        select: {
+          id_user: true,
+          nama_pengguna: true,
+          email: true,
+          role: true,
+          foto_profil_user: true,
+        },
+      },
     },
   },
 };

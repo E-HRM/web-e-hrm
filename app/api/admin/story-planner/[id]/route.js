@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
-import db from "../../../../../lib/prisma";
-import { verifyAuthToken } from "@/lib/jwt";
-import { authenticateRequest } from "../../../../utils/auth/authUtils";
-import { parseDateTimeToUTC } from "../../../../../helpers/date-helper";
+import { NextResponse } from 'next/server';
+import db from '../../../../../lib/prisma';
+import { verifyAuthToken } from '@/lib/jwt';
+import { authenticateRequest } from '../../../../utils/auth/authUtils';
+import { parseDateTimeToUTC } from '../../../../../helpers/date-helper';
 
 async function ensureAuth(req) {
   const auth = req.headers.get("authorization") || "";
@@ -27,9 +27,7 @@ function parseOptionalDateTime(value, field) {
   if (value === undefined || value === null || value === "") return undefined;
   const parsed = parseDateTimeToUTC(value);
   if (!(parsed instanceof Date)) {
-    throw new Error(
-      "Field '" + field + "' harus berupa tanggal/waktu yang valid."
-    );
+    throw new Error("Field '" + field + "' harus berupa tanggal/waktu yang valid.");
   }
   return parsed;
 }
@@ -41,11 +39,7 @@ function parseStatus(value) {
   const status = String(value).trim();
   if (!status) return undefined;
   if (!VALID_WORK_STATUS.has(status)) {
-    throw new Error(
-      "Field 'status' harus salah satu dari: " +
-        Array.from(VALID_WORK_STATUS).join(", ") +
-        "."
-    );
+    throw new Error("Field 'status' harus salah satu dari: " + Array.from(VALID_WORK_STATUS).join(', ') + '.');
   }
   return status;
 }
@@ -78,10 +72,7 @@ export async function GET(req, { params }) {
     });
 
     if (!row) {
-      return NextResponse.json(
-        { message: "Story planner tidak ditemukan" },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: 'Story planner tidak ditemukan' }, { status: 404 });
     }
 
     const data = {
@@ -98,11 +89,8 @@ export async function GET(req, { params }) {
 
     return NextResponse.json({ data });
   } catch (err) {
-    console.error(
-      "GET /story-planner/[id] error:",
-      err && err.code ? err.code : err
-    );
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    console.error('GET /story-planner/[id] error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
@@ -164,10 +152,7 @@ export async function PUT(req, { params }) {
     };
 
     if (Object.keys(dataToUpdate).length === 0) {
-      return NextResponse.json(
-        { message: "Tidak ada perubahan yang dikirim." },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'Tidak ada perubahan yang dikirim.' }, { status: 400 });
     }
 
     const updated = await db.storyPlanner.update({
@@ -185,21 +170,15 @@ export async function PUT(req, { params }) {
     });
 
     return NextResponse.json({
-      message: "Story planner diperbarui.",
+      message: 'Story planner diperbarui.',
       data: updated,
     });
   } catch (err) {
-    if (err && err.code === "P2025") {
-      return NextResponse.json(
-        { message: "Story planner tidak ditemukan" },
-        { status: 404 }
-      );
+    if (err && err.code === 'P2025') {
+      return NextResponse.json({ message: 'Story planner tidak ditemukan' }, { status: 404 });
     }
-    console.error(
-      "PUT /story-planner/[id] error:",
-      err && err.code ? err.code : err
-    );
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    console.error('PUT /story-planner/[id] error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
@@ -216,15 +195,12 @@ export async function DELETE(req, { params }) {
     });
 
     if (!existing) {
-      return NextResponse.json(
-        { message: "Story planner tidak ditemukan" },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: 'Story planner tidak ditemukan' }, { status: 404 });
     }
 
     if (existing.deleted_at) {
       return NextResponse.json({
-        message: "Story planner sudah dihapus.",
+        message: 'Story planner sudah dihapus.',
       });
     }
 
@@ -233,12 +209,9 @@ export async function DELETE(req, { params }) {
       data: { deleted_at: new Date() },
     });
 
-    return NextResponse.json({ message: "Story planner dihapus." });
+    return NextResponse.json({ message: 'Story planner dihapus.' });
   } catch (err) {
-    console.error(
-      "DELETE /story-planner/[id] error:",
-      err && err.code ? err.code : err
-    );
-    return NextResponse.json({ message: "Server error" }, { status: 500 });
+    console.error('DELETE /story-planner/[id] error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
