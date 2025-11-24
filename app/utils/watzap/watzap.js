@@ -92,3 +92,12 @@ export async function sendIzinSakitMessage(message) {
   }
   return sendWhatsAppGroupMessage(IZIN_SAKIT_GROUP_ID, message);
 }
+
+// TAMBAHKAN FUNGSI INI DI BAWAH sendIzinSakitMessage
+export async function sendIzinSakitImage(imageUrl, message = '') {
+  if (!IZIN_SAKIT_GROUP_ID) {
+    return console.warn('WATZAP_GROUP_ID_IZIN_SAKIT belum diatur; melewati notifikasi.');
+  }
+  // false = kirim caption menyatu dengan gambar
+  return sendWhatsAppGroupImage(IZIN_SAKIT_GROUP_ID, imageUrl, message, false);
+}
