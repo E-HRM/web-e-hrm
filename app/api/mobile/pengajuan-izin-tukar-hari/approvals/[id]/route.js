@@ -269,13 +269,17 @@ async function handleDecision(req, { params }) {
         throw NextResponse.json({ ok: false, message: 'Approval sudah memiliki keputusan.' }, { status: 409 });
       }
 
+      const updateData = {
+        decision,
+        note,
+        decided_at: new Date(),
+      };
+      if (!approval.approver_user_id) updateData.approver_user_id = actorId;
+      if (!approval.approver_role && normalizedActorRole) updateData.approver_role = normalizedActorRole;
+
       const updatedApproval = await tx.approvalIzinTukarHari.update({
         where: { id_approval_izin_tukar_hari: id },
-        data: {
-          decision,
-          note,
-          decided_at: new Date(),
-        },
+        data: updateData,
         select: {
           id_approval_izin_tukar_hari: true,
           id_izin_tukar_hari: true,

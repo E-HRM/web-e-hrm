@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import useSWR from "swr";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
@@ -133,7 +133,7 @@ const signatureFromRow = (row) => {
   return `${id_agenda}|${title}|${start}|${end}`;
 };
 
-/* ====== FIX: gunakan deskripsi aktivitas, bukan event.title (nama proyek) ====== */
+/* ====== gunakan deskripsi aktivitas, bukan event.title (nama proyek) ====== */
 const signatureFromEventLike = (evLike) => {
   const raw = evLike.extendedProps?.raw || {};
 
@@ -165,7 +165,10 @@ export default function useAgendaCalendarViewModel() {
     start: dayjs().startOf("month").startOf("week").toDate(),
     end: dayjs().endOf("month").endOf("week").toDate(),
   }));
-  const setRange = useCallback((start, end) => setRangeState({ start, end }), []);
+  const setRange = useCallback(
+    (start, end) => setRangeState({ start, end }),
+    []
+  );
 
   /* ===== Master Users: fetch semua halaman ===== */
   const fetchAllUsers = useCallback(async () => {
@@ -252,16 +255,19 @@ export default function useAgendaCalendarViewModel() {
     const j = u.jabatan || u.nama_jabatan || u.role || null;
     if (!j) return null;
     if (typeof j === "string") return j;
-    if (typeof j === "object") return j.nama_jabatan || j.name || j.title || null;
+    if (typeof j === "object")
+      return j.nama_jabatan || j.name || j.title || null;
     return null;
   }, []);
 
   const getDepartemenName = useCallback((u) => {
     if (!u) return null;
-    const d = u.departemen || u.departement || u.department || u.divisi || null;
+    const d =
+      u.departemen || u.departement || u.department || u.divisi || null;
     if (!d) return null;
     if (typeof d === "string") return d;
-    if (typeof d === "object") return d.nama_departemen || d.nama || d.name || d.title || null;
+    if (typeof d === "object")
+      return d.nama_departemen || d.nama || d.name || d.title || null;
     return null;
   }, []);
 
@@ -293,62 +299,80 @@ export default function useAgendaCalendarViewModel() {
   );
 
   /* ===== List agenda kerja: AMBIL SEMUA HALAMAN ===== */
-  const fetchAllAgendaKerja = useCallback(
-    async (fromDate, toDate) => {
-      const perPage = 200; // aman & ringan; naikkan jika perlu
-      let page = 1;
-      let all = [];
+  const fetchAllAgendaKerja = useCallback(async (fromDate, toDate) => {
+    const perPage = 200;
+    let page = 1;
+    let all = [];
 
-      const from = dayjs(fromDate).format("YYYY-MM-DD");
-      const to = dayjs(toDate).format("YYYY-MM-DD");
+    const from = dayjs(fromDate).format("YYYY-MM-DD");
+    const to = dayjs(toDate).format("YYYY-MM-DD");
 
-      while (true) {
-        const params = new URLSearchParams();
-        params.set("from", from);
-        params.set("to", to);
-        params.set("perPage", String(perPage));
-        // kalau backend dukung sorting, ini bikin deterministik:
-        params.set("orderBy", "start_date");
-        params.set("sort", "asc");
-        params.set("page", String(page));
+    while (true) {
+      const params = new URLSearchParams();
+      params.set("from", from);
+      params.set("to", to);
+      params.set("perPage", String(perPage));
+      params.set("orderBy", "start_date");
+      params.set("sort", "asc");
+      params.set("page", String(page));
 
-        const url = `${ApiEndpoints.GetAgendaKerja}?${params.toString()}`;
-        const json = await fetcher(url);
+      const url = `${ApiEndpoints.GetAgendaKerja}?${params.toString()}`;
+      const json = await fetcher(url);
 
-        const items = Array.isArray(json?.data)
-          ? json.data
-          : Array.isArray(json?.items)
-          ? json.items
-          : [];
+      const items = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.items)
+        ? json.items
+        : [];
 
-        all.push(...items);
+      all.push(...items);
 
-        const totalPages =
-          json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
+      const totalPages =
+        json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
 
-        if (totalPages) {
-          if (page >= totalPages) break;
-          page += 1;
-        } else {
-          if (items.length < perPage) break;
-          page += 1;
-        }
+      if (totalPages) {
+        if (page >= totalPages) break;
+        page += 1;
+      } else {
+        if (items.length < perPage) break;
+        page += 1;
       }
+    }
 
-      return all;
-    },
-    []
-  );
+    return all;
+  }, []);
 
   // SWR key pakai range; fetcher gabung semua halaman
-  const { data: agendaKerjaAll, mutate } = useSWR(
-    range ? ["agendaKerja:all", range.start?.valueOf(), range.end?.valueOf()] : null,
+  const {
+    data: agendaKerjaAll,
+    mutate,
+    isLoading: eventsLoading,
+    isValidating: eventsValidating,
+  } = useSWR(
+    range
+      ? ["agendaKerja:all", range.start?.valueOf(), range.end?.valueOf()]
+      : null,
     () => fetchAllAgendaKerja(range.start, range.end),
     { revalidateOnFocus: false }
   );
 
+  // apakah data agenda sudah pernah berhasil di-load minimal sekali?
+  const [hasLoadedEventsOnce, setHasLoadedEventsOnce] = useState(false);
+
+  useEffect(() => {
+    if (agendaKerjaAll && !hasLoadedEventsOnce) {
+      setHasLoadedEventsOnce(true);
+    }
+  }, [agendaKerjaAll, hasLoadedEventsOnce]);
+
+  const loadingInitialEvents = !hasLoadedEventsOnce && !!eventsLoading;
+  const reloadingEvents = hasLoadedEventsOnce && !!eventsValidating;
+
   const events = useMemo(
-    () => (Array.isArray(agendaKerjaAll) ? agendaKerjaAll.map(mapServerToFC) : []),
+    () =>
+      Array.isArray(agendaKerjaAll)
+        ? agendaKerjaAll.map(mapServerToFC)
+        : [],
     [agendaKerjaAll]
   );
 
@@ -362,7 +386,7 @@ export default function useAgendaCalendarViewModel() {
       status = "teragenda",
       userIds = [],
       id_agenda,
-      onProgress,               // <-- callback opsional
+      onProgress, // optional
     }) => {
       const total = userIds.length || 0;
       let sent = 0;
@@ -379,7 +403,6 @@ export default function useAgendaCalendarViewModel() {
 
         await crudService.post(ApiEndpoints.CreateAgendaKerja, payload);
 
-        // update progress tiap 1 user
         sent += 1;
         if (typeof onProgress === "function") {
           onProgress({
@@ -412,7 +435,8 @@ export default function useAgendaCalendarViewModel() {
 
   const deleteEvent = useCallback(
     async (id, { hard = false } = {}) => {
-      const url = ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : "");
+      const url =
+        ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : "");
       const delFn = crudService.del || crudService.delete;
       await delFn(url);
       await mutate();
@@ -433,7 +457,9 @@ export default function useAgendaCalendarViewModel() {
       null;
 
     const start = toLocalWallTime(raw.start_date || fcEvent.start);
-    const end = toLocalWallTime(raw.end_date || fcEvent.end || fcEvent.start);
+    const end = toLocalWallTime(
+      raw.end_date || fcEvent.end || fcEvent.start
+    );
 
     const p = new URLSearchParams();
     p.set("from", dayjs(start).format("YYYY-MM-DD"));
@@ -458,7 +484,9 @@ export default function useAgendaCalendarViewModel() {
       const delFn = crudService.del || crudService.delete;
       await Promise.all(
         ids.map((id) =>
-          delFn(ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : ""))
+          delFn(
+            ApiEndpoints.DeleteAgendaKerja(id) + (hard ? "?hard=1" : "")
+          )
         )
       );
       await mutate();
@@ -503,5 +531,10 @@ export default function useAgendaCalendarViewModel() {
 
     // util
     showFromDB,
+
+    // state loading agenda
+    loadingInitialEvents,
+    reloadingEvents,
+    hasLoadedEventsOnce,
   };
 }
