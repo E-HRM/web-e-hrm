@@ -304,6 +304,8 @@ export async function POST(req) {
     let uploadMeta = null;
     let lampiranUrl = null;
     const lampiranFile = findFileInBody(body, ['lampiran_izin_sakit', 'lampiran', 'lampiran_file', 'file', 'lampiran_izin']);
+
+    // 1. UPLOAD: Lakukan upload terlebih dahulu sebelum masuk ke transaksi DB
     if (lampiranFile) {
       try {
         const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
@@ -337,6 +339,7 @@ export async function POST(req) {
     if (!targetUser) return NextResponse.json({ message: 'User tujuan tidak ditemukan.' }, { status: 404 });
     if (!kategori) return NextResponse.json({ message: 'Kategori sakit tidak ditemukan.' }, { status: 404 });
 
+    // 2. CREATE: Simpan ke Database dan pastikan berhasil (return objek lengkap)
     const result = await db.$transaction(async (tx) => {
       const created = await tx.pengajuanIzinSakit.create({
         data: {
@@ -372,12 +375,14 @@ export async function POST(req) {
         });
       }
 
+      // Ambil data lengkap dari DB (Fresh Data)
       return tx.pengajuanIzinSakit.findUnique({
         where: { id_pengajuan_izin_sakit: created.id_pengajuan_izin_sakit },
         include: baseInclude,
       });
     });
 
+    // 3. NOTIFIKASI: Hanya dijalankan jika 'result' (data dari DB) sukses didapatkan
     if (result) {
       const deeplink = `/pengajuan-izin-sakit/${result.id_pengajuan_izin_sakit}`;
       const basePayload = {
@@ -433,13 +438,22 @@ export async function POST(req) {
 
       const finalLampiranUrl = result.lampiran_izin_sakit_url;
 
+      // --- LOGIKA UTAMA PERMINTAAN ---
+      // Cek jika ada URL lampiran
       if (finalLampiranUrl) {
-        await new Promise((resolve) => setTimeout(resolve, 6000));
+        // Beri jeda (delay) 3 detik agar CDN/Storage sempat mempropagasi file
+        // Ini mengatasi error "Invalid Image Format" dari Watzap (biasanya karena 404 di detik awal)
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+
+        // Kirim gambar setelah yakin file "siap"
         sendIzinSakitImage(finalLampiranUrl, whatsappMessage).catch((err) => console.error('Gagal kirim WA Image (Sakit):', err));
       } else {
+        // Jika tidak ada lampiran, kirim teks saja
         sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal kirim notif teks di latar belakang:', err));
       }
+      // --- AKHIR LOGIKA UTAMA ---
 
+      // Notifikasi In-App / Firebase (Proses Paralel)
       const notifiedUsers = new Set();
       const notifPromises = [];
 
