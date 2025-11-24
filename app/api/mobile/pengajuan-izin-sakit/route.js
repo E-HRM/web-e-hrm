@@ -3,8 +3,8 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { sendNotification } from '@/app/utils/services/notificationService';
-import storageClient from '@/app/api/_utils/storageClient';
-import { parseRequestBody, findFileInBody, hasOwn } from '@/app/api/_utils/requestBody';
+import storageClient from '@/app/api/_utils/storageClient'; // Kembali menggunakan storageClient
+import { parseRequestBody, findFileInBody, hasOwn, isNullLike } from '@/app/api/_utils/requestBody';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 import { sendIzinSakitMessage, sendIzinSakitImage } from '@/app/utils/watzap/watzap';
 
@@ -98,14 +98,6 @@ const normRole = (role) =>
     .toUpperCase();
 const canManageAll = (role) => ADMIN_ROLES.has(normRole(role));
 
-function isNullLike(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') {
-    const t = value.trim().toLowerCase();
-    if (!t || t === 'null' || t === 'undefined') return true;
-  }
-  return false;
-}
 function normalizeLampiranInput(value) {
   if (value === undefined) return undefined;
   if (isNullLike(value)) return null;
@@ -304,7 +296,14 @@ export async function POST(req) {
     let uploadMeta = null;
     let lampiranUrl = null;
     const lampiranFile = findFileInBody(body, ['lampiran_izin_sakit', 'lampiran', 'lampiran_file', 'file', 'lampiran_izin']);
+
     if (lampiranFile) {
+      // VALIDASI FORMAT GAMBAR DI SINI
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+      if (!allowedTypes.includes(lampiranFile.type)) {
+        return NextResponse.json({ message: 'Format file tidak valid. Harap unggah gambar (JPG/PNG).' }, { status: 400 });
+      }
+
       try {
         const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
         lampiranUrl = res.publicUrl || null;
