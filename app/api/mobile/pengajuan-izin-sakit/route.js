@@ -3,12 +3,12 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { sendNotification } from '@/app/utils/services/notificationService';
-import storageClient from '@/app/api/_utils/storageClient'; // Kembali menggunakan storageClient
-import { parseRequestBody, findFileInBody, hasOwn, isNullLike } from '@/app/api/_utils/requestBody';
+import storageClient from '@/app/api/_utils/storageClient';
+import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
-import { sendIzinSakitMessage, sendIzinSakitImage } from '@/app/utils/watzap/watzap';
+import { sendIzinSakitMessage } from '@/app/utils/watzap/watzap';
 
-const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']);
+const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']); // selaras Prisma
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
 const baseInclude = {
@@ -85,6 +85,7 @@ const baseInclude = {
   },
 };
 
+// tampilkan label sesuai Indonesia
 const formatStatusDisplay = (status) => {
   const s = String(status || 'pending').toLowerCase();
   if (s === 'disetujui') return 'Disetujui';
@@ -98,12 +99,21 @@ const normRole = (role) =>
     .toUpperCase();
 const canManageAll = (role) => ADMIN_ROLES.has(normRole(role));
 
+function isNullLike(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') {
+    const t = value.trim().toLowerCase();
+    if (!t || t === 'null' || t === 'undefined') return true;
+  }
+  return false;
+}
 function normalizeLampiranInput(value) {
   if (value === undefined) return undefined;
   if (isNullLike(value)) return null;
   return String(value).trim();
 }
 
+// alias 'menunggu' → 'pending'
 function normalizeStatusInput(value) {
   if (value === undefined || value === null) return null;
   const s = String(value).trim().toLowerCase();
@@ -222,7 +232,7 @@ export async function GET(req) {
     if (statusParam !== null && statusParam !== undefined && String(statusParam).trim() !== '') {
       const normalized = normalizeStatusInput(statusParam);
       if (!normalized) return NextResponse.json({ message: 'Parameter status tidak valid.' }, { status: 400 });
-      where.status = normalized;
+      where.status = normalized; // 'pending' | 'disetujui' | 'ditolak'
     }
 
     const and = [];
@@ -272,6 +282,7 @@ export async function POST(req) {
     const body = parsed.body || {};
     const approvalsInput = normalizeApprovals(body) ?? [];
 
+    // tanggal_pengajuan (opsional, nullable)
     const rawTanggalPengajuan = body.tanggal_pengajuan;
     let tanggalPengajuan;
     if (rawTanggalPengajuan === undefined) {
@@ -284,6 +295,7 @@ export async function POST(req) {
       tanggalPengajuan = parsedTanggal;
     }
 
+    // kategori
     const kategoriIdRaw = body.id_kategori_sakit ?? body.id_kategori ?? body.kategori;
     const kategoriId = kategoriIdRaw ? String(kategoriIdRaw).trim() : '';
     if (!kategoriId) return NextResponse.json({ message: "Field 'id_kategori_sakit' wajib diisi." }, { status: 400 });
@@ -293,17 +305,11 @@ export async function POST(req) {
 
     const handover = isNullLike(body.handover) ? null : String(body.handover).trim();
 
+    // lampiran
     let uploadMeta = null;
     let lampiranUrl = null;
     const lampiranFile = findFileInBody(body, ['lampiran_izin_sakit', 'lampiran', 'lampiran_file', 'file', 'lampiran_izin']);
-
     if (lampiranFile) {
-      // VALIDASI FORMAT GAMBAR DI SINI
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-      if (!allowedTypes.includes(lampiranFile.type)) {
-        return NextResponse.json({ message: 'Format file tidak valid. Harap unggah gambar (JPG/PNG).' }, { status: 400 });
-      }
-
       try {
         const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
         lampiranUrl = res.publicUrl || null;
@@ -316,6 +322,7 @@ export async function POST(req) {
       lampiranUrl = fallback ?? null;
     }
 
+    // status (default pending) — terima alias 'menunggu'
     const normalizedStatus = normalizeStatusInput(body.status ?? 'pending');
     if (!normalizedStatus) return NextResponse.json({ message: 'status tidak valid.' }, { status: 400 });
 
@@ -412,13 +419,7 @@ export async function POST(req) {
 
       const whatsappMessage = whatsappPayloadLines.join('\n');
 
-      const finalLampiranUrl = result.lampiran_izin_sakit_url;
-
-      if (finalLampiranUrl) {
-        sendIzinSakitImage(finalLampiranUrl, whatsappMessage).catch((err) => console.error('Gagal kirim WA Image (Sakit):', err));
-      } else {
-        sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal kirim notif teks di latar belakang:', err));
-      }
+      sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal mengirim notifikasi WhatsApp izin sakit:', err));
 
       const notifiedUsers = new Set();
       const notifPromises = [];
