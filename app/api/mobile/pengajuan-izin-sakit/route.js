@@ -425,7 +425,7 @@ export async function POST(req) {
       if (finalLampiranUrl) {
         // Beri jeda (delay) 3 detik agar CDN/Storage sempat mempropagasi file
         // Ini mengatasi error "Invalid Image Format" dari Watzap (biasanya karena 404 di detik awal)
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 8000));
 
         // Kirim gambar setelah yakin file "siap"
         sendIzinSakitImage(finalLampiranUrl, whatsappMessage).catch((err) => console.error('Gagal kirim WA Image (Sakit):', err));
