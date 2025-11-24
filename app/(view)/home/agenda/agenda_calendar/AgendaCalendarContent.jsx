@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import "react-quill/dist/quill.snow.css";
 import {
   App as AntdApp,
   Button,
@@ -35,6 +36,9 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), {
+  ssr: false,
+});
+const ReactQuill = dynamic(() => import("react-quill"), {
   ssr: false,
 });
 import interactionPlugin from "@fullcalendar/interaction";
@@ -806,9 +810,10 @@ export default function AgendaCalendarContent() {
             name="title"
             rules={[{ required: true, message: "Judul wajib diisi" }]}
           >
-            <Input.TextArea
-              placeholder="Contoh: Meeting Sprint, Kunjungan Client"
-              autoSize={{ minRows: 3, maxRows: 6 }}
+            <ReactQuill
+              theme="snow"
+              placeholder="Isi kegiatan...."
+              style={{ minHeight: 120 }}
             />
           </Form.Item>
 

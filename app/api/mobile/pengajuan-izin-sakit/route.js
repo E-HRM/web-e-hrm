@@ -6,6 +6,7 @@ import { sendNotification } from '@/app/utils/services/notificationService';
 import storageClient from '@/app/api/_utils/storageClient';
 import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
+import { sendIzinSakitMessage } from '@/app/utils/watzap/watzap';
 
 const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']); // selaras Prisma
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
@@ -400,6 +401,25 @@ export async function POST(req) {
         nama_penerima: 'Rekan',
         pesan_penerima: 'Pengajuan izin sakit baru telah dibuat.',
       };
+
+      const handoverTaggedNames = Array.isArray(result.handover_users)
+        ? result.handover_users
+            .map((h) => h?.user?.nama_pengguna)
+            .filter((name) => typeof name === 'string' && name.trim())
+            .map((name) => name.trim())
+        : [];
+
+      const whatsappPayloadLines = [
+        'Pengajuan Izin Sakit Baru',
+        `Pemohon: ${basePayload.nama_pemohon}`,
+        `Kategori: ${basePayload.kategori_sakit}`,
+        `Handover: ${basePayload.handover || '-'}`,
+        `Handover Tag: ${handoverTaggedNames.length ? handoverTaggedNames.join(', ') : '-'}`,
+      ];
+
+      const whatsappMessage = whatsappPayloadLines.join('\n');
+
+      sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal mengirim notifikasi WhatsApp izin sakit:', err));
 
       const notifiedUsers = new Set();
       const notifPromises = [];
