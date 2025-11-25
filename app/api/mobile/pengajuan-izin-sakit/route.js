@@ -106,6 +106,7 @@ function isNullLike(value) {
   }
   return false;
 }
+
 function normalizeLampiranInput(value) {
   if (value === undefined) return undefined;
   if (isNullLike(value)) return null;
@@ -117,6 +118,14 @@ function normalizeStatusInput(value) {
   const s = String(value).trim().toLowerCase();
   const mapped = s === 'menunggu' ? 'pending' : s;
   return APPROVE_STATUSES.has(mapped) ? mapped : null;
+}
+
+function cleanHandoverFormat(text) {
+  if (!text) return '-';
+  return text.replace(/@\[.*?\]\((.*?)\)/g, (match, name) => {
+    const cleanName = name.replace(/^_+|_+$/g, '').trim();
+    return `@${cleanName}`;
+  });
 }
 
 async function ensureAuth(req) {
@@ -305,7 +314,6 @@ export async function POST(req) {
     let lampiranUrl = null;
     const lampiranFile = findFileInBody(body, ['lampiran_izin_sakit', 'lampiran', 'lampiran_file', 'file', 'lampiran_izin']);
 
-    // 1. UPLOAD: Lakukan upload terlebih dahulu sebelum masuk ke transaksi DB
     if (lampiranFile) {
       try {
         const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
@@ -339,7 +347,6 @@ export async function POST(req) {
     if (!targetUser) return NextResponse.json({ message: 'User tujuan tidak ditemukan.' }, { status: 404 });
     if (!kategori) return NextResponse.json({ message: 'Kategori sakit tidak ditemukan.' }, { status: 404 });
 
-    // 2. CREATE: Simpan ke Database dan pastikan berhasil (return objek lengkap)
     const result = await db.$transaction(async (tx) => {
       const created = await tx.pengajuanIzinSakit.create({
         data: {
@@ -375,21 +382,22 @@ export async function POST(req) {
         });
       }
 
-      // Ambil data lengkap dari DB (Fresh Data)
       return tx.pengajuanIzinSakit.findUnique({
         where: { id_pengajuan_izin_sakit: created.id_pengajuan_izin_sakit },
         include: baseInclude,
       });
     });
 
-    // 3. NOTIFIKASI: Hanya dijalankan jika 'result' (data dari DB) sukses didapatkan
     if (result) {
       const deeplink = `/pengajuan-izin-sakit/${result.id_pengajuan_izin_sakit}`;
+
+      const cleanHandoverNote = cleanHandoverFormat(result.handover);
+
       const basePayload = {
         nama_pemohon: result.user?.nama_pengguna || 'Rekan',
         kategori_sakit: result.kategori?.nama_kategori || '-',
-        handover: result.handover || '-',
-        catatan_handover: result.handover || '-',
+        handover: cleanHandoverNote,
+        catatan_handover: cleanHandoverNote,
         status: result.status || 'pending',
         status_display: formatStatusDisplay(result.status),
         current_level: result.current_level ?? null,
@@ -409,51 +417,27 @@ export async function POST(req) {
         : [];
 
       const whatsappPayloadLines = [
-        'Pengajuan Izin Sakit Baru',
+        '*Pengajuan Izin Sakit Baru*',
         `Pemohon: ${basePayload.nama_pemohon}`,
         `Kategori: ${basePayload.kategori_sakit}`,
-        `Handover: ${basePayload.handover || '-'}`,
+        `Handover: ${basePayload.handover}`,
         `Handover Tag: ${handoverTaggedNames.length ? handoverTaggedNames.join(', ') : '-'}`,
       ];
 
- const whatsappMessage = whatsappPayloadLines.join('\n');
-
-      console.log('[DEBUG-WA] Menyiapkan pesan WhatsApp:', whatsappMessage);
-
-      // Panggil fungsi dengan penanganan error yang lebih detail
-      sendIzinSakitMessage(whatsappMessage)
-        .then((resp) => {
-          console.log('[DEBUG-WA] Sukses terkirim ke fungsi helper. Respons:', JSON.stringify(resp, null, 2));
-        })
-        .catch((err) => {
-          console.error('[DEBUG-WA] GAGAL mengirim notifikasi WhatsApp!');
-          console.error('[DEBUG-WA] Pesan Error:', err.message);
-          if (err.response) {
-            console.error('[DEBUG-WA] Status HTTP:', err.response.status);
-            console.error('[DEBUG-WA] Data Respons API:', JSON.stringify(err.response.data, null, 2));
-          } else {
-            console.error('[DEBUG-WA] Stack Trace:', err.stack);
-          }
-        });
-
+      const whatsappMessage = whatsappPayloadLines.join('\n');
       const finalLampiranUrl = result.lampiran_izin_sakit_url;
 
-      // --- LOGIKA UTAMA PERMINTAAN ---
-      // Cek jika ada URL lampiran
-      if (finalLampiranUrl) {
-        // Beri jeda (delay) 3 detik agar CDN/Storage sempat mempropagasi file
-        // Ini mengatasi error "Invalid Image Format" dari Watzap (biasanya karena 404 di detik awal)
-        await new Promise((resolve) => setTimeout(resolve, 8000));
-
-        // Kirim gambar setelah yakin file "siap"
-        sendIzinSakitImage(finalLampiranUrl, whatsappMessage).catch((err) => console.error('Gagal kirim WA Image (Sakit):', err));
-      } else {
-        // Jika tidak ada lampiran, kirim teks saja
-        sendIzinSakitMessage(whatsappMessage).catch((err) => console.error('Gagal kirim notif teks di latar belakang:', err));
+      try {
+        if (finalLampiranUrl) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await sendIzinSakitImage(finalLampiranUrl, whatsappMessage);
+        } else {
+          await sendIzinSakitMessage(whatsappMessage);
+        }
+      } catch (waError) {
+        console.error('[WA] Gagal mengirim notifikasi WhatsApp:', waError);
       }
-      // --- AKHIR LOGIKA UTAMA ---
 
-      // Notifikasi In-App / Firebase (Proses Paralel)
       const notifiedUsers = new Set();
       const notifPromises = [];
 

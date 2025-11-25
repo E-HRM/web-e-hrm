@@ -1052,6 +1052,23 @@ export default function KaryawanProfileForm({
                             />
                           </Form.Item>
                         </Col>
+                        <Col span={24}>
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                            <Text strong className="text-blue-800 block mb-2">
+                              Keterangan Status Cuti:
+                            </Text>
+                            <ul className="text-blue-700 text-sm list-disc list-inside space-y-1">
+                              <li>
+                                <Text strong>Status Cuti "Aktif":</Text> Karyawan yang tidak menggunakan kuota cutinya 
+                                akan mengaktifkan sistem cuti tabung
+                              </li>
+                              <li>
+                                <Text strong>Status Cuti "Nonaktif":</Text> Karyawan yang tidak menggunakan kuota cutinya 
+                                akan hangus dan tidak ditabung
+                              </li>
+                            </ul>
+                          </div>
+                        </Col>
                       </Row>
                     </div>
 
