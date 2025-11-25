@@ -452,7 +452,7 @@ export async function POST(req) {
         : [];
 
       const whatsappPayloadLines = [
-        '*Pengajuan Izin Sakit Baru*',
+        '*Pengajuan Izin Sakit*',
         `Pemohon: ${basePayload.nama_pemohon}`,
         `Kategori: ${basePayload.kategori_sakit}`,
         `Handover: ${basePayload.handover}`,
