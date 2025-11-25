@@ -3,6 +3,8 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { endOfUTCDay, parseDateTimeToUTC, startOfUTCDay } from '@/helpers/date-helper';
+import { resolveTargetUserAccess } from './access-control';
+import { buildCutiCalendarItem, endOfDay, formatISO, startOfDay } from './calendar-utils';
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -26,14 +28,6 @@ function toDateOrNull(value) {
   return parsed ?? null;
 }
 
-function startOfDay(value) {
-  return startOfUTCDay(value);
-}
-
-function endOfDay(value) {
-  return endOfUTCDay(value);
-}
-
 function normalizeDateRange(fromRaw, toRaw) {
   const MIN_RANGE_DATE = startOfUTCDay('1970-01-01') ?? new Date(Date.UTC(1970, 0, 1));
   const MAX_RANGE_DATE = endOfUTCDay('2999-12-31') ?? new Date(Date.UTC(2999, 11, 31, 23, 59, 59, 999));
@@ -45,16 +39,6 @@ function normalizeDateRange(fromRaw, toRaw) {
     from: fromParsed ? startOfDay(fromParsed) : MIN_RANGE_DATE,
     to: toParsed ? endOfDay(toParsed) : MAX_RANGE_DATE,
   };
-}
-
-function formatISO(value) {
-  if (!value) return null;
-  try {
-    return value.toISOString();
-  } catch {
-    const d = new Date(value);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
-  }
 }
 
 function sortByStartAsc(items) {
@@ -70,7 +54,7 @@ export async function GET(request) {
   const auth = await ensureAuth(request);
   if (auth instanceof NextResponse) return auth;
 
-  const actorId = auth.actor.id;
+  const actorId = String(auth.actor.id);
 
   try {
     const { searchParams } = new URL(request.url);
@@ -78,8 +62,10 @@ export async function GET(request) {
     const perPage = Math.min(100, Math.max(1, parseInt(searchParams.get('perPage') || '20', 10)));
 
     const userIdFilter = (searchParams.get('user_id') || '').trim();
-    const targetUserId = userIdFilter || actorId;
-
+    const { targetUserId, allowed } = resolveTargetUserAccess(auth.actor, userIdFilter);
+    if (!allowed && userIdFilter && userIdFilter !== actorId) {
+      return NextResponse.json({ ok: false, message: 'Forbidden: tidak boleh mengakses kalender pengguna lain.' }, { status: 403 });
+    }
     const fromRaw = searchParams.get('from');
     const toRaw = searchParams.get('to');
     const { from: rangeFrom, to: rangeTo } = normalizeDateRange(fromRaw, toRaw);
@@ -193,22 +179,8 @@ export async function GET(request) {
     }
 
     for (const item of pengajuanCuti) {
-      const dates = (item.tanggal_list || [])
-        .map((d) => (d?.tanggal_cuti instanceof Date ? d.tanggal_cuti : new Date(d.tanggal_cuti)))
-        .filter((d) => !Number.isNaN(d.getTime()))
-        .sort((a, b) => a.getTime() - b.getTime());
-      const startDate = dates[0] || null;
-      const endDate = dates[dates.length - 1] || startDate || null;
-
-      calendarItems.push({
-        type: 'cuti',
-        id: item.id_pengajuan_cuti,
-        user_id: item.id_user,
-        title: 'Pengajuan Cuti Disetujui',
-        description: item.keperluan || null,
-        start: formatISO(startOfDay(startDate)),
-        end: formatISO(endOfDay(endDate)),
-      });
+      const cutiItem = buildCutiCalendarItem(item, rangeFrom, rangeTo);
+      if (cutiItem) calendarItems.push(cutiItem);
     }
 
     for (const item of pengajuanIzinSakit) {
