@@ -68,16 +68,10 @@ const API_MOBILE_IZIN_SAKIT_APPROVALS = "/api/mobile/pengajuan-izin-sakit/approv
 const API_MOBILE_TUKAR_HARI = "/api/mobile/pengajuan-izin-tukar-hari";
 const API_MOBILE_TUKAR_HARI_APPROVALS = "/api/mobile/pengajuan-izin-tukar-hari/approvals";
 
-// === Notifications (user/mobile) ===
+// base path
 const API_NOTIFICATIONS = "/api/notifications";
 const API_NOTIFICATIONS_RECENT = "/api/notifications/recent";
-const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-as-read";
-
-// === Notifications Admin (web / admin mobile) ===
-const API_ADMIN_NOTIFICATIONS = "/api/admin/notifications";
-const API_ADMIN_NOTIFICATIONS_RECENT = "/api/admin/notifications/recent";
-const API_ADMIN_NOTIFICATIONS_MARK_ALL = "/api/admin/notifications/mark-all-as-read";
-
+const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-read";
 
 // === Story Planner
 const API_STORY_PLANNER = "/api/admin/story-planner";
@@ -238,14 +232,13 @@ export const ApiEndpoints = {
   MarkAllNotificationsRead: API_NOTIFICATIONS_MARK_ALL,
   MarkNotificationRead: (id) => `${API_NOTIFICATIONS}/${id}`,
 
-  // ===== NOTIFICATIONS ADMIN =====
+  // ===== NOTIFICATIONS ADMIN (alias ke yang sama) =====
   GetAdminNotifications: (qsObj = {}) =>
-    `${API_ADMIN_NOTIFICATIONS}${buildQS(qsObj)}`,
+    `${API_NOTIFICATIONS}${buildQS(qsObj)}`,
   GetAdminNotificationsRecent: (qsObj = {}) =>
-    `${API_ADMIN_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
-  MarkAllAdminNotificationsRead: API_ADMIN_NOTIFICATIONS_MARK_ALL,
-  MarkAdminNotificationRead: (id) =>
-    `${API_ADMIN_NOTIFICATIONS}/${id}`,
+    `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
+  MarkAllAdminNotificationsRead: API_NOTIFICATIONS_MARK_ALL,
+  MarkAdminNotificationRead: (id) => `${API_NOTIFICATIONS}/${id}`,
 
 
     // Story Planner

@@ -1,66 +1,19 @@
-// app/api/notifications/recent/route.js
-
 import { NextResponse } from "next/server";
 import db from "@/lib/prisma";
-import { verifyAuthToken } from "@/lib/jwt";
-import { authenticateRequest } from "@/app/utils/auth/authUtils";
+import { ensureNotificationAuth } from "../_auth";
 
-// Ambil userId dari Bearer token (mobile) atau session (web)
-async function resolveUserId(request) {
-  const authHeader = request.headers.get("authorization") || "";
-
-  // 1) Bearer token
-  if (authHeader.startsWith("Bearer ")) {
-    const rawToken = authHeader.slice(7).trim();
-    try {
-      const payload = verifyAuthToken(rawToken);
-      const userId =
-        payload?.id_user ||
-        payload?.sub ||
-        payload?.userId ||
-        payload?.id ||
-        payload?.user_id;
-
-      if (userId) {
-        return { userId, source: "bearer" };
-      }
-    } catch (error) {
-      console.warn(
-        "Invalid bearer token for /api/notifications/recent:",
-        error
-      );
-    }
-  }
-
-  // 2) Fallback: session (NextAuth / custom)
-  const sessionOrResponse = await authenticateRequest();
-  if (sessionOrResponse instanceof NextResponse) {
-    return sessionOrResponse;
-  }
-
-  const sessionUserId =
-    sessionOrResponse?.user?.id || sessionOrResponse?.user?.id_user;
-  if (!sessionUserId) {
-    return NextResponse.json(
-      { ok: false, message: "Unauthorized" },
-      { status: 401 }
-    );
-  }
-
-  return { userId: sessionUserId, source: "session", session: sessionOrResponse };
-}
-
-// GET /api/notifications/recent
 export async function GET(request) {
-  const authResult = await resolveUserId(request);
-  if (authResult instanceof NextResponse) return authResult;
+  const auth = await ensureNotificationAuth(request);
+  if (auth instanceof NextResponse) return auth;
 
-  const { userId } = authResult;
+  const userId = auth.actor?.id;
+  if (!userId) {
+    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const { searchParams } = new URL(request.url);
 
-    // param days: default 7, min 1, max 30
     const rawDays = parseInt(searchParams.get("days") || "7", 10);
     const days = Number.isNaN(rawDays)
       ? 7
@@ -69,7 +22,6 @@ export async function GET(request) {
     const now = new Date();
     const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-    // param types: "pengajuan_cuti,izin_tukar_hari,..."
     const typesParam = (searchParams.get("types") || "").trim();
     const typeList = typesParam
       ? typesParam
@@ -79,7 +31,7 @@ export async function GET(request) {
       : [];
 
     const where = {
-      id_user: userId,          // notifikasi milik user/admin ini
+      id_user: userId,
       deleted_at: null,
       created_at: { gte: cutoff },
     };
@@ -91,12 +43,13 @@ export async function GET(request) {
     const notifications = await db.notification.findMany({
       where,
       orderBy: { created_at: "desc" },
-      take: 200, // limit safety
+      take: 200,
     });
 
+    // bentuk tetap: { data: [...] }
     return NextResponse.json({ data: notifications });
   } catch (error) {
-    console.error("Failed to fetch recent notifications:", error);
+    console.error("GET /api/notifications/recent error:", error);
     return NextResponse.json(
       { message: "Internal Server Error" },
       { status: 500 }

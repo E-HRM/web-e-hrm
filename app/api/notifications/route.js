@@ -8,10 +8,7 @@ function sanitizeString(value) {
   return str.length ? str : null;
 }
 
-/**
- * GET /api/notifications
- * List notifikasi milik user (admin/web/mobile) dengan pagination & filter status
- */
+// GET /api/notifications -> list dengan pagination
 export async function GET(request) {
   const auth = await ensureNotificationAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -30,10 +27,7 @@ export async function GET(request) {
     );
     const status = (searchParams.get("status") || "").trim().toLowerCase();
 
-    const where = {
-      id_user: userId,
-      deleted_at: null,
-    };
+    const where = { id_user: userId, deleted_at: null };
 
     if (["read", "unread", "archived"].includes(status)) {
       where.status = status;
@@ -49,10 +43,10 @@ export async function GET(request) {
       }),
     ]);
 
+    // ⚠️ PENTING: bentuk response sama seperti versi lama
     return NextResponse.json({
-      ok: true,
       data: items,
-      meta: {
+      pagination: {
         page,
         pageSize,
         total,
@@ -62,16 +56,13 @@ export async function GET(request) {
   } catch (error) {
     console.error("GET /api/notifications error:", error);
     return NextResponse.json(
-      { ok: false, message: "Internal Server Error" },
+      { message: "Internal Server Error" },
       { status: 500 }
     );
   }
 }
 
-/**
- * POST /api/notifications
- * Register / update device token (FCM) milik user (untuk push notif)
- */
+// POST /api/notifications -> register device token (FCM)
 export async function POST(request) {
   const auth = await ensureNotificationAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -84,7 +75,7 @@ export async function POST(request) {
   let payload;
   try {
     payload = await request.json();
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { ok: false, message: "Invalid JSON body" },
       { status: 400 }
@@ -119,10 +110,7 @@ export async function POST(request) {
 
   try {
     const existing = await db.device.findFirst({
-      where: {
-        id_user: userId,
-        fcm_token: fcmToken,
-      },
+      where: { id_user: userId, fcm_token: fcmToken },
     });
 
     const selectFields = {
@@ -137,13 +125,7 @@ export async function POST(request) {
     };
 
     let record;
-
     if (existing) {
-      console.info("Updating existing notification device", {
-        userId,
-        id_device: existing.id_device,
-      });
-
       record = await db.device.update({
         where: { id_device: existing.id_device },
         data: {
@@ -154,32 +136,21 @@ export async function POST(request) {
         select: selectFields,
       });
     } else {
-      console.info("Creating notification device", { userId });
-
       record = await db.device.create({
-        data: {
-          id_user: userId,
-          ...deviceData,
-        },
+        data: { id_user: userId, ...deviceData },
         select: selectFields,
       });
     }
 
-    return NextResponse.json(
-      {
-        ok: true,
-        message: "Device token registered",
-        data: record,
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      ok: true,
+      message: "Device token registered",
+      data: record,
+    });
   } catch (error) {
     console.error("Failed to register notification token:", error);
     return NextResponse.json(
-      {
-        ok: false,
-        message: "Failed to register notification token",
-      },
+      { ok: false, message: "Failed to register notification token" },
       { status: 500 }
     );
   }

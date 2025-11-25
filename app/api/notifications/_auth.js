@@ -1,16 +1,7 @@
-// app/api/notifications/_auth.js
 import { NextResponse } from "next/server";
 import { verifyAuthToken } from "@/lib/jwt";
 import { authenticateRequest } from "@/app/utils/auth/authUtils";
 
-/**
- * Auth generik untuk semua endpoint /api/notifications
- * - Cek Bearer token dulu (mobile / API)
- * - Kalau gagal, fallback ke session (web)
- * Return:
- *   - NextResponse (error)  -> langsung return ke caller
- *   - { actor: { id, role, source, session? } }
- */
 export async function ensureNotificationAuth(req) {
   const authHeader = req.headers.get("authorization") || "";
 
@@ -38,10 +29,9 @@ export async function ensureNotificationAuth(req) {
       }
     } catch (err) {
       console.warn(
-        "[notifications] Invalid bearer token, fallback to session:",
+        "[notifications] invalid bearer token, fallback to session:",
         err?.message || err
       );
-      // lanjut ke session
     }
   }
 
