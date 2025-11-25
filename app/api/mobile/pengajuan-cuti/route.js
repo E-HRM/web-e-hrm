@@ -602,9 +602,7 @@ export async function POST(req) {
       }
       // === Notif ke approver (rantai persetujuan) ===
       if (Array.isArray(fullPengajuan.approvals) && fullPengajuan.approvals.length) {
-        const approverIds = fullPengajuan.approvals
-          .map((a) => a.approver_user_id)
-          .filter(Boolean);
+        const approverIds = fullPengajuan.approvals.map((a) => a.approver_user_id).filter(Boolean);
 
         if (approverIds.length) {
           const approvers = await db.user.findMany({

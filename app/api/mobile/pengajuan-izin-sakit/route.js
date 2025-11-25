@@ -498,9 +498,7 @@ export async function POST(req) {
 
       // === Notif ke approver (rantai persetujuan) ===
       if (Array.isArray(result.approvals) && result.approvals.length) {
-        const approverIds = result.approvals
-          .map((a) => a.approver_user_id)
-          .filter(Boolean);
+        const approverIds = result.approvals.map((a) => a.approver_user_id).filter(Boolean);
 
         if (approverIds.length) {
           const approvers = await db.user.findMany({

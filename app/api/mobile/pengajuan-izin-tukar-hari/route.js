@@ -607,11 +607,9 @@ export async function POST(req) {
           );
         }
       }
-        // === Notif ke approver/admin ===
+      // === Notif ke approver/admin ===
       if (Array.isArray(full.approvals) && full.approvals.length) {
-        const approverIds = full.approvals
-          .map((a) => a.approver_user_id)
-          .filter(Boolean);
+        const approverIds = full.approvals.map((a) => a.approver_user_id).filter(Boolean);
 
         if (approverIds.length) {
           const approvers = await db.user.findMany({
