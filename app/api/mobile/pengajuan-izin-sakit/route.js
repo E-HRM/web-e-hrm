@@ -11,6 +11,12 @@ import { sendIzinSakitMessage, sendIzinSakitImage } from '@/app/utils/watzap/wat
 const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']);
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
+const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
+  day: '2-digit',
+  month: 'long',
+  year: 'numeric',
+});
+
 const baseInclude = {
   user: {
     select: {
@@ -91,6 +97,28 @@ const formatStatusDisplay = (status) => {
   if (s === 'ditolak') return 'Ditolak';
   return 'Pending';
 };
+
+function formatDateISO(value) {
+  if (!value) return '-';
+  try {
+    const asDate = new Date(value);
+    if (Number.isNaN(asDate.getTime())) return '-';
+    return asDate.toISOString().split('T')[0];
+  } catch (_) {
+    return '-';
+  }
+}
+
+function formatDateDisplay(value) {
+  if (!value) return '-';
+  try {
+    const asDate = new Date(value);
+    if (Number.isNaN(asDate.getTime())) return '-';
+    return dateDisplayFormatter.format(asDate);
+  } catch (_) {
+    return '-';
+  }
+}
 
 const normRole = (role) =>
   String(role || '')
@@ -393,9 +421,15 @@ export async function POST(req) {
 
       const cleanHandoverNote = cleanHandoverFormat(result.handover);
 
+      const tanggalPengajuanValue = result.tanggal_pengajuan || result.created_at || null;
+      const tanggalPengajuanISO = formatDateISO(tanggalPengajuanValue);
+      const tanggalPengajuanDisplay = formatDateDisplay(tanggalPengajuanValue);
+
       const basePayload = {
         nama_pemohon: result.user?.nama_pengguna || 'Rekan',
         kategori_sakit: result.kategori?.nama_kategori || '-',
+        tanggal_pengajuan: tanggalPengajuanISO,
+        tanggal_pengajuan_display: tanggalPengajuanDisplay,
         handover: cleanHandoverNote,
         catatan_handover: cleanHandoverNote,
         status: result.status || 'pending',
@@ -497,6 +531,78 @@ export async function POST(req) {
       }
 
       // === Notif ke approver (rantai persetujuan) ===
+      if (Array.isArray(result.handover_users)) {
+        for (const h of result.handover_users) {
+          const taggedId = h?.id_user_tagged;
+          if (!taggedId || notifiedUsers.has(taggedId)) continue;
+          notifiedUsers.add(taggedId);
+
+          const overrideTitle = `${basePayload.nama_pemohon} mengajukan izin sakit`;
+          const overrideBody = `${basePayload.nama_pemohon} menandai Anda sebagai handover izin sakit (${basePayload.kategori_sakit}) pada ${basePayload.tanggal_pengajuan_display}.`;
+
+          notifPromises.push(
+            sendNotification(
+              'IZIN_SAKIT_HANDOVER_TAGGED',
+              taggedId,
+              {
+                ...basePayload,
+                nama_penerima: h?.user?.nama_pengguna || 'Rekan',
+                title: overrideTitle,
+                body: overrideBody,
+                overrideTitle,
+                overrideBody,
+              },
+              { deeplink }
+            )
+          );
+        }
+      }
+
+      if (result.id_user && !notifiedUsers.has(result.id_user)) {
+        const overrideTitle = 'Pengajuan izin sakit berhasil dikirim';
+        const overrideBody = `Pengajuan izin sakit ${basePayload.kategori_sakit} pada ${basePayload.tanggal_pengajuan_display} telah berhasil dibuat.`;
+        notifPromises.push(
+          sendNotification(
+            'IZIN_SAKIT_HANDOVER_TAGGED',
+            result.id_user,
+            {
+              ...basePayload,
+              is_pemohon: true,
+              nama_penerima: basePayload.nama_pemohon || 'Rekan',
+              title: overrideTitle,
+              body: overrideBody,
+              overrideTitle,
+              overrideBody,
+            },
+            { deeplink }
+          )
+        );
+        notifiedUsers.add(result.id_user);
+      }
+
+      if (canManageAll(actorRole) && actorId && !notifiedUsers.has(actorId)) {
+        const overrideTitle = `${basePayload.nama_pemohon} mengajukan izin sakit`;
+        const overrideBody = `${basePayload.nama_pemohon} mengajukan izin sakit ${basePayload.kategori_sakit} pada ${basePayload.tanggal_pengajuan_display}. Pengajuan ini memerlukan tindak lanjut Anda.`;
+        notifPromises.push(
+          sendNotification(
+            'IZIN_SAKIT_HANDOVER_TAGGED',
+            actorId,
+            {
+              ...basePayload,
+              is_admin: true,
+              nama_penerima: 'Admin',
+              title: overrideTitle,
+              body: overrideBody,
+              overrideTitle,
+              overrideBody,
+            },
+            { deeplink }
+          )
+        );
+        notifiedUsers.add(actorId);
+      }
+
+      // === Notif ke approver (rantai persetujuan) ===
       if (Array.isArray(result.approvals) && result.approvals.length) {
         const approverIds = result.approvals.map((a) => a.approver_user_id).filter(Boolean);
 
@@ -514,6 +620,9 @@ export async function POST(req) {
             if (!uid || notifiedUsers.has(uid)) continue;
             notifiedUsers.add(uid);
 
+            const overrideTitle = `${basePayload.nama_pemohon} mengajukan izin sakit`;
+            const overrideBody = `${basePayload.nama_pemohon} mengajukan izin sakit ${basePayload.kategori_sakit} pada ${basePayload.tanggal_pengajuan_display}. Pengajuan ini menunggu persetujuan Anda.`;
+
             notifPromises.push(
               sendNotification(
                 'IZIN_SAKIT_HANDOVER_TAGGED',
@@ -522,7 +631,10 @@ export async function POST(req) {
                   ...basePayload,
                   is_approver: true,
                   nama_penerima: approver.nama_pengguna || 'Admin',
-                  pesan_penerima: `${basePayload.nama_pemohon} mengajukan izin sakit dan menunggu persetujuan Anda.`,
+                  title: overrideTitle,
+                  body: overrideBody,
+                  overrideTitle,
+                  overrideBody,
                 },
                 { deeplink }
               )
