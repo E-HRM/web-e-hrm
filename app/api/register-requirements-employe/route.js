@@ -5,7 +5,7 @@ import db from '../../../lib/prisma';
 const REQUIRED_FIELDS = ['email', 'nama_pengguna', 'password'];
 
 export async function POST(req) {
-  try {
+  try { 
     const body = await req.json();
 
     // Validasi field wajib
