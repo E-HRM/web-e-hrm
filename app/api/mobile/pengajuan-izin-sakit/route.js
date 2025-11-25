@@ -146,7 +146,13 @@ function normalizeStatusInput(value) {
   const mapped = s === 'menunggu' ? 'pending' : s;
   return APPROVE_STATUSES.has(mapped) ? mapped : null;
 }
-
+function cleanHandoverFormat(text) {
+  if (!text) return '-';
+  return text.replace(/@\[.?\]\((.?)\)/g, (match, name) => {
+    const cleanName = name.replace(/^+|+$/g, '').trim();
+    return `@${cleanName}`;
+  });
+}
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
