@@ -1,57 +1,41 @@
-import { NextResponse } from 'next/server';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
-import { authenticateRequest } from '@/app/utils/auth/authUtils';
-
-async function resolveUserId(request) {
-  const authHeader = request.headers.get('authorization') || '';
-
-  if (authHeader.startsWith('Bearer ')) {
-    const rawToken = authHeader.slice(7).trim();
-    try {
-      const payload = verifyAuthToken(rawToken);
-      const userId = payload?.id_user || payload?.sub || payload?.userId || payload?.id || payload?.user_id;
-
-      if (userId) {
-        return { userId, source: 'bearer' };
-      }
-    } catch (error) {
-      // Jika token bearer tidak valid, lanjut mencoba autentikasi session
-      console.warn('Invalid bearer token for /api/notifications:', error);
-    }
-  }
-
-  const sessionOrResponse = await authenticateRequest();
-  if (sessionOrResponse instanceof NextResponse) {
-    return sessionOrResponse;
-  }
-
-  const sessionUserId = sessionOrResponse?.user?.id || sessionOrResponse?.user?.id_user;
-  if (!sessionUserId) {
-    return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
-  }
-
-  return { userId: sessionUserId, source: 'session', session: sessionOrResponse };
-}
+import { NextResponse } from "next/server";
+import db from "@/lib/prisma";
+import { ensureNotificationAuth } from "./_auth";
 
 function sanitizeString(value) {
   if (value === undefined || value === null) return null;
   const str = String(value).trim();
   return str.length ? str : null;
 }
+
+/**
+ * GET /api/notifications
+ * List notifikasi milik user (admin/web/mobile) dengan pagination & filter status
+ */
 export async function GET(request) {
-  const authResult = await resolveUserId(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const { userId } = authResult;
+  const auth = await ensureNotificationAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
+  const userId = auth.actor?.id;
+  if (!userId) {
+    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const { searchParams } = new URL(request.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
-    const status = (searchParams.get('status') || '').trim().toLowerCase();
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(
+      100,
+      Math.max(1, parseInt(searchParams.get("pageSize") || "20", 10))
+    );
+    const status = (searchParams.get("status") || "").trim().toLowerCase();
 
-    const where = { id_user: userId };
-    if (['read', 'unread', 'archived'].includes(status)) {
+    const where = {
+      id_user: userId,
+      deleted_at: null,
+    };
+
+    if (["read", "unread", "archived"].includes(status)) {
       where.status = status;
     }
 
@@ -59,15 +43,16 @@ export async function GET(request) {
       db.notification.count({ where }),
       db.notification.findMany({
         where,
-        orderBy: { created_at: 'desc' },
+        orderBy: { created_at: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
     ]);
 
     return NextResponse.json({
+      ok: true,
       data: items,
-      pagination: {
+      meta: {
         page,
         pageSize,
         total,
@@ -75,29 +60,45 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error('Failed to fetch notifications:', error);
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+    console.error("GET /api/notifications error:", error);
+    return NextResponse.json(
+      { ok: false, message: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 
+/**
+ * POST /api/notifications
+ * Register / update device token (FCM) milik user (untuk push notif)
+ */
 export async function POST(request) {
-  const authResult = await resolveUserId(request);
-  if (authResult instanceof NextResponse) return authResult;
+  const auth = await ensureNotificationAuth(request);
+  if (auth instanceof NextResponse) return auth;
 
-  const { userId } = authResult;
+  const userId = auth.actor?.id;
+  if (!userId) {
+    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+  }
 
   let payload;
   try {
     payload = await request.json();
   } catch (error) {
-    return NextResponse.json({ ok: false, message: 'Invalid JSON body' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, message: "Invalid JSON body" },
+      { status: 400 }
+    );
   }
 
   const fcmToken = sanitizeString(payload?.token);
   const deviceIdentifier = sanitizeString(payload?.deviceIdentifier);
 
   if (!fcmToken) {
-    return NextResponse.json({ ok: false, message: 'Field "token" is required' }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, message: 'Field "token" is required' },
+      { status: 400 }
+    );
   }
 
   const now = new Date();
@@ -138,7 +139,7 @@ export async function POST(request) {
     let record;
 
     if (existing) {
-      console.info('Updating existing notification device', {
+      console.info("Updating existing notification device", {
         userId,
         id_device: existing.id_device,
       });
@@ -153,7 +154,7 @@ export async function POST(request) {
         select: selectFields,
       });
     } else {
-      console.info('Creating notification device', { userId });
+      console.info("Creating notification device", { userId });
 
       record = await db.device.create({
         data: {
@@ -167,17 +168,17 @@ export async function POST(request) {
     return NextResponse.json(
       {
         ok: true,
-        message: 'Device token registered',
+        message: "Device token registered",
         data: record,
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error('Failed to register notification token:', error);
+    console.error("Failed to register notification token:", error);
     return NextResponse.json(
       {
         ok: false,
-        message: 'Failed to register notification token',
+        message: "Failed to register notification token",
       },
       { status: 500 }
     );

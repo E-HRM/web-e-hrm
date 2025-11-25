@@ -1,72 +1,68 @@
-// app/api/admin/notifications/_auth.js (opsional)
-// atau copas ke tiap file route.js
-
+// app/api/notifications/_auth.js
 import { NextResponse } from "next/server";
 import { verifyAuthToken } from "@/lib/jwt";
 import { authenticateRequest } from "@/app/utils/auth/authUtils";
 
-const ADMIN_ROLES = new Set([
-  "HR",
-  "OPERASIONAL",
-  "DIREKTUR",
-  "SUPERADMIN",
-  "SUBADMIN",
-  "SUPERVISI",
-]);
+/**
+ * Auth generik untuk semua endpoint /api/notifications
+ * - Cek Bearer token dulu (mobile / API)
+ * - Kalau gagal, fallback ke session (web)
+ * Return:
+ *   - NextResponse (error)  -> langsung return ke caller
+ *   - { actor: { id, role, source, session? } }
+ */
+export async function ensureNotificationAuth(req) {
+  const authHeader = req.headers.get("authorization") || "";
 
-const normRole = (role) =>
-  String(role || "")
-    .trim()
-    .toUpperCase();
-
-export async function ensureAdminAuth(req) {
-  const auth = req.headers.get("authorization") || "";
-
-  // Coba pakai Bearer token dulu
-  if (auth.startsWith("Bearer ")) {
+  // 1) Bearer token (mobile / API client)
+  if (authHeader.startsWith("Bearer ")) {
+    const rawToken = authHeader.slice(7).trim();
     try {
-      const payload = verifyAuthToken(auth.slice(7).trim());
+      const payload = verifyAuthToken(rawToken);
+
       const id =
-        payload?.sub || payload?.id_user || payload?.userId || payload?.id;
-      const role = payload?.role;
+        payload?.id_user ||
+        payload?.sub ||
+        payload?.userId ||
+        payload?.id ||
+        payload?.user_id;
 
-      if (!id) {
-        return NextResponse.json(
-          { ok: false, message: "Unauthorized." },
-          { status: 401 }
-        );
+      if (id) {
+        return {
+          actor: {
+            id,
+            role: payload?.role,
+            source: "bearer",
+          },
+        };
       }
-      if (!ADMIN_ROLES.has(normRole(role))) {
-        return NextResponse.json(
-          { ok: false, message: "Forbidden." },
-          { status: 403 }
-        );
-      }
-
-      return { actor: { id, role, source: "bearer" } };
-    } catch (_) {
-      // fallback ke NextAuth di bawah
+    } catch (err) {
+      console.warn(
+        "[notifications] Invalid bearer token, fallback to session:",
+        err?.message || err
+      );
+      // lanjut ke session
     }
   }
 
-  // Fallback: NextAuth session
+  // 2) Session (NextAuth / custom)
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const id = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
-  const role = sessionOrRes?.user?.role;
   if (!id) {
     return NextResponse.json(
-      { ok: false, message: "Unauthorized." },
+      { ok: false, message: "Unauthorized" },
       { status: 401 }
     );
   }
-  if (!ADMIN_ROLES.has(normRole(role))) {
-    return NextResponse.json(
-      { ok: false, message: "Forbidden." },
-      { status: 403 }
-    );
-  }
 
-  return { actor: { id, role, source: "session", session: sessionOrRes } };
+  return {
+    actor: {
+      id,
+      role: sessionOrRes?.user?.role,
+      source: "session",
+      session: sessionOrRes,
+    },
+  };
 }
