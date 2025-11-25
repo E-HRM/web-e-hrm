@@ -28,11 +28,39 @@ function getTypeFor(it) {
   return "info";
 }
 
+// bangun URL tujuan berdasarkan jenis pengajuan
+function buildTargetUrl(it) {
+  const deeplink = it.deeplink;
+  const table = it.related_table;
+  const id = it.related_id;
+
+  // kalau backend kirim deeplink, pakai itu duluan
+  if (deeplink && typeof deeplink === "string") {
+    return deeplink;
+  }
+
+  if (!table || !id) return null;
+
+  if (table === "pengajuan_cuti") {
+    return `/home/pengajuan/cuti`;
+  }
+  if (table === "pengajuan_izin_jam") {
+    return `/home/pengajuan/izinJam`;
+  }
+  if (table === "pengajuan_izin_sakit") {
+    return `/home/pengajuan/sakit`;
+  }
+  if (table === "izin_tukar_hari") {
+    return `/home/pengajuan/tukarHari`;
+  }
+
+  return null;
+}
+
 export default function NotificationContent() {
   const {
-    items,
-    unreadCount,
     filteredItems,
+    unreadCount,
     activeTabKey,
     setActiveTabKey,
     markAllRead,
@@ -43,16 +71,27 @@ export default function NotificationContent() {
   } = useNotificationViewModel();
 
   const renderItem = (it) => {
-    const key = it.id_notification || it.id; // dari DB
-    const read = it.status === "read";       // status: 'read' | 'unread'
+    const key = it.id_notification || it.id;
+    const read = it.status === "read";
     const type = getTypeFor(it);
     const desc = it.body || it.desc || "";
     const timeVal = it.created_at || it.time;
+    const targetUrl = buildTargetUrl(it);
+
+    const handleClick = async () => {
+      // tandai read dulu
+      await markOneRead(key);
+      // lalu redirect kalau ada tujuan
+      if (targetUrl) {
+        // simple & aman, biar jalan di semua layout
+        window.location.href = targetUrl;
+      }
+    };
 
     return (
       <button
         key={key}
-        onClick={() => markOneRead(key)}
+        onClick={handleClick}
         className={`w-full text-left px-3 py-2 rounded-xl transition
           ${
             read
@@ -78,9 +117,7 @@ export default function NotificationContent() {
             <div className="font-medium text-slate-800 line-clamp-1">
               {it.title}
             </div>
-            <div className="text-xs text-slate-600 line-clamp-2">
-              {desc}
-            </div>
+            <div className="text-xs text-slate-600 line-clamp-2">{desc}</div>
             <div className="text-[11px] text-slate-400 mt-1">
               {timeVal ? formatRelativeTime(timeVal) : ""}
             </div>
@@ -119,7 +156,6 @@ export default function NotificationContent() {
           activeKey={activeTabKey}
           onChange={setActiveTabKey}
           items={[
-            // sekarang: "Belum Dibaca" di kiri, "Semua" di kanan
             { key: "unread", label: "Belum Dibaca" },
             { key: "all", label: "Semua" },
           ]}
@@ -128,7 +164,6 @@ export default function NotificationContent() {
           destroyInactiveTabPane
         />
       </div>
-
 
       {/* Error state */}
       {apiError && (
@@ -166,10 +201,7 @@ export default function NotificationContent() {
         </div>
       )}
 
-      {/* Footer (opsional untuk "Lihat semua") */}
-      <div className="px-3 py-2 border-t border-slate-200 bg-slate-50/50 text-right">
-        {/* Bisa isi link ke halaman /home/notifikasi nanti */}
-      </div>
+      <div className="px-3 py-2 border-t border-slate-200 bg-slate-50/50 text-right"></div>
     </div>
   );
 
