@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import db from "@/lib/prisma";
-import { ensureNotificationAuth } from "../_auth";
+import { NextResponse } from 'next/server';
+import db from '@/lib/prisma';
+import { ensureNotificationAuth } from '../_auth';
 
 export async function PUT(request, { params }) {
   const auth = await ensureNotificationAuth(request);
@@ -8,7 +8,7 @@ export async function PUT(request, { params }) {
 
   const userId = auth.actor?.id;
   if (!userId) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
   }
 
   const { id: notificationId } = params;
@@ -46,14 +46,11 @@ export async function PUT(request, { params }) {
 
     return NextResponse.json({
       ok: true,
-      message: "Notification marked as read",
+      message: 'Notification marked as read',
       data: updated,
     });
   } catch (error) {
     console.error(`PUT /api/notifications/${notificationId} error:`, error);
-    return NextResponse.json(
-      { message: "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }

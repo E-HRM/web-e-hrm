@@ -1,7 +1,7 @@
 // app/api/notifications/mark-all-read/route.js
-import { NextResponse } from "next/server";
-import db from "@/lib/prisma";
-import { ensureNotificationAuth } from "../_auth";
+import { NextResponse } from 'next/server';
+import db from '@/lib/prisma';
+import { ensureNotificationAuth } from '../_auth';
 
 export async function PUT(request) {
   const auth = await ensureNotificationAuth(request);
@@ -9,7 +9,7 @@ export async function PUT(request) {
 
   const userId = auth.actor?.id;
   if (!userId) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -30,14 +30,11 @@ export async function PUT(request) {
 
     return NextResponse.json({
       ok: true,
-      message: "All notifications marked as read",
+      message: 'All notifications marked as read',
       data: { updatedCount: result.count },
     });
   } catch (error) {
-    console.error("PUT /api/notifications/mark-all-read error:", error);
-    return NextResponse.json(
-      { ok: false, message: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error('PUT /api/notifications/mark-all-read error:', error);
+    return NextResponse.json({ ok: false, message: 'Internal Server Error' }, { status: 500 });
   }
 }

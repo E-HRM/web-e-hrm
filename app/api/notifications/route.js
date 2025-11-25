@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
-import db from "@/lib/prisma";
-import { ensureNotificationAuth } from "./_auth";
+import { NextResponse } from 'next/server';
+import db from '@/lib/prisma';
+import { ensureNotificationAuth } from './_auth';
 
 function sanitizeString(value) {
   if (value === undefined || value === null) return null;
@@ -15,7 +15,7 @@ export async function GET(request) {
 
   const userId = auth.actor?.id;
   if (!userId) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
   }
 
   try {
@@ -29,7 +29,7 @@ export async function GET(request) {
 
     const where = { id_user: userId, deleted_at: null };
 
-    if (["read", "unread", "archived"].includes(status)) {
+    if (['read', 'unread', 'archived'].includes(status)) {
       where.status = status;
     }
 
@@ -54,11 +54,8 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error("GET /api/notifications error:", error);
-    return NextResponse.json(
-      { message: "Internal Server Error" },
-      { status: 500 }
-    );
+    console.error('GET /api/notifications error:', error);
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -69,17 +66,14 @@ export async function POST(request) {
 
   const userId = auth.actor?.id;
   if (!userId) {
-    return NextResponse.json({ ok: false, message: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
   }
 
   let payload;
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json(
-      { ok: false, message: "Invalid JSON body" },
-      { status: 400 }
-    );
+    return NextResponse.json({ ok: false, message: 'Invalid JSON body' }, { status: 400 });
   }
 
   const fcmToken = sanitizeString(payload?.token);
@@ -144,14 +138,11 @@ export async function POST(request) {
 
     return NextResponse.json({
       ok: true,
-      message: "Device token registered",
+      message: 'Device token registered',
       data: record,
     });
   } catch (error) {
-    console.error("Failed to register notification token:", error);
-    return NextResponse.json(
-      { ok: false, message: "Failed to register notification token" },
-      { status: 500 }
-    );
+    console.error('Failed to register notification token:', error);
+    return NextResponse.json({ ok: false, message: 'Failed to register notification token' }, { status: 500 });
   }
 }
