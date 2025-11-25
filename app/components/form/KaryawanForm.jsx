@@ -15,8 +15,20 @@ import {
   message,
   Space,
   Tag,
+  Avatar,
+  Row,
+  Col,
+  Divider,
+  Typography,
 } from "antd";
-import { UploadOutlined } from "@ant-design/icons";
+import { 
+  UploadOutlined, 
+  UserOutlined, 
+  CameraOutlined,
+  EditOutlined,
+  ArrowLeftOutlined,
+  SaveOutlined
+} from "@ant-design/icons";
 import dayjs from "dayjs";
 import useSWR from "swr";
 import { ApiEndpoints } from "../../../constrainst/endpoints";
@@ -24,8 +36,11 @@ import { crudService } from "../../../app/utils/services/crudService";
 
 dayjs.locale("id");
 
+const { Title, Text } = Typography;
+
 const LABEL_STYLE = { width: 240, fontWeight: 600 };
 const BRAND = "#003A6F";
+const SECONDARY_COLOR = "#1890ff";
 
 /* ======== Opsi Select ======== */
 const OPSI_STATUS_PERKAWINAN = [
@@ -66,7 +81,6 @@ const OPSI_STATUS_KERJA = [
   { value: "CUTI", label: "CUTI" },
 ];
 
-// NEW: Status Cuti
 const OPSI_STATUS_CUTI = [
   { value: "aktif", label: "Aktif" },
   { value: "nonaktif", label: "Nonaktif" },
@@ -100,7 +114,7 @@ function joinAlamat(base, kota, prov) {
   if (b === DASH) {
     const segs = [k, p].filter((x) => x !== DASH);
     return segs.length ? segs.join(", ") : DASH;
-    }
+  }
   return b + (k !== DASH ? ` — ${k}` : "") + (p !== DASH ? `, ${p}` : "");
 }
 
@@ -113,8 +127,8 @@ const swrFetcher = (url) => crudService.get(url);
 
 /* ---------------- main component ---------------- */
 export default function KaryawanProfileForm({
-  mode = "view",        // "view" | "edit" | "add"
-  id,                   // user id (view/edit)
+  mode = "view",
+  id,
   forceReadOnly = false,
   onSuccess,
 }) {
@@ -122,8 +136,8 @@ export default function KaryawanProfileForm({
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
   const [fileList, setFileList] = useState([]);
+  const [previewImage, setPreviewImage] = useState("");
 
-  // Default initial values → status_cuti = "aktif" saat ADD
   const initialValues = useMemo(() => (
     mode === "add" ? { status_cuti: "aktif" } : {}
   ), [mode]);
@@ -154,7 +168,6 @@ export default function KaryawanProfileForm({
   /* ====== initial form values ====== */
   useEffect(() => {
     if (mode === "add") {
-      // Pastikan default status_cuti = aktif saat ADD
       form.setFieldsValue({ status_cuti: "aktif" });
     }
   }, [mode, form]);
@@ -165,11 +178,8 @@ export default function KaryawanProfileForm({
         nama_pengguna: nz(detail.nama_pengguna),
         email: nz(detail.email),
         kontak: nz(detail.kontak),
-
-        // NEW: kontak darurat
         nama_kontak_darurat: nz(detail.nama_kontak_darurat),
         kontak_darurat: nz(detail.kontak_darurat),
-
         agama: nz(detail.agama),
         tempat_lahir: nz(detail.tempat_lahir),
         tanggal_lahir: detail.tanggal_lahir ? dayjs(detail.tanggal_lahir) : undefined,
@@ -177,12 +187,10 @@ export default function KaryawanProfileForm({
         golongan_darah: nz(detail.golongan_darah),
         status_perkawinan: nz(detail.status_perkawinan),
         zona_waktu: nz(detail.zona_waktu),
-
         jenjang_pendidikan: nz(detail.jenjang_pendidikan),
         jurusan: nz(detail.jurusan),
         nama_institusi_pendidikan: nz(detail.nama_institusi_pendidikan),
         tahun_lulus: nz(detail.tahun_lulus),
-
         nomor_induk_karyawan: nz(detail.nomor_induk_karyawan),
         id_departement: nz(detail.id_departement),
         id_jabatan: nz(detail.id_jabatan),
@@ -192,10 +200,7 @@ export default function KaryawanProfileForm({
         jenis_bank: nz(detail.jenis_bank),
         nomor_rekening: nz(detail.nomor_rekening),
         role: nz(detail.role) || "KARYAWAN",
-
-        // NEW: status_cuti (biarkan apa adanya dari DB; default hanya untuk ADD)
         status_cuti: nz(detail.status_cuti),
-
         alamat_ktp: nz(detail.alamat_ktp),
         alamat_ktp_provinsi: nz(detail.alamat_ktp_provinsi),
         alamat_ktp_kota: nz(detail.alamat_ktp_kota),
@@ -213,7 +218,6 @@ export default function KaryawanProfileForm({
       setSaving(true);
 
       if (mode === "add") {
-        // 1) REGISTER minimal
         const registerPayload = {
           nama_pengguna: values.nama_pengguna,
           email: String(values.email).toLowerCase(),
@@ -235,7 +239,6 @@ export default function KaryawanProfileForm({
           return;
         }
 
-        // 2) Lengkapi via PUT
         const hasFile = fileList?.length > 0;
         if (hasFile) {
           const fd = new FormData();
@@ -245,30 +248,23 @@ export default function KaryawanProfileForm({
           append(fd, "golongan_darah", values.golongan_darah);
           append(fd, "status_perkawinan", values.status_perkawinan);
           append(fd, "zona_waktu", values.zona_waktu);
-
           append(fd, "jenjang_pendidikan", values.jenjang_pendidikan);
           append(fd, "jurusan", values.jurusan);
           append(fd, "nama_institusi_pendidikan", values.nama_institusi_pendidikan);
           append(fd, "tahun_lulus", values.tahun_lulus);
-
           append(fd, "nomor_induk_karyawan", values.nomor_induk_karyawan);
           append(fd, "status_kerja", values.status_kerja);
           append(fd, "tanggal_mulai_bekerja", toDateOnly(values.tanggal_mulai_bekerja));
-
           append(fd, "jenis_bank", values.jenis_bank);
           append(fd, "nomor_rekening", values.nomor_rekening);
-
           append(fd, "alamat_ktp", values.alamat_ktp);
           append(fd, "alamat_ktp_provinsi", values.alamat_ktp_provinsi);
           append(fd, "alamat_ktp_kota", values.alamat_ktp_kota);
           append(fd, "alamat_domisili", values.alamat_domisili);
           append(fd, "alamat_domisili_provinsi", values.alamat_domisili_provinsi);
           append(fd, "alamat_domisili_kota", values.alamat_domisili_kota);
-
           append(fd, "tempat_lahir", values.tempat_lahir);
           append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
-
-          // NEW: status_cuti & kontak darurat
           append(fd, "status_cuti", values.status_cuti);
           append(fd, "nama_kontak_darurat", values.nama_kontak_darurat);
           append(fd, "kontak_darurat", values.kontak_darurat);
@@ -283,30 +279,23 @@ export default function KaryawanProfileForm({
             golongan_darah: values.golongan_darah ?? null,
             status_perkawinan: values.status_perkawinan ?? null,
             zona_waktu: values.zona_waktu ?? null,
-
             jenjang_pendidikan: values.jenjang_pendidikan ?? null,
             jurusan: values.jurusan ?? null,
             nama_institusi_pendidikan: values.nama_institusi_pendidikan ?? null,
             tahun_lulus: values.tahun_lulus ?? null,
-
             nomor_induk_karyawan: values.nomor_induk_karyawan ?? null,
             status_kerja: values.status_kerja ?? null,
             tanggal_mulai_bekerja: toDateOnly(values.tanggal_mulai_bekerja) ?? null,
-
             jenis_bank: values.jenis_bank ?? null,
             nomor_rekening: values.nomor_rekening ?? null,
-
             alamat_ktp: values.alamat_ktp ?? null,
             alamat_ktp_provinsi: values.alamat_ktp_provinsi ?? null,
             alamat_ktp_kota: values.alamat_ktp_kota ?? null,
             alamat_domisili: values.alamat_domisili ?? null,
             alamat_domisili_provinsi: values.alamat_domisili_provinsi ?? null,
             alamat_domisili_kota: values.alamat_domisili_kota ?? null,
-
             tempat_lahir: values.tempat_lahir ?? null,
             tanggal_lahir: toDateOnly(values.tanggal_lahir) ?? null,
-
-            // NEW
             status_cuti: values.status_cuti ?? null,
             nama_kontak_darurat: values.nama_kontak_darurat ?? null,
             kontak_darurat: values.kontak_darurat ?? null,
@@ -334,31 +323,25 @@ export default function KaryawanProfileForm({
         append(fd, "role", values.role || "KARYAWAN");
         append(fd, "tanggal_lahir", toDateOnly(values.tanggal_lahir));
         append(fd, "tempat_lahir", values.tempat_lahir);
-
         append(fd, "jenis_kelamin", values.jenis_kelamin);
         append(fd, "golongan_darah", values.golongan_darah);
         append(fd, "status_perkawinan", values.status_perkawinan);
         append(fd, "zona_waktu", values.zona_waktu);
-
         append(fd, "jenjang_pendidikan", values.jenjang_pendidikan);
         append(fd, "jurusan", values.jurusan);
         append(fd, "nama_institusi_pendidikan", values.nama_institusi_pendidikan);
         append(fd, "tahun_lulus", values.tahun_lulus);
-
         append(fd, "nomor_induk_karyawan", values.nomor_induk_karyawan);
         append(fd, "status_kerja", values.status_kerja);
         append(fd, "tanggal_mulai_bekerja", toDateOnly(values.tanggal_mulai_bekerja));
         append(fd, "jenis_bank", values.jenis_bank);
         append(fd, "nomor_rekening", values.nomor_rekening);
-
         append(fd, "alamat_ktp", values.alamat_ktp);
         append(fd, "alamat_ktp_provinsi", values.alamat_ktp_provinsi);
         append(fd, "alamat_ktp_kota", values.alamat_ktp_kota);
         append(fd, "alamat_domisili", values.alamat_domisili);
         append(fd, "alamat_domisili_provinsi", values.alamat_domisili_provinsi);
         append(fd, "alamat_domisili_kota", values.alamat_domisili_kota);
-
-        // NEW: status_cuti & kontak darurat
         append(fd, "status_cuti", values.status_cuti);
         append(fd, "nama_kontak_darurat", values.nama_kontak_darurat);
         append(fd, "kontak_darurat", values.kontak_darurat);
@@ -380,31 +363,25 @@ export default function KaryawanProfileForm({
           role: values.role ?? "KARYAWAN",
           tanggal_lahir: toDateOnly(values.tanggal_lahir) ?? null,
           tempat_lahir: values.tempat_lahir ?? null,
-
           jenis_kelamin: values.jenis_kelamin ?? null,
           golongan_darah: values.golongan_darah ?? null,
           status_perkawinan: values.status_perkawinan ?? null,
           zona_waktu: values.zona_waktu ?? null,
-
           jenjang_pendidikan: values.jenjang_pendidikan ?? null,
           jurusan: values.jurusan ?? null,
           nama_institusi_pendidikan: values.nama_institusi_pendidikan ?? null,
           tahun_lulus: values.tahun_lulus ?? null,
-
           nomor_induk_karyawan: values.nomor_induk_karyawan ?? null,
           status_kerja: values.status_kerja ?? null,
           tanggal_mulai_bekerja: toDateOnly(values.tanggal_mulai_bekerja) ?? null,
           jenis_bank: values.jenis_bank ?? null,
           nomor_rekening: values.nomor_rekening ?? null,
-
           alamat_ktp: values.alamat_ktp ?? null,
           alamat_ktp_provinsi: values.alamat_ktp_provinsi ?? null,
           alamat_ktp_kota: values.alamat_ktp_kota ?? null,
           alamat_domisili: values.alamat_domisili ?? null,
           alamat_domisili_provinsi: values.alamat_domisili_provinsi ?? null,
           alamat_domisili_kota: values.alamat_domisili_kota ?? null,
-
-          // NEW
           status_cuti: values.status_cuti ?? null,
           nama_kontak_darurat: values.nama_kontak_darurat ?? null,
           kontak_darurat: values.kontak_darurat ?? null,
@@ -421,365 +398,718 @@ export default function KaryawanProfileForm({
     }
   };
 
+  /* ====== upload handler ====== */
+  const handleUploadChange = ({ fileList: newFileList }) => {
+    setFileList(newFileList);
+    if (newFileList.length > 0 && newFileList[0].originFileObj) {
+      setPreviewImage(URL.createObjectURL(newFileList[0].originFileObj));
+    }
+  };
+
+  const uploadButton = (
+    <div className="flex flex-col items-center justify-center p-4">
+      <CameraOutlined className="text-2xl text-gray-400 mb-2" />
+      <div className="text-sm text-gray-500">Upload Foto</div>
+    </div>
+  );
+
   /* ====== render ====== */
-  const photoUrl =
-    (detail && detail.foto_profil_user) ||
-    (fileList[0]?.originFileObj ? URL.createObjectURL(fileList[0].originFileObj) : null) ||
+  const photoUrl = previewImage || 
+    (detail && detail.foto_profil_user) || 
     "/avatar-placeholder.png";
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-2xl font-semibold">Profil</h2>
-
-        {readOnly ? (
-          (detail && !forceReadOnly) ? (
-            <Link href={`/home/kelola_karyawan/karyawan/${id}/edit`}>
-              <Button type="default" icon={<span className="ri-pencil-line" />}>
-                Ubah
-              </Button>
-            </Link>
-          ) : null
-        ) : (
-          <Space>
-            <Button onClick={() => window.history.back()}>Batal</Button>
-            <Button
-              type="primary"
-              onClick={() => form.submit()}
-              loading={saving}
-              style={{ background: BRAND }}
-            >
-              {mode === "add" ? "Simpan" : "Simpan Perubahan"}
-            </Button>
-          </Space>
-        )}
-      </div>
-
-      <Card bordered style={{ borderRadius: 16 }}>
-        {mode !== "add" && (loadingDetail || !detail) ? (
-          <Skeleton active avatar paragraph={{ rows: 6 }} />
-        ) : (
-          <div className="grid lg:grid-cols-[240px,1fr] gap-8">
-            {/* KIRI: foto & identitas ringkas */}
-            <div className="flex flex-col items-center">
-              <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden ring-1 ring-gray-200 mb-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photoUrl} alt="Foto" className="object-cover w-full h-full" />
-              </div>
-
-              {readOnly ? (
-                <>
-                  <div className="font-semibold text-lg">
-                    {displayOrDash(detail?.nama_pengguna)}
-                  </div>
-                  <div className="text-sm text-slate-600">
-                    {displayOrDash(detail?.jabatan?.nama_jabatan)}
-                  </div>
-                  <div className="text-sm text-slate-600">
-                    {displayOrDash(detail?.departement?.nama_departement ?? detail?.divisi)}
-                  </div>
-                  {/* NEW: Status Cuti badge */}
-                  <div className="mt-2">
-                    <span className="mr-2">Status Cuti:</span>
-                    <Tag color={(detail?.status_cuti || "") === "aktif" ? "green" : "red"}>
-                      {displayOrDash(detail?.status_cuti)?.replace(/^./, (c) => c.toUpperCase())}
-                    </Tag>
-                  </div>
-                </>
-              ) : (
-                <Form
-                  form={form}
-                  layout="vertical"
-                  className="w-full"
-                  onFinish={onFinish}
-                  initialValues={initialValues}
-                >
-                  <Form.Item
-                    name="nama_pengguna"
-                    label="Nama*"
-                    rules={[{ required: true, message: "Nama wajib diisi" }]}
-                  >
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-
-                  <Form.Item
-                    name="email"
-                    label="Email*"
-                    rules={[
-                      { required: true, message: "Email wajib diisi" },
-                      { type: "email", message: "Format email tidak valid" },
-                    ]}
-                  >
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-
-                  {mode === "add" && (
-                    <Form.Item
-                      name="password"
-                      label="Password*"
-                      rules={[{ required: true, message: "Password wajib diisi" }]}
-                    >
-                      <Input.Password placeholder={DASH} />
-                    </Form.Item>
-                  )}
-
-                  <Upload
-                    fileList={fileList}
-                    maxCount={1}
-                    onChange={({ fileList }) => setFileList(fileList)}
-                    beforeUpload={() => false}
-                  >
-                    <Button icon={<UploadOutlined />}>
-                      {fileList.length ? "Ganti Foto" : "Pilih Foto"}
-                    </Button>
-                  </Upload>
-                </Form>
-              )}
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            <div>
+              <Title level={2} className="!mb-1 !text-gray-800">
+                {mode === "add" ? "Tambah Karyawan Baru" : "Profil Karyawan"}
+              </Title>
+              <Text type="secondary">
+                {mode === "add" 
+                  ? "Lengkapi data karyawan baru" 
+                  : readOnly 
+                    ? "Lihat detail informasi karyawan" 
+                    : "Edit data karyawan"
+                }
+              </Text>
             </div>
-
-            {/* KANAN */}
-            {readOnly ? (
-              <div className="space-y-8">
-                <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
-                  <Descriptions.Item label="Tempat Lahir">
-                    {displayOrDash(detail?.tempat_lahir)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Tanggal Lahir">
-                    {displayOrDash(detail?.tanggal_lahir) !== DASH
-                      ? dayjs(detail.tanggal_lahir).format("DD MMM YYYY")
-                      : DASH}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Jenis Kelamin">
-                    {displayOrDash(detail?.jenis_kelamin)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Golongan Darah">
-                    {displayOrDash(detail?.golongan_darah)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Status Perkawinan">
-                    {displayOrDash(detail?.status_perkawinan)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Agama">
-                    {displayOrDash(detail?.agama)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Nomor Telepon">
-                    {displayOrDash(detail?.kontak)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Zona Waktu">
-                    {displayOrDash(detail?.zona_waktu)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Email">
-                    {displayOrDash(detail?.email)}
-                  </Descriptions.Item>
-                  {/* NEW: Kontak darurat */}
-                  <Descriptions.Item label="Nama Kontak Darurat">
-                    {displayOrDash(detail?.nama_kontak_darurat)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Nomor Kontak Darurat">
-                    {displayOrDash(detail?.kontak_darurat)}
-                  </Descriptions.Item>
-                </Descriptions>
-
-                <h3 className="text-xl font-semibold">Pendidikan Terakhir</h3>
-                <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
-                  <Descriptions.Item label="Jenjang">
-                    {displayOrDash(detail?.jenjang_pendidikan)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Jurusan">
-                    {displayOrDash(detail?.jurusan)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Nama Institusi Pendidikan">
-                    {displayOrDash(detail?.nama_institusi_pendidikan)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Tahun Lulus">
-                    {displayOrDash(detail?.tahun_lulus)}
-                  </Descriptions.Item>
-                </Descriptions>
-
-                <h3 className="text-xl font-semibold">Kepegawaian</h3>
-                <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
-                  <Descriptions.Item label="Nomor Induk Karyawan">
-                    {displayOrDash(detail?.nomor_induk_karyawan)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Divisi">
-                    {displayOrDash(detail?.departement?.nama_departement ?? detail?.divisi)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Jabatan">
-                    {displayOrDash(detail?.jabatan?.nama_jabatan)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Status Kerja">
-                    {displayOrDash(detail?.status_kerja)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Tgl. Mulai Bekerja">
-                    {displayOrDash(detail?.tanggal_mulai_bekerja) !== DASH
-                      ? dayjs(detail.tanggal_mulai_bekerja).format("DD MMM YYYY")
-                      : DASH}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Lokasi Kantor">
-                    {displayOrDash(detail?.kantor?.nama_kantor)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Jenis Bank">
-                    {displayOrDash(detail?.jenis_bank)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Nomor Rekening">
-                    {displayOrDash(detail?.nomor_rekening)}
-                  </Descriptions.Item>
-                </Descriptions>
-
-                <h3 className="text-xl font-semibold">Alamat</h3>
-                <Descriptions bordered column={1} labelStyle={LABEL_STYLE}>
-                  <Descriptions.Item label="Alamat KTP">
-                    {joinAlamat(detail?.alamat_ktp, detail?.alamat_ktp_kota, detail?.alamat_ktp_provinsi)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Alamat Domisili">
-                    {joinAlamat(detail?.alamat_domisili, detail?.alamat_domisili_kota, detail?.alamat_domisili_provinsi)}
-                  </Descriptions.Item>
-                </Descriptions>
-              </div>
-            ) : (
-              <Form form={form} layout="vertical" onFinish={onFinish} initialValues={initialValues}>
-                {/* Identitas */}
-                <Descriptions title="Identitas" bordered column={1} labelStyle={LABEL_STYLE} items={[]} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                  <Form.Item name="tempat_lahir" label="Tempat Lahir">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="tanggal_lahir" label="Tanggal Lahir">
-                    <DatePicker className="w-full" format="DD MMM YYYY" placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="jenis_kelamin" label="Jenis Kelamin">
-                    <Select
-                      options={[
-                        { value: "LAKI_LAKI", label: "Laki-laki" },
-                        { value: "PEREMPUAN", label: "Perempuan" },
-                      ]}
-                      allowClear
-                      placeholder={DASH}
-                    />
-                  </Form.Item>
-                  <Form.Item name="golongan_darah" label="Golongan Darah">
-                    <Select options={OPSI_GOLONGAN_DARAH} allowClear placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="status_perkawinan" label="Status Perkawinan">
-                    <Select options={OPSI_STATUS_PERKAWINAN} allowClear placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="agama" label="Agama">
-                    <Select options={OPSI_AGAMA} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="kontak" label="Nomor Telepon">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="zona_waktu" label="Zona Waktu">
-                    <Input placeholder="mis. WIB / WITA / WIT / UTC+7" />
-                  </Form.Item>
-
-                  {/* NEW: Kontak Darurat */}
-                  <Form.Item name="nama_kontak_darurat" label="Nama Kontak Darurat">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item
-                    name="kontak_darurat"
-                    label="Nomor Kontak Darurat"
-                    rules={[{ pattern: /^[0-9+\-\s()]{6,20}$/, message: "Nomor tidak valid" }]}
-                  >
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                </div>
-
-                {/* Pendidikan */}
-                <h3 className="text-xl font-semibold mt-6">Pendidikan Terakhir</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <Form.Item name="jenjang_pendidikan" label="Jenjang">
-                    <Select options={OPSI_JENJANG} allowClear placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="jurusan" label="Jurusan">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="nama_institusi_pendidikan" label="Nama Institusi Pendidikan">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="tahun_lulus" label="Tahun Lulus">
-                    <Input type="number" placeholder={DASH} />
-                  </Form.Item>
-                </div>
-
-                {/* Kepegawaian */}
-                <h3 className="text-xl font-semibold mt-6">Kepegawaian</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <Form.Item name="nomor_induk_karyawan" label="Nomor Induk Karyawan">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="id_departement" label="Divisi">
-                    <Select options={deptOpts} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="id_jabatan" label="Jabatan">
-                    <Select options={jabOpts} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="status_kerja" label="Status Kerja">
-                    <Select options={OPSI_STATUS_KERJA} allowClear placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="tanggal_mulai_bekerja" label="Tgl. Mulai Bekerja">
-                    <DatePicker className="w-full" format="DD MMM YYYY" placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="id_location" label="Lokasi Kantor">
-                    <Select options={locOpts} allowClear showSearch optionFilterProp="label" placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="jenis_bank" label="Jenis Bank">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="nomor_rekening" label="Nomor Rekening">
-                    <Input placeholder={DASH} />
-                  </Form.Item>
-                  <Form.Item name="role" label="Role">
-                    <Select
-                      options={[
-                        { value: "KARYAWAN", label: "Karyawan" },
-                        { value: "HR", label: "HR" },
-                        { value: "OPERASIONAL", label: "Operasional" },
-                        { value: "DIREKTUR", label: "Direktur" },
-                        { value: "SUPERADMIN", label: "Super-admin" },
-                      ]}
-                      placeholder={DASH}
-                    />
-                  </Form.Item>
-
-                  {/* NEW: Status Cuti */}
-                  <Form.Item name="status_cuti" label="Status Cuti">
-                    <Select options={OPSI_STATUS_CUTI} allowClear placeholder={DASH} />
-                  </Form.Item>
-                </div>
-
-                {/* Alamat */}
-                <h3 className="text-xl font-semibold mt-6">Alamat</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <Form.Item name="alamat_ktp" label="Alamat KTP">
-                    <Input.TextArea rows={2} placeholder={DASH} />
-                  </Form.Item>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Form.Item name="alamat_ktp_provinsi" label="Provinsi (KTP)">
-                      <Input placeholder={DASH} />
-                    </Form.Item>
-                    <Form.Item name="alamat_ktp_kota" label="Kota (KTP)">
-                      <Input placeholder={DASH} />
-                    </Form.Item>
-                  </div>
-
-                  <Form.Item name="alamat_domisili" label="Alamat Domisili">
-                    <Input.TextArea rows={2} placeholder={DASH} />
-                  </Form.Item>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Form.Item name="alamat_domisili_provinsi" label="Provinsi (Domisili)">
-                      <Input placeholder={DASH} />
-                    </Form.Item>
-                    <Form.Item name="alamat_domisili_kota" label="Kota (Domisili)">
-                      <Input placeholder={DASH} />
-                    </Form.Item>
-                  </div>
-                </div>
-              </Form>
-            )}
           </div>
-        )}
-      </Card>
+
+          {readOnly ? (
+            (detail && !forceReadOnly) ? (
+              <Link href={`/home/kelola_karyawan/karyawan/${id}/edit`}>
+                <Button 
+                  type="primary" 
+                  icon={<EditOutlined />}
+                  size="large"
+                  style={{ background: BRAND }}
+                >
+                  Edit Profil
+                </Button>
+              </Link>
+            ) : null
+          ) : (
+            <Space>
+              <Button 
+                size="large" 
+                onClick={() => window.history.back()}
+                className="px-6"
+              >
+                Batal
+              </Button>
+              <Button
+                type="primary"
+                size="large"
+                icon={<SaveOutlined />}
+                onClick={() => form.submit()}
+                loading={saving}
+                style={{ background: BRAND }}
+                className="px-6"
+              >
+                {mode === "add" ? "Simpan Data" : "Simpan Perubahan"}
+              </Button>
+            </Space>
+          )}
+        </div>
+
+        <Card 
+          bordered={false} 
+          className="shadow-lg rounded-xl overflow-hidden border-0"
+          bodyStyle={{ padding: 0 }}
+        >
+          {mode !== "add" && (loadingDetail || !detail) ? (
+            <div className="p-8">
+              <Skeleton active avatar paragraph={{ rows: 8 }} />
+            </div>
+          ) : (
+            <div className="flex flex-col lg:flex-row">
+              {/* Sidebar - Foto & Info Utama */}
+              <div className="lg:w-80 bg-gradient-to-b from-blue-50 to-white p-6 border-r border-gray-200">
+                <div className="flex flex-col items-center text-center">
+                  {/* Foto Profil */}
+                  <div className="relative mb-4">
+                    <Avatar
+                      size={160}
+                      src={photoUrl}
+                      icon={<UserOutlined />}
+                      className="border-4 border-white shadow-lg"
+                    />
+                    {!readOnly && (
+                      <div className="absolute bottom-2 right-2">
+                        <Upload
+                          fileList={fileList}
+                          maxCount={1}
+                          onChange={handleUploadChange}
+                          beforeUpload={() => false}
+                          showUploadList={false}
+                        >
+                          <Button 
+                            type="primary" 
+                            shape="circle" 
+                            icon={<CameraOutlined />}
+                            size="small"
+                            style={{ background: SECONDARY_COLOR }}
+                            className="shadow-lg"
+                          />
+                        </Upload>
+                      </div>
+                    )}
+                  </div>
+
+                  {readOnly ? (
+                    <>
+                      <Title level={3} className="!mb-1 !text-gray-800">
+                        {displayOrDash(detail?.nama_pengguna)}
+                      </Title>
+                      <Text type="secondary" className="block mb-2">
+                        {displayOrDash(detail?.jabatan?.nama_jabatan)}
+                      </Text>
+                      <Text className="block mb-3 text-sm">
+                        {displayOrDash(detail?.departement?.nama_departement ?? detail?.divisi)}
+                      </Text>
+                      
+                      {/* Status Badges */}
+                      <Space direction="vertical" className="w-full mb-4">
+                        <div className="flex justify-between items-center bg-white p-3 rounded-lg border">
+                          <Text strong>Status Kerja:</Text>
+                          <Tag 
+                            color={detail?.status_kerja === "AKTIF" ? "green" : "red"}
+                            className="m-0"
+                          >
+                            {displayOrDash(detail?.status_kerja)}
+                          </Tag>
+                        </div>
+                        <div className="flex justify-between items-center bg-white p-3 rounded-lg border">
+                          <Text strong>Status Cuti:</Text>
+                          <Tag 
+                            color={(detail?.status_cuti || "") === "aktif" ? "blue" : "orange"}
+                            className="m-0"
+                          >
+                            {displayOrDash(detail?.status_cuti)?.replace(/^./, (c) => c.toUpperCase())}
+                          </Tag>
+                        </div>
+                      </Space>
+
+                      {/* Info Kontak */}
+                      <div className="w-full text-left bg-white p-4 rounded-lg border">
+                        <Text strong className="block mb-2">Informasi Kontak</Text>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <Text type="secondary">Email:</Text>
+                            <Text>{displayOrDash(detail?.email)}</Text>
+                          </div>
+                          <div className="flex justify-between">
+                            <Text type="secondary">Telepon:</Text>
+                            <Text>{displayOrDash(detail?.kontak)}</Text>
+                          </div>
+                          {detail?.kontak_darurat && (
+                            <div className="flex justify-between">
+                              <Text type="secondary">Kontak Darurat:</Text>
+                              <Text>{displayOrDash(detail?.kontak_darurat)}</Text>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full space-y-4">
+                      <Form
+                        form={form}
+                        layout="vertical"
+                        className="w-full"
+                        onFinish={onFinish}
+                        initialValues={initialValues}
+                      >
+                        <Form.Item
+                          name="nama_pengguna"
+                          label="Nama Lengkap"
+                          rules={[{ required: true, message: "Nama wajib diisi" }]}
+                          className="mb-3"
+                        >
+                          <Input 
+                            placeholder="Masukkan nama lengkap" 
+                            size="large"
+                            prefix={<UserOutlined className="text-gray-400" />}
+                          />
+                        </Form.Item>
+
+                        <Form.Item
+                          name="email"
+                          label="Email"
+                          rules={[
+                            { required: true, message: "Email wajib diisi" },
+                            { type: "email", message: "Format email tidak valid" },
+                          ]}
+                          className="mb-3"
+                        >
+                          <Input 
+                            placeholder="email@perusahaan.com" 
+                            size="large"
+                          />
+                        </Form.Item>
+
+                        {mode === "add" && (
+                          <Form.Item
+                            name="password"
+                            label="Password"
+                            rules={[{ required: true, message: "Password wajib diisi" }]}
+                            className="mb-3"
+                          >
+                            <Input.Password 
+                              placeholder="Masukkan password" 
+                              size="large"
+                            />
+                          </Form.Item>
+                        )}
+
+                        <div className="text-center">
+                          <Upload
+                            fileList={fileList}
+                            maxCount={1}
+                            onChange={handleUploadChange}
+                            beforeUpload={() => false}
+                            showUploadList={false}
+                          >
+                            <Button 
+                              icon={<UploadOutlined />}
+                              type="dashed"
+                              className="w-full"
+                            >
+                              {fileList.length ? "Ganti Foto Profil" : "Upload Foto Profil"}
+                            </Button>
+                          </Upload>
+                          <Text type="secondary" className="text-xs block mt-2">
+                            Format: JPG, PNG (Maks. 5MB)
+                          </Text>
+                        </div>
+                      </Form>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Main Content */}
+              <div className="flex-1 p-6">
+                {readOnly ? (
+                  <div className="space-y-8">
+                    {/* Identitas */}
+                    <div>
+                      <Title level={4} className="!mb-4 !text-gray-700">Identitas Diri</Title>
+                      <Row gutter={[16, 16]}>
+                        <Col span={8}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Tempat Lahir</Text>
+                            <div className="font-medium">{displayOrDash(detail?.tempat_lahir)}</div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Tanggal Lahir</Text>
+                            <div className="font-medium">
+                              {displayOrDash(detail?.tanggal_lahir) !== DASH
+                                ? dayjs(detail.tanggal_lahir).format("DD MMM YYYY")
+                                : DASH}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Jenis Kelamin</Text>
+                            <div className="font-medium">{displayOrDash(detail?.jenis_kelamin)}</div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Golongan Darah</Text>
+                            <div className="font-medium">{displayOrDash(detail?.golongan_darah)}</div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Status Perkawinan</Text>
+                            <div className="font-medium">{displayOrDash(detail?.status_perkawinan)}</div>
+                          </div>
+                        </Col>
+                        <Col span={8}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Agama</Text>
+                            <div className="font-medium">{displayOrDash(detail?.agama)}</div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Divider />
+
+                    {/* Pendidikan */}
+                    <div>
+                      <Title level={4} className="!mb-4 !text-gray-700">Pendidikan Terakhir</Title>
+                      <Row gutter={[16, 16]}>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Jenjang</Text>
+                            <div className="font-medium">{displayOrDash(detail?.jenjang_pendidikan)}</div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Jurusan</Text>
+                            <div className="font-medium">{displayOrDash(detail?.jurusan)}</div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Institusi Pendidikan</Text>
+                            <div className="font-medium">{displayOrDash(detail?.nama_institusi_pendidikan)}</div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Tahun Lulus</Text>
+                            <div className="font-medium">{displayOrDash(detail?.tahun_lulus)}</div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Divider />
+
+                    {/* Kepegawaian */}
+                    <div>
+                      <Title level={4} className="!mb-4 !text-gray-700">Informasi Kepegawaian</Title>
+                      <Row gutter={[16, 16]}>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Nomor Induk Karyawan</Text>
+                            <div className="font-medium">{displayOrDash(detail?.nomor_induk_karyawan)}</div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Divisi</Text>
+                            <div className="font-medium">
+                              {displayOrDash(detail?.departement?.nama_departement ?? detail?.divisi)}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Jabatan</Text>
+                            <div className="font-medium">{displayOrDash(detail?.jabatan?.nama_jabatan)}</div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Lokasi Kantor</Text>
+                            <div className="font-medium">{displayOrDash(detail?.kantor?.nama_kantor)}</div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Tanggal Mulai Bekerja</Text>
+                            <div className="font-medium">
+                              {displayOrDash(detail?.tanggal_mulai_bekerja) !== DASH
+                                ? dayjs(detail.tanggal_mulai_bekerja).format("DD MMM YYYY")
+                                : DASH}
+                            </div>
+                          </div>
+                        </Col>
+                        <Col span={12}>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <Text type="secondary" className="text-sm">Bank & Rekening</Text>
+                            <div className="font-medium">
+                              {detail?.jenis_bank && detail?.nomor_rekening 
+                                ? `${detail.jenis_bank} - ${detail.nomor_rekening}`
+                                : DASH
+                              }
+                            </div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Divider />
+
+                    {/* Alamat */}
+                    <div>
+                      <Title level={4} className="!mb-4 !text-gray-700">Alamat</Title>
+                      <Row gutter={[16, 16]}>
+                        <Col span={24}>
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <Text strong className="block mb-2">Alamat KTP</Text>
+                            <Text>
+                              {joinAlamat(detail?.alamat_ktp, detail?.alamat_ktp_kota, detail?.alamat_ktp_provinsi)}
+                            </Text>
+                          </div>
+                        </Col>
+                        <Col span={24}>
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <Text strong className="block mb-2">Alamat Domisili</Text>
+                            <Text>
+                              {joinAlamat(detail?.alamat_domisili, detail?.alamat_domisili_kota, detail?.alamat_domisili_provinsi)}
+                            </Text>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+                  </div>
+                ) : (
+                  <Form form={form} layout="vertical" onFinish={onFinish} initialValues={initialValues}>
+                    {/* Identitas */}
+                    <div className="mb-8">
+                      <Title level={4} className="!mb-6 !text-gray-700 border-b pb-2">
+                        Identitas Diri
+                      </Title>
+                      <Row gutter={[16, 16]}>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="tempat_lahir" label="Tempat Lahir">
+                            <Input placeholder="Masukkan tempat lahir" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="tanggal_lahir" label="Tanggal Lahir">
+                            <DatePicker 
+                              className="w-full" 
+                              format="DD MMM YYYY" 
+                              placeholder="Pilih tanggal" 
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="jenis_kelamin" label="Jenis Kelamin">
+                            <Select
+                              options={[
+                                { value: "LAKI_LAKI", label: "Laki-laki" },
+                                { value: "PEREMPUAN", label: "Perempuan" },
+                              ]}
+                              allowClear
+                              placeholder="Pilih jenis kelamin"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="golongan_darah" label="Golongan Darah">
+                            <Select 
+                              options={OPSI_GOLONGAN_DARAH} 
+                              allowClear 
+                              placeholder="Pilih golongan darah"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="status_perkawinan" label="Status Perkawinan">
+                            <Select 
+                              options={OPSI_STATUS_PERKAWINAN} 
+                              allowClear 
+                              placeholder="Pilih status perkawinan"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="agama" label="Agama">
+                            <Select 
+                              options={OPSI_AGAMA} 
+                              allowClear 
+                              showSearch 
+                              optionFilterProp="label" 
+                              placeholder="Pilih agama"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="kontak" label="Nomor Telepon">
+                            <Input placeholder="Masukkan nomor telepon" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="zona_waktu" label="Zona Waktu">
+                            <Input placeholder="WIB / WITA / WIT / UTC+7" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="nama_kontak_darurat" label="Nama Kontak Darurat">
+                            <Input placeholder="Masukkan nama kontak darurat" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item
+                            name="kontak_darurat"
+                            label="Nomor Kontak Darurat"
+                            rules={[{ pattern: /^[0-9+\-\s()]{6,20}$/, message: "Nomor tidak valid" }]}
+                          >
+                            <Input placeholder="Masukkan nomor kontak darurat" size="large" />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Divider />
+
+                    {/* Pendidikan */}
+                    <div className="mb-8">
+                      <Title level={4} className="!mb-6 !text-gray-700 border-b pb-2">
+                        Pendidikan Terakhir
+                      </Title>
+                      <Row gutter={[16, 16]}>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="jenjang_pendidikan" label="Jenjang">
+                            <Select 
+                              options={OPSI_JENJANG} 
+                              allowClear 
+                              placeholder="Pilih jenjang pendidikan"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="jurusan" label="Jurusan">
+                            <Input placeholder="Masukkan jurusan" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="nama_institusi_pendidikan" label="Nama Institusi Pendidikan">
+                            <Input placeholder="Masukkan nama institusi" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="tahun_lulus" label="Tahun Lulus">
+                            <Input type="number" placeholder="Masukkan tahun lulus" size="large" />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Divider />
+
+                    {/* Kepegawaian */}
+                    <div className="mb-8">
+                      <Title level={4} className="!mb-6 !text-gray-700 border-b pb-2">
+                        Informasi Kepegawaian
+                      </Title>
+                      <Row gutter={[16, 16]}>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="nomor_induk_karyawan" label="Nomor Induk Karyawan">
+                            <Input placeholder="Masukkan NIK" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="id_departement" label="Divisi">
+                            <Select 
+                              options={deptOpts} 
+                              allowClear 
+                              showSearch 
+                              optionFilterProp="label" 
+                              placeholder="Pilih divisi"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="id_jabatan" label="Jabatan">
+                            <Select 
+                              options={jabOpts} 
+                              allowClear 
+                              showSearch 
+                              optionFilterProp="label" 
+                              placeholder="Pilih jabatan"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="status_kerja" label="Status Kerja">
+                            <Select 
+                              options={OPSI_STATUS_KERJA} 
+                              allowClear 
+                              placeholder="Pilih status kerja"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="tanggal_mulai_bekerja" label="Tanggal Mulai Bekerja">
+                            <DatePicker 
+                              className="w-full" 
+                              format="DD MMM YYYY" 
+                              placeholder="Pilih tanggal"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="id_location" label="Lokasi Kantor">
+                            <Select 
+                              options={locOpts} 
+                              allowClear 
+                              showSearch 
+                              optionFilterProp="label" 
+                              placeholder="Pilih lokasi"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="jenis_bank" label="Jenis Bank">
+                            <Input placeholder="Masukkan jenis bank" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="nomor_rekening" label="Nomor Rekening">
+                            <Input placeholder="Masukkan nomor rekening" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="role" label="Role">
+                            <Select
+                              options={[
+                                { value: "KARYAWAN", label: "Karyawan" },
+                                { value: "HR", label: "HR" },
+                                { value: "OPERASIONAL", label: "Operasional" },
+                                { value: "DIREKTUR", label: "Direktur" },
+                                { value: "SUPERADMIN", label: "Super-admin" },
+                              ]}
+                              placeholder="Pilih role"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="status_cuti" label="Status Cuti">
+                            <Select 
+                              options={OPSI_STATUS_CUTI} 
+                              allowClear 
+                              placeholder="Pilih status cuti"
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </div>
+
+                    <Divider />
+
+                    {/* Alamat */}
+                    <div>
+                      <Title level={4} className="!mb-6 !text-gray-700 border-b pb-2">
+                        Alamat
+                      </Title>
+                      <Row gutter={[16, 16]}>
+                        <Col span={24}>
+                          <Form.Item name="alamat_ktp" label="Alamat KTP">
+                            <Input.TextArea 
+                              rows={3} 
+                              placeholder="Masukkan alamat sesuai KTP" 
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="alamat_ktp_provinsi" label="Provinsi (KTP)">
+                            <Input placeholder="Masukkan provinsi" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="alamat_ktp_kota" label="Kota (KTP)">
+                            <Input placeholder="Masukkan kota" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col span={24}>
+                          <Form.Item name="alamat_domisili" label="Alamat Domisili">
+                            <Input.TextArea 
+                              rows={3} 
+                              placeholder="Masukkan alamat domisili saat ini" 
+                              size="large"
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="alamat_domisili_provinsi" label="Provinsi (Domisili)">
+                            <Input placeholder="Masukkan provinsi" size="large" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="alamat_domisili_kota" label="Kota (Domisili)">
+                            <Input placeholder="Masukkan kota" size="large" />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </div>
+                  </Form>
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
