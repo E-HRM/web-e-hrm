@@ -5,28 +5,22 @@ import { useMemo, useState, useCallback } from "react";
 import useSWR from "swr";
 import Cookies from "js-cookie";
 import { message } from "antd";
-// import { fetcher } from "@/app/utils/fetcher"; // sudah tidak dipakai
 import { ApiEndpoints } from "@/constrainst/endpoints";
 
 export default function useNotificationViewModel() {
   // ambil 7 hari terakhir untuk 4 jenis pengajuan
-  const swrKey = ApiEndpoints.GetNotificationsRecent({
-    days: 7,
-    types: [
-      "pengajuan_cuti",
-      "izin_tukar_hari",
-      "pengajuan_izin_sakit",
-      "pengajuan_izin_jam",
-    ].join(","),
-  });
+const swrKey = ApiEndpoints.GetAdminNotificationsRecent({
+  days: 7,
+  types: [
+    "pengajuan_cuti",
+    "izin_tukar_hari",
+    "pengajuan_izin_sakit",
+    "pengajuan_izin_jam",
+  ].join(","),
+});
 
-  // === SWR dengan Authorization header ===
-  const {
-    data: apiResponse,
-    error: apiError,
-    isLoading,
-    mutate,
-  } = useSWR(
+
+  const { data: apiResponse, error: apiError, isLoading, mutate } = useSWR(
     swrKey,
     async (url) => {
       const token = Cookies.get("token");
@@ -47,7 +41,7 @@ export default function useNotificationViewModel() {
       return data;
     },
     {
-      refreshInterval: 30000, // polling tiap 30 detik
+      refreshInterval: 30000,
     }
   );
 
@@ -56,7 +50,7 @@ export default function useNotificationViewModel() {
     [apiResponse]
   );
 
-  const [activeTabKey, setActiveTabKey] = useState("all");
+  const [activeTabKey, setActiveTabKey] = useState("unread");
 
   const unreadCount = useMemo(
     () => items.filter((it) => it.status === "unread").length,
@@ -64,17 +58,35 @@ export default function useNotificationViewModel() {
   );
 
   const filteredItems = useMemo(() => {
+    if (!Array.isArray(items)) return [];
+
+    // Tab "Belum Dibaca" -> hanya unread
     if (activeTabKey === "unread") {
       return items.filter((it) => it.status === "unread");
     }
-    return items;
+
+    // Tab "Semua" -> unread dulu, lalu read
+    const sorted = [...items].sort((a, b) => {
+      const aUnread = a.status === "unread";
+      const bUnread = b.status === "unread";
+      if (aUnread !== bUnread) {
+        return aUnread ? -1 : 1; // unread dulu
+      }
+
+      // urutkan berdasarkan created_at desc (paling baru di atas)
+      const at = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bt = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bt - at;
+    });
+
+    return sorted;
   }, [items, activeTabKey]);
 
-  // ==== mark all read ====
+
   const markAllRead = useCallback(async () => {
     try {
       const token = Cookies.get("token");
-      const res = await fetch(ApiEndpoints.MarkAllNotificationsRead, {
+      const res = await fetch(ApiEndpoints.MarkAllAdminNotificationsRead, {
         method: "PUT",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -104,16 +116,18 @@ export default function useNotificationViewModel() {
     }
   }, [mutate]);
 
-  // ==== mark one read ====
   const markOneRead = useCallback(
     async (id) => {
       if (!id) return;
       try {
         const token = Cookies.get("token");
-        const res = await fetch(ApiEndpoints.MarkNotificationRead(id), {
-          method: "PUT",
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+        const res = await fetch(
+          ApiEndpoints.MarkAdminNotificationRead(id),
+          {
+            method: "PUT",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }
+        );
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
           throw new Error(data?.message || `Error ${res.status}`);

@@ -1,55 +1,25 @@
-import { NextResponse } from 'next/server';
-import db from '@/lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
-import { authenticateRequest } from '@/app/utils/auth/authUtils';
+// app/api/admin/notifications/mark-all-as-read/route.js
+import { NextResponse } from "next/server";
+import db from "@/lib/prisma";
+import { ensureAdminAuth } from "../_auth";
 
-async function resolveUserId(request) {
-  const authHeader = request.headers.get('authorization') || '';
+export async function PUT(req) {
+  const auth = await ensureAdminAuth(req);
+  if (auth instanceof NextResponse) return auth;
 
-  if (authHeader.startsWith('Bearer ')) {
-    const rawToken = authHeader.slice(7).trim();
-    try {
-      const payload = verifyAuthToken(rawToken);
-      const userId = payload?.id_user || payload?.sub || payload?.userId || payload?.id || payload?.user_id;
-
-      if (userId) {
-        return { userId, source: 'bearer' };
-      }
-    } catch (error) {
-      console.warn('Invalid bearer token for /api/notifications/mark-all-read:', error);
-    }
-  }
-
-  const sessionOrResponse = await authenticateRequest();
-  if (sessionOrResponse instanceof NextResponse) {
-    return sessionOrResponse;
-  }
-
-  const sessionUserId = sessionOrResponse?.user?.id || sessionOrResponse?.user?.id_user;
-  if (!sessionUserId) {
-    return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
-  }
-
-  return { userId: sessionUserId, source: 'session', session: sessionOrResponse };
-}
-
-export async function PUT(request) {
-  const authResult = await resolveUserId(request);
-  if (authResult instanceof NextResponse) return authResult;
-
-  const { userId } = authResult;
+  const actorId = auth.actor?.id;
 
   try {
     const now = new Date();
 
-    const result = await db.notification.updateMany({
+    await db.notification.updateMany({
       where: {
-        id_user: userId,
-        status: 'unread',
+        id_user: actorId,
+        status: "unread",
         deleted_at: null,
       },
       data: {
-        status: 'read',
+        status: "read",
         read_at: now,
         seen_at: now,
       },
@@ -57,13 +27,16 @@ export async function PUT(request) {
 
     return NextResponse.json({
       ok: true,
-      message: 'All notifications marked as read',
-      data: {
-        updatedCount: result.count,
-      },
+      message: "Semua notifikasi telah ditandai dibaca.",
     });
-  } catch (error) {
-    console.error('Failed to mark notifications as read:', error);
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+  } catch (err) {
+    console.error(
+      "PUT /api/admin/notifications/mark-all-as-read error:",
+      err
+    );
+    return NextResponse.json(
+      { ok: false, message: "Gagal menandai semua notifikasi." },
+      { status: 500 }
+    );
   }
 }

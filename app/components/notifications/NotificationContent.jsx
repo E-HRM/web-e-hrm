@@ -119,14 +119,16 @@ export default function NotificationContent() {
           activeKey={activeTabKey}
           onChange={setActiveTabKey}
           items={[
-            { key: "all", label: "Semua" },
+            // sekarang: "Belum Dibaca" di kiri, "Semua" di kanan
             { key: "unread", label: "Belum Dibaca" },
+            { key: "all", label: "Semua" },
           ]}
           tabBarGutter={12}
           animated
           destroyInactiveTabPane
         />
       </div>
+
 
       {/* Error state */}
       {apiError && (

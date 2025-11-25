@@ -607,7 +607,46 @@ export async function POST(req) {
           );
         }
       }
+        // === Notif ke approver/admin ===
+      if (Array.isArray(full.approvals) && full.approvals.length) {
+        const approverIds = full.approvals
+          .map((a) => a.approver_user_id)
+          .filter(Boolean);
 
+        if (approverIds.length) {
+          const approvers = await db.user.findMany({
+            where: {
+              id_user: { in: approverIds },
+              deleted_at: null,
+            },
+            select: { id_user: true, nama_pengguna: true },
+          });
+
+          for (const admin of approvers) {
+            const uid = admin.id_user;
+            if (!uid || uid === full.id_user) continue; // skip pemohon
+
+            const overrideTitle = `${full.user?.nama_pengguna || 'Karyawan'} mengajukan tukar hari`;
+            const overrideBody = `${full.user?.nama_pengguna || 'Karyawan'} mengajukan tukar hari kategori ${bodyBase.kategori} pada ${bodyBase.hari_izin_display}.`;
+
+            promises.push(
+              sendNotification(
+                'SWAP_HANDOVER_TAGGED',
+                uid,
+                {
+                  ...bodyBase,
+                  nama_penerima: admin.nama_pengguna || 'Admin',
+                  title: overrideTitle,
+                  body: overrideBody,
+                  overrideTitle,
+                  overrideBody,
+                },
+                { deeplink }
+              )
+            );
+          }
+        }
+      }
       await Promise.allSettled(promises);
     }
 

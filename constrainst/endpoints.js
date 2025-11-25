@@ -68,10 +68,16 @@ const API_MOBILE_IZIN_SAKIT_APPROVALS = "/api/mobile/pengajuan-izin-sakit/approv
 const API_MOBILE_TUKAR_HARI = "/api/mobile/pengajuan-izin-tukar-hari";
 const API_MOBILE_TUKAR_HARI_APPROVALS = "/api/mobile/pengajuan-izin-tukar-hari/approvals";
 
-// === Notifications ===
+// === Notifications (user/mobile) ===
 const API_NOTIFICATIONS = "/api/notifications";
 const API_NOTIFICATIONS_RECENT = "/api/notifications/recent";
 const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-as-read";
+
+// === Notifications Admin (web / admin mobile) ===
+const API_ADMIN_NOTIFICATIONS = "/api/admin/notifications";
+const API_ADMIN_NOTIFICATIONS_RECENT = "/api/admin/notifications/recent";
+const API_ADMIN_NOTIFICATIONS_MARK_ALL = "/api/admin/notifications/mark-all-as-read";
+
 
 // === Story Planner
 const API_STORY_PLANNER = "/api/admin/story-planner";
@@ -225,11 +231,22 @@ export const ApiEndpoints = {
   DeletePengajuanTukarHariMobile: (id) => `${API_MOBILE_TUKAR_HARI}/${id}`,
   DecidePengajuanTukarHariMobile: (approvalId) => `${API_MOBILE_TUKAR_HARI_APPROVALS}/${approvalId}`,
 
-  // ===== NOTIFICATIONS 
+  // ===== NOTIFICATIONS (user/mobile) =====
   GetNotifications: (qsObj = {}) => `${API_NOTIFICATIONS}${buildQS(qsObj)}`,
-  GetNotificationsRecent: (qsObj = {}) => `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
+  GetNotificationsRecent: (qsObj = {}) =>
+    `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
   MarkAllNotificationsRead: API_NOTIFICATIONS_MARK_ALL,
   MarkNotificationRead: (id) => `${API_NOTIFICATIONS}/${id}`,
+
+  // ===== NOTIFICATIONS ADMIN =====
+  GetAdminNotifications: (qsObj = {}) =>
+    `${API_ADMIN_NOTIFICATIONS}${buildQS(qsObj)}`,
+  GetAdminNotificationsRecent: (qsObj = {}) =>
+    `${API_ADMIN_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
+  MarkAllAdminNotificationsRead: API_ADMIN_NOTIFICATIONS_MARK_ALL,
+  MarkAdminNotificationRead: (id) =>
+    `${API_ADMIN_NOTIFICATIONS}/${id}`,
+
 
     // Story Planner
   GetStoryPlanner: API_STORY_PLANNER,
