@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import "react-quill/dist/quill.snow.css";
+// HAPUS: import "react-quill/dist/quill.snow.css";
 import {
   App as AntdApp,
   Button,
@@ -38,9 +38,7 @@ dayjs.extend(timezone);
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), {
   ssr: false,
 });
-const ReactQuill = dynamic(() => import("react-quill"), {
-  ssr: false,
-});
+// HAPUS: ReactQuill
 import interactionPlugin from "@fullcalendar/interaction";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -78,12 +76,12 @@ function CircleImg({ src, size = 44, alt = "Avatar" }) {
     </span>
   );
 }
+
 function isQuillEmpty(html) {
   if (!html) return true;
-  // ReactQuill kalau kosong biasanya "<p><br></p>" atau variasinya
   const stripped = html
-    .replace(/<p><br><\/p>/gi, '')
-    .replace(/<[^>]+>/g, '') // buang semua tag
+    .replace(/<p><br><\/p>/gi, "")
+    .replace(/<[^>]+>/g, "")
     .trim();
   return stripped.length === 0;
 }
@@ -127,7 +125,7 @@ export default function AgendaCalendarContent() {
   const [form] = Form.useForm();
   const [editId, setEditId] = useState(null);
 
-  // === Watch field users untuk hitung jumlah dipilih ===
+  // Watch untuk jumlah user
   const usersSelected = Form.useWatch("users", form) || [];
   const totalUsers = vm.userOptions?.length || 0;
 
@@ -156,13 +154,13 @@ export default function AgendaCalendarContent() {
       ? "fc-chip fc-chip--hold"
       : st === "teragenda"
       ? "fc-chip fc-chip--plan"
-      : "fc-chip fc-chip--proc"; // diproses/fallback
+      : "fc-chip fc-chip--proc";
 
   const openCreate = (startStr, endStr) => {
     setEditId(null);
     form.setFieldsValue({
       title: "",
-      status: "teragenda", // default
+      status: "teragenda",
       users: [],
       id_agenda: null,
       start: dayjs(startStr),
@@ -173,8 +171,16 @@ export default function AgendaCalendarContent() {
 
   const openEdit = (fcEvent) => {
     setEditId(fcEvent.id);
+
+    const raw = fcEvent.extendedProps?.raw || {};
+    const descText =
+      fcEvent.extendedProps?.deskripsi ??
+      raw.deskripsi_kerja ??
+      raw.deskripsi ??
+      "";
+
     form.setFieldsValue({
-      title: fcEvent.title,
+      title: descText,
       status: fcEvent.extendedProps?.status || "teragenda",
       users: [fcEvent.extendedProps?.id_user].filter(Boolean),
       id_agenda: fcEvent.extendedProps?.id_agenda || null,
@@ -184,7 +190,7 @@ export default function AgendaCalendarContent() {
     setFormOpen(true);
   };
 
-  // === Helper Pilih Semua / Bersihkan Karyawan ===
+  // Helper Pilih Semua / Bersihkan Karyawan
   const handleSelectAllUsers = () => {
     const allIds = (vm.userOptions || []).map((opt) => opt.value);
     form.setFieldsValue({ users: allIds });
@@ -205,8 +211,15 @@ export default function AgendaCalendarContent() {
 
   const handleSubmitForm = async () => {
     const v = await form.validateFields();
+    const title = (v.title || "").trim();
+
+    if (!title) {
+      notification.warning({ message: "Nama aktivitas tidak boleh kosong" });
+      return;
+    }
+
     const payload = {
-      title: v.title.trim(),
+      title,
       start: v.start?.toDate(),
       end: (v.end || v.start)?.toDate(),
       status: v.status,
@@ -215,12 +228,10 @@ export default function AgendaCalendarContent() {
 
     try {
       if (editId) {
-        // edit satu agenda saja
         setCreateProgress({ running: true, sent: 0, total: 1 });
         await vm.updateEvent(editId, payload);
         notification.success({ message: "Agenda diperbarui" });
       } else {
-        // create ke banyak karyawan
         if (!Array.isArray(v.users) || v.users.length === 0) {
           notification.warning({
             message: "Pilih setidaknya satu karyawan",
@@ -248,6 +259,7 @@ export default function AgendaCalendarContent() {
       }
 
       setFormOpen(false);
+      setEditId(null);
       form.resetFields();
     } catch (e) {
       const msg =
@@ -352,8 +364,15 @@ export default function AgendaCalendarContent() {
 
   const commitMoveResize = async ({ event }) => {
     try {
+      const raw = event.extendedProps?.raw || {};
+      const descText =
+        event.extendedProps?.deskripsi ??
+        raw.deskripsi_kerja ??
+        raw.deskripsi ??
+        "";
+
       await vm.updateEvent(event.id, {
-        title: event.title,
+        title: descText, // pakai deskripsi aktivitas, bukan nama proyek
         start: event.start,
         end: event.end || event.start,
         status: event.extendedProps?.status || "teragenda",
@@ -421,8 +440,7 @@ export default function AgendaCalendarContent() {
 
     const name =
       user?.nama_pengguna || user?.name || user?.email || id || "—";
-    const photo =
-      vm.getPhotoUrl(user) || "/avatar-placeholder.jpg";
+    const photo = vm.getPhotoUrl(user) || "/avatar-placeholder.jpg";
     const sub =
       vm.getJabatanName(user) ||
       vm.getDepartemenName(user) ||
@@ -476,8 +494,8 @@ export default function AgendaCalendarContent() {
   }, [detailEvent]);
 
   const descHtml = detailEvent?.extendedProps?.deskripsi || "";
-  
-  // === Menu titik-tiga (More)
+
+  // Menu titik tiga
   const onMoreMenuClick = ({ key }) => {
     if (key === "history") setHistoryOpen(true);
     if (key === "bulk-delete") confirmBulkDeleteSimilar();
@@ -499,7 +517,6 @@ export default function AgendaCalendarContent() {
   return (
     <div className="p-4">
       <div className="relative rounded-2xl border border-slate-200 bg-white shadow-xl p-3">
-        {/* Overlay loading awal: blok interaksi sampai semua agenda termuat */}
         {vm.loadingInitialEvents && (
           <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
             <div className="inline-flex items-center gap-2 rounded-full bg-sky-50/90 px-4 py-1 text-xs text-sky-700 ring-1 ring-sky-200 shadow">
@@ -509,8 +526,6 @@ export default function AgendaCalendarContent() {
           </div>
         )}
 
-
-        {/* Indikator kecil kalau sedang revalidate di background */}
         {vm.reloadingEvents && !vm.loadingInitialEvents && (
           <div className="absolute right-3 top-3 z-10 rounded-full bg-white/90 px-3 py-1 text-[11px] text-slate-500 shadow-sm">
             Memuat ulang agenda…
@@ -624,7 +639,6 @@ export default function AgendaCalendarContent() {
                     </span>
                   ) : null}
 
-                  {/* CHIP TANGGAL-JAM */}
                   <div className="fc-chip--time">
                     <ClockCircleOutlined />
                     <span>
@@ -648,6 +662,8 @@ export default function AgendaCalendarContent() {
 
             <Divider style={{ margin: "14px 0 12px" }} />
 
+            {/* Deskripsi: kalau data lama masih HTML dari Quill, ini tetap dirender.
+                Kalau sekarang plain text, tetap aman. */}
             <div
               style={{
                 fontSize: 14,
@@ -660,7 +676,6 @@ export default function AgendaCalendarContent() {
                   : descHtml,
               }}
             />
-
 
             <div className="flex justify-end gap-2 mt-10">
               <Tooltip title="Edit">
@@ -736,15 +751,18 @@ export default function AgendaCalendarContent() {
         </div>
       </Modal>
 
-      {/* Modal Buat / Edit Agenda — Fixed center, scroll cuma di dalam form */}
+      {/* Modal Buat / Edit Agenda */}
       <Modal
         title={editId ? "Edit Agenda" : "Agenda Baru"}
         open={formOpen}
-        onCancel={() => setFormOpen(false)}
+        onCancel={() => {
+          setFormOpen(false);
+          setEditId(null);
+          form.resetFields();
+        }}
         centered
         footer={
           <div className="flex items-center justify-between gap-3">
-            {/* Info progress di kiri */}
             <div>
               {createProgress.running && !editId && (
                 <span className="text-xs text-slate-500">
@@ -759,10 +777,13 @@ export default function AgendaCalendarContent() {
               )}
             </div>
 
-            {/* Tombol di kanan */}
             <div className="flex gap-2">
               <Button
-                onClick={() => setFormOpen(false)}
+                onClick={() => {
+                  setFormOpen(false);
+                  setEditId(null);
+                  form.resetFields();
+                }}
                 disabled={createProgress.running}
               >
                 Batal
@@ -784,7 +805,6 @@ export default function AgendaCalendarContent() {
           </div>
         }
         destroyOnClose
-        // Scroll cuma di body, modal-nya tetap center & fixed
         styles={{
           body: {
             maxHeight: "60vh",
@@ -820,15 +840,16 @@ export default function AgendaCalendarContent() {
             </Space.Compact>
           </Form.Item>
 
+          {/* INI KEMBALI KE ANT DESIGN BIASA */}
           <Form.Item
             label="Nama Aktivitas"
             name="title"
             rules={[{ required: true, message: "Judul wajib diisi" }]}
           >
-            <ReactQuill
-              theme="snow"
-              placeholder="Isi kegiatan...."
-              style={{ minHeight: 120 }}
+            <Input.TextArea
+              rows={4}
+              placeholder="Isi kegiatan..."
+              autoSize={{ minRows: 4, maxRows: 8 }}
             />
           </Form.Item>
 

@@ -175,31 +175,14 @@ function normalizeApprovals(payload) {
 
     const level = Number(entry.level ?? entry.order ?? entry.sequence ?? entry.seq);
     if (!Number.isFinite(level)) {
-      throw NextResponse.json(
-        { message: 'Setiap approval harus memiliki level numerik.' },
-        { status: 400 }
-      );
+      throw NextResponse.json({ message: 'Setiap approval harus memiliki level numerik.' }, { status: 400 });
     }
 
-    const idRaw =
-      entry.id_approval_izin_sakit ??
-      entry.id ??
-      entry.approval_id ??
-      entry.approvalId ??
-      null;
+    const idRaw = entry.id_approval_izin_sakit ?? entry.id ?? entry.approval_id ?? entry.approvalId ?? null;
 
-    const approverUserRaw =
-      entry.approver_user_id ??
-      entry.user_id ??
-      entry.id_user ??
-      entry.approverId ??
-      entry.userId;
+    const approverUserRaw = entry.approver_user_id ?? entry.user_id ?? entry.id_user ?? entry.approverId ?? entry.userId;
 
-    const approverRoleRaw =
-      entry.approver_role ??
-      entry.role ??
-      entry.role_code ??
-      entry.roleCode;
+    const approverRoleRaw = entry.approver_role ?? entry.role ?? entry.role_code ?? entry.roleCode;
 
     const approver_user_id = approverUserRaw == null ? null : String(approverUserRaw).trim();
     const approver_role = approverRoleRaw == null ? null : normRole(approverRoleRaw);
@@ -278,10 +261,7 @@ export async function GET(req) {
     ) {
       const normalized = normalizeStatusInput(statusParam);
       if (!normalized) {
-        return NextResponse.json(
-          { message: 'Parameter status tidak valid.' },
-          { status: 400 }
-        );
+        return NextResponse.json({ message: 'Parameter status tidak valid.' }, { status: 400 });
       }
       where.status = normalized;
     }
@@ -362,8 +342,7 @@ export async function POST(req) {
       if (!parsedTanggal) {
         return NextResponse.json(
           {
-            message:
-              "Field 'tanggal_pengajuan' harus berupa tanggal valid (YYYY-MM-DD).",
+            message: "Field 'tanggal_pengajuan' harus berupa tanggal valid (YYYY-MM-DD).",
           },
           { status: 400 }
         );
@@ -375,21 +354,12 @@ export async function POST(req) {
       body.id_kategori_sakit ?? body.id_kategori ?? body.kategori;
     const kategoriId = kategoriIdRaw ? String(kategoriIdRaw).trim() : '';
     if (!kategoriId) {
-      return NextResponse.json(
-        { message: "Field 'id_kategori_sakit' wajib diisi." },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: "Field 'id_kategori_sakit' wajib diisi." }, { status: 400 });
     }
 
-    const targetUserId =
-      canManageAll(actorRole) && body.id_user
-        ? String(body.id_user).trim()
-        : actorId;
+    const targetUserId = canManageAll(actorRole) && body.id_user ? String(body.id_user).trim() : actorId;
     if (!targetUserId) {
-      return NextResponse.json(
-        { message: 'id_user tujuan tidak valid.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'id_user tujuan tidak valid.' }, { status: 400 });
     }
 
     const handover = isNullLike(body.handover)
@@ -440,10 +410,7 @@ export async function POST(req) {
 
     const normalizedStatus = normalizeStatusInput(body.status ?? 'pending');
     if (!normalizedStatus) {
-      return NextResponse.json(
-        { message: 'status tidak valid.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'status tidak valid.' }, { status: 400 });
     }
 
     const currentLevel =
@@ -474,16 +441,10 @@ export async function POST(req) {
     ]);
 
     if (!targetUser) {
-      return NextResponse.json(
-        { message: 'User tujuan tidak ditemukan.' },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: 'User tujuan tidak ditemukan.' }, { status: 404 });
     }
     if (!kategori) {
-      return NextResponse.json(
-        { message: 'Kategori sakit tidak ditemukan.' },
-        { status: 404 }
-      );
+      return NextResponse.json({ message: 'Kategori sakit tidak ditemukan.' }, { status: 404 });
     }
 
     const result = await db.$transaction(async (tx) => {
@@ -559,10 +520,7 @@ export async function POST(req) {
         deeplink,
         nama_penerima: 'Rekan',
         pesan_penerima: 'Pengajuan izin sakit baru telah dibuat.',
-        tanggal_pengajuan:
-          result.tanggal_pengajuan instanceof Date
-            ? result.tanggal_pengajuan.toISOString().slice(0, 10)
-            : null,
+        tanggal_pengajuan: result.tanggal_pengajuan instanceof Date ? result.tanggal_pengajuan.toISOString().slice(0, 10) : null,
         tanggal_pengajuan_display: tanggalPengajuanDisplay,
       };
 
@@ -593,6 +551,21 @@ export async function POST(req) {
 
       const whatsappMessage = whatsappPayloadLines.join('\n');
       const finalLampiranUrl = result.lampiran_izin_sakit_url;
+
+      try {
+        if (finalLampiranUrl) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await sendIzinSakitImage(finalLampiranUrl, whatsappMessage);
+          // Tambahkan log untuk sukses pengiriman gambar
+          console.log('[WA] Sukses mengirim notifikasi WhatsApp (dengan gambar) untuk pengajuan:', result.id_pengajuan_izin_sakit);
+        } else {
+          await sendIzinSakitMessage(whatsappMessage);
+          // Tambahkan log untuk sukses pengiriman teks
+          console.log('[WA] Sukses mengirim notifikasi WhatsApp (teks) untuk pengajuan:', result.id_pengajuan_izin_sakit);
+        }
+      } catch (waError) {
+        console.error('[WA] Gagal mengirim notifikasi WhatsApp:', waError);
+      }
 
       try {
         if (finalLampiranUrl) {
@@ -645,8 +618,7 @@ export async function POST(req) {
               ...basePayload,
               is_pemohon: true,
               nama_penerima: basePayload.nama_pemohon || 'Rekan',
-              pesan_penerima:
-                'Pengajuan izin sakit Anda berhasil dikirim ke admin.',
+              pesan_penerima: 'Pengajuan izin sakit Anda berhasil dikirim ke admin.',
               title: overrideTitle,
               body: overrideBody,
               overrideTitle,
@@ -736,10 +708,7 @@ export async function POST(req) {
   } catch (err) {
     if (err instanceof NextResponse) return err;
     if (err?.code === 'P2003') {
-      return NextResponse.json(
-        { message: 'Data referensi tidak valid.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'Data referensi tidak valid.' }, { status: 400 });
     }
     console.error('POST /mobile/pengajuan-izin-sakit error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
