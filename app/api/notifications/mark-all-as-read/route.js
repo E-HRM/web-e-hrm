@@ -1,4 +1,4 @@
-// app/api/notifications/mark-all-read/route.js
+// app/api/notifications/mark-all-as-read/route.js
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { ensureNotificationAuth } from '../_auth';
@@ -34,7 +34,7 @@ export async function PUT(request) {
       data: { updatedCount: result.count },
     });
   } catch (error) {
-    console.error('PUT /api/notifications/mark-all-read error:', error);
+    console.error('PUT /api/notifications/mark-all-as-read error:', error);
     return NextResponse.json({ ok: false, message: 'Internal Server Error' }, { status: 500 });
   }
 }

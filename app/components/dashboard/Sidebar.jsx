@@ -115,11 +115,11 @@ const MENU = [
         match: ["/home/agenda/aktivitas"],
         label: "Aktivitas",
       },
-      {
-        href: "/home/agenda/agenda_kerja",
-        match: ["/home/agenda/agenda_kerja"],
-        label: "Agenda Kerja",
-      },
+      // {
+      //   href: "/home/agenda/agenda_kerja",
+      //   match: ["/home/agenda/agenda_kerja"],
+      //   label: "Agenda Kerja",
+      // },
       {
         href: "/home/agenda/agenda_calendar",
         match: ["/home/agenda/agenda_calendar"],
@@ -162,12 +162,12 @@ const MENU = [
       },
     ],
   },
-  {
-    href: "/home/broadcast",
-    match: ["/home/broadcast"],
-    label: "Broadcast",
-    icon: NotificationOutlined,
-  },
+  // {
+  //   href: "/home/broadcast",
+  //   match: ["/home/broadcast"],
+  //   label: "Broadcast",
+  //   icon: NotificationOutlined,
+  // },
 ];
 
 /** ===== RBAC Sidebar ===== */

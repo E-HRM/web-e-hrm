@@ -78,6 +78,15 @@ function CircleImg({ src, size = 44, alt = "Avatar" }) {
     </span>
   );
 }
+function isQuillEmpty(html) {
+  if (!html) return true;
+  // ReactQuill kalau kosong biasanya "<p><br></p>" atau variasinya
+  const stripped = html
+    .replace(/<p><br><\/p>/gi, '')
+    .replace(/<[^>]+>/g, '') // buang semua tag
+    .trim();
+  return stripped.length === 0;
+}
 
 /* ===== Formatter KHUSUS Riwayat ===== */
 const AUDIT_TZ = dayjs.tz.guess();
@@ -466,6 +475,8 @@ export default function AgendaCalendarContent() {
     return normalizeUrgencyLocal(rawVal);
   }, [detailEvent]);
 
+  const descHtml = detailEvent?.extendedProps?.deskripsi || "";
+  
   // === Menu titik-tiga (More)
   const onMoreMenuClick = ({ key }) => {
     if (key === "history") setHistoryOpen(true);
@@ -490,13 +501,14 @@ export default function AgendaCalendarContent() {
       <div className="relative rounded-2xl border border-slate-200 bg-white shadow-xl p-3">
         {/* Overlay loading awal: blok interaksi sampai semua agenda termuat */}
         {vm.loadingInitialEvents && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/80">
-            <span className="inline-block h-8 w-8 rounded-full border-2 border-slate-400 border-t-transparent animate-spin" />
-            <span className="mt-2 text-sm text-slate-700">
-              Memuat agenda kerja…
-            </span>
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            <div className="inline-flex items-center gap-2 rounded-full bg-sky-50/90 px-4 py-1 text-xs text-sky-700 ring-1 ring-sky-200 shadow">
+              <span className="inline-block h-3 w-3 rounded-full border border-sky-500 border-t-transparent animate-spin" />
+              <span>Memuat agenda kerja…</span>
+            </div>
           </div>
         )}
+
 
         {/* Indikator kecil kalau sedang revalidate di background */}
         {vm.reloadingEvents && !vm.loadingInitialEvents && (
@@ -640,12 +652,15 @@ export default function AgendaCalendarContent() {
               style={{
                 fontSize: 14,
                 color: "#0f172a",
-                whiteSpace: "pre-wrap",
                 wordBreak: "break-word",
               }}
-            >
-              {detailEvent.extendedProps?.deskripsi || "—"}
-            </div>
+              dangerouslySetInnerHTML={{
+                __html: isQuillEmpty(descHtml)
+                  ? '<span style="color:#94a3b8">—</span>'
+                  : descHtml,
+              }}
+            />
+
 
             <div className="flex justify-end gap-2 mt-10">
               <Tooltip title="Edit">

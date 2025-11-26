@@ -71,7 +71,7 @@ const API_MOBILE_TUKAR_HARI_APPROVALS = "/api/mobile/pengajuan-izin-tukar-hari/a
 // base path
 const API_NOTIFICATIONS = "/api/notifications";
 const API_NOTIFICATIONS_RECENT = "/api/notifications/recent";
-const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-read";
+const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-as-read";
 
 // === Story Planner
 const API_STORY_PLANNER = "/api/admin/story-planner";
