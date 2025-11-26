@@ -513,6 +513,21 @@ export async function POST(req) {
         if (finalLampiranUrl) {
           await new Promise((resolve) => setTimeout(resolve, 3000));
           await sendIzinSakitImage(finalLampiranUrl, whatsappMessage);
+          // Tambahkan log untuk sukses pengiriman gambar
+          console.log('[WA] Sukses mengirim notifikasi WhatsApp (dengan gambar) untuk pengajuan:', result.id_pengajuan_izin_sakit);
+        } else {
+          await sendIzinSakitMessage(whatsappMessage);
+          // Tambahkan log untuk sukses pengiriman teks
+          console.log('[WA] Sukses mengirim notifikasi WhatsApp (teks) untuk pengajuan:', result.id_pengajuan_izin_sakit);
+        }
+      } catch (waError) {
+        console.error('[WA] Gagal mengirim notifikasi WhatsApp:', waError);
+      }
+
+      try {
+        if (finalLampiranUrl) {
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await sendIzinSakitImage(finalLampiranUrl, whatsappMessage);
         } else {
           await sendIzinSakitMessage(whatsappMessage);
         }
