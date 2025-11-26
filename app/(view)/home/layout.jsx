@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 
 import Sidebar from "@/app/components/dashboard/Sidebar";
-import AppHeader from "@/app/components/dashboard/AppHeader"; // perbaiki case-nya
+import AppHeader from "@/app/components/dashboard/Appheader"; // perbaiki case-nya
 import useLogoutViewModel from "../auth/logout/useLogoutViewModel";
 
 const { Sider, Content, Footer } = Layout;
