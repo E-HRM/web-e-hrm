@@ -3,6 +3,7 @@ import "./globals.css";
 import { Poppins } from "next/font/google";
 import LayoutClient from "./layout-client";
 import { App } from "antd"; 
+import 'react-quill/dist/quill.snow.css';
 
 const poppins = Poppins({
   subsets: ["latin"],

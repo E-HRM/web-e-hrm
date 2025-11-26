@@ -66,19 +66,7 @@ export default function ShiftContent() {
       width: 230,
       render: (v) => <span className="text-slate-700">{v}</span>,
     },
-    {
-      title: <span className="text-slate-600">Toleransi Keterlambatan</span>,
-      dataIndex: "toleransi",
-      key: "toleransi",
-      width: 220,
-      render: (v) => <span className="text-slate-700">{v}</span>,
-    },
-    {
-      title: <span className="text-slate-600">Catatan</span>,
-      dataIndex: "note",
-      key: "note",
-      render: (v) => <span className="text-slate-500">{v}</span>,
-    },
+
     {
       title: <span className="text-slate-600">Aksi</span>,
       key: "aksi",
@@ -317,13 +305,6 @@ export default function ShiftContent() {
             <Input className="rounded-xl" />
           </Form.Item>
 
-          <Form.Item label="Toleransi Keterlambatan" name="toleransi">
-            <InputNumber addonAfter="Menit" className="w-40" min={0} />
-          </Form.Item>
-
-          <Form.Item label="Catatan" name="catatan">
-            <Input className="rounded-xl" />
-          </Form.Item>
 
           <div className="pl-[25%] -mt-2 mb-2 text-slate-700 flex items-center gap-2">
             <span className="font-medium">Jadwal Kerja</span>

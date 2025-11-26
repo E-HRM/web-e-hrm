@@ -1,223 +1,167 @@
-export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
-import { parseDateOnlyToUTC } from '@/helpers/date-helper';
-import { ensureAuth, pengajuanInclude, sanitizeHandoverIds, normalizeStatus } from '../route';
+import { ensureAuth, pengajuanInclude } from '../route';
+import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
+import storageClient from '@/app/api/_utils/storageClient';
+import { parseDateOnlyToUTC } from '@/helpers/date-helper'; // Pastikan helper ini diimport
 
-async function getPengajuanOrError(id) {
-  return db.pengajuanCuti.findUnique({
+const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
+
+function normalizeRole(role) {
+  return String(role || '')
+    .trim()
+    .toUpperCase();
+}
+
+const isAdminRole = (role) => ADMIN_ROLES.has(normalizeRole(role));
+
+async function handleUpdate(req, { params }) {
+  const auth = await ensureAuth(req);
+  if (auth instanceof NextResponse) return auth;
+
+  const actorId = auth.actor?.id;
+  const { id } = params;
+
+  if (!id) {
+    return NextResponse.json({ ok: false, message: 'ID tidak valid.' }, { status: 400 });
+  }
+
+  let parsed;
+  try {
+    parsed = await parseRequestBody(req);
+  } catch (err) {
+    return NextResponse.json({ ok: false, message: 'Gagal memproses request body.' }, { status: 400 });
+  }
+
+  const body = parsed.body || {};
+
+  const existing = await db.pengajuanCuti.findUnique({
     where: { id_pengajuan_cuti: id },
-    include: {
-      ...pengajuanInclude,
-      user: {
-        select: { id_user: true },
-      },
-    },
   });
-}
 
-function buildForbiddenResponse() {
-  return NextResponse.json({ ok: false, message: 'Anda tidak memiliki akses ke pengajuan ini.' }, { status: 403 });
-}
-
-function buildNotFoundResponse() {
-  return NextResponse.json({ ok: false, message: 'Pengajuan cuti tidak ditemukan.' }, { status: 404 });
-}
-
-export async function GET(req, { params }) {
-  const auth = await ensureAuth(req);
-  if (auth instanceof NextResponse) return auth;
-
-  const actorId = auth.actor?.id;
-  if (!actorId) {
-    return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
+  if (!existing) {
+    return NextResponse.json({ ok: false, message: 'Pengajuan cuti tidak ditemukan.' }, { status: 404 });
   }
 
-  const id = params?.id;
-  if (!id) {
-    return NextResponse.json({ ok: false, message: 'ID pengajuan wajib diisi.' }, { status: 400 });
+  // Validasi kepemilikan
+  if (existing.id_user !== actorId) {
+    return NextResponse.json({ ok: false, message: 'Anda tidak memiliki akses untuk mengedit data ini.' }, { status: 403 });
   }
 
-  try {
-    const pengajuan = await getPengajuanOrError(id);
-    if (!pengajuan || pengajuan.deleted_at) {
-      return buildNotFoundResponse();
-    }
+  // Ambil field dasar
+  const keperluan = body.keperluan;
+  const handover = body.handover;
+  const id_kategori_cuti = body.id_kategori_cuti;
 
-    if (pengajuan.user.id_user !== actorId) {
-      return buildForbiddenResponse();
-    }
-
-    const { user, ...rest } = pengajuan;
-
-    return NextResponse.json({ ok: true, data: rest });
-  } catch (err) {
-    console.error(`GET /mobile/pengajuan-cuti/${id} error:`, err);
-    return NextResponse.json({ ok: false, message: 'Gagal mengambil detail pengajuan cuti.' }, { status: 500 });
-  }
-}
-
-function normalizeBodyString(value) {
-  if (value === undefined || value === null) return null;
-  return String(value);
-}
-
-function hasOwn(obj, key) {
-  return Object.prototype.hasOwnProperty.call(obj, key);
-}
-
-async function handleUpdate(req, params) {
-  const auth = await ensureAuth(req);
-  if (auth instanceof NextResponse) return auth;
-
-  const actorId = auth.actor?.id;
-  if (!actorId) {
-    return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
+  // --- PERBAIKAN: Parse Tanggal Masuk Kerja ---
+  let tanggalMasukKerja = undefined;
+  if (body.tanggal_masuk_kerja) {
+    // Gunakan helper yang sama dengan create agar konsisten (UTC)
+    const d = parseDateOnlyToUTC(body.tanggal_masuk_kerja);
+    if (d) tanggalMasukKerja = d;
   }
 
-  const id = params?.id;
-  if (!id) {
-    return NextResponse.json({ ok: false, message: 'ID pengajuan wajib diisi.' }, { status: 400 });
-  }
+  // --- PERBAIKAN UTAMA: Parse List Tanggal Cuti Baru ---
+  let parsedCutiDates = [];
+  // Cek berbagai kemungkinan key yang dikirim oleh Flutter
+  const tanggalCutiInput = body['tanggal_list[]'] ?? body['tanggal_list'] ?? body['tanggal_cuti[]'] ?? body['tanggal_cuti'];
 
-  let body;
-  try {
-    body = await req.json();
-  } catch (err) {
-    return NextResponse.json({ ok: false, message: 'Body request harus berupa JSON.' }, { status: 400 });
-  }
+  if (tanggalCutiInput) {
+    const tanggalCutiArray = Array.isArray(tanggalCutiInput) ? tanggalCutiInput : [tanggalCutiInput];
 
-  try {
-    const pengajuan = await getPengajuanOrError(id);
-    if (!pengajuan || pengajuan.deleted_at) {
-      return buildNotFoundResponse();
-    }
-    if (pengajuan.user.id_user !== actorId) {
-      return buildForbiddenResponse();
-    }
-
-    const updateData = {};
-
-    if (hasOwn(body, 'id_kategori_cuti')) {
-      const idKategori = String(body.id_kategori_cuti || '').trim();
-      if (!idKategori) {
-        return NextResponse.json({ ok: false, message: 'id_kategori_cuti wajib diisi.' }, { status: 400 });
+    for (const raw of tanggalCutiArray) {
+      const tgl = parseDateOnlyToUTC(raw);
+      if (tgl) {
+        parsedCutiDates.push(tgl);
       }
-      const kategori = await db.kategoriCuti.findFirst({
-        where: { id_kategori_cuti: idKategori, deleted_at: null },
-        select: { id_kategori_cuti: true },
+    }
+    // Validasi: Tanggal cuti tidak boleh kosong jika user berniat mengupdatenya
+    if (parsedCutiDates.length === 0) {
+      return NextResponse.json({ ok: false, message: 'Format tanggal cuti tidak valid.' }, { status: 400 });
+    }
+  }
+
+  // --- Upload Lampiran ---
+  let lampiranUrl = undefined;
+  const lampiranFile = findFileInBody(body, ['lampiran_cuti', 'file', 'lampiran']);
+
+  if (lampiranFile) {
+    try {
+      const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
+      lampiranUrl = res.publicUrl;
+    } catch (e) {
+      return NextResponse.json({ ok: false, message: 'Gagal upload lampiran baru.' }, { status: 500 });
+    }
+  }
+
+  try {
+    const result = await db.$transaction(async (tx) => {
+      const updateData = {};
+      if (keperluan !== undefined) updateData.keperluan = keperluan;
+      if (handover !== undefined) updateData.handover = handover;
+      if (id_kategori_cuti !== undefined) updateData.id_kategori_cuti = id_kategori_cuti;
+      if (tanggalMasukKerja !== undefined) updateData.tanggal_masuk_kerja = tanggalMasukKerja;
+      if (lampiranUrl !== undefined) updateData.lampiran_cuti_url = lampiranUrl;
+
+      // Reset status ke pending jika di-edit (Opsional, tergantung aturan bisnis Anda)
+      // updateData.status = 'pending';
+
+      // 1. Update Data Utama
+      const updated = await tx.pengajuanCuti.update({
+        where: { id_pengajuan_cuti: id },
+        data: updateData,
       });
-      if (!kategori) {
-        return NextResponse.json({ ok: false, message: 'Kategori cuti tidak ditemukan.' }, { status: 404 });
-      }
-      updateData.id_kategori_cuti = idKategori;
-    }
 
-    let tanggalMulaiBaru;
-    if (hasOwn(body, 'tanggal_mulai')) {
-      tanggalMulaiBaru = parseDateOnlyToUTC(body.tanggal_mulai);
-      if (!tanggalMulaiBaru) {
-        return NextResponse.json({ ok: false, message: 'tanggal_mulai tidak valid.' }, { status: 400 });
-      }
-      updateData.tanggal_mulai = tanggalMulaiBaru;
-    }
-
-    let tanggalMasukBaru;
-    if (hasOwn(body, 'tanggal_masuk_kerja')) {
-      tanggalMasukBaru = parseDateOnlyToUTC(body.tanggal_masuk_kerja);
-      if (!tanggalMasukBaru) {
-        return NextResponse.json({ ok: false, message: 'tanggal_masuk_kerja tidak valid.' }, { status: 400 });
-      }
-      updateData.tanggal_masuk_kerja = tanggalMasukBaru;
-    }
-
-    if (hasOwn(body, 'keperluan')) {
-      updateData.keperluan = normalizeBodyString(body.keperluan);
-    }
-
-    if (hasOwn(body, 'handover')) {
-      updateData.handover = normalizeBodyString(body.handover);
-    }
-
-    if (hasOwn(body, 'status')) {
-      const normalized = normalizeStatus(body.status);
-      if (!normalized) {
-        return NextResponse.json({ ok: false, message: 'status tidak valid.' }, { status: 400 });
-      }
-      updateData.status = normalized;
-    }
-
-    const handoverIds = sanitizeHandoverIds(body.handover_tag_user_ids);
-    if (handoverIds === null) {
-      return NextResponse.json({ ok: false, message: 'handover_tag_user_ids harus berupa array.' }, { status: 400 });
-    }
-
-    if (handoverIds && handoverIds.length) {
-      const users = await db.user.findMany({
-        where: { id_user: { in: handoverIds }, deleted_at: null },
-        select: { id_user: true },
-      });
-      const found = new Set(users.map((u) => u.id_user));
-      const missing = handoverIds.filter((userId) => !found.has(userId));
-      if (missing.length) {
-        return NextResponse.json({ ok: false, message: 'Beberapa handover_tag_user_ids tidak valid.' }, { status: 400 });
-      }
-    }
-
-    const finalTanggalMulai = tanggalMulaiBaru ?? pengajuan.tanggal_mulai;
-    const finalTanggalMasuk = tanggalMasukBaru ?? pengajuan.tanggal_masuk_kerja;
-    if (finalTanggalMasuk && finalTanggalMulai && finalTanggalMasuk < finalTanggalMulai) {
-      return NextResponse.json({ ok: false, message: 'tanggal_masuk_kerja tidak boleh sebelum tanggal_mulai.' }, { status: 400 });
-    }
-
-    const hasUpdate = Object.keys(updateData).length > 0;
-    const shouldSyncHandover = handoverIds !== undefined;
-
-    if (!hasUpdate && !shouldSyncHandover) {
-      return NextResponse.json({ ok: false, message: 'Tidak ada perubahan yang diberikan.' }, { status: 400 });
-    }
-
-    const updated = await db.$transaction(async (tx) => {
-      if (hasUpdate) {
-        await tx.pengajuanCuti.update({
+      // 2. Update Relasi Tanggal Cuti (Jika ada perubahan tanggal)
+      if (parsedCutiDates.length > 0) {
+        // A. Hapus semua tanggal lama untuk pengajuan ini
+        await tx.pengajuanCutiTanggal.deleteMany({
           where: { id_pengajuan_cuti: id },
-          data: updateData,
+        });
+
+        // B. Masukkan tanggal-tanggal baru
+        await tx.pengajuanCutiTanggal.createMany({
+          data: parsedCutiDates.map((tgl) => ({
+            id_pengajuan_cuti: id,
+            tanggal_cuti: tgl,
+          })),
+          skipDuplicates: true,
         });
       }
 
-      if (shouldSyncHandover) {
-        await tx.handoverCuti.deleteMany({ where: { id_pengajuan_cuti: id } });
-        if (handoverIds && handoverIds.length) {
-          await tx.handoverCuti.createMany({
-            data: handoverIds.map((userId) => ({
-              id_pengajuan_cuti: id,
-              id_user_tagged: userId,
-            })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
+      // 3. Return data lengkap dengan include
       return tx.pengajuanCuti.findUnique({
         where: { id_pengajuan_cuti: id },
         include: pengajuanInclude,
       });
     });
 
-    return NextResponse.json({ ok: true, message: 'Pengajuan cuti berhasil diperbarui.', data: updated });
+    // Transformasi data response agar sesuai format GET (optional, agar UI langsung update)
+    const itemsProcessed = { ...result };
+    if (itemsProcessed.tanggal_list) {
+      const dates = itemsProcessed.tanggal_list.map((d) => (d?.tanggal_cuti instanceof Date ? d.tanggal_cuti : new Date(d.tanggal_cuti))).sort((a, b) => a.getTime() - b.getTime());
+
+      itemsProcessed.tanggal_cuti = dates.length ? dates[0] : null;
+      itemsProcessed.tanggal_selesai = dates.length ? dates[dates.length - 1] : null;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: 'Pengajuan cuti berhasil diperbarui.',
+      data: itemsProcessed,
+    });
   } catch (err) {
-    console.error(`UPDATE /mobile/pengajuan-cuti/${id} error:`, err);
-    return NextResponse.json({ ok: false, message: 'Gagal memperbarui pengajuan cuti.' }, { status: 500 });
+    console.error('Update Error:', err);
+    return NextResponse.json({ ok: false, message: 'Terjadi kesalahan server saat update.' }, { status: 500 });
   }
 }
 
-export async function PUT(req, context) {
-  return handleUpdate(req, context?.params ?? {});
+export async function PUT(req, ctx) {
+  return handleUpdate(req, ctx);
 }
 
-export async function PATCH(req, context) {
-  return handleUpdate(req, context?.params ?? {});
+export async function PATCH(req, ctx) {
+  return handleUpdate(req, ctx);
 }
 
 export async function DELETE(req, { params }) {
@@ -225,33 +169,40 @@ export async function DELETE(req, { params }) {
   if (auth instanceof NextResponse) return auth;
 
   const actorId = auth.actor?.id;
+  const actorRole = auth.actor?.role;
+
   if (!actorId) {
     return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
 
-  const id = params?.id;
-  if (!id) {
-    return NextResponse.json({ ok: false, message: 'ID pengajuan wajib diisi.' }, { status: 400 });
-  }
-
   try {
-    const pengajuan = await getPengajuanOrError(id);
-    if (!pengajuan || pengajuan.deleted_at) {
-      return buildNotFoundResponse();
-    }
+    const { id } = params;
 
-    if (pengajuan.user.id_user !== actorId) {
-      return buildForbiddenResponse();
-    }
-
-    await db.pengajuanCuti.update({
+    const existing = await db.pengajuanCuti.findUnique({
       where: { id_pengajuan_cuti: id },
-      data: { deleted_at: new Date() },
+      select: { id_pengajuan_cuti: true, id_user: true, status: true },
     });
 
-    return NextResponse.json({ ok: true, message: 'Pengajuan cuti berhasil dihapus.' });
+    if (!existing) {
+      return NextResponse.json({ ok: false, message: 'Pengajuan cuti tidak ditemukan.' }, { status: 404 });
+    }
+
+    if (existing.id_user !== actorId && !isAdminRole(actorRole)) {
+      return NextResponse.json({ ok: false, message: 'Forbidden.' }, { status: 403 });
+    }
+
+    // Karena relasi di Prisma biasanya cascade (atau perlu dihapus manual jika tidak),
+    // pastikan `onDelete: Cascade` ada di schema.prisma untuk PengajuanCutiTanggal.
+    // Jika tidak, hapus manual dulu:
+    // await db.pengajuanCutiTanggal.deleteMany({ where: { id_pengajuan_cuti: id } });
+
+    await db.pengajuanCuti.delete({
+      where: { id_pengajuan_cuti: id },
+    });
+
+    return NextResponse.json({ ok: true, message: 'Pengajuan cuti berhasil dihapus permanen.' });
   } catch (err) {
-    console.error(`DELETE /mobile/pengajuan-cuti/${id} error:`, err);
-    return NextResponse.json({ ok: false, message: 'Gagal menghapus pengajuan cuti.' }, { status: 500 });
+    console.error(err);
+    return NextResponse.json({ ok: false, message: 'Server error.' }, { status: 500 });
   }
 }

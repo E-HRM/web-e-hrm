@@ -5,6 +5,7 @@ const API_BASE_URL = 'https://api.watzap.id/v1';
 const API_KEY = process.env.API_KEY_WATZAP;
 const NUMBER_KEY = process.env.NUMBER_KEY_WATZAP;
 const KUNJUNGAN_GROUP_ID = process.env.WATZAP_GROUP_ID_START_KUNJUNGAN;
+const IZIN_SAKIT_GROUP_ID = process.env.WATZAP_GROUP_ID_IZIN_SAKIT;
 
 // Instance axios
 const client = axios.create({
@@ -83,4 +84,20 @@ export async function sendStartKunjunganImage(imageUrl, message = '') {
     return console.warn('WATZAP_GROUP_ID_START_KUNJUNGAN belum diatur; melewati notifikasi.');
   }
   return sendWhatsAppGroupImage(KUNJUNGAN_GROUP_ID, imageUrl, message, false);
+}
+
+export async function sendIzinSakitMessage(message) {
+  if (!IZIN_SAKIT_GROUP_ID) {
+    return console.warn('WATZAP_GROUP_ID_IZIN_SAKIT belum diatur; melewati notifikasi.');
+  }
+  return sendWhatsAppGroupMessage(IZIN_SAKIT_GROUP_ID, message);
+}
+
+// TAMBAHKAN FUNGSI INI DI BAWAH sendIzinSakitMessage
+export async function sendIzinSakitImage(imageUrl, message = '') {
+  if (!IZIN_SAKIT_GROUP_ID) {
+    return console.warn('WATZAP_GROUP_ID_IZIN_SAKIT belum diatur; melewati notifikasi.');
+  }
+  // false = kirim caption menyatu dengan gambar
+  return sendWhatsAppGroupImage(IZIN_SAKIT_GROUP_ID, imageUrl, message, false);
 }

@@ -24,17 +24,23 @@ export async function GET(req) {
     const from = (searchParams.get('from') || '').trim(); // 'YYYY-MM-DD'
     const to = (searchParams.get('to') || '').trim(); // 'YYYY-MM-DD'
     const userId = (searchParams.get('userId') || '').trim(); // optional
+
+    // pagination params (server-side)
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const perPage = Math.min(5000, Math.max(1, parseInt(searchParams.get('perPage') || '1000', 10)));
+
+    // Buat rentang tanggal inklusif: [from 00:00:00, nextDay(to) 00:00:00)
+    const start = from ? new Date(`${from}T00:00:00`) : null;
+    const endExclusive = to ? new Date(new Date(`${to}T00:00:00`).getTime() + 24 * 60 * 60 * 1000) : null;
 
     const where = {
       deleted_at: null,
       ...(userId ? { id_user: userId } : {}),
-      ...(from || to
+      ...(start || endExclusive
         ? {
             tanggal: {
-              ...(from && { gte: new Date(from) }),
-              ...(to && { lte: new Date(to) }),
+              ...(start && { gte: start }),
+              ...(endExclusive && { lt: endExclusive }),
             },
           }
         : {}),
@@ -71,6 +77,28 @@ export async function GET(req) {
               start_istirahat_longitude: true,
               end_istirahat_latitude: true,
               end_istirahat_longitude: true,
+              absensi: {
+                select: {
+                  lokasiIn: {
+                    select: {
+                      id_location: true,
+                      nama_kantor: true,
+                      latitude: true,
+                      longitude: true,
+                      radius: true,
+                    },
+                  },
+                  lokasiOut: {
+                    select: {
+                      id_location: true,
+                      nama_kantor: true,
+                      latitude: true,
+                      longitude: true,
+                      radius: true,
+                    },
+                  },
+                },
+              },
               created_at: true,
               updated_at: true,
             },
@@ -84,10 +112,17 @@ export async function GET(req) {
     return NextResponse.json({
       ok: true,
       data: items,
-      meta: { page, perPage, total, totalPages: Math.ceil(total / perPage), from: from || null, to: to || null },
+      meta: {
+        page,
+        perPage,
+        total,
+        totalPages: Math.ceil(total / perPage),
+        from: from || null,
+        to: to || null,
+      },
     });
   } catch (error) {
-    console.error('absensi history list error:', error);
+    console.error('absensi records list error:', error);
     return NextResponse.json({ ok: false, message: 'Terjadi kesalahan ketika mengambil riwayat absensi.' }, { status: 500 });
   }
 }

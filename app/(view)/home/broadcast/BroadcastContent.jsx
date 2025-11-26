@@ -10,7 +10,7 @@ import {
   Space,
   Dropdown,
   Modal,
-  Tag,
+  TFag,
   Upload,
   Form,
   Select,
@@ -20,6 +20,7 @@ import {
   Checkbox,
   message,
   Typography,
+  Badge,
 } from "antd";
 import {
   PlusOutlined,
@@ -32,8 +33,15 @@ import {
   PaperClipOutlined,
   ExclamationCircleFilled,
   UploadOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  PauseCircleOutlined,
+  CloseCircleOutlined,
+  FileTextOutlined,
+  InfoCircleOutlined,
 } from "@ant-design/icons";
 import useBroadcastViewModel from "./useBroadcastViewModel";
+import ReactQuill from "react-quill";
 
 const { Title, Text } = Typography;
 const BRAND = "#003A6F";
@@ -41,6 +49,11 @@ const BRAND = "#003A6F";
 /* ---------- Modal: Kirim Sekarang ---------- */
 function SendNowModal({ open, onCancel, onSend }) {
   const [agree, setAgree] = useState(false);
+    const [content, setContent] = useState('');
+
+  const handleContentChange = (value) => {
+    setContent(value);
+  };
   return (
     <Modal
       open={open}
@@ -70,7 +83,7 @@ function SendNowModal({ open, onCancel, onSend }) {
 /* ---------- Modal: Daftar Penerima ---------- */
 function RecipientsModal({ open, onCancel, recipients = [] }) {
   return (
-    <Modal open={open} onCancel={onCancel} footer={null} title="Daftar Penerima">
+    <Modal open={open} onCancel={onCancel} footer={null} title="Daftar Penerima" width={600}>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {recipients.map((r) => (
           <div key={r.id} className="flex items-center gap-2 rounded-xl p-2 ring-1 ring-slate-200">
@@ -87,6 +100,7 @@ function RecipientsModal({ open, onCancel, recipients = [] }) {
 function BroadcastFormModal({ open, onCancel, onSave, employeeOptions }) {
   const [form] = Form.useForm();
   const [fileList, setFileList] = useState([]);
+  const [content, setContent] = useState(""); // <-- tambahkan state untuk konten
 
   return (
     <Modal
@@ -94,24 +108,32 @@ function BroadcastFormModal({ open, onCancel, onSave, employeeOptions }) {
       onCancel={() => {
         form.resetFields();
         setFileList([]);
+        setContent(""); // <-- reset konten saat batal/tutup
         onCancel?.();
       }}
       title="Broadcast Baru"
       okText="Simpan"
       okButtonProps={{ type: "primary", style: { background: BRAND } }}
       onOk={async () => {
+        // pastikan field Form sinkron dengan state content sebelum validasi
+        form.setFieldsValue({ content });
+
         const v = await form.validateFields();
         const files = fileList.map((f) => ({ name: f.name || f.file?.name || "dokumen" }));
+
         onSave?.({
           title: v.title,
-          content: v.content,
+          content: v.content,      // akan berisi nilai dari ReactQuill
           recipientIds: v.recipients,
           files,
         });
+
         form.resetFields();
         setFileList([]);
+        setContent(""); // <-- reset setelah simpan
       }}
       destroyOnClose
+      width={600}
     >
       <Form form={form} layout="vertical">
         <Form.Item
@@ -127,7 +149,15 @@ function BroadcastFormModal({ open, onCancel, onSave, employeeOptions }) {
           name="content"
           rules={[{ required: true, message: "Konten wajib diisi" }]}
         >
-          <Input.TextArea rows={4} placeholder="Tuliskan isi pengumuman..." />
+          <ReactQuill
+            theme="snow"
+            value={content}
+            onChange={(v) => {
+              setContent(v);
+              form.setFieldsValue({ content: v });
+            }}
+            placeholder="Tulis sesuatu di sini..."
+          />
         </Form.Item>
 
         <Form.Item label="Dokumen">
@@ -169,6 +199,25 @@ function BroadcastFormModal({ open, onCancel, onSave, employeeOptions }) {
   );
 }
 
+// Komponen Tab Kustom untuk tampilan yang lebih baik
+const CustomTab = ({ count, label, icon, active }) => (
+  <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+    active 
+      ? 'bg-blue-50 text-blue-600 border border-blue-200' 
+      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+  }`}>
+    {icon}
+    <span className="font-medium">{label}</span>
+    <Badge 
+      count={count} 
+      showZero 
+      color={active ? BRAND : '#94a3b8'}
+      style={{ backgroundColor: active ? BRAND : '#94a3b8' }}
+      className="ml-1"
+    />
+  </div>
+);
+
 /* =========================================================
    MAIN CONTENT
 ========================================================= */
@@ -179,18 +228,57 @@ export default function BroadcastContent() {
   const [sendTarget, setSendTarget] = useState(null);
   const [recipientsModal, setRecipientsModal] = useState({ open: false, list: [] });
 
+  // Konfigurasi tab dengan icon dan styling yang lebih baik
+  const tabItems = [
+    { 
+      key: "ALL", 
+      label: "Semua",
+      icon: <FileTextOutlined />,
+      count: vm.counts.ALL
+    },
+    { 
+      key: "DRAFT", 
+      label: "Konsep",
+      icon: <EditOutlined />,
+      count: vm.counts.DRAFT
+    },
+    { 
+      key: "SENDING", 
+      label: "Mengirim",
+      icon: <ClockCircleOutlined />,
+      count: vm.counts.SENDING
+    },
+    { 
+      key: "DELAYED", 
+      label: "Ditunda",
+      icon: <PauseCircleOutlined />,
+      count: vm.counts.DELAYED
+    },
+    { 
+      key: "CANCELED", 
+      label: "Batal",
+      icon: <CloseCircleOutlined />,
+      count: vm.counts.CANCELED
+    },
+    { 
+      key: "DONE", 
+      label: "Selesai",
+      icon: <CheckCircleOutlined />,
+      count: vm.counts.DONE
+    },
+  ];
+
   const columns = [
     {
-      // header jangan patah per huruf
       title: <span style={{ whiteSpace: "nowrap" }}>Judul</span>,
       dataIndex: "title",
       key: "title",
-      width: 320,          // lebar tetap agar tidak menyempit
-      ellipsis: true,      // aktifkan ellipsis (perlu width)
+      width: 180,
+      ellipsis: true,
       onHeaderCell: () => ({ style: { whiteSpace: "nowrap" } }),
-      onCell:    () => ({ style: { maxWidth: 320 } }),
+      onCell: () => ({ style: { maxWidth: 180 } }),
       render: (_, row) => (
-        <div style={{ maxWidth: 320 }}>
+        <div style={{ maxWidth: 180 }}>
           <div
             className="font-semibold text-slate-900"
             style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
@@ -210,7 +298,7 @@ export default function BroadcastContent() {
       title: "Konten Pengumuman",
       dataIndex: "content",
       key: "content",
-      width: 480,
+      width: 200,
       render: (v) => (
         <div
           className="text-slate-700"
@@ -225,7 +313,7 @@ export default function BroadcastContent() {
       title: "Dokumen",
       dataIndex: "files",
       key: "files",
-      width: 140,
+      width: 80,
       render: (files) =>
         files && files.length ? (
           <Space size={4}>
@@ -240,7 +328,7 @@ export default function BroadcastContent() {
     {
       title: "Penerima",
       key: "recipients",
-      width: 260,
+      width: 180,
       render: (_, row) => {
         const max = 4;
         const show = row.recipients.slice(0, max);
@@ -321,15 +409,6 @@ export default function BroadcastContent() {
     },
   ];
 
-  const tabItems = [
-    { key: "ALL", label: `Semua (${vm.counts.ALL})` },
-    { key: "DRAFT", label: `Konsep (${vm.counts.DRAFT})` },
-    { key: "SENDING", label: `Mengirim (${vm.counts.SENDING})` },
-    { key: "DELAYED", label: `Ditunda (${vm.counts.DELAYED})` },
-    { key: "CANCELED", label: `Batal (${vm.counts.CANCELED})` },
-    { key: "DONE", label: `Selesai (${vm.counts.DONE})` },
-  ];
-
   return (
     <ConfigProvider
       theme={{
@@ -337,7 +416,11 @@ export default function BroadcastContent() {
         components: {
           Button: { borderRadius: 10 },
           Table: { headerBg: "#F6F7FB", headerColor: "#0f172a" },
-          Tabs: { itemSelectedColor: BRAND, inkBarColor: BRAND },
+          Tabs: { 
+            itemSelectedColor: BRAND, 
+            inkBarColor: BRAND,
+            itemHoverColor: BRAND,
+          },
           Input: { borderRadiusLG: 10 },
         },
       }}
@@ -369,22 +452,45 @@ export default function BroadcastContent() {
             </Button>
           }
         >
-          <div className="mt-1">
-            <Tabs items={tabItems} activeKey={vm.statusTab} onChange={vm.setStatusTab} tabBarGutter={8} />
+          {/* Tab Section yang diperbaiki */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+            </div>
+            
+            {/* Custom Tabs */}
+            <div className="flex flex-wrap gap-2">
+              {tabItems.map((tab) => (
+                <div
+                  key={tab.key}
+                  onClick={() => vm.setStatusTab(tab.key)}
+                  className="cursor-pointer"
+                >
+                  <CustomTab
+                    label={tab.label}
+                    count={tab.count}
+                    icon={tab.icon}
+                    active={vm.statusTab === tab.key}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="px-4 py-3 text-slate-600 text-sm bg-slate-50 rounded-md mb-3">
-            Pengumuman perusahaan untuk karyawan. Tanpa sistem kuota; fokus pada isi dan penerima.
+          <div className="px-4 py-3 text-slate-600 text-sm bg-slate-50 rounded-md mb-3 border border-slate-200">
           </div>
 
           <Table
             rowKey="id"
             columns={columns}
             dataSource={vm.filteredRows}
-            pagination={{ pageSize: 10, showSizeChanger: false }}
+            pagination={{ 
+              pageSize: 10, 
+              showSizeChanger: false,
+              showTotal: (total, range) => 
+                `Menampilkan ${range[0]}-${range[1]} dari ${total} broadcast`
+            }}
             bordered
             size="middle"
-            // beri ruang agar kolom "Judul" tidak dipaksa sempit
             scroll={{ x: 1400 }}
           />
         </Card>

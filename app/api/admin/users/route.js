@@ -7,17 +7,16 @@ async function getActor(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
     try {
-      const payload = verifyAuthToken(auth.slice(7)); 
+      const payload = verifyAuthToken(auth.slice(7));
       return { id: payload?.sub || payload?.id_user || payload?.userId, role: payload?.role, source: 'bearer' };
-    } catch (_) {
-    }
+    } catch (_) {}
   }
   const sessionOrRes = await authenticateRequest();
-  if (sessionOrRes instanceof NextResponse) return sessionOrRes; 
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
   return { id: sessionOrRes.user.id, role: sessionOrRes.user.role, source: 'session' };
 }
 
-const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_pengguna', 'email', 'role']);
+const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_pengguna', 'email', 'role', 'status_cuti']);
 
 export async function GET(req) {
   const actor = await getActor(req);
@@ -34,11 +33,13 @@ export async function GET(req) {
 
     const search = (searchParams.get('search') || '').trim();
     const role = (searchParams.get('role') || '').trim();
+    const statusCutiParam = (searchParams.get('statusCuti') || '').trim().toLowerCase();
+    const statusCuti = statusCutiParam === 'aktif' || statusCutiParam === 'nonaktif' ? statusCutiParam : '';
     const departementId = (searchParams.get('departementId') || '').trim();
     const locationId = (searchParams.get('locationId') || '').trim();
     const jabatanId = (searchParams.get('jabatanId') || '').trim();
     const namaPengguna = (searchParams.get('namaPengguna') || '').trim();
-    const includeDeleted = searchParams.get('includeDeleted') === '1';
+    const includeDeleted = (searchParams.get('includeDeleted') || '') === '1';
     const orderByParam = (searchParams.get('orderBy') || 'created_at').trim();
     const orderBy = ALLOWED_ORDER_BY.has(orderByParam) ? orderByParam : 'created_at';
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
@@ -47,12 +48,17 @@ export async function GET(req) {
       ...(includeDeleted ? {} : { deleted_at: null }),
       ...(role ? { role } : {}),
       ...(departementId ? { id_departement: departementId } : {}),
+      ...(statusCuti ? { status_cuti: statusCuti } : {}),
       ...(locationId ? { id_location: locationId } : {}),
       ...(jabatanId ? { id_jabatan: jabatanId } : {}),
       ...(namaPengguna ? { nama_pengguna: { contains: namaPengguna } } : {}),
       ...(search
         ? {
-            OR: [{ nama_pengguna: { contains: search } }, { email: { contains: search } }, { kontak: { contains: search } }],
+            OR: [
+              { nama_pengguna: { contains: search } },
+              { email: { contains: search } },
+              { kontak: { contains: search } },
+            ],
           }
         : {}),
     };
@@ -69,6 +75,11 @@ export async function GET(req) {
           nama_pengguna: true,
           email: true,
           kontak: true,
+
+          // NEW: kontak darurat
+          nama_kontak_darurat: true,
+          kontak_darurat: true,
+
           agama: true,
           foto_profil_user: true,
           tanggal_lahir: true,
@@ -94,12 +105,18 @@ export async function GET(req) {
           id_location: true,
           id_jabatan: true,
           status_kerja: true,
+          status_cuti: true,
+
           tanggal_mulai_bekerja: true,
           nomor_rekening: true,
           jenis_bank: true,
+
           created_at: true,
           updated_at: true,
+
           deleted_at: true,
+          catatan_delete: true,
+
           departement: { select: { id_departement: true, nama_departement: true } },
           kantor: { select: { id_location: true, nama_kantor: true } },
           jabatan: { select: { id_jabatan: true, nama_jabatan: true } },

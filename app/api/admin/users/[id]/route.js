@@ -1,4 +1,3 @@
-// app/api/admin/users/[id]/route.js
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
@@ -12,48 +11,38 @@ import {
   normalizeNullableEnum,
   normalizeNullableInt,
   normalizeNullableString,
-  normalizeOptionalDate,
+  normalizeOptionalDate
 } from '../../../_utils/user-field-normalizer';
 
-// ===== Helpers umum =====
-const normRole = (r) => String(r || '').trim().toUpperCase();
+const normRole = (r) =>
+  String(r || '')
+    .trim()
+    .toUpperCase();
 const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
+const STATUS_CUTI_VALUES = new Set(['aktif', 'nonaktif']);
 
-// ===== Helpers: Auth (Admin) =====
 async function getAdminActor(req) {
-  // Izinkan Bearer (mis. Postman) ATAU NextAuth session (panel admin)
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
     try {
       const payload = verifyAuthToken(auth.slice(7));
-      return {
-        id: payload?.sub || payload?.id_user || payload?.userId,
-        role: normRole(payload?.role),
-        source: 'bearer',
-      };
-    } catch (_) {
-      // fallback ke session
-    }
+      return { id: payload?.sub || payload?.id_user || payload?.userId, role: normRole(payload?.role), source: 'bearer' };
+    } catch (_) {}
   }
   const sessionOrRes = await authenticateRequest();
-  if (sessionOrRes instanceof NextResponse) return sessionOrRes; // unauthorized dari util
-  return {
-    id: sessionOrRes.user.id,
-    role: normRole(sessionOrRes.user.role),
-    source: 'session',
-  };
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+  return { id: sessionOrRes.user.id, role: normRole(sessionOrRes.user.role), source: 'session' };
 }
 
-// ===== Helpers: Supabase Storage =====
+/* ========== Supabase helpers ========== */
 function getSupabase() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Supabase env tidak lengkap.');
   return createClient(url, key);
 }
-
 function extractBucketPath(publicUrl) {
   try {
     const u = new URL(publicUrl);
@@ -64,7 +53,6 @@ function extractBucketPath(publicUrl) {
   if (m2) return { bucket: m2[1], path: decodeURIComponent(m2[2]) };
   return null;
 }
-
 async function deleteOldFotoFromSupabase(publicUrl) {
   if (!publicUrl) return;
   const info = extractBucketPath(publicUrl);
@@ -73,28 +61,24 @@ async function deleteOldFotoFromSupabase(publicUrl) {
   const { error } = await supabase.storage.from(info.bucket).remove([info.path]);
   if (error) console.warn('Gagal hapus foto lama:', error.message);
 }
-
 async function uploadFotoToSupabase(nama_pengguna, file) {
   if (!file) return null;
   const supabase = getSupabase();
-
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   const ext = (file.name?.split('.').pop() || 'bin').toLowerCase();
   const filename = `${Date.now()}.${ext}`;
   const path = `foto_profile/${nama_pengguna}/${filename}`;
-
   const { error: upErr } = await supabase.storage.from('e-hrm').upload(path, buffer, {
     upsert: true,
     contentType: file.type || 'application/octet-stream',
   });
   if (upErr) throw new Error(`Gagal upload foto: ${upErr.message}`);
-
   const { data: pub } = supabase.storage.from('e-hrm').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
 
-// ===== Helpers: Body Parser =====
+/* ========== Safe body parser (no crash on empty) ========== */
 async function parseBody(req) {
   const ct = req.headers.get('content-type') || '';
   if (ct.includes('multipart/form-data')) {
@@ -106,10 +90,22 @@ async function parseBody(req) {
     }
     return { type: 'form', body: obj };
   }
-  return { type: 'json', body: await req.json() };
+  // Non-form: baca sebagai text dulu agar aman jika kosong
+  let raw = '';
+  try {
+    raw = await req.text();
+  } catch {
+    raw = '';
+  }
+  if (!raw) return { type: 'json', body: {} };
+  try {
+    return { type: 'json', body: JSON.parse(raw) };
+  } catch {
+    return { type: 'text', body: raw };
+  }
 }
 
-// ===== GET : detail user (HR/DIREKTUR/SUPERADMIN) =====
+/* ========== GET ========== */
 export async function GET(_req, { params }) {
   const actor = await getAdminActor(_req);
   if (actor instanceof NextResponse) return actor;
@@ -126,6 +122,10 @@ export async function GET(_req, { params }) {
         nama_pengguna: true,
         email: true,
         kontak: true,
+        // NEW
+        nama_kontak_darurat: true,
+        kontak_darurat: true,
+
         agama: true,
         foto_profil_user: true,
         tanggal_lahir: true,
@@ -151,12 +151,19 @@ export async function GET(_req, { params }) {
         id_location: true,
         id_jabatan: true,
         status_kerja: true,
+        // NEW
+        status_cuti: true,
+
         tanggal_mulai_bekerja: true,
         nomor_rekening: true,
         jenis_bank: true,
         created_at: true,
         updated_at: true,
-        departement: { select: { id_departement: true, nama_departement: true} },
+        deleted_at: true,
+        // NEW
+        catatan_delete: true,
+
+        departement: { select: { id_departement: true, nama_departement: true } },
         kantor: { select: { id_location: true, nama_kantor: true } },
         jabatan: { select: { id_jabatan: true, nama_jabatan: true } },
       },
@@ -169,7 +176,7 @@ export async function GET(_req, { params }) {
   }
 }
 
-// ===== PUT : update profil (HR/DIREKTUR/SUPERADMIN) =====
+/* ========== PUT ========== */
 export async function PUT(req, { params }) {
   const actor = await getAdminActor(req);
   if (actor instanceof NextResponse) return actor;
@@ -187,33 +194,30 @@ export async function PUT(req, { params }) {
     if (!current) return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
 
     const { type, body } = await parseBody(req);
-
     const wantsRemove = body.remove_foto === true || body.remove_foto === 'true';
 
-    const { value: tanggalLahirValue, error: tanggalLahirError } =
-      normalizeOptionalDate(body.tanggal_lahir, 'tanggal_lahir');
-    if (tanggalLahirError) {
-      return NextResponse.json({ message: tanggalLahirError }, { status: 400 });
-    }
-    const { value: tanggalMulaiValue, error: tanggalMulaiError } =
-      normalizeOptionalDate(body.tanggal_mulai_bekerja, 'tanggal_mulai_bekerja');
-    if (tanggalMulaiError) {
-      return NextResponse.json({ message: tanggalMulaiError }, { status: 400 });
-    }
-    const { value: tahunLulusValue, error: tahunLulusError } =
-      normalizeNullableInt(body.tahun_lulus, 'tahun_lulus');
-    if (tahunLulusError) {
-      return NextResponse.json({ message: tahunLulusError }, { status: 400 });
-    }
-    const { value: jenisKelaminValue, error: jenisKelaminError } =
-      normalizeNullableEnum(body.jenis_kelamin, JENIS_KELAMIN_VALUES, 'jenis_kelamin');
-    if (jenisKelaminError) {
-      return NextResponse.json({ message: jenisKelaminError }, { status: 400 });
-    }
-    const { value: statusKerjaValue, error: statusKerjaError } =
-      normalizeNullableEnum(body.status_kerja, STATUS_KERJA_VALUES, 'status_kerja');
-    if (statusKerjaError) {
-      return NextResponse.json({ message: statusKerjaError }, { status: 400 });
+    const { value: tanggalLahirValue, error: tanggalLahirError } = normalizeOptionalDate(body.tanggal_lahir, 'tanggal_lahir');
+    if (tanggalLahirError) return NextResponse.json({ message: tanggalLahirError }, { status: 400 });
+
+    const { value: tanggalMulaiValue, error: tanggalMulaiError } = normalizeOptionalDate(body.tanggal_mulai_bekerja, 'tanggal_mulai_bekerja');
+    if (tanggalMulaiError) return NextResponse.json({ message: tanggalMulaiError }, { status: 400 });
+
+    const { value: tahunLulusValue, error: tahunLulusError } = normalizeNullableInt(body.tahun_lulus, 'tahun_lulus');
+    if (tahunLulusError) return NextResponse.json({ message: tahunLulusError }, { status: 400 });
+
+    const { value: jenisKelaminValue, error: jenisKelaminError } = normalizeNullableEnum(body.jenis_kelamin, JENIS_KELAMIN_VALUES, 'jenis_kelamin');
+    if (jenisKelaminError) return NextResponse.json({ message: jenisKelaminError }, { status: 400 });
+
+    const { value: statusKerjaValue, error: statusKerjaError } = normalizeNullableEnum(body.status_kerja, STATUS_KERJA_VALUES, 'status_kerja');
+    if (statusKerjaError) return NextResponse.json({ message: statusKerjaError }, { status: 400 });
+
+    let statusCutiValue;
+    if (body.status_cuti !== undefined) {
+      const normalized = String(body.status_cuti).trim().toLowerCase();
+      if (!STATUS_CUTI_VALUES.has(normalized)) {
+        return NextResponse.json({ message: "Field 'status_cuti' harus salah satu dari: aktif, nonaktif." }, { status: 400 });
+      }
+      statusCutiValue = normalized;
     }
 
     const tempatLahir = normalizeNullableString(body.tempat_lahir);
@@ -237,6 +241,10 @@ export async function PUT(req, { params }) {
     const nomorRekening = normalizeNullableString(body.nomor_rekening);
     const jenisBank = normalizeNullableString(body.jenis_bank);
 
+    // NEW: kontak darurat
+    const namaKontakDarurat = normalizeNullableString(body.nama_kontak_darurat);
+    const kontakDarurat = normalizeNullableString(body.kontak_darurat);
+
     let uploadedUrl = null;
     if (type === 'form') {
       const file = body.file || body.foto || body.foto_profil_user;
@@ -253,6 +261,8 @@ export async function PUT(req, { params }) {
       ...(body.nama_pengguna !== undefined && { nama_pengguna: String(body.nama_pengguna).trim() }),
       ...(body.email !== undefined && { email: String(body.email).trim().toLowerCase() }),
       ...(body.kontak !== undefined && { kontak: body.kontak === null ? null : String(body.kontak).trim() }),
+      ...(namaKontakDarurat.value !== undefined && { nama_kontak_darurat: namaKontakDarurat.value }),
+      ...(kontakDarurat.value !== undefined && { kontak_darurat: kontakDarurat.value }),
       ...(body.agama !== undefined && { agama: body.agama === null ? null : String(body.agama).trim() }),
       ...(tanggalLahirValue !== undefined && { tanggal_lahir: tanggalLahirValue }),
       ...(tempatLahir.value !== undefined && { tempat_lahir: tempatLahir.value }),
@@ -276,6 +286,7 @@ export async function PUT(req, { params }) {
       ...(locationId.value !== undefined && { id_location: locationId.value }),
       ...(jabatanId.value !== undefined && { id_jabatan: jabatanId.value }),
       ...(statusKerjaValue !== undefined && { status_kerja: statusKerjaValue }),
+      ...(statusCutiValue !== undefined && { status_cuti: statusCutiValue }),
       ...(tanggalMulaiValue !== undefined && { tanggal_mulai_bekerja: tanggalMulaiValue }),
       ...(nomorRekening.value !== undefined && { nomor_rekening: nomorRekening.value }),
       ...(jenisBank.value !== undefined && { jenis_bank: jenisBank.value }),
@@ -321,6 +332,8 @@ export async function PUT(req, { params }) {
         nama_pengguna: true,
         email: true,
         kontak: true,
+        nama_kontak_darurat: true,
+        kontak_darurat: true,
         agama: true,
         foto_profil_user: true,
         tanggal_lahir: true,
@@ -346,6 +359,7 @@ export async function PUT(req, { params }) {
         id_location: true,
         id_jabatan: true,
         status_kerja: true,
+        status_cuti: true,
         tanggal_mulai_bekerja: true,
         nomor_rekening: true,
         jenis_bank: true,
@@ -358,15 +372,13 @@ export async function PUT(req, { params }) {
 
     return NextResponse.json({ message: 'Profil berhasil diperbarui.', data: updated });
   } catch (err) {
-    if (err?.code === 'P2025') {
-      return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
-    }
+    if (err?.code === 'P2025') return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
     console.error('ADMIN PUT /users/[id] error:', err);
     return NextResponse.json({ message: err?.message || 'Server error' }, { status: 500 });
   }
 }
 
-// ===== DELETE : soft delete (HR/DIREKTUR/SUPERADMIN) =====
+/* ========== DELETE (soft delete → permanent delete kalau dihapus lagi) ========== */
 export async function DELETE(req, { params }) {
   const actor = await getAdminActor(req);
   if (actor instanceof NextResponse) return actor;
@@ -375,11 +387,51 @@ export async function DELETE(req, { params }) {
   }
   try {
     const { id } = params;
-    await db.user.update({ where: { id_user: id }, data: { deleted_at: new Date() } });
-    return NextResponse.json({ message: 'User dihapus (soft delete).' });
+
+    const { body } = await parseBody(req);
+    const { searchParams } = new URL(req.url);
+
+    const note = (body && (body.catatan_delete ?? body.note ?? body.alasan)) ?? searchParams.get('note') ?? searchParams.get('catatan') ?? null;
+
+    // Cek kondisi sekarang
+    const current = await db.user.findUnique({
+      where: { id_user: id },
+      select: { id_user: true, deleted_at: true, foto_profil_user: true, nama_pengguna: true },
+    });
+    if (!current) {
+      return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });
+    }
+
+    if (!current.deleted_at) {
+      // Soft delete pertama
+      await db.user.update({
+        where: { id_user: id },
+        data: { deleted_at: new Date(), catatan_delete: note ? String(note).slice(0, 2000) : null },
+      });
+      return NextResponse.json({ message: 'User dihapus (soft delete).', catatan_delete: note ?? null, mode: 'soft' });
+    }
+
+    // Sudah soft-deleted → hapus permanen
+    await deleteOldFotoFromSupabase(current.foto_profil_user);
+    try {
+      await db.user.delete({ where: { id_user: id } });
+      return NextResponse.json({ message: 'User dihapus permanen.', mode: 'hard' });
+    } catch (e) {
+      // Foreign key constraint? sampaikan info jelas.
+      if (e?.code === 'P2003') {
+        return NextResponse.json(
+          {
+            message: 'Tidak bisa hapus permanen karena masih terkait data lain (foreign key). User tetap soft-deleted.',
+            detail: 'Bersihkan/arsip relasi (izin/cuti/absen/dll) atau atur ON DELETE CASCADE di skema.',
+          },
+          { status: 409 }
+        );
+      }
+      throw e;
+    }
   } catch (err) {
     if (err?.code === 'P2025') {
-      return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
+      return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });
     }
     console.error('ADMIN DELETE /users/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
