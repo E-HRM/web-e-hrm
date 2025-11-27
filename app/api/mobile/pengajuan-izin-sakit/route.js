@@ -532,7 +532,7 @@ export async function POST(req) {
           // --- PERBAIKAN UTAMA DI SINI ---
           // Buat pesan spesifik untuk Handover
           const handoverTitle = `${basePayload.nama_pemohon} menandai Anda`;
-          const handoverBody = `Anda ditunjuk sebagai handover oleh ${basePayload.nama_pemohon}.`;
+          const handoverBody = `Anda ditunjuk sebagai handover oleh ${basePayload.nama_pemohon}. ${basePayload.handover}`;
 
           notifPromises.push(
             sendNotification(
