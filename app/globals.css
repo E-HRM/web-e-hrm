@@ -1,18 +1,4 @@
 @import "tailwindcss";
-/* Tailwind matiin bullet global, ini hidupin lagi khusus area Quill */
-.ql-editor ul {
-  list-style-type: disc;
-  padding-left: 1.5rem;
-  margin: 0.25rem 0;
-}
-.ql-editor ol {
-  list-style-type: decimal;
-  padding-left: 1.5rem;
-  margin: 0.25rem 0;
-}
-.ql-editor li {
-  list-style-position: outside;
-}
 
 /* theme (opsional) */
 :root { --background:#ffffff; --foreground:#171717; }
