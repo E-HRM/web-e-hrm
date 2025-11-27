@@ -563,17 +563,6 @@ export async function POST(req) {
         console.error('[WA] Gagal mengirim notifikasi WhatsApp:', waError);
       }
 
-      try {
-        if (finalLampiranUrl) {
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-          await sendIzinSakitImage(finalLampiranUrl, whatsappMessage);
-        } else {
-          await sendIzinSakitMessage(whatsappMessage);
-        }
-      } catch (waError) {
-        console.error('[WA] Gagal mengirim notifikasi WhatsApp:', waError);
-      }
-
       const notifiedUsers = new Set();
       const notifPromises = [];
 
