@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-// HAPUS: import "react-quill/dist/quill.snow.css";
 import {
   App as AntdApp,
   Button,
@@ -30,6 +29,10 @@ import "dayjs/locale/id";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import useVM, { showFromDB as showFromDBVM } from "./useAgendaCalendarViewModel";
+import HtmlEditor, {
+  normalizeRichText,
+  isQuillEmpty,
+} from "../../../../components/editor/HtmlEditor";
 
 dayjs.locale("id");
 dayjs.extend(utc);
@@ -38,13 +41,11 @@ dayjs.extend(timezone);
 const FullCalendar = dynamic(() => import("@fullcalendar/react"), {
   ssr: false,
 });
-// HAPUS: ReactQuill
 import interactionPlugin from "@fullcalendar/interaction";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import listPlugin from "@fullcalendar/list";
 
-/* Avatar bulat ringkas */
 function CircleImg({ src, size = 44, alt = "Avatar" }) {
   const s = {
     width: size,
@@ -77,16 +78,6 @@ function CircleImg({ src, size = 44, alt = "Avatar" }) {
   );
 }
 
-function isQuillEmpty(html) {
-  if (!html) return true;
-  const stripped = html
-    .replace(/<p><br><\/p>/gi, "")
-    .replace(/<[^>]+>/g, "")
-    .trim();
-  return stripped.length === 0;
-}
-
-/* ===== Formatter KHUSUS Riwayat ===== */
 const AUDIT_TZ = dayjs.tz.guess();
 function formatAuditLocal(v, fmt = "DD MMM YYYY HH:mm:ss") {
   if (!v) return "—";
@@ -96,7 +87,6 @@ function formatAuditLocal(v, fmt = "DD MMM YYYY HH:mm:ss") {
   return m.isValid() ? m.format(fmt) : "—";
 }
 
-/* ===== NORMALIZER URGENSI ===== */
 function normalizeUrgencyLocal(v) {
   const s = (v || "").toString().trim().toUpperCase();
   switch (s) {
@@ -120,12 +110,10 @@ export default function AgendaCalendarContent() {
   const calRef = useRef(null);
   const vm = useVM();
 
-  /* ===== Form Create/Edit ===== */
   const [formOpen, setFormOpen] = useState(false);
   const [form] = Form.useForm();
   const [editId, setEditId] = useState(null);
 
-  // Watch untuk jumlah user
   const usersSelected = Form.useWatch("users", form) || [];
   const totalUsers = vm.userOptions?.length || 0;
 
@@ -135,18 +123,14 @@ export default function AgendaCalendarContent() {
     total: 0,
   });
 
-  /* ===== Modal Tambah Proyek (opsional) ===== */
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [agendaForm] = Form.useForm();
 
-  /* ===== Detail Modal ===== */
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailEvent, setDetailEvent] = useState(null);
 
-  /* ===== Riwayat Modal ===== */
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  /* ----- helpers ----- */
   const statusColor = (st) =>
     st === "selesai"
       ? "fc-chip fc-chip--done"
@@ -180,6 +164,7 @@ export default function AgendaCalendarContent() {
       "";
 
     form.setFieldsValue({
+      // HTML Quill
       title: descText,
       status: fcEvent.extendedProps?.status || "teragenda",
       users: [fcEvent.extendedProps?.id_user].filter(Boolean),
@@ -190,7 +175,6 @@ export default function AgendaCalendarContent() {
     setFormOpen(true);
   };
 
-  // Helper Pilih Semua / Bersihkan Karyawan
   const handleSelectAllUsers = () => {
     const allIds = (vm.userOptions || []).map((opt) => opt.value);
     form.setFieldsValue({ users: allIds });
@@ -211,9 +195,9 @@ export default function AgendaCalendarContent() {
 
   const handleSubmitForm = async () => {
     const v = await form.validateFields();
-    const title = (v.title || "").trim();
+    const title = v.title || ""; // HTML, jangan di-trim
 
-    if (!title) {
+    if (isQuillEmpty(title)) {
       notification.warning({ message: "Nama aktivitas tidak boleh kosong" });
       return;
     }
@@ -340,7 +324,6 @@ export default function AgendaCalendarContent() {
     }
   };
 
-  /* === BUKA DETAIL TANPA MENUTUP POPOVER "+X more" === */
   const openDetail = (arg) => {
     arg.jsEvent?.preventDefault?.();
     arg.jsEvent?.stopPropagation?.();
@@ -348,7 +331,6 @@ export default function AgendaCalendarContent() {
     setDetailOpen(true);
   };
 
-  /* ====== Guard: tahan FullCalendar menutup popover saat modal detail terbuka ====== */
   useEffect(() => {
     if (!detailOpen) return;
     const guard = (e) => {
@@ -372,7 +354,7 @@ export default function AgendaCalendarContent() {
         "";
 
       await vm.updateEvent(event.id, {
-        title: descText, // pakai deskripsi aktivitas, bukan nama proyek
+        title: descText,
         start: event.start,
         end: event.end || event.start,
         status: event.extendedProps?.status || "teragenda",
@@ -389,7 +371,6 @@ export default function AgendaCalendarContent() {
     }
   };
 
-  /* ===== Render event: JAM · EVENT/PROYEK · NAMA · STATUS ===== */
   const renderEventContent = (info) => {
     const st = info.event.extendedProps?.status;
 
@@ -423,7 +404,6 @@ export default function AgendaCalendarContent() {
     );
   };
 
-  /* ===== user header untuk Detail ===== */
   const detailUser = useMemo(() => {
     if (!detailEvent) return null;
     const raw = detailEvent.extendedProps?.raw || {};
@@ -452,7 +432,6 @@ export default function AgendaCalendarContent() {
     return { user, name, photo, sub, link };
   }, [detailEvent, vm]);
 
-  /* ===== audit created/updated ===== */
   const audit = useMemo(() => {
     const raw = detailEvent?.extendedProps?.raw || {};
     const created =
@@ -474,7 +453,6 @@ export default function AgendaCalendarContent() {
     };
   }, [detailEvent]);
 
-  /* ===== URGENSI ===== */
   const urgencyChip = useMemo(() => {
     if (!detailEvent) return null;
     const fromProps = detailEvent.extendedProps?.urgency || null;
@@ -493,9 +471,11 @@ export default function AgendaCalendarContent() {
     return normalizeUrgencyLocal(rawVal);
   }, [detailEvent]);
 
-  const descHtml = detailEvent?.extendedProps?.deskripsi || "";
+  const descHtml =
+    detailEvent?.extendedProps?.deskripsi ??
+    detailEvent?.extendedProps?.raw?.deskripsi_kerja ??
+    "";
 
-  // Menu titik tiga
   const onMoreMenuClick = ({ key }) => {
     if (key === "history") setHistoryOpen(true);
     if (key === "bulk-delete") confirmBulkDeleteSimilar();
@@ -662,20 +642,20 @@ export default function AgendaCalendarContent() {
 
             <Divider style={{ margin: "14px 0 12px" }} />
 
-            {/* Deskripsi: kalau data lama masih HTML dari Quill, ini tetap dirender.
-                Kalau sekarang plain text, tetap aman. */}
-            <div
-              style={{
-                fontSize: 14,
-                color: "#0f172a",
-                wordBreak: "break-word",
-              }}
-              dangerouslySetInnerHTML={{
-                __html: isQuillEmpty(descHtml)
-                  ? '<span style="color:#94a3b8">—</span>'
-                  : descHtml,
-              }}
-            />
+            {/* Deskripsi: pakai Quill readOnly → bullet/angka aman */}
+            <div className="agenda-detail-editor">
+              {isQuillEmpty(descHtml) ? (
+                <span style={{ color: "#94a3b8" }}>—</span>
+              ) : (
+                <HtmlEditor
+                  value={descHtml}
+                  readOnly
+                  variant="agenda"
+                  minHeight={0}
+                  className="agenda-detail-editor-inner"
+                />
+              )}
+            </div>
 
             <div className="flex justify-end gap-2 mt-10">
               <Tooltip title="Edit">
@@ -812,6 +792,7 @@ export default function AgendaCalendarContent() {
           },
         }}
         maskClosable={false}
+        width={700}
       >
         <Form form={form} layout="vertical">
           <Form.Item label="Proyek/Agenda" required>
@@ -840,16 +821,32 @@ export default function AgendaCalendarContent() {
             </Space.Compact>
           </Form.Item>
 
-          {/* INI KEMBALI KE ANT DESIGN BIASA */}
           <Form.Item
             label="Nama Aktivitas"
             name="title"
-            rules={[{ required: true, message: "Judul wajib diisi" }]}
+            valuePropName="value"
+            getValueFromEvent={normalizeRichText}
+            initialValue=""
+            rules={[
+              {
+                required: true,
+                message: "Nama aktivitas tidak boleh kosong",
+                validator: (_, value) => {
+                  if (isQuillEmpty(value)) {
+                    return Promise.reject(
+                      new Error("Nama aktivitas tidak boleh kosong")
+                    );
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
           >
-            <Input.TextArea
-              rows={4}
-              placeholder="Isi kegiatan..."
-              autoSize={{ minRows: 4, maxRows: 8 }}
+            <HtmlEditor
+              className="agenda-editor"
+              placeholder="Tulis nama aktivitas atau deskripsi pekerjaan..."
+              minHeight={150}
+              variant="agenda"
             />
           </Form.Item>
 
@@ -944,10 +941,18 @@ export default function AgendaCalendarContent() {
               { required: true, message: "Tanggal mulai wajib diisi" },
             ]}
           >
-            <DatePicker showTime className="w-full" />
+            <DatePicker
+              showTime
+              format="YYYY-MM-DD HH:mm:ss"
+              className="w-full"
+            />
           </Form.Item>
           <Form.Item label="Selesai" name="end">
-            <DatePicker showTime className="w-full" />
+            <DatePicker
+              showTime
+              format="YYYY-MM-DD HH:mm:ss"
+              className="w-full"
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -1002,7 +1007,6 @@ export default function AgendaCalendarContent() {
         </Form>
       </Modal>
 
-      {/* Styling global FullCalendar + chip */}
       <style jsx global>{`
         .fc .fc-daygrid-event {
           padding: 2px 6px;
@@ -1107,6 +1111,46 @@ export default function AgendaCalendarContent() {
 
         .fc .fc-daygrid-event a {
           text-decoration: none;
+        }
+
+        /* Editor di modal Create/Edit */
+        .agenda-editor {
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          background: #fff;
+          overflow: hidden;
+          transition: all 0.2s ease;
+        }
+        .agenda-editor:hover {
+          border-color: #9ca3af;
+        }
+        .agenda-editor .ql-toolbar {
+          border: 0;
+          border-bottom: 1px solid #e5e7eb;
+          background: #f9fafb;
+          padding: 8px 12px;
+        }
+        .agenda-editor .ql-container {
+          border: 0;
+        }
+        .agenda-editor .ql-editor {
+          min-height: 150px;
+          padding: 12px 16px;
+          font-size: 14px;
+          line-height: 1.6;
+        }
+
+        /* Detail pakai Quill readOnly */
+        .agenda-detail-editor .ql-toolbar {
+          display: none;
+        }
+        .agenda-detail-editor .ql-container {
+          border: 0;
+        }
+        .agenda-detail-editor .ql-editor {
+          padding: 0;
+          font-size: 14px;
+          line-height: 1.6;
         }
       `}</style>
     </div>

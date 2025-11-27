@@ -2,15 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
-import "react-quill/dist/quill.snow.css"; // style dasar Quill
+import "react-quill/dist/quill.snow.css";
 
-// ReactQuill hanya dirender di client
 const ReactQuill = dynamic(() => import("react-quill"), {
   ssr: false,
   loading: () => <div style={{ padding: 8 }}>Memuat editor…</div>,
 });
 
-/* ===== Preset toolbar praktis ===== */
 const TOOLBARS = {
   mini: [
     ["bold", "italic", "underline"],
@@ -19,42 +17,46 @@ const TOOLBARS = {
     ["clean"],
   ],
   email: [
-    [{ header: [1, 2, 3, false] }],
     ["bold", "italic", "underline", "strike"],
-    [{ color: [] }, { background: [] }],
     [{ list: "ordered" }, { list: "bullet" }],
-    [{ align: [] }],
-    ["link", "blockquote", "code"],
+    [{ indent: "-1" }, { indent: "+1" }],
+    ["link", "blockquote"],
     ["clean"],
   ],
   full: [
-    [{ font: [] }, { header: [1, 2, 3, 4, 5, 6, false] }],
-    ["bold", "italic", "underline", "strike", "blockquote", "code-block"],
-    [{ color: [] }, { background: [] }],
-    [{ script: "sub" }, { script: "super" }],
-    [
-      { list: "ordered" },
-      { list: "bullet" },
-      { indent: "-1" },
-      { indent: "+1" },
-    ],
-    [{ align: [] }, { direction: "rtl" }],
-    ["link", "image", "video"],
+    ["bold", "italic", "underline", "strike"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    [{ indent: "-1" }, { indent: "+1" }],
+    [{ align: [] }],
+    ["link", "blockquote", "code-block"],
+    ["clean"],
+  ],
+  agenda: [
+    ["bold", "italic", "underline"],
+    [{ list: "ordered" }, { list: "bullet" }],
+    [{ indent: "-1" }, { indent: "+1" }],
+    ["link"],
     ["clean"],
   ],
 };
 
-/* ===== Helper: normalisasi rich text kosong ===== */
-// Dipakai di Form AntD: <Form.Item getValueFromEvent={normalizeRichText} />
-export function normalizeRichText(value) {
-  const str = typeof value === "string" ? value.trim() : "";
-  if (!str) return "";
-  if (str === "<p><br></p>") return "";
-  return value || "";
-}
+/** Dipakai di AntD Form: jaga HTML, cuma normalisasi kosong */
+export const normalizeRichText = (value) => {
+  if (value === undefined || value === null) return "";
+  const str = typeof value === "string" ? value : String(value);
+  const trimmed = str.trim();
 
-/* ===== Helper opsional: cek kosong ===== */
-export function isQuillEmpty(html) {
+  // state kosong standar Quill
+  if (!trimmed || trimmed === "<p><br></p>" || trimmed === "<p></p>") {
+    return "";
+  }
+
+  // jangan sentuh <ul>, <ol>, <li>, dsb — biarkan Quill yang urus
+  return trimmed;
+};
+
+/** Cek bener-bener kosong tanpa teks (tag HTML diabaikan) */
+export const isQuillEmpty = (html) => {
   if (!html) return true;
   const stripped = String(html)
     .replace(/<p><br><\/p>/gi, "")
@@ -63,64 +65,59 @@ export function isQuillEmpty(html) {
     .replace(/<[^>]+>/g, "")
     .trim();
   return stripped.length === 0;
-}
-
-/* ===== Komponen utama ===== */
+};
 
 export default function HtmlEditor({
   value,
   onChange,
   placeholder = "Tulis konten…",
-  variant = "email", // "mini" | "email" | "full"
-  toolbar, // override manual: array toolbar Quill
+  variant = "agenda",
+  toolbar,
   readOnly = false,
   className,
   style,
   minHeight = 200,
 }) {
-  // modules / toolbar Quill
   const modules = useMemo(
-  () => ({
-    // kalau readOnly: hilangkan toolbar
-    toolbar: readOnly
-      ? false
-      : toolbar ?? TOOLBARS[variant] ?? TOOLBARS.email,
-    clipboard: { matchVisual: false },
-  }),
-  [toolbar, variant, readOnly]
-);
+    () => ({
+      toolbar: readOnly
+        ? false
+        : toolbar ?? TOOLBARS[variant] ?? TOOLBARS.agenda,
+      clipboard: { matchVisual: false },
+      history: {
+        delay: 1000,
+        maxStack: 100,
+        userOnly: true,
+      },
+    }),
+    [toolbar, variant, readOnly]
+  );
 
-  // format yang diizinkan
   const formats = [
-    "header",
-    "font",
-    "size",
     "bold",
     "italic",
     "underline",
     "strike",
-    "blockquote",
-    "code",
-    "code-block",
-    "color",
-    "background",
-    "script",
     "list",
     "bullet",
     "indent",
-    "align",
-    "direction",
     "link",
-    "image",
-    "video",
+    "blockquote",
+    "code-block",
+    "align",
   ];
 
+  const handleChange = (content) => {
+    const normalizedContent = normalizeRichText(content);
+    onChange?.(normalizedContent);
+  };
+
   return (
-    <div className={className} style={style}>
+    <div className={`html-editor-wrapper ${className || ""}`} style={style}>
       <ReactQuill
         theme="snow"
-        value={value || ""} // selalu string
-        onChange={onChange}
+        value={value || ""}
+        onChange={handleChange}
         modules={modules}
         formats={formats}
         placeholder={placeholder}
