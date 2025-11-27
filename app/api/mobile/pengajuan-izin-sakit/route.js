@@ -572,6 +572,11 @@ export async function POST(req) {
           if (!taggedId || notifiedUsers.has(taggedId)) continue;
           notifiedUsers.add(taggedId);
 
+          // --- PERBAIKAN UTAMA DI SINI ---
+          // Buat pesan spesifik untuk Handover
+          const handoverTitle = `${basePayload.nama_pemohon} menandai Anda`;
+          const handoverBody = `Anda ditunjuk sebagai handover oleh ${basePayload.nama_pemohon}.`;
+
           notifPromises.push(
             sendNotification(
               'IZIN_SAKIT_HANDOVER_TAGGED',
@@ -580,11 +585,11 @@ export async function POST(req) {
                 ...basePayload,
                 handover: basePayload.handover,
                 nama_penerima: h?.user?.nama_pengguna || 'Rekan',
-                pesan_penerima: `Anda ditunjuk sebagai handover oleh ${basePayload.nama_pemohon}.`,
-                title: overrideTitle,
-                body: overrideBody,
-                overrideTitle,
-                overrideBody,
+                pesan_penerima: handoverBody,
+                title: handoverTitle, // Pakai pesan spesifik
+                body: handoverBody, // Pakai pesan spesifik
+                overrideTitle: handoverTitle, // Pakai pesan spesifik
+                overrideBody: handoverBody, // Pakai pesan spesifik
               },
               { deeplink }
             )
