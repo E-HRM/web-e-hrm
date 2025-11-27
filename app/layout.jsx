@@ -11,7 +11,7 @@ const poppins = Poppins({
   variable: "--font-poppins",
   display: "swap",
 });
-y
+
 export const metadata = {
   title: "E-HRM",
   description: "HR Management System",

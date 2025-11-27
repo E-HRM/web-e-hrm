@@ -6,16 +6,48 @@ import { endOfUTCDay, parseDateTimeToUTC, startOfUTCDay } from '@/helpers/date-h
 import { resolveTargetUserAccess } from './access-control';
 import { buildCutiCalendarItem, endOfDay, formatISO, startOfDay } from './calendar-utils';
 
-// Helper sederhana untuk mengambil Jam:Menit dari DateTime UTC
+// Helper untuk format Jam:Menit
 function formatTimeOnly(dateObj) {
   if (!dateObj) return '';
   try {
     const d = new Date(dateObj);
-    // Mengambil jam:menit dalam format lokal/UTC string pendek (HH:MM)
     return d.toISOString().substring(11, 16);
   } catch (e) {
     return '';
   }
+}
+
+// Helper untuk menyusun deskripsi lengkap (Keperluan + Handover)
+function formatDescription({ keperluan, handover, handoverUsers }) {
+  const parts = [];
+
+  // 1. Keperluan Utama
+  if (keperluan && keperluan.trim()) {
+    parts.push(keperluan.trim());
+  }
+
+  // 2. User yang di-tag (Penerima Handover)
+  if (handoverUsers && handoverUsers.length > 0) {
+    // Ambil nama dari relasi: handover_user -> user -> nama_pengguna
+    const names = handoverUsers
+      .map((h) => h.user?.nama_pengguna)
+      .filter((n) => n) // Hapus yang null/undefined
+      .join(', ');
+
+    if (names) {
+      parts.push(`\n👥 Handover ke: ${names}`);
+    }
+  }
+
+  // 3. Pesan/Catatan Handover
+  // Kita cek apakah text handover mengandung info substantif yang belum ada di keperluan
+  if (handover && handover.trim()) {
+    // Bersihkan markup mention (opsional, tapi mobile app kamu sepertinya sudah handle parsing)
+    // Kita kirim raw saja agar mobile app bisa parse @mention nya
+    parts.push(`📝 Catatan Handover: ${handover.trim()}`);
+  }
+
+  return parts.join('\n');
 }
 
 async function ensureAuth(req) {
@@ -91,17 +123,14 @@ export async function GET(request) {
     const toRaw = searchParams.get('to');
     const { from: rangeFrom, to: rangeTo } = normalizeDateRange(fromRaw, toRaw);
 
-    // 1. STORY PLANNER: Tetap PERSONAL (Filter by targetUserId)
+    // 1. STORY PLANNER (Personal)
     const fetchStoryPlanners = approvedOnly
       ? Promise.resolve([])
       : db.storyPlanner.findMany({
           where: {
             deleted_at: null,
             id_user: targetUserId,
-            count_time: {
-              gte: rangeFrom,
-              lte: rangeTo,
-            },
+            count_time: { gte: rangeFrom, lte: rangeTo },
           },
           select: {
             id_story: true,
@@ -113,13 +142,12 @@ export async function GET(request) {
           },
         });
 
-    // 2. SHIFT KERJA: GLOBAL (Semua User) & Include Pola Kerja
+    // 2. SHIFT KERJA (Global)
     const fetchShiftKerja = approvedOnly
       ? Promise.resolve([])
       : db.shiftKerja.findMany({
           where: {
             deleted_at: null,
-            // id_user dihapus agar global
             tanggal_mulai: { lte: rangeTo },
             tanggal_selesai: { gte: rangeFrom },
           },
@@ -130,9 +158,7 @@ export async function GET(request) {
             tanggal_mulai: true,
             tanggal_selesai: true,
             status: true,
-            // Ambil nama user
             user: { select: { nama_pengguna: true } },
-            // AMBIL POLA KERJA
             polaKerja: {
               select: {
                 nama_pola_kerja: true,
@@ -143,35 +169,39 @@ export async function GET(request) {
           },
         });
 
-    // Jalankan semua query secara paralel
     const results = await Promise.all([
-      fetchStoryPlanners, // Index 0
+      fetchStoryPlanners, // 0
 
-      // 1. Cuti Approved ONLY (Draft DIHAPUS)
+      // 1. Cuti Approved (Global) + Handover Info
       db.pengajuanCuti.findMany({
         where: {
           deleted_at: null,
           status: 'disetujui',
           jenis_pengajuan: 'cuti',
-          // id_user dihapus agar global
           tanggal_list: { some: { tanggal_cuti: { gte: rangeFrom, lte: rangeTo } } },
         },
         select: {
           id_pengajuan_cuti: true,
           id_user: true,
           keperluan: true,
+          handover: true, // Ambil teks handover
           tanggal_list: { select: { tanggal_cuti: true } },
           user: { select: { nama_pengguna: true } },
+          // Ambil user yang di-tag
+          handoverUsers: {
+            select: {
+              user: { select: { nama_pengguna: true } },
+            },
+          },
         },
       }),
 
-      // 2. Izin Sakit (Disetujui Only)
+      // 2. Izin Sakit (Global) + Handover Info
       db.pengajuanIzinSakit.findMany({
         where: {
           deleted_at: null,
           status: 'disetujui',
           jenis_pengajuan: 'sakit',
-          // id_user dihapus agar global
           OR: [{ tanggal_pengajuan: { gte: rangeFrom, lte: rangeTo } }, { AND: [{ tanggal_pengajuan: null }, { created_at: { gte: rangeFrom, lte: rangeTo } }] }],
         },
         select: {
@@ -181,16 +211,20 @@ export async function GET(request) {
           tanggal_pengajuan: true,
           created_at: true,
           user: { select: { nama_pengguna: true } },
+          handoverUsers: {
+            select: {
+              user: { select: { nama_pengguna: true } },
+            },
+          },
         },
       }),
 
-      // 3. Izin Jam (Disetujui Only)
+      // 3. Izin Jam (Global) + Handover Info
       db.pengajuanIzinJam.findMany({
         where: {
           deleted_at: null,
           status: 'disetujui',
           jenis_pengajuan: 'jam',
-          // id_user dihapus agar global
           jam_mulai: { lte: rangeTo },
           jam_selesai: { gte: rangeFrom },
         },
@@ -198,14 +232,20 @@ export async function GET(request) {
           id_pengajuan_izin_jam: true,
           id_user: true,
           keperluan: true,
+          handover: true,
           tanggal_izin: true,
           jam_mulai: true,
           jam_selesai: true,
           user: { select: { nama_pengguna: true } },
+          handoverUsers: {
+            select: {
+              user: { select: { nama_pengguna: true } },
+            },
+          },
         },
       }),
 
-      fetchShiftKerja, // Index 4
+      fetchShiftKerja, // 4
     ]);
 
     const _storyPlanners = results[0];
@@ -242,6 +282,12 @@ export async function GET(request) {
       if (cutiItem) {
         cutiItem.user_name = item.user?.nama_pengguna;
         cutiItem.title = `${item.user?.nama_pengguna ? item.user.nama_pengguna + ' - ' : ''}Cuti`;
+        // Gunakan helper untuk deskripsi lengkap
+        cutiItem.description = formatDescription({
+          keperluan: item.keperluan,
+          handover: item.handover,
+          handoverUsers: item.handoverUsers,
+        });
         calendarItems.push(cutiItem);
       }
     }
@@ -255,7 +301,12 @@ export async function GET(request) {
         user_id: item.id_user,
         user_name: item.user?.nama_pengguna,
         title: `${item.user?.nama_pengguna ? item.user.nama_pengguna + ' - ' : ''}Sakit`,
-        description: item.handover || null,
+        // Gunakan helper (untuk sakit biasanya keperluan = 'Sakit')
+        description: formatDescription({
+          keperluan: 'Izin Sakit',
+          handover: item.handover,
+          handoverUsers: item.handoverUsers,
+        }),
         start: formatISO(startOfDay(startDate)),
         end: formatISO(endOfDay(startDate)),
       });
@@ -271,18 +322,22 @@ export async function GET(request) {
         user_id: item.id_user,
         user_name: item.user?.nama_pengguna,
         title: `${item.user?.nama_pengguna ? item.user.nama_pengguna + ' - ' : ''}Izin Jam`,
-        description: item.keperluan || null,
+        // Gunakan helper
+        description: formatDescription({
+          keperluan: item.keperluan,
+          handover: item.handover,
+          handoverUsers: item.handoverUsers,
+        }),
         start: formatISO(startDate),
         end: formatISO(endDate),
       });
     }
 
-    // Shift Kerja (DENGAN POLA KERJA)
+    // Shift Kerja
     for (const shift of _shifts) {
       const namaUser = shift.user?.nama_pengguna || 'Karyawan';
       const pola = shift.polaKerja;
 
-      // Buat deskripsi jam kerja
       let shiftDesc = shift.status || '';
       if (pola) {
         const jamMasuk = formatTimeOnly(pola.jam_mulai);
