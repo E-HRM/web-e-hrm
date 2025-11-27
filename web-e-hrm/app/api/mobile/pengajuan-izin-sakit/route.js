@@ -1,5 +1,4 @@
-export const runtime = 'nodejs';
-
+// app/api/mobile/pengajuan-izin-sakit/route.js
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
@@ -148,11 +147,7 @@ async function ensureAuth(req) {
 
 function normalizeApprovals(payload) {
   if (!payload || typeof payload !== 'object') return undefined;
-  const rawApprovals =
-    payload.approvals ??
-    payload['approvals[]'] ??
-    payload.approval ??
-    payload['approval[]'];
+  const rawApprovals = payload.approvals ?? payload['approvals[]'] ?? payload.approval ?? payload['approval[]'];
   if (rawApprovals === undefined) return undefined;
 
   const entries = Array.isArray(rawApprovals) ? rawApprovals : [rawApprovals];
@@ -166,10 +161,7 @@ function normalizeApprovals(payload) {
       try {
         entry = JSON.parse(t);
       } catch {
-        throw NextResponse.json(
-          { message: 'Format approvals tidak valid. Gunakan JSON array.' },
-          { status: 400 }
-        );
+        throw NextResponse.json({ message: 'Format approvals tidak valid. Gunakan JSON array.' }, { status: 400 });
       }
     }
     if (!entry || typeof entry !== 'object') continue;
@@ -223,10 +215,7 @@ async function validateTaggedUsers(userIds) {
   });
   if (found.length !== uniqueIds.length) {
     const missing = uniqueIds.filter((id) => !found.some((u) => u.id_user === id));
-    throw NextResponse.json(
-      { message: `User berikut tidak ditemukan: ${missing.join(', ')}` },
-      { status: 400 }
-    );
+    throw NextResponse.json({ message: `User berikut tidak ditemukan: ${missing.join(', ')}` }, { status: 400 });
   }
 }
 
@@ -241,10 +230,7 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const pageSize = Math.min(
-      100,
-      Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10))
-    );
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
 
     const statusParam = searchParams.get('status');
     const idUserFilter = searchParams.get('id_user');
@@ -255,11 +241,7 @@ export async function GET(req) {
     if (!canManageAll(actorRole)) where.id_user = actorId;
     else if (idUserFilter) where.id_user = String(idUserFilter).trim();
 
-    if (
-      statusParam !== null &&
-      statusParam !== undefined &&
-      String(statusParam).trim() !== ''
-    ) {
+    if (statusParam !== null && statusParam !== undefined && String(statusParam).trim() !== '') {
       const normalized = normalizeStatusInput(statusParam);
       if (!normalized) {
         return NextResponse.json({ message: 'Parameter status tidak valid.' }, { status: 400 });
@@ -331,6 +313,7 @@ export async function POST(req) {
     const body = parsed.body || {};
     const approvalsInput = normalizeApprovals(body) ?? [];
 
+    // tanggal_pengajuan (opsional)
     const rawTanggalPengajuan = body.tanggal_pengajuan;
     let tanggalPengajuan;
     if (rawTanggalPengajuan === undefined) {
@@ -350,8 +333,7 @@ export async function POST(req) {
       tanggalPengajuan = parsedTanggal;
     }
 
-    const kategoriIdRaw =
-      body.id_kategori_sakit ?? body.id_kategori ?? body.kategori;
+    const kategoriIdRaw = body.id_kategori_sakit ?? body.id_kategori ?? body.kategori;
     const kategoriId = kategoriIdRaw ? String(kategoriIdRaw).trim() : '';
     if (!kategoriId) {
       return NextResponse.json({ message: "Field 'id_kategori_sakit' wajib diisi." }, { status: 400 });
@@ -362,19 +344,12 @@ export async function POST(req) {
       return NextResponse.json({ message: 'id_user tujuan tidak valid.' }, { status: 400 });
     }
 
-    const handover = isNullLike(body.handover)
-      ? null
-      : String(body.handover).trim();
+    const handover = isNullLike(body.handover) ? null : String(body.handover).trim();
 
+    // Lampiran
     let uploadMeta = null;
     let lampiranUrl = null;
-    const lampiranFile = findFileInBody(body, [
-      'lampiran_izin_sakit',
-      'lampiran',
-      'lampiran_file',
-      'file',
-      'lampiran_izin',
-    ]);
+    const lampiranFile = findFileInBody(body, ['lampiran_izin_sakit', 'lampiran', 'lampiran_file', 'file', 'lampiran_izin']);
 
     if (lampiranFile) {
       try {
@@ -398,12 +373,7 @@ export async function POST(req) {
         );
       }
     } else {
-      const fallback = normalizeLampiranInput(
-        body.lampiran_izin_sakit_url ??
-          body.lampiran_url ??
-          body.lampiran ??
-          body.lampiran_izin
-      );
+      const fallback = normalizeLampiranInput(body.lampiran_izin_sakit_url ?? body.lampiran_url ?? body.lampiran ?? body.lampiran_izin);
       lampiranUrl = fallback ?? null;
     }
 
@@ -412,20 +382,14 @@ export async function POST(req) {
       return NextResponse.json({ message: 'status tidak valid.' }, { status: 400 });
     }
 
-    const currentLevel =
-      body.current_level !== undefined ? Number(body.current_level) : null;
+    const currentLevel = body.current_level !== undefined ? Number(body.current_level) : null;
     if (currentLevel !== null && !Number.isFinite(currentLevel)) {
-      return NextResponse.json(
-        { message: 'current_level harus berupa angka.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'current_level harus berupa angka.' }, { status: 400 });
     }
 
     const jenis_pengajuan = 'sakit';
 
-    const tagUserIds = parseTagUserIds(
-      body.tag_user_ids ?? body.handover_user_ids
-    );
+    const tagUserIds = parseTagUserIds(body.tag_user_ids ?? body.handover_user_ids);
     await validateTaggedUsers(tagUserIds);
 
     const [targetUser, kategori] = await Promise.all([
@@ -456,9 +420,7 @@ export async function POST(req) {
           status: normalizedStatus,
           current_level: currentLevel,
           jenis_pengajuan,
-          ...(tanggalPengajuan !== undefined
-            ? { tanggal_pengajuan: tanggalPengajuan }
-            : {}),
+          ...(tanggalPengajuan !== undefined ? { tanggal_pengajuan: tanggalPengajuan } : {}),
         },
       });
 
@@ -528,6 +490,7 @@ export async function POST(req) {
         ? `${basePayload.nama_pemohon} mengajukan izin sakit kategori ${basePayload.kategori_sakit} pada ${tanggalPengajuanDisplay}.`
         : `${basePayload.nama_pemohon} mengajukan izin sakit kategori ${basePayload.kategori_sakit}.`;
 
+      // ========== WhatsApp ==========
       const handoverTaggedNames = Array.isArray(result.handover_users)
         ? result.handover_users
             .map((h) => h?.user?.nama_pengguna)
@@ -540,11 +503,7 @@ export async function POST(req) {
         `Pemohon: ${basePayload.nama_pemohon}`,
         `Kategori: ${basePayload.kategori_sakit}`,
         `Handover: ${basePayload.handover}`,
-        `Handover Tag: ${
-          handoverTaggedNames.length
-            ? handoverTaggedNames.join(', ')
-            : '-'
-        }`,
+        `Handover Tag: ${handoverTaggedNames.length ? handoverTaggedNames.join(', ') : '-'}`,
       ];
 
       const whatsappMessage = whatsappPayloadLines.join('\n');
@@ -554,9 +513,11 @@ export async function POST(req) {
         if (finalLampiranUrl) {
           await new Promise((resolve) => setTimeout(resolve, 3000));
           await sendIzinSakitImage(finalLampiranUrl, whatsappMessage);
+          // Tambahkan log untuk sukses pengiriman gambar
           console.log('[WA] Sukses mengirim notifikasi WhatsApp (dengan gambar) untuk pengajuan:', result.id_pengajuan_izin_sakit);
         } else {
           await sendIzinSakitMessage(whatsappMessage);
+          // Tambahkan log untuk sukses pengiriman teks
           console.log('[WA] Sukses mengirim notifikasi WhatsApp (teks) untuk pengajuan:', result.id_pengajuan_izin_sakit);
         }
       } catch (waError) {
@@ -574,9 +535,11 @@ export async function POST(req) {
         console.error('[WA] Gagal mengirim notifikasi WhatsApp:', waError);
       }
 
+      // ========== Notifikasi in-app ==========
       const notifiedUsers = new Set();
       const notifPromises = [];
 
+      // 1) Handover tag
       if (Array.isArray(result.handover_users)) {
         for (const h of result.handover_users) {
           const taggedId = h?.id_user_tagged;
@@ -589,7 +552,6 @@ export async function POST(req) {
               taggedId,
               {
                 ...basePayload,
-                handover: basePayload.handover,
                 nama_penerima: h?.user?.nama_pengguna || 'Rekan',
                 pesan_penerima: `Anda ditunjuk sebagai handover oleh ${basePayload.nama_pemohon}.`,
                 title: overrideTitle,
@@ -603,6 +565,7 @@ export async function POST(req) {
         }
       }
 
+      // 2) Pemohon
       if (result.id_user && !notifiedUsers.has(result.id_user)) {
         notifPromises.push(
           sendNotification(
@@ -624,6 +587,7 @@ export async function POST(req) {
         notifiedUsers.add(result.id_user);
       }
 
+      // 3) Admin yang membuat (jika aktor adalah admin)
       if (canManageAll(actorRole) && actorId && !notifiedUsers.has(actorId)) {
         notifPromises.push(
           sendNotification(
@@ -645,10 +609,9 @@ export async function POST(req) {
         notifiedUsers.add(actorId);
       }
 
+      // 4) Approver chain
       if (Array.isArray(result.approvals) && result.approvals.length) {
-        const approverIds = result.approvals
-          .map((a) => a.approver_user_id)
-          .filter(Boolean);
+        const approverIds = result.approvals.map((a) => a.approver_user_id).filter(Boolean);
 
         if (approverIds.length) {
           const approvers = await db.user.findMany({
@@ -679,7 +642,6 @@ export async function POST(req) {
                   overrideBody,
                 },
                 { deeplink }
-                
               )
             );
           }
