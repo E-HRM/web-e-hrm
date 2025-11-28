@@ -17,10 +17,10 @@ import {
   Tooltip,
   Space,
   Card,
-  Table,
   Select,
   Avatar,
   Badge,
+  message,
 } from "antd";
 import {
   SearchOutlined,
@@ -30,11 +30,12 @@ import {
   InfoCircleOutlined,
   UserOutlined,
   ClockCircleOutlined,
-  FileTextOutlined, // ✨ untuk tombol lampiran
+  FileTextOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
 import useTukarHariViewModel from "./useTukarHariViewModel";
+import ApprovalTable from "@/app/components/pengajuan/ApprovalTable";
 
 dayjs.locale("id");
 
@@ -56,12 +57,15 @@ function MiniField({ label, children, span = 1, className = "" }) {
 }
 
 function StatusBadge({ status }) {
-  const cfg = {
-    Disetujui: { color: "#52c41a", text: "Disetujui" },
-    Ditolak: { color: "#ff4d4f", text: "Ditolak" },
-    Menunggu: { color: "#faad14", text: "Menunggu" },
-  }[status] || { color: "#faad14", text: "Menunggu" };
-  return <Badge color={cfg.color} text={cfg.text} className="font-medium text-xs" />;
+  const cfg =
+    {
+      Disetujui: { color: "#52c41a", text: "Disetujui" },
+      Ditolak: { color: "#ff4d4f", text: "Ditolak" },
+      Menunggu: { color: "#faad14", text: "Menunggu" },
+    }[status] || { color: "#faad14", text: "Menunggu" };
+  return (
+    <Badge color={cfg.color} text={cfg.text} className="font-medium text-xs" />
+  );
 }
 
 function formatDateTimeID(date) {
@@ -97,7 +101,10 @@ function TextClampCell({ text, expanded, onToggle }) {
     const el = ghostRef.current;
     if (!el) return;
     const cs = window.getComputedStyle(el);
-    const base = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3 || 18;
+    const base =
+      parseFloat(cs.lineHeight) ||
+      parseFloat(cs.fontSize) * 1.3 ||
+      18;
     const lines = Math.round(el.scrollHeight / base);
     setShowToggle(lines > 1);
   }, []);
@@ -105,7 +112,8 @@ function TextClampCell({ text, expanded, onToggle }) {
   useLayoutEffect(() => {
     recompute();
     const ro = new ResizeObserver(recompute);
-    if (ghostRef.current?.parentElement) ro.observe(ghostRef.current.parentElement);
+    if (ghostRef.current?.parentElement)
+      ro.observe(ghostRef.current.parentElement);
     return () => ro.disconnect();
   }, [recompute, text]);
 
@@ -194,12 +202,15 @@ function ApproveModal({ openRow, polaOptions, onSubmit, onCancel, loadingPola })
         <div className="space-y-5">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <div className="text-sm text-blue-900">
-              <span className="font-medium">{openRow.nama}</span> • {openRow.jabatanDivisi}
+              <span className="font-medium">{openRow.nama}</span> •{" "}
+              {openRow.jabatanDivisi}
             </div>
           </div>
 
           <div className="rounded-lg border border-gray-200 p-3">
-            <div className="text-xs font-semibold text-gray-700 mb-2">Ringkasan Pasangan Tanggal</div>
+            <div className="text-xs font-semibold text-gray-700 mb-2">
+              Ringkasan Pasangan Tanggal
+            </div>
             <div className="space-y-1 text-sm">
               {(openRow.pairs || []).map((p, idx) => (
                 <div key={idx} className="flex items-center gap-2">
@@ -207,18 +218,23 @@ function ApproveModal({ openRow, polaOptions, onSubmit, onCancel, loadingPola })
                   <span>izin: {formatDateOnlyID(p.izin)}</span>
                   <span className="text-gray-400">→</span>
                   <span>pengganti: {formatDateOnlyID(p.pengganti)}</span>
-                  {p.catatan ? <em className="text-gray-500">({p.catatan})</em> : null}
+                  {p.catatan ? (
+                    <em className="text-gray-500">({p.catatan})</em>
+                  ) : null}
                 </div>
               ))}
               {!openRow.pairs?.length && (
-                <div className="text-gray-500">Tidak ada pasangan tanggal di data.</div>
+                <div className="text-gray-500">
+                  Tidak ada pasangan tanggal di data.
+                </div>
               )}
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Pola Kerja Pengganti <span className="text-gray-400 font-normal">(opsional)</span>
+              Pola Kerja Pengganti{" "}
+              <span className="text-gray-400 font-normal">(opsional)</span>
             </label>
             <Select
               className="w-full"
@@ -250,7 +266,10 @@ export default function TukarHariContent() {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
   const [expandedKeperluan, setExpandedKeperluan] = useState(new Set());
-  const [expandedHandover, setExpandedHandover] = useState(new Set()); // ✨
+  const [expandedHandover, setExpandedHandover] = useState(new Set());
+
+  const [previewDocUrl, setPreviewDocUrl] = useState(null);
+  const [previewDocTitle, setPreviewDocTitle] = useState("");
 
   const toggleExpand = (id) =>
     setExpandedKeperluan((prev) => {
@@ -258,7 +277,7 @@ export default function TukarHariContent() {
       s.has(id) ? s.delete(id) : s.add(id);
       return s;
     });
-  const toggleHandover = (id) => // ✨
+  const toggleHandover = (id) =>
     setExpandedHandover((prev) => {
       const s = new Set(prev);
       s.has(id) ? s.delete(id) : s.add(id);
@@ -328,11 +347,13 @@ export default function TukarHariContent() {
         key: "detail",
         render: (_, r) => {
           const expanded = expandedKeperluan.has(r.id);
-          const expHan = expandedHandover.has(r.id); // ✨
+          const expHan = expandedHandover.has(r.id);
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-
-              <MiniField label="Tanggal Izin → Tanggal Pengganti" className="lg:col-span-3">
+              <MiniField
+                label="Tanggal Izin → Tanggal Pengganti"
+                className="lg:col-span-3"
+              >
                 <div className="bg-gray-50 rounded-lg p-3">
                   {Array.isArray(r.pairs) && r.pairs.length ? (
                     <div className="flex flex-wrap gap-2">
@@ -341,12 +362,18 @@ export default function TukarHariContent() {
                           key={idx}
                           className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
                         >
-                          <Tag className="!m-0 !rounded-md">{idx + 1}</Tag>
+                          <Tag className="!m-0 !rounded-md">
+                            {idx + 1}
+                          </Tag>
                           <span className="text-sm text-gray-700">
-                            {formatDateOnlyID(p.izin)} <span className="text-gray-400">→</span> {formatDateOnlyID(p.pengganti)}
+                            {formatDateOnlyID(p.izin)}{" "}
+                            <span className="text-gray-400">→</span>{" "}
+                            {formatDateOnlyID(p.pengganti)}
                           </span>
                           {p.catatan ? (
-                            <em className="text-xs text-gray-500">({p.catatan})</em>
+                            <em className="text-xs text-gray-500">
+                              ({p.catatan})
+                            </em>
                           ) : null}
                         </div>
                       ))}
@@ -371,8 +398,10 @@ export default function TukarHariContent() {
                 </div>
               </MiniField>
 
-              {/* ✨ Handover - sama seperti di Cuti */}
-              <MiniField label="Handover Pekerjaan" className="lg:col-span-3">
+              <MiniField
+                label="Handover Pekerjaan"
+                className="lg:col-span-3"
+              >
                 <div className="bg-gray-50 rounded-lg p-3">
                   <TextClampCell
                     text={r.handover}
@@ -380,28 +409,33 @@ export default function TukarHariContent() {
                     onToggle={() => toggleHandover(r.id)}
                   />
 
-                  {Array.isArray(r.handoverUsers) && r.handoverUsers.length > 0 && (
-                    <div className="mt-3">
-                      <div className="text-xs font-semibold text-gray-700 mb-2">
-                        Daftar Penerima Handover :
+                  {Array.isArray(r.handoverUsers) &&
+                    r.handoverUsers.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold text-gray-700 mb-2">
+                          Daftar Penerima Handover :
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {r.handoverUsers.map((u) => (
+                            <div
+                              key={u.id}
+                              className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
+                            >
+                              <Avatar
+                                src={u.photo}
+                                size={24}
+                                icon={<UserOutlined />}
+                              />
+                              <Tooltip title={u.name}>
+                                <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                                  {ellipsisWords(u.name, 2)}
+                                </span>
+                              </Tooltip>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {r.handoverUsers.map((u) => (
-                          <div
-                            key={u.id}
-                            className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
-                          >
-                            <Avatar src={u.photo} size={24} icon={<UserOutlined />} />
-                            <Tooltip title={u.name}>
-                              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
-                                {ellipsisWords(u.name, 2)}
-                              </span>
-                            </Tooltip>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               </MiniField>
 
@@ -411,13 +445,18 @@ export default function TukarHariContent() {
                   size="small"
                   type={r.buktiUrl ? "primary" : "default"}
                   disabled={!r.buktiUrl}
-                  onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
+                  onClick={() => {
+                    if (!r.buktiUrl) return;
+                    setPreviewDocUrl(r.buktiUrl);
+                    setPreviewDocTitle(
+                      `Dokumen pendukung - ${r.nama || ""}`
+                    );
+                  }}
                   className="flex items-center gap-1"
                 >
                   {r.buktiUrl ? "Lihat Dokumen" : "Tidak Ada File"}
                 </Button>
               </MiniField>
-
             </div>
           );
         },
@@ -429,7 +468,6 @@ export default function TukarHariContent() {
         fixed: "right",
         onCell: () => ({ style: { verticalAlign: "top" } }),
         render: (_, r) => {
-          // Tampilkan tombol hanya pada tab "pengajuan".
           if (vm.tab === "pengajuan") {
             return (
               <Space direction="vertical" size={8} className="w-full">
@@ -457,44 +495,53 @@ export default function TukarHariContent() {
               </Space>
             );
           }
-        const isApproved = vm.tab === "disetujui";
-        return (
-          <div
-            className={`rounded-lg p-3 border ${
-              isApproved
-                ? "bg-green-50 border-green-200"
-                : "bg-red-50 border-red-200"
-            }`}
-          >
-            <div className={`text-xs font-semibold mb-1 ${
-              isApproved ? "text-green-700" : "text-red-700"
-            }`}>
-              {isApproved ? "Disetujui Pada" : "Ditolak Pada"}
-            </div>
-
-            <div className={`text-sm font-medium ${
-              isApproved ? "text-green-900" : "text-red-900"
-            }`}>
-              {formatDateTimeID(r.tglKeputusan)}
-            </div>
-
-            {r.alasan && (
-              <div className="mt-3">
-                <div className={`text-xs font-semibold mb-1 ${
+          const isApproved = vm.tab === "disetujui";
+          return (
+            <div
+              className={`rounded-lg p-3 border ${
+                isApproved
+                  ? "bg-green-50 border-green-200"
+                  : "bg-red-50 border-red-200"
+              }`}
+            >
+              <div
+                className={`text-xs font-semibold mb-1 ${
                   isApproved ? "text-green-700" : "text-red-700"
-                }`}>
-                  Catatan
-                </div>
-                <div className={`text-sm rounded p-2 ${
-                  isApproved ? "bg-white/60 text-green-900" : "bg-white/60 text-red-900"
-                }`}>
-                  {r.alasan}
-                </div>
+                }`}
+              >
+                {isApproved ? "Disetujui Pada" : "Ditolak Pada"}
               </div>
-            )}
-          </div>
-        );
 
+              <div
+                className={`text-sm font-medium ${
+                  isApproved ? "text-green-900" : "text-red-900"
+                }`}
+              >
+                {formatDateTimeID(r.tglKeputusan)}
+              </div>
+
+              {r.alasan && (
+                <div className="mt-3">
+                  <div
+                    className={`text-xs font-semibold mb-1 ${
+                      isApproved ? "text-green-700" : "text-red-700"
+                    }`}
+                  >
+                    Catatan
+                  </div>
+                  <div
+                    className={`text-sm rounded p-2 ${
+                      isApproved
+                        ? "bg-white/60 text-green-900"
+                        : "bg-white/60 text-red-900"
+                    }`}
+                  >
+                    {r.alasan}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
         },
       },
     ],
@@ -557,7 +604,7 @@ export default function TukarHariContent() {
             headerBg: "#f8fafc",
             headerColor: "#374151",
             headerSplitColor: "transparent",
-            rowHoverBg: "transparent", // hilangkan hover bg
+            rowHoverBg: "transparent",
           },
         },
         token: {
@@ -577,7 +624,8 @@ export default function TukarHariContent() {
                 Pengajuan Izin Tukar Hari
               </h1>
               <p className="text-gray-600 text-sm">
-                Kelola pengajuan tukar hari kerja. Gunakan tab untuk melihat status.
+                Kelola pengajuan tukar hari kerja. Gunakan tab untuk melihat
+                status.
               </p>
             </div>
           </div>
@@ -598,58 +646,76 @@ export default function TukarHariContent() {
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
                     <div>
                       <h2 className="text-lg font-semibold text-gray-900">
-                        Daftar {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
+                        Daftar{" "}
+                        {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
                       </h2>
                       <p className="text-gray-500 text-sm mt-1">
-                        Menampilkan {dataSource.length} dari {vm.tabCounts[t.key]} pengajuan
+                        Menampilkan {dataSource.length} dari{" "}
+                        {vm.tabCounts[t.key]} pengajuan
                       </p>
                     </div>
-                    <Input
-                      allowClear
-                      placeholder="Cari nama, jabatan, divisi, kategori, keperluan, handover…"
-                      prefix={<SearchOutlined className="text-gray-400" />}
-                      value={vm.search}
-                      onChange={(e) => vm.setSearch(e.target.value)}
-                      className="w-full lg:w-80"
-                      size="large"
-                    />
                   </div>
 
-                  <Table
+                  <ApprovalTable
                     columns={columns}
                     dataSource={dataSource}
-                    size="middle"
-                    tableLayout="fixed"
-                    sticky
-                    pagination={{
-                      current: pagination.current,
-                      pageSize: pagination.pageSize,
-                      pageSizeOptions: [10, 20, 50],
-                      showSizeChanger: true,
-                      showTotal: (total, range) =>
-                        `${range[0]}-${range[1]} dari ${total} data`,
-                      onChange: (current, pageSize) =>
-                        setPagination({ current, pageSize }),
-                    }}
-                    scroll={{ x: 1200, y: 600 }}
+                    page={vm.page}                // atau pagination.current
+                    pageSize={vm.pageSize}        // atau pagination.pageSize
+                    total={counts[vm.tab]}        // atau vm.tabCounts[t.key]
                     loading={vm.loading}
-                    rowClassName={() => "no-hover-row"} // kelas untuk matikan hover via CSS
+                    onChangePage={(current, pageSize) => {
+                      vm.changePage?.(current, pageSize); // kalau ada
+                      setPagination?.({ current, pageSize });
+                    }}
                   />
+
                 </div>
               ),
             }))}
           />
         </Card>
 
-        {/* Matikan efek hover abu-abu Antd (fallback CSS) */}
-        <style jsx global>{`
-          .no-hover-row:hover > td {
-            background: transparent !important;
-          }
-          .ant-table-tbody > tr.ant-table-row:hover > td {
-            background: transparent !important;
-          }
-        `}</style>
+        {/* Modal Preview Dokumen */}
+        <Modal
+          title={previewDocTitle || "Preview Dokumen"}
+          open={!!previewDocUrl}
+          onCancel={() => {
+            setPreviewDocUrl(null);
+            setPreviewDocTitle("");
+          }}
+          footer={null}
+          width="50%"
+          style={{ top: 20 }}
+          bodyStyle={{ padding: 0 }}
+          centered
+        >
+          {previewDocUrl && (
+            <div style={{ height: "75vh" }}>
+              {/\.(png|jpe?g|gif|webp)$/i.test(previewDocUrl) ? (
+                <img
+                  src={previewDocUrl}
+                  alt={previewDocTitle || "Dokumen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+              ) : (
+                <iframe
+                  src={previewDocUrl}
+                  title={previewDocTitle || "Dokumen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </Modal>
 
         {/* Modal TOLAK */}
         <Modal
@@ -668,7 +734,7 @@ export default function TukarHariContent() {
           }}
           onOk={async () => {
             const r = String(reason || "").trim();
-            if (!r) { 
+            if (!r) {
               message.error("Alasan wajib diisi saat menolak.");
               return;
             }
@@ -678,7 +744,6 @@ export default function TukarHariContent() {
               setReason("");
             }
           }}
-
           onCancel={() => {
             setRejectRow(null);
             setReason("");
@@ -692,7 +757,8 @@ export default function TukarHariContent() {
                 Konfirmasi Penolakan
               </div>
               <div className="text-sm text-red-700 mt-1">
-                Anda akan menolak pengajuan dari <strong>{rejectRow?.nama}</strong>
+                Anda akan menolak pengajuan dari{" "}
+                <strong>{rejectRow?.nama}</strong>
               </div>
             </div>
 
@@ -708,7 +774,8 @@ export default function TukarHariContent() {
                 className="resize-none"
               />
               <div className="text-xs text-gray-500 mt-2">
-                Alasan penolakan wajib diisi dan akan dikirimkan kepada karyawan.
+                Alasan penolakan wajib diisi dan akan dikirimkan kepada
+                karyawan.
               </div>
             </div>
           </div>

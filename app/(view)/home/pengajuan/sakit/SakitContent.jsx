@@ -18,7 +18,6 @@ import {
   Tooltip,
   Space,
   Card,
-  Table,
   Avatar,
   Badge,
   message,
@@ -36,6 +35,7 @@ import {
 import dayjs from "dayjs";
 import "dayjs/locale/id";
 import useSakitViewModel from "./useSakitViewModel";
+import ApprovalTable from "@/app/components/pengajuan/ApprovalTable";
 
 dayjs.locale("id");
 
@@ -95,7 +95,10 @@ function TextClampCell({ text, expanded, onToggle }) {
     const el = ghostRef.current;
     if (!el) return;
     const cs = window.getComputedStyle(el);
-    const base = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3 || 18;
+    const base =
+      parseFloat(cs.lineHeight) ||
+      parseFloat(cs.fontSize) * 1.3 ||
+      18;
     const lines = Math.round(el.scrollHeight / base);
     setShowToggle(lines > 1);
   }, []);
@@ -103,7 +106,8 @@ function TextClampCell({ text, expanded, onToggle }) {
   useLayoutEffect(() => {
     recompute();
     const ro = new ResizeObserver(recompute);
-    if (ghostRef.current?.parentElement) ro.observe(ghostRef.current.parentElement);
+    if (ghostRef.current?.parentElement)
+      ro.observe(ghostRef.current.parentElement);
     return () => ro.disconnect();
   }, [recompute, text]);
 
@@ -161,7 +165,6 @@ function TextClampCell({ text, expanded, onToggle }) {
 export default function SakitContent() {
   const vm = useSakitViewModel();
 
-  // sinkronkan pagination lokal (untuk kolom NO) dengan VM
   const [pagination, setPagination] = useState({
     current: vm.page,
     pageSize: vm.pageSize,
@@ -181,6 +184,9 @@ export default function SakitContent() {
       s.has(id) ? s.delete(id) : s.add(id);
       return s;
     });
+
+  const [previewDocUrl, setPreviewDocUrl] = useState(null);
+  const [previewDocTitle, setPreviewDocTitle] = useState("");
 
   const counts = vm.tabCounts || { pengajuan: 0, disetujui: 0, ditolak: 0 };
 
@@ -241,13 +247,14 @@ export default function SakitContent() {
 
           return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Kategori */}
               <MiniField label="Kategori Sakit">
                 <span className="font-medium">{r.kategori}</span>
               </MiniField>
 
-              {/* Handover */}
-              <MiniField label="Handover Pekerjaan" className="lg:col-span-3">
+              <MiniField
+                label="Handover Pekerjaan"
+                className="lg:col-span-3"
+              >
                 <div className="bg-gray-50 rounded-lg p-3">
                   <TextClampCell
                     text={r.handover}
@@ -255,37 +262,40 @@ export default function SakitContent() {
                     onToggle={() => toggleHandover(r.id)}
                   />
 
-                  {Array.isArray(r.handoverUsers) && r.handoverUsers.length > 0 && (
-                    <div className="mt-3">
-                      <div className="text-xs font-semibold text-gray-700 mb-2">
-                        Daftar Penerima Handover :
+                  {Array.isArray(r.handoverUsers) &&
+                    r.handoverUsers.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold text-gray-700 mb-2">
+                          Daftar Penerima Handover :
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {r.handoverUsers.map((u) => (
+                            <div
+                              key={u.id}
+                              className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
+                            >
+                              <Avatar
+                                src={u.photo}
+                                size={24}
+                                icon={<UserOutlined />}
+                              />
+                              <Tooltip title={u.name}>
+                                <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                                  {ellipsisWords(u.name, 2)}
+                                </span>
+                              </Tooltip>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {r.handoverUsers.map((u) => (
-                          <div
-                            key={u.id}
-                            className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
-                          >
-                            <Avatar src={u.photo} size={24} icon={<UserOutlined />} />
-                            <Tooltip title={u.name}>
-                              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
-                                {ellipsisWords(u.name, 2)}
-                              </span>
-                            </Tooltip>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               </MiniField>
 
-              {/* Tanggal Pengajuan */}
               <MiniField label="Tanggal Pengajuan" className="lg:col-span-3">
                 {formatDateTimeID(r.tglPengajuan)}
               </MiniField>
 
-              {/* Dokumen */}
               <MiniField label="Dokumen Pendukung" className="lg:col-span-3">
                 {Array.isArray(r.attachments) && r.attachments.length > 0 ? (
                   <Space wrap>
@@ -295,7 +305,11 @@ export default function SakitContent() {
                         icon={<FileTextOutlined />}
                         size="small"
                         type="primary"
-                        onClick={() => window.open(f.url, "_blank")}
+                        onClick={() => {
+                          if (!f || !f.url) return;
+                          setPreviewDocUrl(f.url);                       
+                          setPreviewDocTitle(`Dokumen pendukung - ${r.nama || ""}`);
+                        }}
                         className="flex items-center gap-1"
                       >
                         Lihat Dokumen
@@ -307,7 +321,13 @@ export default function SakitContent() {
                     icon={<FileTextOutlined />}
                     size="small"
                     type="primary"
-                    onClick={() => window.open(r.buktiUrl, "_blank")}
+                    onClick={() => {
+                      if (!r.buktiUrl) return;
+                      setPreviewDocUrl(r.buktiUrl);
+                      setPreviewDocTitle(
+                        `Dokumen pendukung - ${r.nama || ""}`
+                      );
+                    }}
                     className="flex items-center gap-1"
                   >
                     Lihat Dokumen
@@ -504,7 +524,6 @@ export default function SakitContent() {
             activeKey={vm.tab}
             onChange={(k) => {
               vm.setTab(k);
-              // nomor baris (NO) ikut reset halaman
               setPagination((p) => ({ ...p, current: 1 }));
             }}
             type="line"
@@ -517,52 +536,76 @@ export default function SakitContent() {
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
                     <div>
                       <h2 className="text-lg font-semibold text-gray-900">
-                        Daftar {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
+                        Daftar{" "}
+                        {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
                       </h2>
                       <p className="text-gray-500 text-sm mt-1">
-                        Menampilkan {dataSource.length} dari {counts[t.key]} pengajuan
+                        Menampilkan {dataSource.length} dari {counts[t.key]}{" "}
+                        pengajuan
                       </p>
                     </div>
                   </div>
 
-                  <Table
+                  <ApprovalTable
                     columns={columns}
                     dataSource={dataSource}
-                    size="middle"
-                    tableLayout="fixed"
-                    sticky
-                    pagination={{
-                      current: vm.page,            // pakai VM
-                      pageSize: vm.pageSize,
-                      total: counts[t.key] ?? 0,   // total server (tiap tab)
-                      pageSizeOptions: [10, 20, 50],
-                      showSizeChanger: true,
-                      showTotal: (total, range) =>
-                        `${range[0]}-${range[1]} dari ${total} data`,
-                      onChange: (current, pageSize) => {
-                        vm.changePage(current, pageSize);
-                        setPagination({ current, pageSize }); // sinkron NO
-                      },
-                    }}
-                    scroll={{ x: 1200, y: 600 }}
+                    page={vm.page}                // atau pagination.current
+                    pageSize={vm.pageSize}        // atau pagination.pageSize
+                    total={counts[vm.tab]}        // atau vm.tabCounts[t.key]
                     loading={vm.loading}
-                    rowClassName={() => "no-hover-row"}
+                    onChangePage={(current, pageSize) => {
+                      vm.changePage?.(current, pageSize); // kalau ada
+                      setPagination?.({ current, pageSize });
+                    }}
                   />
+
                 </div>
               ),
             }))}
           />
         </Card>
 
-        {/* Hilangkan hover abu-abu Antd */}
-        <style jsx global>{`
-          .no-hover-row:hover > td {
-            background: transparent !important;
-          }
-          .ant-table-tbody > tr.ant-table-row:hover > td {
-            background: transparent !important;
-          }
-        `}</style>
+        {/* Modal Preview Dokumen */}
+        <Modal
+          title={previewDocTitle || "Preview Dokumen"}
+          open={!!previewDocUrl}
+          onCancel={() => {
+            setPreviewDocUrl(null);
+            setPreviewDocTitle("");
+          }}
+          footer={null}
+          width="50%"
+          style={{ top: 20 }}
+          bodyStyle={{ padding: 0 }}
+          centered
+        >
+          {previewDocUrl && (
+            <div style={{ height: "75vh" }}>
+              {/\.(png|jpe?g|gif|webp)$/i.test(previewDocUrl) ? (
+                <img
+                  src={previewDocUrl}
+                  alt={previewDocTitle || "Dokumen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+              ) : (
+                <iframe
+                  src={previewDocUrl}
+                  title={previewDocTitle || "Dokumen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </Modal>
 
         {/* Modal Penolakan */}
         <Modal
@@ -604,7 +647,8 @@ export default function SakitContent() {
                 Konfirmasi Penolakan
               </div>
               <div className="text-sm text-red-700 mt-1">
-                Anda akan menolak pengajuan dari <strong>{rejectRow?.nama}</strong>
+                Anda akan menolak pengajuan dari{" "}
+                <strong>{rejectRow?.nama}</strong>
               </div>
             </div>
 
@@ -620,52 +664,54 @@ export default function SakitContent() {
                 className="resize-none"
               />
               <div className="text-xs text-gray-500 mt-2">
-                Alasan penolakan wajib diisi dan akan dikirimkan kepada karyawan.
+                Alasan penolakan wajib diisi dan akan dikirimkan kepada
+                karyawan.
               </div>
             </div>
           </div>
         </Modal>
-        <Modal
-        title={
-          <div className="flex items-center gap-2">
-            <CheckOutlined className="text-green-600" />
-            <span>Setujui Pengajuan Izin Sakit</span>
-          </div>
-        }
-        open={!!approveRow}
-        okText="Setujui Pengajuan"
-        okButtonProps={{
-          type: "primary",
-          icon: <CheckOutlined />,
-        }}
-        onOk={async () => {
-          if (!approveRow) return;
-          await vm.approve(approveRow.id); // tanpa note
-          setApproveRow(null);
-        }}
-        onCancel={() => {
-          setApproveRow(null);
-        }}
-        width={480}
-      >
-        <div className="space-y-3">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-green-900">
-              <InfoCircleOutlined />
-              Konfirmasi Persetujuan
-            </div>
-            <div className="text-sm text-green-700 mt-1">
-              Anda akan menyetujui pengajuan izin sakit dari{" "}
-              <strong>{approveRow?.nama}</strong>.
-            </div>
-          </div>
-          <p className="text-xs text-gray-500">
-            Tindakan ini tidak dapat dibatalkan dari halaman ini. Pastikan data
-            pengajuan sudah benar.
-          </p>
-        </div>
-      </Modal>
 
+        {/* Modal Setujui */}
+        <Modal
+          title={
+            <div className="flex items-center gap-2">
+              <CheckOutlined className="text-green-600" />
+              <span>Setujui Pengajuan Izin Sakit</span>
+            </div>
+          }
+          open={!!approveRow}
+          okText="Setujui Pengajuan"
+          okButtonProps={{
+            type: "primary",
+            icon: <CheckOutlined />,
+          }}
+          onOk={async () => {
+            if (!approveRow) return;
+            await vm.approve(approveRow.id);
+            setApproveRow(null);
+          }}
+          onCancel={() => {
+            setApproveRow(null);
+          }}
+          width={480}
+        >
+          <div className="space-y-3">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-green-900">
+                <InfoCircleOutlined />
+                Konfirmasi Persetujuan
+              </div>
+              <div className="text-sm text-green-700 mt-1">
+                Anda akan menyetujui pengajuan izin sakit dari{" "}
+                <strong>{approveRow?.nama}</strong>.
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Tindakan ini tidak dapat dibatalkan dari halaman ini. Pastikan
+              data pengajuan sudah benar.
+            </p>
+          </div>
+        </Modal>
       </div>
     </ConfigProvider>
   );
