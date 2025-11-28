@@ -40,30 +40,32 @@ const TOOLBARS = {
   ],
 };
 
-/** Dipakai di AntD Form: jaga HTML, cuma normalisasi kosong */
 export const normalizeRichText = (value) => {
   if (value === undefined || value === null) return "";
   const str = typeof value === "string" ? value : String(value);
-  const trimmed = str.trim();
 
-  // state kosong standar Quill
+  const trimmed = str.trim();
   if (!trimmed || trimmed === "<p><br></p>" || trimmed === "<p></p>") {
     return "";
   }
 
-  // jangan sentuh <ul>, <ol>, <li>, dsb — biarkan Quill yang urus
-  return trimmed;
+  // jangan sentuh <ul>/<ol>/<li>
+  const cleanHtml = trimmed
+    .replace(/<p>\s*<\/p>/g, "") // paragraf kosong
+    .replace(/<br\s*\/?>\s*<br\s*\/?>/g, "<br>") // <br><br> -> <br>
+    .trim();
+
+  return cleanHtml || "";
 };
 
-/** Cek bener-bener kosong tanpa teks (tag HTML diabaikan) */
 export const isQuillEmpty = (html) => {
   if (!html) return true;
+
   const stripped = String(html)
     .replace(/<p><br><\/p>/gi, "")
-    .replace(/<br\s*\/?>/gi, "")
-    .replace(/&nbsp;/gi, " ")
     .replace(/<[^>]+>/g, "")
     .trim();
+
   return stripped.length === 0;
 };
 
@@ -74,16 +76,16 @@ export default function HtmlEditor({
   variant = "agenda",
   toolbar,
   readOnly = false,
-  className,
+  className = "",
   style,
   minHeight = 200,
 }) {
   const modules = useMemo(
     () => ({
-      toolbar: readOnly
-        ? false
-        : toolbar ?? TOOLBARS[variant] ?? TOOLBARS.agenda,
-      clipboard: { matchVisual: false },
+      toolbar: readOnly ? false : toolbar ?? TOOLBARS[variant] ?? TOOLBARS.agenda,
+      clipboard: {
+        matchVisual: false,
+      },
       history: {
         delay: 1000,
         maxStack: 100,
@@ -107,13 +109,13 @@ export default function HtmlEditor({
     "align",
   ];
 
-  const handleChange = (content) => {
-    const normalizedContent = normalizeRichText(content);
-    onChange?.(normalizedContent);
+  // ❗ tidak dinormalisasi di sini, biar HTML asli tetap utuh
+  const handleChange = (content /*, delta, source, editor */) => {
+    onChange?.(content);
   };
 
   return (
-    <div className={`html-editor-wrapper ${className || ""}`} style={style}>
+    <div className={`html-editor-wrapper ${className}`} style={style}>
       <ReactQuill
         theme="snow"
         value={value || ""}

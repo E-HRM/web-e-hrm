@@ -28,7 +28,7 @@ function formatDescription({ keperluan, handover, handoverUsers }) {
 
   // 2. User yang di-tag (Penerima Handover)
   if (handoverUsers && handoverUsers.length > 0) {
-    // Ambil nama dari relasi: handover_user -> user -> nama_pengguna
+    // Ambil nama dari relasi: handover_users -> user -> nama_pengguna
     const names = handoverUsers
       .map((h) => h.user?.nama_pengguna)
       .filter((n) => n) // Hapus yang null/undefined
@@ -40,10 +40,7 @@ function formatDescription({ keperluan, handover, handoverUsers }) {
   }
 
   // 3. Pesan/Catatan Handover
-  // Kita cek apakah text handover mengandung info substantif yang belum ada di keperluan
   if (handover && handover.trim()) {
-    // Bersihkan markup mention (opsional, tapi mobile app kamu sepertinya sudah handle parsing)
-    // Kita kirim raw saja agar mobile app bisa parse @mention nya
     parts.push(`📝 Catatan Handover: ${handover.trim()}`);
   }
 
@@ -172,7 +169,7 @@ export async function GET(request) {
     const results = await Promise.all([
       fetchStoryPlanners, // 0
 
-      // 1. Cuti Approved (Global) + Handover Info
+      // 1. Cuti Approved (Global) [FIX: handover_users]
       db.pengajuanCuti.findMany({
         where: {
           deleted_at: null,
@@ -184,11 +181,11 @@ export async function GET(request) {
           id_pengajuan_cuti: true,
           id_user: true,
           keperluan: true,
-          handover: true, // Ambil teks handover
+          handover: true,
           tanggal_list: { select: { tanggal_cuti: true } },
           user: { select: { nama_pengguna: true } },
-          // Ambil user yang di-tag
-          handoverUsers: {
+          // PERBAIKAN: handover_users
+          handover_users: {
             select: {
               user: { select: { nama_pengguna: true } },
             },
@@ -196,7 +193,7 @@ export async function GET(request) {
         },
       }),
 
-      // 2. Izin Sakit (Global) + Handover Info
+      // 2. Izin Sakit (Global) [FIX: handover_users]
       db.pengajuanIzinSakit.findMany({
         where: {
           deleted_at: null,
@@ -211,7 +208,8 @@ export async function GET(request) {
           tanggal_pengajuan: true,
           created_at: true,
           user: { select: { nama_pengguna: true } },
-          handoverUsers: {
+          // PERBAIKAN: handover_users
+          handover_users: {
             select: {
               user: { select: { nama_pengguna: true } },
             },
@@ -219,7 +217,7 @@ export async function GET(request) {
         },
       }),
 
-      // 3. Izin Jam (Global) + Handover Info
+      // 3. Izin Jam (Global) [FIX: handover_users]
       db.pengajuanIzinJam.findMany({
         where: {
           deleted_at: null,
@@ -237,7 +235,8 @@ export async function GET(request) {
           jam_mulai: true,
           jam_selesai: true,
           user: { select: { nama_pengguna: true } },
-          handoverUsers: {
+          // PERBAIKAN: handover_users
+          handover_users: {
             select: {
               user: { select: { nama_pengguna: true } },
             },
@@ -282,11 +281,11 @@ export async function GET(request) {
       if (cutiItem) {
         cutiItem.user_name = item.user?.nama_pengguna;
         cutiItem.title = `${item.user?.nama_pengguna ? item.user.nama_pengguna + ' - ' : ''}Cuti`;
-        // Gunakan helper untuk deskripsi lengkap
+        // FIX: Pass item.handover_users
         cutiItem.description = formatDescription({
           keperluan: item.keperluan,
           handover: item.handover,
-          handoverUsers: item.handoverUsers,
+          handoverUsers: item.handover_users,
         });
         calendarItems.push(cutiItem);
       }
@@ -301,11 +300,11 @@ export async function GET(request) {
         user_id: item.id_user,
         user_name: item.user?.nama_pengguna,
         title: `${item.user?.nama_pengguna ? item.user.nama_pengguna + ' - ' : ''}Sakit`,
-        // Gunakan helper (untuk sakit biasanya keperluan = 'Sakit')
+        // FIX: Pass item.handover_users
         description: formatDescription({
           keperluan: 'Izin Sakit',
           handover: item.handover,
-          handoverUsers: item.handoverUsers,
+          handoverUsers: item.handover_users,
         }),
         start: formatISO(startOfDay(startDate)),
         end: formatISO(endOfDay(startDate)),
@@ -322,11 +321,11 @@ export async function GET(request) {
         user_id: item.id_user,
         user_name: item.user?.nama_pengguna,
         title: `${item.user?.nama_pengguna ? item.user.nama_pengguna + ' - ' : ''}Izin Jam`,
-        // Gunakan helper
+        // FIX: Pass item.handover_users
         description: formatDescription({
           keperluan: item.keperluan,
           handover: item.handover,
-          handoverUsers: item.handoverUsers,
+          handoverUsers: item.handover_users,
         }),
         start: formatISO(startDate),
         end: formatISO(endDate),

@@ -105,6 +105,40 @@ function normalizeUrgencyLocal(v) {
   }
 }
 
+function getEventDescHtml(event) {
+  if (!event) return "";
+
+  const ext = event.extendedProps || {};
+  const raw = ext.raw || {};
+
+  // 1️⃣ SELALU UTAMAKAN DATA MENTAH DARI DB
+  const fromRaw =
+    raw.deskripsi_kerja_html ??
+    raw.deskripsi_kerja ??
+    raw.deskripsi_html ??
+    raw.deskripsi;
+
+  if (fromRaw && typeof fromRaw === "string") {
+    return fromRaw;
+  }
+
+  // 2️⃣ Baru kalau nggak ada, pakai extendedProps.deskripsi
+  if (typeof ext.deskripsi === "string") {
+    return ext.deskripsi;
+  }
+
+  // 3️⃣ Terakhir banget, cek kalau title ternyata berisi HTML juga
+  if (
+    typeof event.title === "string" &&
+    /<\/?[a-z][\s\S]*>/i.test(event.title)
+  ) {
+    return event.title;
+  }
+
+  return "";
+}
+
+
 export default function AgendaCalendarContent() {
   const { notification } = AntdApp.useApp();
   const calRef = useRef(null);
@@ -142,6 +176,7 @@ export default function AgendaCalendarContent() {
 
   const openCreate = (startStr, endStr) => {
     setEditId(null);
+
     form.setFieldsValue({
       title: "",
       status: "teragenda",
@@ -154,26 +189,22 @@ export default function AgendaCalendarContent() {
   };
 
   const openEdit = (fcEvent) => {
-    setEditId(fcEvent.id);
+  setEditId(fcEvent.id);
 
-    const raw = fcEvent.extendedProps?.raw || {};
-    const descText =
-      fcEvent.extendedProps?.deskripsi ??
-      raw.deskripsi_kerja ??
-      raw.deskripsi ??
-      "";
+  const descText = getEventDescHtml(fcEvent);
 
-    form.setFieldsValue({
-      // HTML Quill
-      title: descText,
-      status: fcEvent.extendedProps?.status || "teragenda",
-      users: [fcEvent.extendedProps?.id_user].filter(Boolean),
-      id_agenda: fcEvent.extendedProps?.id_agenda || null,
-      start: dayjs(fcEvent.start),
-      end: dayjs(fcEvent.end || fcEvent.start),
-    });
-    setFormOpen(true);
-  };
+  form.setFieldsValue({
+    title: descText,
+    status: fcEvent.extendedProps?.status || "teragenda",
+    users: [fcEvent.extendedProps?.id_user].filter(Boolean),
+    id_agenda: fcEvent.extendedProps?.id_agenda || null,
+    start: dayjs(fcEvent.start),
+    end: dayjs(fcEvent.end || fcEvent.start),
+  });
+
+  setFormOpen(true);
+};
+
 
   const handleSelectAllUsers = () => {
     const allIds = (vm.userOptions || []).map((opt) => opt.value);
@@ -195,7 +226,9 @@ export default function AgendaCalendarContent() {
 
   const handleSubmitForm = async () => {
     const v = await form.validateFields();
-    const title = v.title || ""; // HTML, jangan di-trim
+
+    const rawTitle = v.title || "";
+    const title = normalizeRichText(rawTitle);
 
     if (isQuillEmpty(title)) {
       notification.warning({ message: "Nama aktivitas tidak boleh kosong" });
@@ -203,7 +236,7 @@ export default function AgendaCalendarContent() {
     }
 
     const payload = {
-      title,
+      title, // HTML sudah dinormalisasi, list tetap aman
       start: v.start?.toDate(),
       end: (v.end || v.start)?.toDate(),
       status: v.status,
@@ -345,31 +378,27 @@ export default function AgendaCalendarContent() {
   }, [detailOpen]);
 
   const commitMoveResize = async ({ event }) => {
-    try {
-      const raw = event.extendedProps?.raw || {};
-      const descText =
-        event.extendedProps?.deskripsi ??
-        raw.deskripsi_kerja ??
-        raw.deskripsi ??
-        "";
+  try {
+    const descText = getEventDescHtml(event);
 
-      await vm.updateEvent(event.id, {
-        title: descText,
-        start: event.start,
-        end: event.end || event.start,
-        status: event.extendedProps?.status || "teragenda",
-        id_agenda: event.extendedProps?.id_agenda || null,
-      });
-      notification.success({ message: "Agenda diperbarui" });
-    } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.message ||
-        "Gagal memperbarui agenda";
-      notification.error({ message: msg });
-      event.revert();
-    }
-  };
+    await vm.updateEvent(event.id, {
+      title: descText,
+      start: event.start,
+      end: event.end || event.start,
+      status: event.extendedProps?.status || "teragenda",
+      id_agenda: event.extendedProps?.id_agenda || null,
+    });
+    notification.success({ message: "Agenda diperbarui" });
+  } catch (e) {
+    const msg =
+      e?.response?.data?.message ||
+      e?.message ||
+      "Gagal memperbarui agenda";
+    notification.error({ message: msg });
+    event.revert();
+  }
+};
+
 
   const renderEventContent = (info) => {
     const st = info.event.extendedProps?.status;
@@ -471,11 +500,8 @@ export default function AgendaCalendarContent() {
     return normalizeUrgencyLocal(rawVal);
   }, [detailEvent]);
 
-  const descHtml =
-    detailEvent?.extendedProps?.deskripsi ??
-    detailEvent?.extendedProps?.raw?.deskripsi_kerja ??
-    "";
-
+  const descHtml = getEventDescHtml(detailEvent);
+  
   const onMoreMenuClick = ({ key }) => {
     if (key === "history") setHistoryOpen(true);
     if (key === "bulk-delete") confirmBulkDeleteSimilar();
@@ -642,20 +668,15 @@ export default function AgendaCalendarContent() {
 
             <Divider style={{ margin: "14px 0 12px" }} />
 
-            {/* Deskripsi: pakai Quill readOnly → bullet/angka aman */}
-            <div className="agenda-detail-editor">
-              {isQuillEmpty(descHtml) ? (
-                <span style={{ color: "#94a3b8" }}>—</span>
-              ) : (
-                <HtmlEditor
-                  value={descHtml}
-                  readOnly
-                  variant="agenda"
-                  minHeight={0}
-                  className="agenda-detail-editor-inner"
-                />
-              )}
-            </div>
+            {/* Deskripsi: render HTML langsung, class ql-editor supaya style list kepakai */}
+            {isQuillEmpty(descHtml) ? (
+              <span style={{ color: "#94a3b8" }}>—</span>
+            ) : (
+              <div
+                className="agenda-detail-html ql-editor"
+                dangerouslySetInnerHTML={{ __html: descHtml }}
+              />
+            )}
 
             <div className="flex justify-end gap-2 mt-10">
               <Tooltip title="Edit">
@@ -712,21 +733,11 @@ export default function AgendaCalendarContent() {
         <div style={{ display: "grid", rowGap: 8, fontSize: 14 }}>
           <div style={{ display: "flex", gap: 8 }}>
             <div style={{ width: 120, color: "#64748b" }}>Dibuat</div>
-            <div style={{ color: "#0f172a" }}>
-              {formatAuditLocal(
-                detailEvent?.extendedProps?.raw?.created_at,
-                "DD MMM YYYY HH:mm"
-              )}
-            </div>
+            <div style={{ color: "#0f172a" }}>{audit.createdText}</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <div style={{ width: 120, color: "#64748b" }}>Diubah</div>
-            <div style={{ color: "#0f172a" }}>
-              {formatAuditLocal(
-                detailEvent?.extendedProps?.raw?.updated_at,
-                "DD MMM YYYY HH:mm"
-              )}
-            </div>
+            <div style={{ color: "#0f172a" }}>{audit.updatedText}</div>
           </div>
         </div>
       </Modal>
@@ -824,15 +835,11 @@ export default function AgendaCalendarContent() {
           <Form.Item
             label="Nama Aktivitas"
             name="title"
-            valuePropName="value"
-            getValueFromEvent={normalizeRichText}
-            initialValue=""
             rules={[
               {
-                required: true,
-                message: "Nama aktivitas tidak boleh kosong",
                 validator: (_, value) => {
-                  if (isQuillEmpty(value)) {
+                  const normalized = normalizeRichText(value);
+                  if (isQuillEmpty(normalized)) {
                     return Promise.reject(
                       new Error("Nama aktivitas tidak boleh kosong")
                     );
@@ -843,6 +850,7 @@ export default function AgendaCalendarContent() {
             ]}
           >
             <HtmlEditor
+              key={editId ?? "create"} // remount tiap ganti event
               className="agenda-editor"
               placeholder="Tulis nama aktivitas atau deskripsi pekerjaan..."
               minHeight={150}
@@ -1113,7 +1121,6 @@ export default function AgendaCalendarContent() {
           text-decoration: none;
         }
 
-        /* Editor di modal Create/Edit */
         .agenda-editor {
           border: 1px solid #d1d5db;
           border-radius: 8px;
@@ -1140,17 +1147,11 @@ export default function AgendaCalendarContent() {
           line-height: 1.6;
         }
 
-        /* Detail pakai Quill readOnly */
-        .agenda-detail-editor .ql-toolbar {
-          display: none;
-        }
-        .agenda-detail-editor .ql-container {
-          border: 0;
-        }
-        .agenda-detail-editor .ql-editor {
-          padding: 0;
+        .agenda-detail-html {
           font-size: 14px;
           line-height: 1.6;
+          color: #0f172a;
+          word-break: break-word;
         }
       `}</style>
     </div>

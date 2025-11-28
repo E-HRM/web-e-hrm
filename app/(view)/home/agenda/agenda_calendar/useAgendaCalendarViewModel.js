@@ -10,6 +10,9 @@ import { crudService } from "../../../../utils/services/crudService";
 
 dayjs.extend(utc);
 
+/* ========= Helpers TZ-agnostic ========= */
+
+/** Normalisasi string tanggal dari server ke "YYYY-MM-DD HH:mm:ss" (tanpa TZ). */
 const toLocalWallTime = (v) => {
   if (!v) return null;
   const s = String(v).trim();
@@ -26,9 +29,11 @@ const toLocalWallTime = (v) => {
   return d.isValid() ? d.format("YYYY-MM-DD HH:mm:ss") : s;
 };
 
+/** Serialisasi Date/dayjs ke string lokal polos. */
 const serializeLocalWallTime = (d) =>
   d ? dayjs(d).format("YYYY-MM-DD HH:mm:ss") : null;
 
+/** Format tampilan dari string DB/ISO tanpa geser zona. */
 export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
   if (!v) return "-";
   const s = String(v).trim();
@@ -36,6 +41,7 @@ export const showFromDB = (v, fmt = "DD MMM YYYY HH:mm") => {
   return dayjs(local).format(fmt);
 };
 
+/* ===== Urgensi normalizer (DB -> label + level) ===== */
 const normalizeUrgency = (v) => {
   const s = (v || "").toString().trim().toUpperCase();
   switch (s) {
@@ -54,6 +60,7 @@ const normalizeUrgency = (v) => {
   }
 };
 
+/* Ambil nilai “kebutuhan_agenda” dari berbagai lokasi */
 const extractUrgencyRaw = (row) =>
   row?.kebutuhan_agenda ??
   row?.kebutuhan ??
@@ -63,10 +70,13 @@ const extractUrgencyRaw = (row) =>
   row?.agenda_kerja?.kebutuhan_agenda ??
   null;
 
+/* ============== Map Server -> FullCalendar ============== */
+
 const mapServerToFC = (row) => {
   const status =
     row.status || row.status_agenda || row.status_kerja || "teragenda";
 
+  // title = nama proyek (aktivitas/desc di extendedProps.deskripsi)
   const title =
     row.agenda?.nama_agenda ||
     row.nama_agenda ||
@@ -83,7 +93,7 @@ const mapServerToFC = (row) => {
 
   const urgency = normalizeUrgency(extractUrgencyRaw(row));
 
-  let backgroundColor = "#9ca3af";
+  let backgroundColor = "#9ca3af"; // teragenda
   if (status === "selesai") backgroundColor = "#22c55e";
   else if (status === "ditunda") backgroundColor = "#f59e0b";
   else if (status === "diproses") backgroundColor = "#3b82f6";
@@ -97,6 +107,7 @@ const mapServerToFC = (row) => {
     borderColor: backgroundColor,
     extendedProps: {
       status,
+      // HTML penuh dari Quill disimpan di sini:
       deskripsi: row.deskripsi_kerja || row.deskripsi || "",
       agenda:
         row.agenda ||
@@ -112,6 +123,7 @@ const mapServerToFC = (row) => {
   };
 };
 
+/* ===== Signature helper: identitas “serupa” ===== */
 const signatureFromRow = (row) => {
   const title = (row?.deskripsi_kerja || "").trim();
   const id_agenda = String(row?.id_agenda || row?.agenda?.id_agenda || "");
@@ -122,6 +134,7 @@ const signatureFromRow = (row) => {
   return `${id_agenda}|${title}|${start}|${end}`;
 };
 
+/* gunakan deskripsi aktivitas, bukan event.title (nama proyek) */
 const signatureFromEventLike = (evLike) => {
   const raw = evLike.extendedProps?.raw || {};
 
@@ -148,6 +161,7 @@ const signatureFromEventLike = (evLike) => {
 };
 
 export default function useAgendaCalendarViewModel() {
+  /* ===== Range kalender (FC memberi end eksklusif) ===== */
   const [range, setRangeState] = useState(() => ({
     start: dayjs().startOf("month").startOf("week").toDate(),
     end: dayjs().endOf("month").endOf("week").toDate(),
@@ -157,6 +171,7 @@ export default function useAgendaCalendarViewModel() {
     []
   );
 
+  /* ===== Master Users: fetch semua halaman ===== */
   const fetchAllUsers = useCallback(async () => {
     const perPage = 100;
     let page = 1;
@@ -257,6 +272,7 @@ export default function useAgendaCalendarViewModel() {
     return null;
   }, []);
 
+  /* ===== Master Proyek/Agenda ===== */
   const { data: agendaRes, mutate: refetchAgenda } = useSWR(
     `${ApiEndpoints.GetAgenda}?perPage=1000`,
     fetcher,
@@ -283,6 +299,7 @@ export default function useAgendaCalendarViewModel() {
     [refetchAgenda]
   );
 
+  /* ===== List agenda kerja: AMBIL SEMUA HALAMAN ===== */
   const fetchAllAgendaKerja = useCallback(async (fromDate, toDate) => {
     const perPage = 200;
     let page = 1;
@@ -358,9 +375,11 @@ export default function useAgendaCalendarViewModel() {
     [agendaKerjaAll]
   );
 
+  /* ===== CRUD ===== */
+
   const createEvents = useCallback(
     async ({
-      title, // HTML dari ReactQuill
+      title, // HTML dari Quill
       start,
       end,
       status = "teragenda",
@@ -375,7 +394,7 @@ export default function useAgendaCalendarViewModel() {
         const payload = {
           id_user: uid,
           id_agenda: id_agenda || null,
-          deskripsi_kerja: title, // simpan apa adanya
+          deskripsi_kerja: title, // simpan HTML apa adanya
           status,
           start_date: serializeLocalWallTime(start),
           end_date: serializeLocalWallTime(end || start),
@@ -385,11 +404,7 @@ export default function useAgendaCalendarViewModel() {
 
         sent += 1;
         if (typeof onProgress === "function") {
-          onProgress({
-            sent,
-            total,
-            userId: uid,
-          });
+          onProgress({ sent, total, userId: uid });
         }
       }
 
@@ -401,7 +416,7 @@ export default function useAgendaCalendarViewModel() {
   const updateEvent = useCallback(
     async (id, { title, start, end, status, id_agenda }) => {
       const payload = {
-        deskripsi_kerja: title, // HTML full
+        deskripsi_kerja: title, // HTML penuh Quill
         start_date: serializeLocalWallTime(start),
         end_date: serializeLocalWallTime(end || start),
         status: status || "teragenda",
@@ -423,6 +438,8 @@ export default function useAgendaCalendarViewModel() {
     },
     [mutate]
   );
+
+  /* ===== Bulk tools ===== */
 
   const findSimilarEventsByEvent = useCallback(async (fcEvent) => {
     if (!fcEvent) return { targets: [] };
