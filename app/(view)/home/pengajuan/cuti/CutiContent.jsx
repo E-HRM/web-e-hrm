@@ -17,11 +17,11 @@ import {
   Tooltip,
   Space,
   Card,
-  Table,
   Select,
   DatePicker,
   Avatar,
   Badge,
+  message,
 } from "antd";
 import {
   SearchOutlined,
@@ -38,6 +38,7 @@ import Link from "next/link";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
 import useCutiViewModel from "./useCutiViewModel";
+import ApprovalTable from "@/app/components/pengajuan/ApprovalTable";
 
 dayjs.locale("id");
 
@@ -75,7 +76,13 @@ function StatusBadge({ status }) {
     Menunggu: { color: WARNING_COLOR, text: "Menunggu" },
   };
   const config = statusConfig[status] || statusConfig.Menunggu;
-  return <Badge color={config.color} text={config.text} className="font-medium text-xs" />;
+  return (
+    <Badge
+      color={config.color}
+      text={config.text}
+      className="font-medium text-xs"
+    />
+  );
 }
 
 function formatDateListID(date) {
@@ -103,7 +110,8 @@ function TextClampCell({ text, expanded, onToggle }) {
     const el = ghostRef.current;
     if (!el) return;
     const cs = window.getComputedStyle(el);
-    const base = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3 || 18;
+    const base =
+      parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.3 || 18;
     const lines = Math.round(el.scrollHeight / base);
     setShowToggle(lines > 1);
   }, []);
@@ -111,7 +119,8 @@ function TextClampCell({ text, expanded, onToggle }) {
   useLayoutEffect(() => {
     recompute();
     const ro = new ResizeObserver(recompute);
-    if (ghostRef.current?.parentElement) ro.observe(ghostRef.current.parentElement);
+    if (ghostRef.current?.parentElement)
+      ro.observe(ghostRef.current.parentElement);
     return () => ro.disconnect();
   }, [recompute, text]);
 
@@ -256,14 +265,15 @@ function ApproveModal({ openRow, polaOptions, onSubmit, onCancel }) {
 export default function CutiContent() {
   const vm = useCutiViewModel();
 
-  // State untuk modal dan UI
   const [rejectRow, setRejectRow] = useState(null);
   const [reason, setReason] = useState("");
   const [approveRow, setApproveRow] = useState(null);
   const [expandedKeterangan, setExpandedKeterangan] = useState(new Set());
   const [expandedHandover, setExpandedHandover] = useState(new Set());
 
-  // Toggle untuk expandable content
+  const [previewDocUrl, setPreviewDocUrl] = useState(null);
+  const [previewDocTitle, setPreviewDocTitle] = useState("");
+
   const toggleKeterangan = (id) =>
     setExpandedKeterangan((prev) => {
       const s = new Set(prev);
@@ -280,7 +290,6 @@ export default function CutiContent() {
 
   const counts = vm.tabCounts || { pengajuan: 0, disetujui: 0, ditolak: 0 };
 
-  // Kolom tabel
   const columns = useMemo(() => {
     return [
       {
@@ -328,7 +337,6 @@ export default function CutiContent() {
             </div>
           </div>
         ),
-
       },
       {
         title: "DETAIL PENGAJUAN",
@@ -341,7 +349,7 @@ export default function CutiContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <MiniField label="Jenis Cuti">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full" />
                   <span className="font-medium">{r.jenisCuti}</span>
                 </div>
               </MiniField>
@@ -408,29 +416,33 @@ export default function CutiContent() {
                     onToggle={() => toggleHandover(r.id)}
                   />
 
-                  {Array.isArray(r.handoverUsers) && r.handoverUsers.length > 0 && (
-                    <div className="mt-3">
-                      <div className="text-xs font-semibold text-gray-700 mb-2">
-                        Daftar Penerima Handover :
+                  {Array.isArray(r.handoverUsers) &&
+                    r.handoverUsers.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-xs font-semibold text-gray-700 mb-2">
+                          Daftar Penerima Handover :
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {r.handoverUsers.map((u) => (
+                            <div
+                              key={u.id}
+                              className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
+                            >
+                              <Avatar
+                                src={u.photo}
+                                size={24}
+                                icon={<UserOutlined />}
+                              />
+                              <Tooltip title={u.name}>
+                                <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
+                                  {ellipsisWords(u.name, 2)}
+                                </span>
+                              </Tooltip>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {r.handoverUsers.map((u) => (
-                          <div
-                            key={u.id}
-                            className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200"
-                          >
-                            <Avatar src={u.photo} size={24} icon={<UserOutlined />} />
-                            <Tooltip title={u.name}>
-                              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">
-                                {ellipsisWords(u.name, 2)}
-                              </span>
-                            </Tooltip>
-                          </div>
-                        ))}
-
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               </MiniField>
 
@@ -440,7 +452,13 @@ export default function CutiContent() {
                   size="small"
                   type={r.buktiUrl ? "primary" : "default"}
                   disabled={!r.buktiUrl}
-                  onClick={() => r.buktiUrl && window.open(r.buktiUrl, "_blank")}
+                  onClick={() => {
+                    if (!r.buktiUrl) return;
+                    setPreviewDocUrl(r.buktiUrl);
+                    setPreviewDocTitle(
+                      `Dokumen pendukung - ${r.nama || ""}`
+                    );
+                  }}
                   className="flex items-center gap-1"
                 >
                   {r.buktiUrl ? "Lihat Dokumen" : "Tidak Ada File"}
@@ -457,7 +475,6 @@ export default function CutiContent() {
         fixed: "right",
         onCell: () => ({ style: { verticalAlign: "top" } }),
         render: (_, r) => {
-          // Tampilkan tombol hanya pada tab "pengajuan".
           if (vm.tab === "pengajuan") {
             return (
               <Space direction="vertical" size={8} className="w-full">
@@ -486,7 +503,6 @@ export default function CutiContent() {
             );
           }
 
-          // Di tab "disetujui" atau "ditolak": tampilkan info saja, tanpa tombol lawan aksi.
           const isApproved = vm.tab === "disetujui";
           return (
             <div
@@ -496,28 +512,38 @@ export default function CutiContent() {
                   : "bg-red-50 border-red-200"
               }`}
             >
-              <div className={`text-xs font-semibold mb-1 ${
-                isApproved ? "text-green-700" : "text-red-700"
-              }`}>
+              <div
+                className={`text-xs font-semibold mb-1 ${
+                  isApproved ? "text-green-700" : "text-red-700"
+                }`}
+              >
                 {isApproved ? "Disetujui Pada" : "Ditolak Pada"}
               </div>
 
-              <div className={`text-sm font-medium ${
-                isApproved ? "text-green-900" : "text-red-900"
-              }`}>
+              <div
+                className={`text-sm font-medium ${
+                  isApproved ? "text-green-900" : "text-red-900"
+                }`}
+              >
                 {formatDateTimeID(r.tglKeputusan)}
               </div>
 
               {r.alasan && (
                 <div className="mt-3">
-                  <div className={`text-xs font-semibold mb-1 ${
-                    isApproved ? "text-green-700" : "text-red-700"
-                  }`}>
+                  <div
+                    className={`text-xs font-semibold mb-1 ${
+                      isApproved ? "text-green-700" : "text-red-700"
+                    }`}
+                  >
                     Catatan
                   </div>
-                  <div className={`text-sm rounded p-2 ${
-                    isApproved ? "bg-white/60 text-green-900" : "bg-white/60 text-red-900"
-                  }`}>
+                  <div
+                    className={`text-sm rounded p-2 ${
+                      isApproved
+                        ? "bg-white/60 text-green-900"
+                        : "bg-white/60 text-red-900"
+                    }`}
+                  >
                     {r.alasan}
                   </div>
                 </div>
@@ -585,7 +611,7 @@ export default function CutiContent() {
             headerBg: "#f8fafc",
             headerColor: "#374151",
             headerSplitColor: "transparent",
-            rowHoverBg: "transparent", 
+            rowHoverBg: "transparent",
           },
         },
         token: {
@@ -605,7 +631,8 @@ export default function CutiContent() {
                 Manajemen Pengajuan Cuti
               </h1>
               <p className="text-gray-600 text-sm">
-                Kelola dan pantau semua pengajuan cuti karyawan dalam satu tempat
+                Kelola dan pantau semua pengajuan cuti karyawan dalam satu
+                tempat
               </p>
             </div>
 
@@ -642,31 +669,22 @@ export default function CutiContent() {
                         Daftar {t.key.charAt(0).toUpperCase() + t.key.slice(1)}
                       </h2>
                       <p className="text-gray-500 text-sm mt-1">
-                        Menampilkan {dataSource.length} dari {counts[t.key]} pengajuan
+                        Menampilkan {dataSource.length} dari {counts[t.key]}{" "}
+                        pengajuan
                       </p>
                     </div>
                   </div>
 
-                  <Table
+                  <ApprovalTable
                     columns={columns}
                     dataSource={dataSource}
-                    size="middle"
-                    tableLayout="fixed"
-                    sticky
-                    pagination={{
-                      current: vm.page,
-                      pageSize: vm.pageSize,
-                      total: counts[vm.tab],
-                      pageSizeOptions: [10, 20, 50],
-                      showSizeChanger: true,
-                      showTotal: (total, range) =>
-                        `${range[0]}-${range[1]} dari ${total} data`,
-                      onChange: (current, pageSize) =>
-                        vm.changePage(current, pageSize),
-                    }}
-                    scroll={{ x: 1200, y: 600 }}
+                    page={vm.page}
+                    pageSize={vm.pageSize}
+                    total={counts[vm.tab]}
                     loading={vm.loading}
-                    rowClassName={() => "no-hover-row"} // kelas untuk matikan hover via CSS
+                    onChangePage={(current, pageSize) =>
+                      vm.changePage(current, pageSize)
+                    }
                   />
                 </div>
               ),
@@ -674,15 +692,47 @@ export default function CutiContent() {
           />
         </Card>
 
-        {/* Matikan efek hover abu-abu Antd (fallback CSS) */}
-        <style jsx global>{`
-          .no-hover-row:hover > td {
-            background: transparent !important;
-          }
-          .ant-table-tbody > tr.ant-table-row:hover > td {
-            background: transparent !important;
-          }
-        `}</style>
+        {/* Modal preview dokumen */}
+        <Modal
+          title={previewDocTitle || "Preview Dokumen"}
+          open={!!previewDocUrl}
+          onCancel={() => {
+            setPreviewDocUrl(null);
+            setPreviewDocTitle("");
+          }}
+          footer={null}
+          width="50%"
+          style={{ top: 20 }}
+          bodyStyle={{ padding: 0 }}
+          centered
+        >
+          {previewDocUrl && (
+            <div style={{ height: "75vh" }}>
+              {/\.(png|jpe?g|gif|webp)$/i.test(previewDocUrl) ? (
+                <img
+                  src={previewDocUrl}
+                  alt={previewDocTitle || "Dokumen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    display: "block",
+                  }}
+                />
+              ) : (
+                <iframe
+                  src={previewDocUrl}
+                  title={previewDocTitle || "Dokumen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                  }}
+                />
+              )}
+            </div>
+          )}
+        </Modal>
 
         {/* Modal Penolakan */}
         <Modal
@@ -701,7 +751,7 @@ export default function CutiContent() {
           }}
           onOk={async () => {
             const r = String(reason || "").trim();
-            if (!r) { // guard lokal biar gak memanggil VM ketika kosong
+            if (!r) {
               message.error("Alasan wajib diisi saat menolak.");
               return;
             }
@@ -724,7 +774,8 @@ export default function CutiContent() {
                 Konfirmasi Penolakan
               </div>
               <div className="text-sm text-red-700 mt-1">
-                Anda akan menolak pengajuan cuti dari <strong>{rejectRow?.nama}</strong>
+                Anda akan menolak pengajuan cuti dari{" "}
+                <strong>{rejectRow?.nama}</strong>
               </div>
             </div>
 
@@ -740,7 +791,8 @@ export default function CutiContent() {
                 className="resize-none"
               />
               <div className="text-xs text-gray-500 mt-2">
-                Alasan penolakan wajib diisi dan akan dikirimkan kepada karyawan
+                Alasan penolakan wajib diisi dan akan dikirimkan kepada
+                karyawan
               </div>
             </div>
           </div>

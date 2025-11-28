@@ -60,7 +60,7 @@ const normalizeUrgency = (v) => {
   }
 };
 
-/* Ambil nilai “kebutuhan_agenda” dari berbagai lokasi */
+/* Ambil nilai “kebutuhan_agenda” dari berbagai kemungkinan lokasi */
 const extractUrgencyRaw = (row) =>
   row?.kebutuhan_agenda ??
   row?.kebutuhan ??
@@ -76,7 +76,7 @@ const mapServerToFC = (row) => {
   const status =
     row.status || row.status_agenda || row.status_kerja || "teragenda";
 
-  // title = nama proyek (aktivitas/desc di extendedProps.deskripsi)
+  // Nama PROYEK di judul event (aktivitas/desc disimpan di extendedProps.deskripsi)
   const title =
     row.agenda?.nama_agenda ||
     row.nama_agenda ||
@@ -107,7 +107,6 @@ const mapServerToFC = (row) => {
     borderColor: backgroundColor,
     extendedProps: {
       status,
-      // HTML penuh dari Quill disimpan di sini:
       deskripsi: row.deskripsi_kerja || row.deskripsi || "",
       agenda:
         row.agenda ||
@@ -123,7 +122,7 @@ const mapServerToFC = (row) => {
   };
 };
 
-/* ===== Signature helper: identitas “serupa” ===== */
+/* ====== Signature helper: identitas “serupa” (judul + proyek + jam) ====== */
 const signatureFromRow = (row) => {
   const title = (row?.deskripsi_kerja || "").trim();
   const id_agenda = String(row?.id_agenda || row?.agenda?.id_agenda || "");
@@ -134,7 +133,7 @@ const signatureFromRow = (row) => {
   return `${id_agenda}|${title}|${start}|${end}`;
 };
 
-/* gunakan deskripsi aktivitas, bukan event.title (nama proyek) */
+/* ====== gunakan deskripsi aktivitas, bukan event.title (nama proyek) ====== */
 const signatureFromEventLike = (evLike) => {
   const raw = evLike.extendedProps?.raw || {};
 
@@ -343,6 +342,7 @@ export default function useAgendaCalendarViewModel() {
     return all;
   }, []);
 
+  // SWR key pakai range; fetcher gabung semua halaman
   const {
     data: agendaKerjaAll,
     mutate,
@@ -356,6 +356,7 @@ export default function useAgendaCalendarViewModel() {
     { revalidateOnFocus: false }
   );
 
+  // apakah data agenda sudah pernah berhasil di-load minimal sekali?
   const [hasLoadedEventsOnce, setHasLoadedEventsOnce] = useState(false);
 
   useEffect(() => {
@@ -379,13 +380,13 @@ export default function useAgendaCalendarViewModel() {
 
   const createEvents = useCallback(
     async ({
-      title, // HTML dari Quill
+      title,
       start,
       end,
       status = "teragenda",
       userIds = [],
       id_agenda,
-      onProgress,
+      onProgress, // optional
     }) => {
       const total = userIds.length || 0;
       let sent = 0;
@@ -394,7 +395,7 @@ export default function useAgendaCalendarViewModel() {
         const payload = {
           id_user: uid,
           id_agenda: id_agenda || null,
-          deskripsi_kerja: title, // simpan HTML apa adanya
+          deskripsi_kerja: title,
           status,
           start_date: serializeLocalWallTime(start),
           end_date: serializeLocalWallTime(end || start),
@@ -404,7 +405,11 @@ export default function useAgendaCalendarViewModel() {
 
         sent += 1;
         if (typeof onProgress === "function") {
-          onProgress({ sent, total, userId: uid });
+          onProgress({
+            sent,
+            total,
+            userId: uid,
+          });
         }
       }
 
@@ -416,7 +421,7 @@ export default function useAgendaCalendarViewModel() {
   const updateEvent = useCallback(
     async (id, { title, start, end, status, id_agenda }) => {
       const payload = {
-        deskripsi_kerja: title, // HTML penuh Quill
+        deskripsi_kerja: title,
         start_date: serializeLocalWallTime(start),
         end_date: serializeLocalWallTime(end || start),
         status: status || "teragenda",
@@ -439,7 +444,7 @@ export default function useAgendaCalendarViewModel() {
     [mutate]
   );
 
-  /* ===== Bulk tools ===== */
+  /* ===== Bulk tools: cari & hapus “serupa” (judul+proyek+jam sama) ===== */
 
   const findSimilarEventsByEvent = useCallback(async (fcEvent) => {
     if (!fcEvent) return { targets: [] };
@@ -501,22 +506,33 @@ export default function useAgendaCalendarViewModel() {
   );
 
   return {
+    // data
     events,
     agendaOptions,
     userOptions,
+
+    // user helpers
     getUserById,
     getPhotoUrl,
     getJabatanName,
     getDepartemenName,
+
+    // actions
     setRange,
     createEvents,
     updateEvent,
     deleteEvent,
     createAgendaMaster,
+
+    // bulk helpers
     findSimilarEventsByEvent,
     bulkDeleteByIds,
     bulkDeleteSimilarByEvent,
+
+    // util
     showFromDB,
+
+    // state loading agenda
     loadingInitialEvents,
     reloadingEvents,
     hasLoadedEventsOnce,
