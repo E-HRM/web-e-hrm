@@ -199,7 +199,6 @@ function ApproveModal({ openRow, polaOptions, onSubmit, onCancel }) {
     <Modal
       title={
         <div className="flex items-center gap-2">
-          <CheckOutlined className="text-green-600" />
           <span>Setujui Pengajuan Cuti</span>
         </div>
       }
@@ -738,7 +737,6 @@ export default function CutiContent() {
         <Modal
           title={
             <div className="flex items-center gap-2">
-              <CloseOutlined className="text-red-600" />
               <span>Tolak Pengajuan Cuti</span>
             </div>
           }

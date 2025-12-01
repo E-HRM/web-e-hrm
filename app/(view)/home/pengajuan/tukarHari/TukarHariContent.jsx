@@ -184,7 +184,6 @@ function ApproveModal({ openRow, polaOptions, onSubmit, onCancel, loadingPola })
     <Modal
       title={
         <div className="flex items-center gap-2">
-          <CheckOutlined className="text-green-600" />
           <span>Setujui Pengajuan Tukar Hari</span>
         </div>
       }
@@ -721,7 +720,6 @@ export default function TukarHariContent() {
         <Modal
           title={
             <div className="flex items-center gap-2">
-              <CloseOutlined className="text-red-600" />
               <span>Tolak Pengajuan</span>
             </div>
           }

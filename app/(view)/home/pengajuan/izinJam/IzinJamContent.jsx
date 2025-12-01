@@ -632,7 +632,6 @@ export default function IzinJamContent() {
         <Modal
           title={
             <div className="flex items-center gap-2">
-              <CloseOutlined className="text-red-600" />
               <span>Tolak Pengajuan Izin Jam</span>
             </div>
           }
@@ -696,7 +695,6 @@ export default function IzinJamContent() {
         <Modal
           title={
             <div className="flex items-center gap-2">
-              <CheckOutlined className="text-green-600" />
               <span>Setujui Pengajuan Izin Jam</span>
             </div>
           }
