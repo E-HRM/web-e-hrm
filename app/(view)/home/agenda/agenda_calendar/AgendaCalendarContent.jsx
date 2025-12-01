@@ -120,6 +120,10 @@ export default function AgendaCalendarContent() {
   const calRef = useRef(null);
   const vm = useVM();
 
+  // default jam untuk DatePicker (tanpa detik)
+  const defaultStartTime = dayjs("00:00", "HH:mm");
+  const defaultEndTime = dayjs("23:59", "HH:mm");
+
   /* ===== Form Create/Edit ===== */
   const [formOpen, setFormOpen] = useState(false);
   const [form] = Form.useForm();
@@ -156,15 +160,23 @@ export default function AgendaCalendarContent() {
       ? "fc-chip fc-chip--plan"
       : "fc-chip fc-chip--proc";
 
+  // BUKA CREATE:
+  // base day = tanggal yang dipilih di kalender (startStr),
+  // lalu set 00:00–23:59 di hari itu, supaya 1 kotak saja.
   const openCreate = (startStr, endStr) => {
     setEditId(null);
+
+    const baseDay = startStr ? dayjs(startStr) : dayjs();
+    const start = baseDay.startOf("day"); // 00:00
+    const end = baseDay.hour(23).minute(59); // 23:59
+
     form.setFieldsValue({
       title: "",
       status: "teragenda",
       users: [],
       id_agenda: null,
-      start: dayjs(startStr),
-      end: dayjs(endStr),
+      start,
+      end,
     });
     setFormOpen(true);
   };
@@ -179,13 +191,30 @@ export default function AgendaCalendarContent() {
       raw.deskripsi ??
       "";
 
+    // Normalisasi start & end
+    let start = dayjs(fcEvent.start);
+    let end = dayjs(fcEvent.end || fcEvent.start);
+
+    // Kalau data lama pola-nya: start=hari N 00:00, end=hari N+1 00:00,
+    // anggap sebagai "full day" dan ubah end jadi 23:59 di hari yang sama.
+    if (
+      fcEvent.end &&
+      end.diff(start, "day") === 1 &&
+      start.hour() === 0 &&
+      start.minute() === 0 &&
+      end.hour() === 0 &&
+      end.minute() === 0
+    ) {
+      end = start.hour(23).minute(59);
+    }
+
     form.setFieldsValue({
       title: descText,
       status: fcEvent.extendedProps?.status || "teragenda",
       users: [fcEvent.extendedProps?.id_user].filter(Boolean),
       id_agenda: fcEvent.extendedProps?.id_agenda || null,
-      start: dayjs(fcEvent.start),
-      end: dayjs(fcEvent.end || fcEvent.start),
+      start,
+      end,
     });
     setFormOpen(true);
   };
@@ -944,10 +973,18 @@ export default function AgendaCalendarContent() {
               { required: true, message: "Tanggal mulai wajib diisi" },
             ]}
           >
-            <DatePicker showTime className="w-full" />
+            <DatePicker
+              showTime={{ format: "HH:mm", defaultValue: defaultStartTime }}
+              format="YYYY-MM-DD HH:mm"
+              className="w-full"
+            />
           </Form.Item>
           <Form.Item label="Selesai" name="end">
-            <DatePicker showTime className="w-full" />
+            <DatePicker
+              showTime={{ format: "HH:mm", defaultValue: defaultEndTime }}
+              format="YYYY-MM-DD HH:mm"
+              className="w-full"
+            />
           </Form.Item>
         </Form>
       </Modal>

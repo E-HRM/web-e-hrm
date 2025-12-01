@@ -611,7 +611,6 @@ export default function SakitContent() {
         <Modal
           title={
             <div className="flex items-center gap-2">
-              <CloseOutlined className="text-red-600" />
               <span>Tolak Pengajuan Izin Sakit</span>
             </div>
           }
@@ -675,7 +674,6 @@ export default function SakitContent() {
         <Modal
           title={
             <div className="flex items-center gap-2">
-              <CheckOutlined className="text-green-600" />
               <span>Setujui Pengajuan Izin Sakit</span>
             </div>
           }
