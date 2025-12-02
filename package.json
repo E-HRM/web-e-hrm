@@ -37,6 +37,8 @@
     "react-leaflet": "^4.2.1",
     "react-quill": "^2.0.0",
     "recharts": "^3.2.1",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-react": "^5.30.3",
     "swr": "^2.3.6",
     "xlsx": "^0.18.5"
   },
