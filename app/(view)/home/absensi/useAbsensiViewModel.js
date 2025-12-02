@@ -32,13 +32,25 @@ function normalizePhotoUrl(url) {
 
 function pickCoord(obj) {
   if (!obj) return null;
+
   const lat = Number(obj.latitude ?? obj.lat ?? obj.geo_lat ?? obj.lat_start ?? obj.lat_end);
   const lon = Number(obj.longitude ?? obj.lon ?? obj.geo_lon ?? obj.lon_start ?? obj.lon_end);
+
+  // deteksi soft delete (sesuaikan kalau nama field kamu beda)
+  const deleted =
+    !!(obj.deleted_at || obj.deletedAt || obj.is_deleted || obj.isDeleted);
+
   if (Number.isFinite(lat) && Number.isFinite(lon)) {
-    return { lat, lon, name: obj.nama_kantor || obj.name || null };
+    return {
+      lat,
+      lon,
+      name: obj.nama_kantor || obj.name || null,
+      deleted,           // <-- simpan status soft delete
+    };
   }
   return null;
 }
+
 
 function toMinutes(hhmm) {
   if (!hhmm) return null;
@@ -224,18 +236,30 @@ export default function useAbsensiViewModel() {
   }, [base]);
 
   const lokasiOptions = useMemo(() => {
-    const s = new Set();
-    const add = (loc) => {
-      if (!loc) return;
-      const label = loc.name ||
-        (Number.isFinite(loc.lat) && Number.isFinite(loc.lon)
-          ? `Lat ${loc.lat.toFixed(5)}, Lon ${loc.lon.toFixed(5)}`
-          : "");
-      if (label) s.add(label);
-    };
-    for (const r of base) { add(r?.lokasiIn); add(r?.lokasiOut); add(r?.breakStartCoord); add(r?.breakEndCoord); }
-    return Array.from(s).map(v => ({ value: v, label: v }));
-  }, [base]);
+  const s = new Set();
+  const add = (loc) => {
+    if (!loc) return;
+    if (loc.deleted) return; // <-- jangan masukkan yang soft delete
+
+    const label =
+      loc.name ||
+      (Number.isFinite(loc.lat) && Number.isFinite(loc.lon)
+        ? `Lat ${loc.lat.toFixed(5)}, Lon ${loc.lon.toFixed(5)}`
+        : "");
+
+    if (label) s.add(label);
+  };
+
+  for (const r of base) {
+    add(r?.lokasiIn);
+    add(r?.lokasiOut);
+    add(r?.breakStartCoord);
+    add(r?.breakEndCoord);
+  }
+
+  return Array.from(s).map((v) => ({ value: v, label: v }));
+}, [base]);
+
 
   const kedatangan = useMemo(
     () =>

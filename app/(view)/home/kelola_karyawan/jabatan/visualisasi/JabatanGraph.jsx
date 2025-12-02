@@ -65,12 +65,6 @@ export default function JabatanGraph() {
         style={{ borderRadius: 16 }}
         title={
           <div className="flex gap-3">
-            <Button type="primary" onClick={vm.seedDefault} loading={vm.seeding}>
-              Tambahkan Jabatan Default
-            </Button>
-            <Button icon={<PrinterOutlined />} onClick={() => window.print()}>
-              Cetak
-            </Button>
           </div>
         }
         extra={
