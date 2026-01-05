@@ -1,251 +1,239 @@
 import { NextResponse } from 'next/server';
 import db from '../../../../lib/prisma';
-import { verifyAuthToken } from '@/lib/jwt';
+import { verifyAuthToken } from '../../../../lib/jwt';
 import { authenticateRequest } from '../../../utils/auth/authUtils';
-import { parseDateTimeToUTC } from '../../../../helpers/date-helper';
 
-async function ensureAuth(req) {
-  const auth = req.headers.get("authorization") || "";
-  if (auth.startsWith("Bearer ")) {
+const ALLOWED_ROLES = new Set(['HR', 'DIREKTUR', 'OPERASIONAL', 'SUPERADMIN']);
+
+async function getActor(req) {
+  const auth = req.headers.get('authorization') || '';
+  if (auth.startsWith('Bearer ')) {
     try {
-      verifyAuthToken(auth.slice(7));
-      return true;
-    } catch (_) {}
+      const payload = verifyAuthToken(auth.slice(7));
+      return {
+        id: payload?.sub || payload?.id_user || payload?.userId,
+        role: payload?.role,
+        source: 'bearer',
+      };
+    } catch (_) {
+      // fallback ke session
+    }
   }
+
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
-  return true;
+
+  return {
+    id: sessionOrRes?.user?.id,
+    role: sessionOrRes?.user?.role,
+    source: 'session',
+  };
 }
 
-function parseRequiredString(value, field) {
-  const str = value !== undefined && value !== null ? String(value).trim() : '';
-  if (!str) {
-    throw new Error(`Field '${field}' wajib diisi.`);
+function requireAdminRole(actor) {
+  if (!actor?.role || !ALLOWED_ROLES.has(actor.role)) {
+    return NextResponse.json({ ok: false, message: 'Forbidden: tidak memiliki akses.' }, { status: 403 });
   }
-  return str;
+  return null;
 }
 
-function parseOptionalString(value) {
+const BULAN_VALUES = new Set(['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']);
+
+const BULAN_BY_NUMBER = {
+  1: 'JANUARI',
+  2: 'FEBRUARI',
+  3: 'MARET',
+  4: 'APRIL',
+  5: 'MEI',
+  6: 'JUNI',
+  7: 'JULI',
+  8: 'AGUSTUS',
+  9: 'SEPTEMBER',
+  10: 'OKTOBER',
+  11: 'NOVEMBER',
+  12: 'DESEMBER',
+};
+
+function parseIntStrict(value, field) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(n)) throw new Error(`Field '${field}' harus berupa angka integer.`);
+  return n;
+}
+
+function parseBool(value, field) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const v = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(v)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(v)) return false;
+  throw new Error(`Field '${field}' harus boolean (true/false).`);
+}
+
+function parseBulan(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+
+  // numeric month
+  if (typeof value === 'number' || /^\d+$/.test(String(value).trim())) {
+    const n = Number.parseInt(String(value).trim(), 10);
+    if (n >= 1 && n <= 12) return BULAN_BY_NUMBER[n];
+    throw new Error("Field 'bulan' harus 1-12 atau salah satu enum Bulan.");
+  }
+
+  const s = String(value).trim().toUpperCase();
+  if (BULAN_VALUES.has(s)) return s;
+
+  throw new Error("Field 'bulan' harus salah satu dari: " + Array.from(BULAN_VALUES).join(', ') + ' (atau 1-12).');
+}
+
+function parseIdUser(value) {
   if (value === undefined || value === null) return undefined;
-  const str = String(value).trim();
-  return str === "" ? null : str;
+  const s = String(value).trim();
+  if (!s) return undefined;
+  // validasi ringan uuid char(36)
+  if (s.length !== 36) throw new Error("Field 'id_user' tidak valid.");
+  return s;
 }
 
-function parseOptionalDateTime(value, field) {
-  if (value === undefined || value === null || value === "") return undefined;
-  const parsed = parseDateTimeToUTC(value);
-  if (!(parsed instanceof Date)) {
-    throw new Error(`Field '${field}' harus berupa tanggal/waktu yang valid.`);
-  }
-  return parsed;
-}
+const ORDERABLE_FIELDS = new Set(['created_at', 'updated_at', 'tahun', 'bulan', 'is_scheduled']);
 
-const VALID_WORK_STATUS = new Set(["berjalan", "berhenti", "selesai"]);
+export async function GET(request) {
+  const actor = await getActor(request);
+  if (actor instanceof NextResponse) return actor;
 
-function parseStatus(value) {
-  const status = value !== undefined && value !== null ? String(value).trim() : '';
-  if (!status) return undefined;
-  if (!VALID_WORK_STATUS.has(status)) {
-    throw new Error(
-      `Field 'status' harus salah satu dari: ${Array.from(
-        VALID_WORK_STATUS
-      ).join(", ")}.`
-    );
-  }
-  return status;
-}
-
-export async function GET(req) {
-  const ok = await ensureAuth(req);
-  if (ok instanceof NextResponse) return ok;
+  const forbidden = requireAdminRole(actor);
+  if (forbidden) return forbidden;
 
   try {
-    const { searchParams } = new URL(req.url);
-    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
-    const search = (searchParams.get('search') || '').trim();
-    const includeDeleted = searchParams.get('includeDeleted') === '1';
-    const status = parseStatus(searchParams.get('status'));
-    const idUser = (searchParams.get('id_user') || '').trim();
-    const idDepartement = (searchParams.get('id_departement') || '').trim();
+    const { searchParams } = new URL(request.url);
 
-    // NEW: filter range count_time (per minggu)
-    let countTimeFrom;
-    let countTimeTo;
-    try {
-      countTimeFrom = parseOptionalDateTime(searchParams.get('countTimeFrom'), 'countTimeFrom');
-      countTimeTo = parseOptionalDateTime(searchParams.get('countTimeTo'), 'countTimeTo');
-    } catch (parseErr) {
-      return NextResponse.json({ message: parseErr.message }, { status: 400 });
+    const q = (searchParams.get('q') || '').trim();
+    const page = Math.max(1, parseIntStrict(searchParams.get('page') || '1', 'page'));
+    const perPage = Math.min(100, Math.max(1, parseIntStrict(searchParams.get('perPage') || '20', 'perPage')));
+
+    const id_user = parseIdUser(searchParams.get('id_user'));
+    const tahun = parseIntStrict(searchParams.get('tahun'), 'tahun');
+    const bulan = parseBulan(searchParams.get('bulan'));
+    const is_scheduled = parseBool(searchParams.get('is_scheduled'), 'is_scheduled');
+
+    const includeDeleted = (searchParams.get('includeDeleted') || '').trim().toLowerCase();
+    const withDeleted = includeDeleted === '1' || includeDeleted === 'true';
+
+    const orderBy = (searchParams.get('orderBy') || 'created_at').trim();
+    const orderDirRaw = (searchParams.get('orderDir') || 'desc').trim().toLowerCase();
+    const orderDir = orderDirRaw === 'asc' ? 'asc' : 'desc';
+
+    const orderField = ORDERABLE_FIELDS.has(orderBy) ? orderBy : 'created_at';
+
+    const where = {};
+    if (!withDeleted) where.deleted_at = null;
+    if (id_user) where.id_user = id_user;
+    if (tahun !== undefined) where.tahun = tahun;
+    if (bulan) where.bulan = bulan;
+    if (is_scheduled !== undefined) where.is_scheduled = is_scheduled;
+
+    if (q) {
+      // cari via user (nama/email)
+      where.user = {
+        OR: [{ nama_pengguna: { contains: q } }, { email: { contains: q } }],
+      };
     }
 
-    const allowedOrder = new Set(['deskripsi_kerja', 'count_time', 'status', 'created_at', 'updated_at', 'deleted_at']);
-    const orderByParam = (searchParams.get('orderBy') || 'created_at').trim();
-    const orderByField = allowedOrder.has(orderByParam) ? orderByParam : 'created_at';
-    const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
-
-    const where = {
-      ...(includeDeleted ? {} : { deleted_at: null }),
-      ...(search
-        ? {
-            deskripsi_kerja: {
-              contains: search,
-              mode: 'insensitive',
-            },
-          }
-        : {}),
-      ...(status ? { status } : {}),
-      ...(idUser ? { id_user: idUser } : {}),
-      ...(idDepartement ? { id_departement: idDepartement } : {}),
-      ...(countTimeFrom || countTimeTo
-        ? {
-            count_time: {
-              ...(countTimeFrom && { gte: countTimeFrom }),
-              ...(countTimeTo && { lte: countTimeTo }),
-            },
-          }
-        : {}),
-    };
-
-    const [total, data] = await Promise.all([
-      db.storyPlanner.count({ where }),
-      db.storyPlanner.findMany({
+    const [total, items] = await Promise.all([
+      db.schedulePlanner.count({ where }),
+      db.schedulePlanner.findMany({
         where,
-        orderBy: { [orderByField]: sort },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        orderBy: [{ [orderField]: orderDir }],
+        skip: (page - 1) * perPage,
+        take: perPage,
         select: {
-          id_story: true,
+          id_schedule_planner: true,
           id_user: true,
-          id_departement: true,
-          deskripsi_kerja: true,
-          count_time: true,
-          status: true,
+          tahun: true,
+          bulan: true,
+          is_scheduled: true,
           created_at: true,
           updated_at: true,
           deleted_at: true,
           user: {
-            select: { id_user: true, nama_pengguna: true, email: true },
-          },
-          departement: {
-            select: { id_departement: true, nama_departement: true },
+            select: {
+              id_user: true,
+              email: true,
+              nama_pengguna: true,
+              role: true,
+            },
           },
         },
       }),
     ]);
 
-    const enriched = data.map((row) => ({
-      ...row,
-      user: row.user
+    const data = items.map((it) => ({
+      ...it,
+      user: it.user
         ? {
-            id_user: row.user.id_user,
-            email: row.user.email,
-            nama_lengkap: row.user.nama_pengguna,
-            nama_pengguna: row.user.nama_pengguna,
+            ...it.user,
+            nama_lengkap: it.user.nama_pengguna, // alias kompatibilitas FE yang sering dipakai di repo ini
           }
         : null,
     }));
 
     return NextResponse.json({
-      data: enriched,
-      pagination: {
-        page,
-        pageSize,
-        total,
-        totalPages: Math.ceil(total / pageSize),
-      },
+      ok: true,
+      data,
+      meta: { page, perPage, total, totalPages: Math.ceil(total / perPage) },
     });
   } catch (err) {
-    console.error('GET /story-planner error:', err && err.code ? err.code : err);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    console.error('GET /admin/story-planner error:', err);
+    return NextResponse.json({ ok: false, message: err?.message || 'Failed to fetch schedule planner' }, { status: 500 });
   }
 }
 
-export async function POST(req) {
-  const ok = await ensureAuth(req);
-  if (ok instanceof NextResponse) return ok;
+export async function POST(request) {
+  const actor = await getActor(request);
+  if (actor instanceof NextResponse) return actor;
+
+  const forbidden = requireAdminRole(actor);
+  if (forbidden) return forbidden;
 
   try {
-    const body = await req.json();
+    const body = await request.json();
 
-    let idUser;
-    try {
-      idUser = parseRequiredString(body.id_user, 'id_user');
-    } catch (parseErr) {
-      return NextResponse.json({ message: parseErr.message }, { status: 400 });
-    }
+    const id_user = parseIdUser(body?.id_user);
+    const tahun = parseIntStrict(body?.tahun, 'tahun');
+    const bulan = parseBulan(body?.bulan);
+    const is_scheduled = parseBool(body?.is_scheduled, 'is_scheduled');
 
-    const userExists = await db.user.findUnique({
-      where: { id_user: idUser },
-      select: { id_user: true },
-    });
-    if (!userExists) {
-      return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });
-    }
+    if (!id_user) return NextResponse.json({ ok: false, message: 'id_user wajib diisi' }, { status: 400 });
+    if (tahun === undefined) return NextResponse.json({ ok: false, message: 'tahun wajib diisi' }, { status: 400 });
+    if (!bulan) return NextResponse.json({ ok: false, message: 'bulan wajib diisi' }, { status: 400 });
 
-    let idDepartement = undefined;
-    if (body.id_departement !== undefined) {
-      const depVal = parseOptionalString(body.id_departement);
-      if (depVal === null) {
-        idDepartement = null;
-      } else if (depVal !== undefined) {
-        const depExists = await db.departement.findUnique({
-          where: { id_departement: depVal },
-          select: { id_departement: true },
-        });
-        if (!depExists) {
-          return NextResponse.json(
-            { message: "Departement tidak ditemukan." },
-            { status: 404 }
-          );
-        }
-        idDepartement = depVal;
-      }
-    }
-
-    let deskripsi;
-    try {
-      deskripsi = parseRequiredString(body.deskripsi_kerja, 'deskripsi_kerja');
-    } catch (parseErr) {
-      return NextResponse.json({ message: parseErr.message }, { status: 400 });
-    }
-
-    let countTime;
-    try {
-      countTime = parseOptionalDateTime(body.count_time, "count_time");
-    } catch (parseErr) {
-      return NextResponse.json({ message: parseErr.message }, { status: 400 });
-    }
-
-    let status = 'berjalan';
-    try {
-      status = parseStatus(body.status) || 'berjalan';
-    } catch (parseErr) {
-      return NextResponse.json({ message: parseErr.message }, { status: 400 });
-    }
-
-    const created = await db.storyPlanner.create({
+    const created = await db.schedulePlanner.create({
       data: {
-        id_user: idUser,
-        deskripsi_kerja: deskripsi,
-        status: status,
-        ...(countTime !== undefined && { count_time: countTime }),
-        ...(idDepartement !== undefined && { id_departement: idDepartement }),
+        id_user,
+        tahun,
+        bulan,
+        ...(is_scheduled !== undefined ? { is_scheduled } : {}),
       },
       select: {
-        id_story: true,
+        id_schedule_planner: true,
         id_user: true,
-        id_departement: true,
-        deskripsi_kerja: true,
-        count_time: true,
-        status: true,
+        tahun: true,
+        bulan: true,
+        is_scheduled: true,
         created_at: true,
+        updated_at: true,
+        deleted_at: true,
       },
     });
 
-    return NextResponse.json({ message: 'Story planner dibuat.', data: created }, { status: 201 });
+    return NextResponse.json({ ok: true, message: 'Schedule planner dibuat.', data: created }, { status: 201 });
   } catch (err) {
-    console.error('POST /story-planner error:', err && err.code ? err.code : err);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    console.error('POST /admin/story-planner error:', err && err.code ? err.code : err);
+
+    // Prisma unique constraint
+    if (err?.code === 'P2002') {
+      return NextResponse.json({ ok: false, message: 'Schedule planner untuk user/bulan/tahun tersebut sudah ada.' }, { status: 409 });
+    }
+
+    return NextResponse.json({ ok: false, message: err?.message || 'Server error' }, { status: 500 });
   }
 }

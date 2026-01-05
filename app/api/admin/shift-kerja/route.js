@@ -3,12 +3,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
-import {
-  extractWeeklyScheduleInput,
-  normalizeWeeklySchedule,
-  serializeHariKerja,
-  transformShiftRecord,
-} from './schedul-utils';
+import { extractWeeklyScheduleInput, normalizeWeeklySchedule, serializeHariKerja, transformShiftRecord } from './schedul-utils';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
 const SHIFT_STATUS = ['KERJA', 'LIBUR'];
@@ -60,106 +55,95 @@ function buildDateFilter(searchParams, field) {
   return Object.keys(filter).length > 0 ? filter : undefined;
 }
 
-export async function GET(req) {
+export async function GET(req, { params }) {
   const ok = await ensureAuth(req);
   if (ok instanceof NextResponse) return ok;
 
   try {
-    const { searchParams } = new URL(req.url);
-    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
-    const includeDeleted = searchParams.get('includeDeleted') === '1';
+    const { id } = params;
+    const url = new URL(req.url);
+    const searchParams = url.searchParams;
 
-    const allowedOrder = new Set(['tanggal_mulai', 'tanggal_selesai', 'created_at', 'updated_at', 'status']);
-    const orderByParam = (searchParams.get('orderBy') || 'created_at').trim();
-    const orderByField = allowedOrder.has(orderByParam) ? orderByParam : 'created_at';
+    const includeDeleted = ['1', 'true', 'yes'].includes((searchParams.get('includeDeleted') || '').toLowerCase());
+
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const pageSize = Math.min(200, Math.max(1, parseInt(searchParams.get('pageSize') || '50', 10)));
+
+    const orderBy = (searchParams.get('orderBy') || 'tanggal_mulai').trim();
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
+    const statusParam = (searchParams.get('status') || '').trim().toUpperCase();
+    const hari = (searchParams.get('hari') || '').trim();
+
+    // Normalize date-only filters (accept YYYY-MM-DD or full ISO)
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    const from = fromParam ? parseDateOnlyToUTC(fromParam) : null;
+    const to = toParam ? parseDateOnlyToUTC(toParam) : null;
+
+    // Build where
     const where = {
+      id_user: id,
       ...(includeDeleted ? {} : { deleted_at: null }),
+      ...(statusParam === 'KERJA' || statusParam === 'LIBUR' ? { status: statusParam } : {}),
+      ...(hari ? { hari_kerja: { contains: hari, mode: 'insensitive' } } : {}),
+      ...(from && to
+        ? {
+            // overlap range: shift intersects [from, to]
+            tanggal_mulai: { lte: to },
+            tanggal_selesai: { gte: from },
+          }
+        : from
+        ? {
+            // anything that is active on/after 'from'
+            tanggal_selesai: { gte: from },
+          }
+        : to
+        ? {
+            // anything that starts on/before 'to'
+            tanggal_mulai: { lte: to },
+          }
+        : {}),
     };
 
-    const idUser = (searchParams.get('id_user') || '').trim();
-    if (idUser) where.id_user = idUser;
+    const allowedOrderBy = new Set(['tanggal_mulai', 'tanggal_selesai', 'status', 'created_at', 'updated_at']);
+    const safeOrderBy = allowedOrderBy.has(orderBy) ? orderBy : 'tanggal_mulai';
 
-    const idPolaKerjaRaw = searchParams.get('id_pola_kerja');
-    if (idPolaKerjaRaw !== null) {
-      const trimmed = idPolaKerjaRaw.trim();
-      if (trimmed === 'null') where.id_pola_kerja = null;
-      else if (trimmed) where.id_pola_kerja = trimmed;
-    }
-
-    // === Perbaikan: relation filter pakai { is: ... } ===
-    const userFilter = {};
-    const jabatanParam = searchParams.get('id_jabatan');
-    if (jabatanParam !== null) {
-      const trimmed = jabatanParam.trim();
-      if (trimmed === 'null') userFilter.id_jabatan = null;
-      else if (trimmed) userFilter.id_jabatan = trimmed;
-    }
-    const jabatanSearch = (searchParams.get('searchJabatan') || '').trim();
-    if (jabatanSearch) {
-      userFilter.jabatan = {
-        ...(userFilter.jabatan ?? {}),
-        is: {
-          ...(userFilter.jabatan?.is ?? {}),
-          nama_jabatan: { contains: jabatanSearch, mode: 'insensitive' },
-        },
-      };
-    }
-    if (Object.keys(userFilter).length > 0) {
-      where.user = { is: userFilter }; // <-- penting
-    }
-
-    const status = (searchParams.get('status') || '').trim();
-    if (status) {
-      const normalized = status.toUpperCase();
-      if (!SHIFT_STATUS.includes(normalized)) {
-        return NextResponse.json({ message: "Parameter 'status' tidak valid." }, { status: 400 });
-      }
-      where.status = normalized;
-    }
-
-    const tanggalMulaiFilter = buildDateFilter(searchParams, 'tanggalMulai');
-    if (tanggalMulaiFilter) where.tanggal_mulai = tanggalMulaiFilter;
-    const tanggalSelesaiFilter = buildDateFilter(searchParams, 'tanggalSelesai');
-    if (tanggalSelesaiFilter) where.tanggal_selesai = tanggalSelesaiFilter;
-
-    const [total, rawData] = await Promise.all([
+    const [total, rows] = await Promise.all([
       db.shiftKerja.count({ where }),
       db.shiftKerja.findMany({
         where,
-        orderBy: { [orderByField]: sort },
+        orderBy: { [safeOrderBy]: sort },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        select: {
-          id_shift_kerja: true,
-          id_user: true,
-          tanggal_mulai: true,
-          tanggal_selesai: true,
-          hari_kerja: true,
-          status: true,
-          id_pola_kerja: true,
-          created_at: true,
-          updated_at: true,
-          deleted_at: true,
-          user: { select: { id_user: true, nama_pengguna: true, email: true } },
-          polaKerja: { select: { id_pola_kerja: true, nama_pola_kerja: true } },
+        include: {
+          polaKerja: true,
+          user: true,
         },
       }),
     ]);
 
-    const data = rawData.map(transformShiftRecord);
-    return NextResponse.json({
-      data,
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
-    });
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('tanggal')) {
-      return NextResponse.json({ message: err.message }, { status: 400 });
-    }
-    console.error('GET /shift-kerja error:', err);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    const data = rows.map((r) => transformShiftRecord(r));
+
+    return NextResponse.json(
+      {
+        data,
+        meta: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+        },
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
+  } catch (error) {
+    console.error('GET /admin/shift-kerja/user/[id] error:', error);
+    return NextResponse.json({ message: 'Gagal mengambil shift kerja.' }, { status: 500 });
   }
 }
 

@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// ===== Enums =====
+// ================= ENUMS =================
 
 enum Role {
   KARYAWAN
@@ -116,7 +116,7 @@ enum NotificationStatus {
   archived
 }
 
-/// ===== Models =====
+// ================= MODELS =================
 
 model Location {
   id_location String    @id @default(uuid()) @db.Char(36)
@@ -376,31 +376,38 @@ model User {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  departement                Departement?               @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
-  kantor                     Location?                  @relation(fields: [id_location], references: [id_location], onDelete: Restrict, onUpdate: Cascade)
-  jabatan                    Jabatan?                   @relation(fields: [id_jabatan], references: [id_jabatan], onDelete: SetNull, onUpdate: Cascade)
+  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
+  kantor      Location?    @relation(fields: [id_location], references: [id_location], onDelete: Restrict, onUpdate: Cascade)
+  jabatan     Jabatan?     @relation(fields: [id_jabatan], references: [id_jabatan], onDelete: SetNull, onUpdate: Cascade)
+
   faces                      Face[]
   agendas                    AgendaKerja[]
   shifts                     ShiftKerja[]
-  story_planners             StoryPlanner[]
   absensi                    Absensi[]
   lembur                     Lembur[]
-  shift_storyPlanner         ShiftStoryPlanner[]
   broadcast_rcv              BroadcastRecipient[]
   devices                    Device[]
-  lembur_approvals           LemburApproval[]           @relation("LemburApproval_approver_user_idToUser")
   absensi_reports_received   AbsensiReportRecipient[]
   kunjungan                  Kunjungan[]
   kunjungan_reports_received KunjunganReportRecipient[]
   notifications              Notification[]
   istirahat                  Istirahat[]
 
+  // NEW (pengganti StoryPlanner/JadwalStoryPlanner/ShiftStoryPlanner)
+  schedule_planners SchedulePlanner[]
+
   supervised_department Departement? @relation("SupervisorForDepartment")
+
+  lembur_approvals LemburApproval[] @relation("LemburApproval_approver_user_idToUser")
 
   approvals_pengajuan_cuti ApprovalPengajuanCuti[]    @relation("ApprovalPengajuanCuti_approver")
   approvals_izin_sakit     ApprovalIzinSakit[]        @relation("ApprovalIzinSakit_approver")
   approvals_izin_jam       ApprovalPengajuanIzinJam[] @relation("ApprovalIzinJam_approver")
   approvals_tukar_hari     ApprovalIzinTukarHari[]    @relation("ApprovalTukarHari_approver")
+
+  approvals_reimburse    ApprovalReimburse[]   @relation("ApprovalReimburse_approver")
+  approvals_payment      ApprovalPayment[]     @relation("ApprovalPayment_approver")
+  approvals_pocket_money ApprovalPocketMoney[] @relation("ApprovalPocketMoney_approver")
 
   pengajuan_cuti       PengajuanCuti[]
   pengajuan_izin_sakit PengajuanIzinSakit[]
@@ -412,6 +419,10 @@ model User {
   tagged_in_sakit      HandoverIzinSakit[]
   tagged_in_izin_jam   HandoverIzinJam[]
   tagged_in_tukar_hari HandoverTukarHari[]
+
+  reimburses   Reimburse[]
+  pocketMonies PocketMoney[]
+  payments     Payment[]
 
   @@index([id_departement])
   @@index([id_location])
@@ -428,10 +439,14 @@ model Departement {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  users        User[]
-  jabatan      Jabatan[]
-  supervisor   User?          @relation("SupervisorForDepartment", fields: [id_supervisor], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
-  StoryPlanner StoryPlanner[]
+  users      User[]
+  jabatan    Jabatan[]
+  supervisor User?     @relation("SupervisorForDepartment", fields: [id_supervisor], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
+
+  // Financial Relations
+  reimburse     Reimburse[]
+  pocket_moneys PocketMoney[]
+  payments      Payment[]
 
   @@map("departement")
 }
@@ -494,26 +509,6 @@ model Face {
   @@map("face")
 }
 
-model StoryPlanner {
-  id_story        String     @id @default(uuid()) @db.Char(36)
-  id_user         String     @db.Char(36)
-  id_departement  String?    @db.Char(36)
-  deskripsi_kerja String     @db.LongText
-  count_time      DateTime?  @db.DateTime(0)
-  status          WorkStatus
-
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt @db.DateTime(0)
-  deleted_at DateTime? @db.DateTime(0)
-
-  user        User         @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
-
-  @@index([id_user])
-  @@index([id_departement])
-  @@map("story_planner")
-}
-
 model Device {
   id_device            String    @id @default(uuid()) @db.Char(36)
   id_user              String    @db.Char(36)
@@ -561,9 +556,10 @@ model Absensi {
   updated_at           DateTime       @updatedAt @db.DateTime(0)
   deleted_at           DateTime?      @db.DateTime(0)
 
-  user              User                     @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  lokasiIn          Location?                @relation("absen_datang", fields: [id_lokasi_datang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
-  lokasiOut         Location?                @relation("absen_pulang", fields: [id_lokasi_pulang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
+  user      User      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  lokasiIn  Location? @relation("absen_datang", fields: [id_lokasi_datang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
+  lokasiOut Location? @relation("absen_pulang", fields: [id_lokasi_pulang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
+
   agendas           AgendaKerja[]
   report_recipients AbsensiReportRecipient[]
   catatan           Catatan[]
@@ -662,9 +658,10 @@ model Lembur {
   alasan        String?      @db.LongText
   status        LemburStatus
   current_level Int?
-  created_at    DateTime     @default(now()) @db.DateTime(0)
-  updated_at    DateTime     @updatedAt @db.DateTime(0)
-  deleted_at    DateTime?    @db.DateTime(0)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
 
   user      User             @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
   approvals LemburApproval[]
@@ -696,46 +693,14 @@ model LemburApproval {
   @@map("lembur_approval")
 }
 
-model JadwalStoryPlanner {
-  id_jadwal_story_planner String    @id @default(uuid()) @db.Char(36)
-  Tahun                   DateTime? @db.Date
-  Bulan                   Bulan
-  keterangan              String?   @db.LongText
-
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt @db.DateTime(0)
-  deleted_at DateTime? @db.DateTime(0)
-
-  shifts ShiftStoryPlanner[]
-
-  @@map("jadwal_story_planer")
-}
-
-model ShiftStoryPlanner {
-  id_shift_story_planner  String @id @default(uuid()) @db.Char(36)
-  id_jadwal_story_planner String @db.Char(36)
-  id_user                 String @db.Char(36)
-  hari_story_planner      String
-
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt @db.DateTime(0)
-  deleted_at DateTime? @db.DateTime(0)
-
-  jadwal JadwalStoryPlanner @relation(fields: [id_jadwal_story_planner], references: [id_jadwal_story_planner], onDelete: Cascade, onUpdate: Cascade)
-  user   User               @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-
-  @@index([id_jadwal_story_planner])
-  @@index([id_user])
-  @@map("shift_story_planer")
-}
-
 model KategoriSakit {
-  id_kategori_sakit String               @id @default(uuid()) @db.Char(36)
-  nama_kategori     String               @db.VarChar(255)
-  created_at        DateTime             @default(now()) @db.DateTime(0)
-  updated_at        DateTime             @updatedAt @db.DateTime(0)
-  deleted_at        DateTime?            @db.DateTime(0)
-  sakit             PengajuanIzinSakit[]
+  id_kategori_sakit String    @id @default(uuid()) @db.Char(36)
+  nama_kategori     String    @db.VarChar(255)
+  created_at        DateTime  @default(now()) @db.DateTime(0)
+  updated_at        DateTime  @updatedAt @db.DateTime(0)
+  deleted_at        DateTime? @db.DateTime(0)
+
+  sakit PengajuanIzinSakit[]
 
   @@map("kategori_sakit")
 }
@@ -773,7 +738,7 @@ model CutiKonfigurasi {
 model KategoriCuti {
   id_kategori_cuti  String    @id @default(uuid()) @db.Char(36)
   nama_kategori     String    @db.VarChar(255)
-  pengurangan_kouta Boolean   @default(true) // NEW: apakah kategori ini mengurangi kuota cuti
+  pengurangan_kouta Boolean   @default(true)
   created_at        DateTime  @default(now()) @db.DateTime(0)
   updated_at        DateTime  @updatedAt @db.DateTime(0)
   deleted_at        DateTime? @db.DateTime(0)
@@ -783,7 +748,19 @@ model KategoriCuti {
   @@map("kategori_cuti")
 }
 
-/// ===== Pengajuan Cuti (relasional penuh) =====
+model KategoriKeperluan {
+  id_kategori_keperluan String    @id @default(uuid()) @db.Char(36)
+  nama_keperluan        String    @db.VarChar(255)
+  created_at            DateTime  @default(now()) @db.DateTime(0)
+  updated_at            DateTime  @updatedAt @db.DateTime(0)
+  deleted_at            DateTime? @db.DateTime(0)
+
+  reimburses    Reimburse[]
+  pocket_moneys PocketMoney[]
+  payments      Payment[]
+
+  @@map("kategori_keperluan")
+}
 
 model PengajuanCuti {
   id_pengajuan_cuti   String        @id @default(uuid()) @db.Char(36)
@@ -847,8 +824,6 @@ model ApprovalPengajuanCuti {
   @@index([approver_user_id])
   @@map("approval_pengajuan_cuti")
 }
-
-/// ===== Izin Sakit & Izin Jam (tidak berubah) =====
 
 model PengajuanIzinSakit {
   id_pengajuan_izin_sakit String        @id @default(uuid()) @db.Char(36)
@@ -950,8 +925,6 @@ model ApprovalPengajuanIzinJam {
   @@map("approval_pengajuan_izin_jam")
 }
 
-/// ===== Izin Tukar Hari (relasional penuh, berpasangan) =====
-
 model IzinTukarHari {
   id_izin_tukar_hari           String        @id @default(uuid()) @db.Char(36)
   id_user                      String        @db.Char(36)
@@ -970,14 +943,12 @@ model IzinTukarHari {
   user           User                    @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
   approvals      ApprovalIzinTukarHari[]
   handover_users HandoverTukarHari[]
-  // daftar pasangan tanggal izin<->pengganti
   pairs          IzinTukarHariPair[]
 
   @@index([id_user, created_at])
   @@map("izin_tukar_hari")
 }
 
-// Satu baris = satu pasangan (hari_izin, hari_pengganti) untuk satu pengajuan
 model IzinTukarHariPair {
   id_izin_tukar_hari_pair String   @id @default(uuid()) @db.Char(36)
   id_izin_tukar_hari      String   @db.Char(36)
@@ -989,7 +960,6 @@ model IzinTukarHariPair {
 
   izin_tukar_hari IzinTukarHari @relation(fields: [id_izin_tukar_hari], references: [id_izin_tukar_hari], onDelete: Cascade, onUpdate: Cascade)
 
-  // Cegah duplikasi pasangan dalam satu pengajuan
   @@unique([id_izin_tukar_hari, hari_izin, hari_pengganti], name: "uniq_pair_per_pengajuan")
   @@index([id_izin_tukar_hari, hari_izin])
   @@index([id_izin_tukar_hari, hari_pengganti])
@@ -1076,4 +1046,249 @@ model HandoverTukarHari {
   @@index([id_izin_tukar_hari])
   @@index([id_user_tagged])
   @@map("handover_tukar_hari")
+}
+
+model Reimburse {
+  id_reimburse          String   @id @default(uuid()) @db.Char(36)
+  id_user               String   @db.Char(36)
+  id_departement        String   @db.Char(36)
+  id_kategori_keperluan String?  @db.Char(36)
+  tanggal               DateTime @db.Date
+  keterangan            String?  @db.LongText
+  total_pengeluaran     Decimal  @default(0) @db.Decimal(15, 2)
+  metode_pembayaran     String   @db.VarChar(50)
+
+  nomor_rekening        String? @db.VarChar(50)
+  nama_pemilik_rekening String? @db.VarChar(255)
+  jenis_bank            String? @db.VarChar(50)
+
+  bukti_pembayaran_url String? @db.LongText
+
+  status        ApproveStatus @default(pending)
+  current_level Int?
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user               User                @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  departement        Departement         @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
+  kategori_keperluan KategoriKeperluan?  @relation(fields: [id_kategori_keperluan], references: [id_kategori_keperluan], onDelete: SetNull, onUpdate: Cascade)
+  items              ReimburseItem[]
+  approvals          ApprovalReimburse[]
+
+  @@index([id_user, tanggal])
+  @@index([id_departement, tanggal])
+  @@index([metode_pembayaran])
+  @@index([id_kategori_keperluan])
+  @@map("reimburse")
+}
+
+model ReimburseItem {
+  id_reimburse_item   String  @id @default(uuid()) @db.Char(36)
+  id_reimburse        String  @db.Char(36)
+  nama_item_reimburse String  @db.LongText
+  harga               Decimal @db.Decimal(15, 2)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  reimburse Reimburse @relation(fields: [id_reimburse], references: [id_reimburse], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([id_reimburse])
+  @@map("reimburse_items")
+}
+
+model PocketMoney {
+  id_pocket_money       String   @id @default(uuid()) @db.Char(36)
+  id_user               String   @db.Char(36)
+  id_departement        String   @db.Char(36)
+  id_kategori_keperluan String?  @db.Char(36)
+  tanggal               DateTime @db.Date
+  keterangan            String?  @db.LongText
+  total_pengeluaran     Decimal  @default(0) @db.Decimal(15, 2)
+  metode_pembayaran     String   @db.VarChar(50)
+
+  nomor_rekening        String? @db.VarChar(50)
+  nama_pemilik_rekening String? @db.VarChar(255)
+  jenis_bank            String? @db.VarChar(50)
+
+  bukti_pembayaran_url String? @db.LongText
+
+  status        ApproveStatus @default(pending)
+  current_level Int?
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user               User                  @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  departement        Departement           @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
+  kategori_keperluan KategoriKeperluan?    @relation(fields: [id_kategori_keperluan], references: [id_kategori_keperluan], onDelete: SetNull, onUpdate: Cascade)
+  items              PocketMoneyItem[]
+  approvals          ApprovalPocketMoney[]
+
+  @@index([id_user, tanggal])
+  @@index([id_departement, tanggal])
+  @@index([metode_pembayaran])
+  @@index([id_kategori_keperluan])
+  @@map("pocket_money")
+}
+
+model PocketMoneyItem {
+  id_pocket_money_item   String  @id @default(uuid()) @db.Char(36)
+  id_pocket_money        String  @db.Char(36)
+  nama_item_pocket_money String  @db.LongText
+  harga                  Decimal @db.Decimal(15, 2)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  pocketMoney PocketMoney @relation(fields: [id_pocket_money], references: [id_pocket_money], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([id_pocket_money])
+  @@map("pocket_money_items")
+}
+
+model Payment {
+  id_payment            String   @id @default(uuid()) @db.Char(36)
+  id_user               String   @db.Char(36)
+  id_departement        String   @db.Char(36)
+  id_kategori_keperluan String?  @db.Char(36)
+  tanggal               DateTime @db.Date
+  keterangan            String?  @db.LongText
+  nominal_pembayaran    Decimal  @default(0) @db.Decimal(15, 2)
+  metode_pembayaran     String   @db.VarChar(50)
+
+  nomor_rekening        String? @db.VarChar(50)
+  nama_pemilik_rekening String? @db.VarChar(255)
+  jenis_bank            String? @db.VarChar(50)
+
+  bukti_pembayaran_url String? @db.LongText
+
+  status        ApproveStatus @default(pending)
+  current_level Int?
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user               User               @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  departement        Departement        @relation(fields: [id_departement], references: [id_departement], onDelete: Restrict, onUpdate: Cascade)
+  kategori_keperluan KategoriKeperluan? @relation(fields: [id_kategori_keperluan], references: [id_kategori_keperluan], onDelete: SetNull, onUpdate: Cascade)
+  approvals          ApprovalPayment[]
+
+  @@index([id_user, tanggal])
+  @@index([id_departement, tanggal])
+  @@index([metode_pembayaran])
+  @@index([id_kategori_keperluan])
+  @@map("payment")
+}
+
+model ApprovalReimburse {
+  id_approval_reimburse String        @id @default(uuid()) @db.Char(36)
+  id_reimburse          String        @db.Char(36)
+  level                 Int
+  approver_user_id      String?       @db.Char(36)
+  approver_role         Role?
+  decision              ApproveStatus @default(pending)
+  decided_at            DateTime?     @db.DateTime(0)
+  note                  String?       @db.LongText
+
+  bukti_approval_reimburse_url String? @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  reimburse Reimburse @relation(fields: [id_reimburse], references: [id_reimburse], onDelete: Cascade, onUpdate: Cascade)
+  approver  User?     @relation("ApprovalReimburse_approver", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([id_reimburse, level])
+  @@index([approver_user_id])
+  @@map("approval_reimburse")
+}
+
+model ApprovalPayment {
+  id_approval_payment String        @id @default(uuid()) @db.Char(36)
+  id_payment          String        @db.Char(36)
+  level               Int
+  approver_user_id    String?       @db.Char(36)
+  approver_role       Role?
+  decision            ApproveStatus @default(pending)
+  decided_at          DateTime?     @db.DateTime(0)
+  note                String?       @db.LongText
+
+  bukti_approval_payment_url String? @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  payment  Payment @relation(fields: [id_payment], references: [id_payment], onDelete: Cascade, onUpdate: Cascade)
+  approver User?   @relation("ApprovalPayment_approver", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([id_payment, level])
+  @@index([approver_user_id])
+  @@map("approval_payment")
+}
+
+model ApprovalPocketMoney {
+  id_approval_pocket_money String        @id @default(uuid()) @db.Char(36)
+  id_pocket_money          String        @db.Char(36)
+  level                    Int
+  approver_user_id         String?       @db.Char(36)
+  approver_role            Role?
+  decision                 ApproveStatus @default(pending)
+  decided_at               DateTime?     @db.DateTime(0)
+  note                     String?       @db.LongText
+
+  bukti_approval_pocket_money_url String? @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  pocket_money PocketMoney @relation(fields: [id_pocket_money], references: [id_pocket_money], onDelete: Cascade, onUpdate: Cascade)
+  approver     User?       @relation("ApprovalPocketMoney_approver", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([id_pocket_money, level])
+  @@index([approver_user_id])
+  @@map("approval_pocket_money")
+}
+
+model sop_karyawan {
+  id_sop_karyawan  String   @id @default(uuid()) @db.Char(36)
+  nama_dokumen     String   @db.VarChar(255)
+  tanggal_terbit   DateTime @db.Date
+  lampiran_sop_url String?  @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  @@index([tanggal_terbit])
+  @@map("sop_karyawan")
+}
+
+model SchedulePlanner {
+  id_schedule_planner String @id @default(uuid()) @db.Char(36)
+  id_user             String @db.Char(36)
+
+  tahun        Int
+  bulan        Bulan
+  is_scheduled Boolean @default(false)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user User @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([id_user, tahun, bulan], name: "uniq_user_schedule_month")
+  @@index([id_user])
+  @@index([tahun, bulan])
+  @@map("schedule_planner")
 }
