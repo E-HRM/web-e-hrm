@@ -32,6 +32,8 @@ const API_JABATAN = "/api/admin/jabatans";
 // POLA & SHIFT KERJA
 const API_POLA_KERJA = "/api/admin/pola-kerja";
 const API_SHIFT_KERJA = "/api/admin/shift-kerja";
+const API_SHIFT_KERJA_USER = "/api/admin/shift-kerja/user";
+
 
 // === NEW: Absensi
 const API_ABSENSI_RECORDS = "/api/admin/absensi/history";
@@ -140,6 +142,7 @@ export const ApiEndpoints = {
   GetShiftKerjaById: (id) => `${API_SHIFT_KERJA}/${id}`,
   UpdateShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
   DeleteShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
+  GetShiftKerjaByUser: (userId) => `${API_SHIFT_KERJA_USER}/${userId}`,
 
   // Absensi
   GetAbsensiRecords: (qsObj = {}) => `${API_ABSENSI_RECORDS}${buildQS(qsObj)}`,
