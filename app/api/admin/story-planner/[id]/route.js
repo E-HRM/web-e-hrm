@@ -1,243 +1,208 @@
 import { NextResponse } from 'next/server';
 import db from '../../../../../lib/prisma';
-import { verifyAuthToken } from '../../../../../lib/jwt';
+import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '../../../../utils/auth/authUtils';
+import { parseDateTimeToUTC } from '../../../../../helpers/date-helper';
 
-const ALLOWED_ROLES = new Set(['HR', 'DIREKTUR', 'OPERASIONAL', 'SUPERADMIN']);
-
-async function getActor(req) {
+async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
   if (auth.startsWith('Bearer ')) {
     try {
-      const payload = verifyAuthToken(auth.slice(7));
-      return {
-        id: payload?.sub || payload?.id_user || payload?.userId,
-        role: payload?.role,
-        source: 'bearer',
-      };
-    } catch (_) {
-      // fallback ke session
-    }
+      verifyAuthToken(auth.slice(7));
+      return true;
+    } catch (_) {}
   }
-
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
-
-  return {
-    id: sessionOrRes?.user?.id,
-    role: sessionOrRes?.user?.role,
-    source: 'session',
-  };
+  return true;
 }
 
-function requireAdminRole(actor) {
-  if (!actor?.role || !ALLOWED_ROLES.has(actor.role)) {
-    return NextResponse.json({ ok: false, message: 'Forbidden: tidak memiliki akses.' }, { status: 403 });
-  }
-  return null;
-}
-
-const BULAN_VALUES = new Set(['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']);
-
-const BULAN_BY_NUMBER = {
-  1: 'JANUARI',
-  2: 'FEBRUARI',
-  3: 'MARET',
-  4: 'APRIL',
-  5: 'MEI',
-  6: 'JUNI',
-  7: 'JULI',
-  8: 'AGUSTUS',
-  9: 'SEPTEMBER',
-  10: 'OKTOBER',
-  11: 'NOVEMBER',
-  12: 'DESEMBER',
-};
-
-function parseIntStrict(value, field) {
-  if (value === undefined || value === null || value === '') return undefined;
-  const n = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(n)) throw new Error(`Field '${field}' harus berupa angka integer.`);
-  return n;
-}
-
-function parseBool(value, field) {
-  if (value === undefined || value === null || value === '') return undefined;
-  const v = String(value).trim().toLowerCase();
-  if (['1', 'true', 'yes', 'y', 'on'].includes(v)) return true;
-  if (['0', 'false', 'no', 'n', 'off'].includes(v)) return false;
-  throw new Error(`Field '${field}' harus boolean (true/false).`);
-}
-
-function parseBulan(value) {
-  if (value === undefined || value === null || value === '') return undefined;
-
-  if (typeof value === 'number' || /^\d+$/.test(String(value).trim())) {
-    const n = Number.parseInt(String(value).trim(), 10);
-    if (n >= 1 && n <= 12) return BULAN_BY_NUMBER[n];
-    throw new Error("Field 'bulan' harus 1-12 atau salah satu enum Bulan.");
-  }
-
-  const s = String(value).trim().toUpperCase();
-  if (BULAN_VALUES.has(s)) return s;
-
-  throw new Error("Field 'bulan' harus salah satu dari: " + Array.from(BULAN_VALUES).join(', ') + ' (atau 1-12).');
-}
-
-function parseIdUser(value) {
+function parseOptionalString(value) {
   if (value === undefined || value === null) return undefined;
-  const s = String(value).trim();
-  if (!s) return undefined;
-  if (s.length !== 36) throw new Error("Field 'id_user' tidak valid.");
-  return s;
+  const str = String(value).trim();
+  return str === '' ? null : str;
 }
 
-export async function GET(request, { params }) {
-  const actor = await getActor(request);
-  if (actor instanceof NextResponse) return actor;
+function parseOptionalDateTime(value, field) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = parseDateTimeToUTC(value);
+  if (!(parsed instanceof Date)) {
+    throw new Error("Field '" + field + "' harus berupa tanggal/waktu yang valid.");
+  }
+  return parsed;
+}
 
-  const forbidden = requireAdminRole(actor);
-  if (forbidden) return forbidden;
+const VALID_WORK_STATUS = new Set(['berjalan', 'berhenti', 'selesai']);
+
+function parseStatus(value) {
+  if (value === undefined || value === null) return undefined;
+  const status = String(value).trim();
+  if (!status) return undefined;
+  if (!VALID_WORK_STATUS.has(status)) {
+    throw new Error("Field 'status' harus salah satu dari: " + Array.from(VALID_WORK_STATUS).join(', ') + '.');
+  }
+  return status;
+}
+
+export async function GET(req, { params }) {
+  const ok = await ensureAuth(req);
+  if (ok instanceof NextResponse) return ok;
 
   try {
-    const id = String(params?.id || '').trim();
-    if (!id) return NextResponse.json({ ok: false, message: 'ID tidak valid' }, { status: 400 });
-
-    const row = await db.schedulePlanner.findUnique({
-      where: { id_schedule_planner: id },
+    const id = params.id;
+    const row = await db.storyPlanner.findUnique({
+      where: { id_story: id },
       select: {
-        id_schedule_planner: true,
+        id_story: true,
         id_user: true,
-        tahun: true,
-        bulan: true,
-        is_scheduled: true,
+        id_departement: true,
+        deskripsi_kerja: true,
+        count_time: true,
+        status: true,
         created_at: true,
         updated_at: true,
         deleted_at: true,
         user: {
-          select: {
-            id_user: true,
-            email: true,
-            nama_pengguna: true,
-            role: true,
-          },
+          select: { id_user: true, nama_pengguna: true, email: true },
+        },
+        departement: {
+          select: { id_departement: true, nama_departement: true },
         },
       },
     });
 
-    if (!row || row.deleted_at) {
-      return NextResponse.json({ ok: false, message: 'Schedule planner tidak ditemukan' }, { status: 404 });
+    if (!row) {
+      return NextResponse.json({ message: 'Story planner tidak ditemukan' }, { status: 404 });
     }
 
     const data = {
       ...row,
       user: row.user
         ? {
-            ...row.user,
+            id_user: row.user.id_user,
+            email: row.user.email,
             nama_lengkap: row.user.nama_pengguna,
+            nama_pengguna: row.user.nama_pengguna,
           }
         : null,
     };
 
-    return NextResponse.json({ ok: true, data });
+    return NextResponse.json({ data });
   } catch (err) {
-    console.error('GET /admin/story-planner/[id] error:', err);
-    return NextResponse.json({ ok: false, message: err?.message || 'Server error' }, { status: 500 });
+    console.error('GET /story-planner/[id] error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
-export async function PUT(request, { params }) {
-  const actor = await getActor(request);
-  if (actor instanceof NextResponse) return actor;
-
-  const forbidden = requireAdminRole(actor);
-  if (forbidden) return forbidden;
+export async function PUT(req, { params }) {
+  const ok = await ensureAuth(req);
+  if (ok instanceof NextResponse) return ok;
 
   try {
-    const id = String(params?.id || '').trim();
-    if (!id) return NextResponse.json({ ok: false, message: 'ID tidak valid' }, { status: 400 });
+    const id = params.id;
+    const body = await req.json();
 
-    const current = await db.schedulePlanner.findUnique({ where: { id_schedule_planner: id } });
-    if (!current || current.deleted_at) {
-      return NextResponse.json({ ok: false, message: 'Schedule planner tidak ditemukan' }, { status: 404 });
+    let idDepartement;
+    if (body.id_departement !== undefined) {
+      const depVal = parseOptionalString(body.id_departement);
+      if (depVal === null) {
+        idDepartement = null;
+      } else if (depVal !== undefined) {
+        const depExists = await db.departement.findUnique({
+          where: { id_departement: depVal },
+          select: { id_departement: true },
+        });
+        if (!depExists) {
+          return NextResponse.json({ message: 'Departement tidak ditemukan.' }, { status: 404 });
+        }
+        idDepartement = depVal;
+      }
     }
 
-    const body = await request.json();
-
-    const id_user = parseIdUser(body?.id_user);
-    const tahun = parseIntStrict(body?.tahun, 'tahun');
-    const bulan = parseBulan(body?.bulan);
-    const is_scheduled = parseBool(body?.is_scheduled, 'is_scheduled');
-
-    const data = {};
-    if (id_user !== undefined) data.id_user = id_user;
-    if (tahun !== undefined) data.tahun = tahun;
-    if (bulan !== undefined) data.bulan = bulan;
-    if (is_scheduled !== undefined) data.is_scheduled = is_scheduled;
-
-    if (Object.keys(data).length === 0) {
-      return NextResponse.json({ ok: false, message: 'Tidak ada field yang diupdate.' }, { status: 400 });
+    let countTime;
+    try {
+      countTime = parseOptionalDateTime(body.count_time, 'count_time');
+    } catch (parseErr) {
+      return NextResponse.json({ message: parseErr.message }, { status: 400 });
     }
 
-    const updated = await db.schedulePlanner.update({
-      where: { id_schedule_planner: id },
-      data,
+    let status;
+    try {
+      status = parseStatus(body.status);
+    } catch (parseErr) {
+      return NextResponse.json({ message: parseErr.message }, { status: 400 });
+    }
+
+    const dataToUpdate = {
+      ...(body.deskripsi_kerja !== undefined && {
+        deskripsi_kerja: String(body.deskripsi_kerja).trim(),
+      }),
+      ...(countTime !== undefined && { count_time: countTime }),
+      ...(status !== undefined && { status }),
+      ...(idDepartement !== undefined && { id_departement: idDepartement }),
+    };
+
+    if (Object.keys(dataToUpdate).length === 0) {
+      return NextResponse.json({ message: 'Tidak ada perubahan yang dikirim.' }, { status: 400 });
+    }
+
+    const updated = await db.storyPlanner.update({
+      where: { id_story: id },
+      data: dataToUpdate,
       select: {
-        id_schedule_planner: true,
+        id_story: true,
         id_user: true,
-        tahun: true,
-        bulan: true,
-        is_scheduled: true,
-        created_at: true,
+        id_departement: true,
+        deskripsi_kerja: true,
+        count_time: true,
+        status: true,
         updated_at: true,
-        deleted_at: true,
       },
     });
 
-    return NextResponse.json({ ok: true, message: 'Schedule planner diupdate.', data: updated });
+    return NextResponse.json({
+      message: 'Story planner diperbarui.',
+      data: updated,
+    });
   } catch (err) {
-    console.error('PUT /admin/story-planner/[id] error:', err && err.code ? err.code : err);
-
-    if (err?.code === 'P2002') {
-      return NextResponse.json({ ok: false, message: 'Schedule planner untuk user/bulan/tahun tersebut sudah ada.' }, { status: 409 });
+    if (err && err.code === 'P2025') {
+      return NextResponse.json({ message: 'Story planner tidak ditemukan' }, { status: 404 });
     }
-
-    return NextResponse.json({ ok: false, message: err?.message || 'Server error' }, { status: 500 });
+    console.error('PUT /story-planner/[id] error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
 
-export async function DELETE(request, { params }) {
-  const actor = await getActor(request);
-  if (actor instanceof NextResponse) return actor;
-
-  const forbidden = requireAdminRole(actor);
-  if (forbidden) return forbidden;
+export async function DELETE(req, { params }) {
+  const ok = await ensureAuth(req);
+  if (ok instanceof NextResponse) return ok;
 
   try {
-    const id = String(params?.id || '').trim();
-    if (!id) return NextResponse.json({ ok: false, message: 'ID tidak valid' }, { status: 400 });
+    const id = params.id;
 
-    const current = await db.schedulePlanner.findUnique({ where: { id_schedule_planner: id } });
-    if (!current || current.deleted_at) {
-      return NextResponse.json({ ok: false, message: 'Schedule planner tidak ditemukan' }, { status: 404 });
+    const existing = await db.storyPlanner.findUnique({
+      where: { id_story: id },
+      select: { id_story: true, deleted_at: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ message: 'Story planner tidak ditemukan' }, { status: 404 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const hard = (searchParams.get('hard') || '').trim().toLowerCase();
-
-    if (hard === '1' || hard === 'true') {
-      await db.schedulePlanner.delete({ where: { id_schedule_planner: id } });
-      return NextResponse.json({ ok: true, data: { id, deleted: true, hard: true } });
+    if (existing.deleted_at) {
+      return NextResponse.json({
+        message: 'Story planner sudah dihapus.',
+      });
     }
 
-    await db.schedulePlanner.update({
-      where: { id_schedule_planner: id },
+    await db.storyPlanner.update({
+      where: { id_story: id },
       data: { deleted_at: new Date() },
     });
 
-    return NextResponse.json({ ok: true, message: 'Schedule planner dihapus.' });
+    return NextResponse.json({ message: 'Story planner dihapus.' });
   } catch (err) {
-    console.error('DELETE /admin/story-planner/[id] error:', err && err.code ? err.code : err);
-    return NextResponse.json({ ok: false, message: err?.message || 'Server error' }, { status: 500 });
+    console.error('DELETE /story-planner/[id] error:', err && err.code ? err.code : err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
