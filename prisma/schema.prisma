@@ -376,29 +376,26 @@ model User {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
-  kantor      Location?    @relation(fields: [id_location], references: [id_location], onDelete: Restrict, onUpdate: Cascade)
-  jabatan     Jabatan?     @relation(fields: [id_jabatan], references: [id_jabatan], onDelete: SetNull, onUpdate: Cascade)
-
+  departement                Departement?               @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
+  kantor                     Location?                  @relation(fields: [id_location], references: [id_location], onDelete: Restrict, onUpdate: Cascade)
+  jabatan                    Jabatan?                   @relation(fields: [id_jabatan], references: [id_jabatan], onDelete: SetNull, onUpdate: Cascade)
   faces                      Face[]
   agendas                    AgendaKerja[]
   shifts                     ShiftKerja[]
+  story_planners             StoryPlanner[]
   absensi                    Absensi[]
   lembur                     Lembur[]
+  shift_storyPlanner         ShiftStoryPlanner[]
   broadcast_rcv              BroadcastRecipient[]
   devices                    Device[]
+  lembur_approvals           LemburApproval[]           @relation("LemburApproval_approver_user_idToUser")
   absensi_reports_received   AbsensiReportRecipient[]
   kunjungan                  Kunjungan[]
   kunjungan_reports_received KunjunganReportRecipient[]
   notifications              Notification[]
   istirahat                  Istirahat[]
 
-  // NEW (pengganti StoryPlanner/JadwalStoryPlanner/ShiftStoryPlanner)
-  schedule_planners SchedulePlanner[]
-
   supervised_department Departement? @relation("SupervisorForDepartment")
-
-  lembur_approvals LemburApproval[] @relation("LemburApproval_approver_user_idToUser")
 
   approvals_pengajuan_cuti ApprovalPengajuanCuti[]    @relation("ApprovalPengajuanCuti_approver")
   approvals_izin_sakit     ApprovalIzinSakit[]        @relation("ApprovalIzinSakit_approver")
@@ -439,9 +436,10 @@ model Departement {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  users      User[]
-  jabatan    Jabatan[]
-  supervisor User?     @relation("SupervisorForDepartment", fields: [id_supervisor], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
+  users        User[]
+  jabatan      Jabatan[]
+  supervisor   User?          @relation("SupervisorForDepartment", fields: [id_supervisor], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
+  StoryPlanner StoryPlanner[]
 
   // Financial Relations
   reimburse     Reimburse[]
@@ -509,6 +507,26 @@ model Face {
   @@map("face")
 }
 
+model StoryPlanner {
+  id_story        String     @id @default(uuid()) @db.Char(36)
+  id_user         String     @db.Char(36)
+  id_departement  String?    @db.Char(36)
+  deskripsi_kerja String     @db.LongText
+  count_time      DateTime?  @db.DateTime(0)
+  status          WorkStatus
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user        User         @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([id_user])
+  @@index([id_departement])
+  @@map("story_planner")
+}
+
 model Device {
   id_device            String    @id @default(uuid()) @db.Char(36)
   id_user              String    @db.Char(36)
@@ -556,10 +574,9 @@ model Absensi {
   updated_at           DateTime       @updatedAt @db.DateTime(0)
   deleted_at           DateTime?      @db.DateTime(0)
 
-  user      User      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  lokasiIn  Location? @relation("absen_datang", fields: [id_lokasi_datang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
-  lokasiOut Location? @relation("absen_pulang", fields: [id_lokasi_pulang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
-
+  user              User                     @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  lokasiIn          Location?                @relation("absen_datang", fields: [id_lokasi_datang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
+  lokasiOut         Location?                @relation("absen_pulang", fields: [id_lokasi_pulang], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
   agendas           AgendaKerja[]
   report_recipients AbsensiReportRecipient[]
   catatan           Catatan[]
@@ -658,10 +675,9 @@ model Lembur {
   alasan        String?      @db.LongText
   status        LemburStatus
   current_level Int?
-
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt @db.DateTime(0)
-  deleted_at DateTime? @db.DateTime(0)
+  created_at    DateTime     @default(now()) @db.DateTime(0)
+  updated_at    DateTime     @updatedAt @db.DateTime(0)
+  deleted_at    DateTime?    @db.DateTime(0)
 
   user      User             @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
   approvals LemburApproval[]
@@ -693,14 +709,46 @@ model LemburApproval {
   @@map("lembur_approval")
 }
 
-model KategoriSakit {
-  id_kategori_sakit String    @id @default(uuid()) @db.Char(36)
-  nama_kategori     String    @db.VarChar(255)
-  created_at        DateTime  @default(now()) @db.DateTime(0)
-  updated_at        DateTime  @updatedAt @db.DateTime(0)
-  deleted_at        DateTime? @db.DateTime(0)
+model JadwalStoryPlanner {
+  id_jadwal_story_planner String    @id @default(uuid()) @db.Char(36)
+  Tahun                   DateTime? @db.Date
+  Bulan                   Bulan
+  keterangan              String?   @db.LongText
 
-  sakit PengajuanIzinSakit[]
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  shifts ShiftStoryPlanner[]
+
+  @@map("jadwal_story_planer")
+}
+
+model ShiftStoryPlanner {
+  id_shift_story_planner  String @id @default(uuid()) @db.Char(36)
+  id_jadwal_story_planner String @db.Char(36)
+  id_user                 String @db.Char(36)
+  hari_story_planner      String
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  jadwal JadwalStoryPlanner @relation(fields: [id_jadwal_story_planner], references: [id_jadwal_story_planner], onDelete: Cascade, onUpdate: Cascade)
+  user   User               @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([id_jadwal_story_planner])
+  @@index([id_user])
+  @@map("shift_story_planer")
+}
+
+model KategoriSakit {
+  id_kategori_sakit String               @id @default(uuid()) @db.Char(36)
+  nama_kategori     String               @db.VarChar(255)
+  created_at        DateTime             @default(now()) @db.DateTime(0)
+  updated_at        DateTime             @updatedAt @db.DateTime(0)
+  deleted_at        DateTime?            @db.DateTime(0)
+  sakit             PengajuanIzinSakit[]
 
   @@map("kategori_sakit")
 }
@@ -755,6 +803,7 @@ model KategoriKeperluan {
   updated_at            DateTime  @updatedAt @db.DateTime(0)
   deleted_at            DateTime? @db.DateTime(0)
 
+  // Reverse relations to financial models
   reimburses    Reimburse[]
   pocket_moneys PocketMoney[]
   payments      Payment[]
@@ -1271,24 +1320,4 @@ model sop_karyawan {
 
   @@index([tanggal_terbit])
   @@map("sop_karyawan")
-}
-
-model SchedulePlanner {
-  id_schedule_planner String @id @default(uuid()) @db.Char(36)
-  id_user             String @db.Char(36)
-
-  tahun        Int
-  bulan        Bulan
-  is_scheduled Boolean @default(false)
-
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt @db.DateTime(0)
-  deleted_at DateTime? @db.DateTime(0)
-
-  user User @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-
-  @@unique([id_user, tahun, bulan], name: "uniq_user_schedule_month")
-  @@index([id_user])
-  @@index([tahun, bulan])
-  @@map("schedule_planner")
 }
