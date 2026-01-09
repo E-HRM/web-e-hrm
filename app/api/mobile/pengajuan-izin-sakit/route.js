@@ -5,7 +5,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { sendNotification } from '@/app/utils/services/notificationService';
-import storageClient from '@/app/api/_utils/storageClient';
+import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
 import { parseRequestBody, findFileInBody, hasOwn } from '@/app/api/_utils/requestBody';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 import { sendIzinSakitMessage, sendIzinSakitImage } from '@/app/utils/watzap/watzap';
@@ -378,23 +378,32 @@ export async function POST(req) {
 
     if (lampiranFile) {
       try {
-        const res = await storageClient.uploadBufferWithPresign(lampiranFile, {
-          folder: 'pengajuan',
+        const uploaded = await uploadMediaWithFallback(lampiranFile, {
+          storageFolder: 'pengajuan',
+          supabasePrefix: 'pengajuan',
+          pathSegments: [String(actorId)],
         });
-        lampiranUrl = res.publicUrl || null;
+
+        lampiranUrl = uploaded.publicUrl || null;
+
         uploadMeta = {
-          key: res.key,
-          publicUrl: res.publicUrl,
-          etag: res.etag,
-          size: res.size,
+          provider: uploaded.provider,
+          publicUrl: uploaded.publicUrl || null,
+          key: uploaded.key,
+          etag: uploaded.etag,
+          size: uploaded.size,
+          bucket: uploaded.bucket,
+          path: uploaded.path,
+          fallbackFromStorageError: uploaded.errors?.storage || undefined,
         };
       } catch (e) {
         return NextResponse.json(
           {
             message: 'Gagal mengunggah lampiran.',
             detail: e?.message || String(e),
+            errors: e?.errors,
           },
-          { status: 502 }
+          { status: e?.status || 502 }
         );
       }
     } else {

@@ -3,7 +3,7 @@ export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { ensureAuth, paymentInclude } from '../route';
-import storageClient from '@/app/api/_utils/storageClient';
+import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
 import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 import { parseApprovalsFromBody, ensureApprovalUsersExist, syncApprovalRecords } from '../_utils/approvals';
@@ -198,11 +198,34 @@ async function handleUpdate(req, ctx) {
     const buktiFile = findFileInBody(body, ['bukti_pembayaran', 'bukti', 'file', 'bukti_pembayaran_file']);
     if (buktiFile) {
       try {
-        const res = await storageClient.uploadBufferWithPresign(buktiFile, { folder: 'financial' });
-        buktiUrl = res.publicUrl || null;
-        uploadMeta = { key: res.key, publicUrl: res.publicUrl, etag: res.etag, size: res.size };
+        const uploaded = await uploadMediaWithFallback(buktiFile, {
+          storageFolder: 'financial',
+          supabasePrefix: 'financial',
+          pathSegments: [String(existing.id_user)],
+        });
+
+        buktiUrl = uploaded.publicUrl || null;
+
+        uploadMeta = {
+          provider: uploaded.provider,
+          publicUrl: uploaded.publicUrl || null,
+          key: uploaded.key,
+          etag: uploaded.etag,
+          size: uploaded.size,
+          bucket: uploaded.bucket,
+          path: uploaded.path,
+          fallbackFromStorageError: uploaded.errors?.storage || undefined,
+        };
       } catch (e) {
-        return NextResponse.json({ ok: false, message: 'Gagal upload bukti pembayaran.', detail: e?.message || String(e) }, { status: 502 });
+        return NextResponse.json(
+          {
+            ok: false,
+            message: 'Ga...mbayaran.',
+            detail: e?.message || String(e),
+            errors: e?.errors,
+          },
+          { status: e?.status || 502 }
+        );
       }
       updateData.bukti_pembayaran_url = buktiUrl;
     } else if (Object.prototype.hasOwnProperty.call(body, 'bukti_pembayaran_url')) {

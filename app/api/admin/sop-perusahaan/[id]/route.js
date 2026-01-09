@@ -1,17 +1,21 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import db from '../../../../../lib/prisma';
-import { verifyAuthToken } from '../../../../../lib/jwt';
-import { authenticateRequest } from '../../../../utils/auth/authUtils';
-import storageClient from '../../../_utils/storageClient';
-import { parseRequestBody, findFileInBody, isNullLike } from '../../../_utils/requestBody';
-import { parseDateOnlyToUTC } from '../../../../../helpers/date-helper';
+import db from '@/lib/prisma';
+import { verifyAuthToken } from '@/lib/jwt';
+import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import { parseDateOnlyToUTC } from '@/helpers/date-helper';
+import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
+import { parseRequestBody, findFileInBody, isNullLike } from '@/app/api/_utils/requestBody';
 
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
 function getSopDelegate() {
   return db?.sop_karyawan || db?.sopKaryawan || null;
+}
+
+function getKategoriDelegate() {
+  return db?.kategori_sop || db?.kategoriSop || null;
 }
 
 async function getActor(req) {
@@ -39,6 +43,16 @@ function guardAdmin(actor) {
   return null;
 }
 
+const SOP_WITH_KATEGORI_INCLUDE = {
+  kategori_sop: {
+    select: {
+      id_kategori_sop: true,
+      nama_kategori: true,
+      deskripsi: true,
+    },
+  },
+};
+
 export async function GET(req, { params }) {
   const actor = await getActor(req);
   if (actor instanceof NextResponse) return actor;
@@ -59,6 +73,7 @@ export async function GET(req, { params }) {
         id_sop_karyawan: params.id,
         ...(!includeDeleted ? { deleted_at: null } : {}),
       },
+      include: SOP_WITH_KATEGORI_INCLUDE,
     });
 
     if (!data) return NextResponse.json({ message: 'SOP tidak ditemukan.' }, { status: 404 });
@@ -107,14 +122,37 @@ export async function PUT(req, { params }) {
       updateData.tanggal_terbit = tanggal_terbit;
     }
 
-    // upload file lampiran SOP
+    if (Object.prototype.hasOwnProperty.call(body, 'id_kategori_sop')) {
+      const id_kategori_sop = isNullLike(body.id_kategori_sop) ? null : String(body.id_kategori_sop).trim();
+
+      if (id_kategori_sop) {
+        const kategori = getKategoriDelegate();
+        if (!kategori) {
+          return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+        }
+
+        const exists = await kategori.findFirst({
+          where: { id_kategori_sop, deleted_at: null },
+          select: { id_kategori_sop: true },
+        });
+        if (!exists) return NextResponse.json({ message: 'Kategori SOP tidak ditemukan.' }, { status: 400 });
+      }
+
+      updateData.id_kategori_sop = id_kategori_sop;
+    }
+
     const lampiranFile = findFileInBody(body, ['lampiran_sop', 'lampiran', 'file', 'lampiran_sop_file']);
     if (lampiranFile) {
       try {
-        const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'sop-perusahaan' });
-        updateData.lampiran_sop_url = res.publicUrl || null;
+        const uploaded = await uploadMediaWithFallback(lampiranFile, {
+          storageFolder: 'sop-perusahaan',
+          supabasePrefix: 'sop-perusahaan',
+          pathSegments: actor?.id ? [String(actor.id)] : [],
+        });
+
+        updateData.lampiran_sop_url = uploaded.publicUrl || null;
       } catch (e) {
-        return NextResponse.json({ message: 'Gagal mengunggah lampiran SOP.', detail: e?.message || String(e) }, { status: 502 });
+        return NextResponse.json({ message: 'Gagal mengunggah lampiran SOP.', detail: e?.message || String(e) }, { status: e?.status || 502 });
       }
     } else if (Object.prototype.hasOwnProperty.call(body, 'lampiran_sop_url')) {
       updateData.lampiran_sop_url = isNullLike(body.lampiran_sop_url) ? null : String(body.lampiran_sop_url).trim();
@@ -127,6 +165,7 @@ export async function PUT(req, { params }) {
     const updated = await sop.update({
       where: { id_sop_karyawan: params.id },
       data: updateData,
+      include: SOP_WITH_KATEGORI_INCLUDE,
     });
 
     return NextResponse.json({ message: 'SOP berhasil diupdate.', data: updated });
