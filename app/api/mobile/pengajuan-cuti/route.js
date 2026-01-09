@@ -6,7 +6,7 @@ import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 import { sendNotification } from '@/app/utils/services/notificationService';
-import storageClient from '@/app/api/_utils/storageClient';
+import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
 import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 import { parseApprovalsFromBody, ensureApprovalUsersExist, syncApprovalRecords } from './_utils/approvals';
 
@@ -478,14 +478,38 @@ export async function POST(req) {
 
     let uploadMeta = null;
     let lampiranUrl = null;
+
     const lampiranFile = findFileInBody(body, ['lampiran_cuti', 'lampiran', 'lampiran_file', 'file']);
     if (lampiranFile) {
       try {
-        const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'pengajuan' });
-        lampiranUrl = res.publicUrl || null;
-        uploadMeta = { key: res.key, publicUrl: res.publicUrl, etag: res.etag, size: res.size };
+        const uploaded = await uploadMediaWithFallback(lampiranFile, {
+          storageFolder: 'pengajuan',
+          supabasePrefix: 'pengajuan',
+          pathSegments: [actorId],
+        });
+
+        lampiranUrl = uploaded.publicUrl || null;
+
+        uploadMeta = {
+          provider: uploaded.provider,
+          publicUrl: uploaded.publicUrl || null,
+          key: uploaded.key,
+          etag: uploaded.etag,
+          size: uploaded.size,
+          bucket: uploaded.bucket,
+          path: uploaded.path,
+          fallbackFromStorageError: uploaded.errors?.storage || undefined,
+        };
       } catch (e) {
-        return NextResponse.json({ ok: false, message: 'Gagal mengunggah lampiran.', detail: e?.message || String(e) }, { status: 502 });
+        return NextResponse.json(
+          {
+            ok: false,
+            message: 'Gagal mengunggah lampiran.',
+            detail: e?.message || String(e),
+            errors: e?.errors,
+          },
+          { status: e?.status || 502 }
+        );
       }
     }
 

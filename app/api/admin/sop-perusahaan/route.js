@@ -1,18 +1,22 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import db from '../../../../lib/prisma';
-import { verifyAuthToken } from '../../../../lib/jwt';
-import { authenticateRequest } from '../../../utils/auth/authUtils';
-import storageClient from '../../_utils/storageClient';
-import { parseRequestBody, findFileInBody, isNullLike } from '../../_utils/requestBody';
-import { parseDateOnlyToUTC } from '../../../../helpers/date-helper';
+import db from '@/lib/prisma';
+import { verifyAuthToken } from '@/lib/jwt';
+import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import { parseDateOnlyToUTC } from '@/helpers/date-helper';
+import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
+import { parseRequestBody, findFileInBody, isNullLike } from '@/app/api/_utils/requestBody';
 
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'tanggal_terbit', 'nama_dokumen']);
 
 function getSopDelegate() {
   return db?.sop_karyawan || db?.sopKaryawan || null;
+}
+
+function getKategoriDelegate() {
+  return db?.kategori_sop || db?.kategoriSop || null;
 }
 
 async function getActor(req) {
@@ -40,6 +44,16 @@ function guardAdmin(actor) {
   return null;
 }
 
+const SOP_WITH_KATEGORI_INCLUDE = {
+  kategori_sop: {
+    select: {
+      id_kategori_sop: true,
+      nama_kategori: true,
+      deskripsi: true,
+    },
+  },
+};
+
 export async function GET(req) {
   const actor = await getActor(req);
   if (actor instanceof NextResponse) return actor;
@@ -58,11 +72,12 @@ export async function GET(req) {
     const includeDeleted = ['1', 'true'].includes((searchParams.get('includeDeleted') || '').toLowerCase());
     const deletedOnly = ['1', 'true'].includes((searchParams.get('deletedOnly') || '').toLowerCase());
 
+    const id_kategori_sop = (searchParams.get('id_kategori_sop') || searchParams.get('kategoriId') || '').trim();
+
     const orderByParam = (searchParams.get('orderBy') || 'created_at').trim();
     const orderBy = ALLOWED_ORDER_BY.has(orderByParam) ? orderByParam : 'created_at';
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-    // "GET dapat dilihat semua" => default tetap support pagination, tapi bisa all=true untuk ambil semua
     const all = ['1', 'true'].includes((searchParams.get('all') || '').toLowerCase());
     const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
     const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
@@ -71,12 +86,14 @@ export async function GET(req) {
       ...(deletedOnly ? { deleted_at: { not: null } } : {}),
       ...(!includeDeleted && !deletedOnly ? { deleted_at: null } : {}),
       ...(search ? { OR: [{ nama_dokumen: { contains: search } }] } : {}),
+      ...(id_kategori_sop ? { id_kategori_sop } : {}),
     };
 
     if (all) {
       const items = await sop.findMany({
         where,
         orderBy: { [orderBy]: sort },
+        include: SOP_WITH_KATEGORI_INCLUDE,
       });
       return NextResponse.json({ total: items.length, items });
     }
@@ -88,6 +105,7 @@ export async function GET(req) {
         orderBy: { [orderBy]: sort },
         skip: (page - 1) * pageSize,
         take: pageSize,
+        include: SOP_WITH_KATEGORI_INCLUDE,
       }),
     ]);
 
@@ -134,15 +152,43 @@ export async function POST(req) {
       return NextResponse.json({ message: 'tanggal_terbit wajib & valid (format: YYYY-MM-DD).' }, { status: 400 });
     }
 
+    const id_kategori_sop = isNullLike(body?.id_kategori_sop) ? null : String(body.id_kategori_sop).trim();
+    if (id_kategori_sop) {
+      const kategori = getKategoriDelegate();
+      if (!kategori) {
+        return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+      }
+
+      const exists = await kategori.findFirst({
+        where: { id_kategori_sop, deleted_at: null },
+        select: { id_kategori_sop: true },
+      });
+      if (!exists) return NextResponse.json({ message: 'Kategori SOP tidak ditemukan.' }, { status: 400 });
+    }
+
+    let createdByName = null;
+    if (actor?.id) {
+      const u = await db.user.findUnique({
+        where: { id_user: String(actor.id) },
+        select: { nama_pengguna: true },
+      });
+      createdByName = u?.nama_pengguna || null;
+    }
+
     let lampiranUrl = null;
 
     const lampiranFile = findFileInBody(body, ['lampiran_sop', 'lampiran', 'file', 'lampiran_sop_file']);
     if (lampiranFile) {
       try {
-        const res = await storageClient.uploadBufferWithPresign(lampiranFile, { folder: 'sop-perusahaan' });
-        lampiranUrl = res.publicUrl || null;
+        const uploaded = await uploadMediaWithFallback(lampiranFile, {
+          storageFolder: 'sop-perusahaan',
+          supabasePrefix: 'sop-perusahaan',
+          pathSegments: actor?.id ? [String(actor.id)] : [],
+        });
+
+        lampiranUrl = uploaded.publicUrl || null;
       } catch (e) {
-        return NextResponse.json({ message: 'Gagal mengunggah lampiran SOP.', detail: e?.message || String(e) }, { status: 502 });
+        return NextResponse.json({ message: 'Gagal mengunggah lampiran SOP.', detail: e?.message || String(e) }, { status: e?.status || 502 });
       }
     } else if (Object.prototype.hasOwnProperty.call(body, 'lampiran_sop_url')) {
       lampiranUrl = isNullLike(body.lampiran_sop_url) ? null : String(body.lampiran_sop_url).trim();
@@ -153,7 +199,10 @@ export async function POST(req) {
         nama_dokumen,
         tanggal_terbit,
         lampiran_sop_url: lampiranUrl,
+        id_kategori_sop,
+        created_by_snapshot_nama_pengguna: createdByName,
       },
+      include: SOP_WITH_KATEGORI_INCLUDE,
     });
 
     return NextResponse.json({ message: 'SOP perusahaan berhasil dibuat.', data: created }, { status: 201 });
