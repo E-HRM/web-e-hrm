@@ -1,12 +1,24 @@
-"use client";
+'use client';
 
-import { Suspense, lazy } from "react";
+import { Suspense, lazy } from 'react';
+import LoadingSplash from '@/app/(view)/component_shared/LoadingSplash';
 
-const ResetPassword = lazy(() => import("./ResetPasswordContent"));
+const ResetPassword = lazy(() => import('./ResetPasswordContent'));
 
 export default function Page() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className='grid place-items-center min-h-[calc(100dvh-64px-56px)]'>
+          <LoadingSplash
+            label='Menyiapkan Halaman…'
+            brand='#003A6F'
+            size={124}
+            fullscreen={false}
+          />
+        </div>
+      }
+    >
       <ResetPassword />
     </Suspense>
   );

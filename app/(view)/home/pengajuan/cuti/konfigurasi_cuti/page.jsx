@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import { Suspense, lazy } from "react";
+import { Suspense, lazy } from 'react';
+import LoadingSplash from '@/app/(view)/component_shared/LoadingSplash';
 
-const KonfigurasiCuti = lazy(() => import("./KonfigurasiCutiContent"));
-import LoadingSplash from "@/app/components/common/LoadingSplash";
+const KonfigurasiCuti = lazy(() => import('./KonfigurasiCutiContent'));
 
 export default function Page() {
   return (
     <Suspense
       fallback={
-        <div className="grid place-items-center min-h-[calc(100dvh-64px-56px)]">
+        <div className='grid place-items-center min-h-[calc(100dvh-64px-56px)]'>
           <LoadingSplash
-            label="Menyiapkan Halaman…"
-            brand="#003A6F"
+            label='Menyiapkan Halaman…'
+            brand='#003A6F'
             size={124}
-            fullscreen={false}   
+            fullscreen={false}
           />
         </div>
       }

@@ -1,108 +1,134 @@
-"use client";
+'use client';
 
-import React from "react";
-import Link from "next/link";
-import {
-  Card,
-  Table,
-  Input,
-  Button,
-  Space,
-  Modal,
-  Form,
-  Select,
-  message,
-  Typography,
-  Popconfirm,
-} from "antd";
-import {
-  PlusOutlined,
-  SearchOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  ApartmentOutlined, // <— ikon visualisasi
-} from "@ant-design/icons";
-import useJabatanViewModel from "./useJabatanViewModel";
+import React, { useMemo } from 'react';
+import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons';
+import useJabatanViewModel from './useJabatanViewModel';
 
-const { Title } = Typography;
+import AppCard from '../../../component_shared/AppCard';
+import AppTable from '../../../component_shared/AppTable';
+import AppInput from '../../../component_shared/AppInput';
+import AppButton from '../../../component_shared/AppButton';
+import AppSpace from '../../../component_shared/AppSpace';
+import AppModal from '../../../component_shared/AppModal';
+import AppForm from '../../../component_shared/AppForm';
+import AppTypography from '../../../component_shared/AppTypography';
+import AppMessage from '../../../component_shared/AppMessage';
 
 export default function JabatanContent() {
   const vm = useJabatanViewModel();
 
-  const columns = [
-    {
-      title: "Jabatan",
-      dataIndex: "nama_jabatan",
-      key: "nama_jabatan",
-    },
-    {
-      title: "Aksi",
-      key: "action",
-      fixed: "right",
-      width: 160,
-      render: (_, row) => (
-        <Space>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => vm.openEdit(row.id_jabatan)}
-          />
-          <Popconfirm
-            title="Hapus jabatan ini?"
-            okText="Hapus"
-            okButtonProps={{ danger: true }}
-            cancelText="Batal"
-            onConfirm={() => vm.remove(row.id_jabatan)}
-          >
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+  const parentOptions = useMemo(() => {
+    const base = Array.isArray(vm.parentOptions) ? vm.parentOptions : [];
+    if (vm.modal.mode === 'edit' && vm.modal.id) {
+      return base.filter((o) => o.value !== vm.modal.id);
+    }
+    return base;
+  }, [vm.parentOptions, vm.modal.mode, vm.modal.id]);
+
+  const runSearch = () => {
+    vm.reload();
+  };
+
+  const columns = useMemo(
+    () => [
+      {
+        title: 'Jabatan',
+        dataIndex: 'nama_jabatan',
+        key: 'nama_jabatan',
+      },
+      {
+        title: 'Aksi',
+        key: 'action',
+        fixed: 'right',
+        width: 160,
+        render: (_, row) => (
+          <div className='flex items-center gap-2'>
+            <AppButton
+              variant='text'
+              size='small'
+              icon={<EditOutlined />}
+              onClick={() => vm.openEdit(row.id_jabatan)}
+              aria-label='Edit'
+            />
+            <AppButton
+              variant='danger'
+              size='small'
+              icon={<DeleteOutlined />}
+              aria-label='Hapus'
+              confirm={{
+                title: 'Hapus jabatan ini?',
+                okText: 'Hapus',
+                cancelText: 'Batal',
+                okButtonProps: { danger: true },
+                onOk: async () => {
+                  await vm.remove(row.id_jabatan);
+                },
+              }}
+            />
+          </div>
+        ),
+      },
+    ],
+    [vm]
+  );
 
   return (
-    <div className="p-6">
-      <Title level={2} style={{ marginTop: 0 }}>
+    <div className='p-6'>
+      <AppTypography.Title
+        level={2}
+        className='!mt-0'
+      >
         Jabatan
-      </Title>
+      </AppTypography.Title>
 
-      <Card
-        bordered
-        style={{ borderRadius: 16 }}
+      <AppCard
+        className='!rounded-2xl'
         bodyStyle={{ paddingTop: 16 }}
         title={
-          <Space>
-            <Input.Search
-              placeholder="Cari jabatan…"
-              allowClear
-              onSearch={(v) => {
-                vm.setSearch(v);
-                vm.reload();
-              }}
-              onChange={(e) => vm.setSearch(e.target.value)}
-              value={vm.search}
-              enterButton={<SearchOutlined />}
-              style={{ width: 320 }}
-            />
-          </Space>
+          <AppSpace>
+            <div className='flex items-center gap-2'>
+              <div className='w-[320px]'>
+                <AppInput
+                  placeholder='Cari jabatan…'
+                  allowClear
+                  value={vm.search}
+                  onChange={(e) => vm.setSearch(e.target.value)}
+                  onPressEnter={runSearch}
+                  prefixIcon={<SearchOutlined />}
+                />
+              </div>
+              <AppButton
+                variant='outline'
+                icon={<SearchOutlined />}
+                onClick={runSearch}
+              >
+                Cari
+              </AppButton>
+            </div>
+          </AppSpace>
         }
         extra={
-          <Space>
-            {/* Tombol Visualisasi */}
-            <Link href="/home/kelola_karyawan/jabatan/visualisasi">
-              <Button icon={<ApartmentOutlined />}>Lihat Visualisasi</Button>
-            </Link>
+          <AppSpace>
+            <AppButton
+              variant='outline'
+              icon={<ApartmentOutlined />}
+              href='/home/kelola_karyawan/jabatan/visualisasi'
+            >
+              Lihat Visualisasi
+            </AppButton>
 
-            {/* Tombol Tambah */}
-            <Button type="primary" icon={<PlusOutlined />} onClick={vm.openCreate}>
+            <AppButton
+              variant='primary'
+              icon={<PlusOutlined />}
+              onClick={vm.openCreate}
+            >
               Tambah Jabatan
-            </Button>
-          </Space>
+            </AppButton>
+          </AppSpace>
         }
       >
-        <Table
-          rowKey="id_jabatan"
+        <AppTable
+          rowKey='id_jabatan'
           loading={vm.loading}
           columns={columns}
           dataSource={vm.data}
@@ -115,78 +141,63 @@ export default function JabatanContent() {
           }}
           scroll={{ x: 560 }}
         />
-      </Card>
+      </AppCard>
 
-      {/* ==== MODAL ==== */}
-      <Modal
+      <AppModal
         open={vm.modal.open}
-        onCancel={vm.closeModal}
-        title={vm.modal.mode === "create" ? "Tambah Jabatan" : "Ubah Jabatan"}
-        okText={vm.modal.mode === "create" ? "Simpan" : "Simpan Perubahan"}
+        onClose={vm.closeModal}
+        title={vm.modal.mode === 'create' ? 'Tambah Jabatan' : 'Ubah Jabatan'}
+        okText={vm.modal.mode === 'create' ? 'Simpan' : 'Simpan Perubahan'}
+        cancelText='Batal'
         onOk={() => vm.form.submit()}
-        confirmLoading={vm.saving}
+        okLoading={vm.saving}
         destroyOnClose
-        styles={{
-          header: { borderBottom: "1px solid #ECEEF1" },
-          footer: { borderTop: "1px solid #ECEEF1" },
-          body: { paddingTop: 20, paddingBottom: 8 },
-        }}
       >
-        <Form
+        <AppForm
           form={vm.form}
-          layout="horizontal"
-          labelCol={{ span: 6 }}
-          wrapperCol={{ span: 18 }}
-          colon={false}
+          layout='vertical'
+          showSubmit={false}
+          initialValues={{
+            nama_jabatan: '',
+            id_induk_jabatan: undefined,
+          }}
+          fields={[
+            {
+              type: 'text',
+              name: 'nama_jabatan',
+              label: 'Nama',
+              placeholder: 'cth: Manager Operasional',
+              rules: [{ required: true, message: 'Nama jabatan wajib diisi' }],
+              controlProps: { size: 'large', allowClear: true },
+            },
+            {
+              type: 'select',
+              name: 'id_induk_jabatan',
+              label: 'Induk',
+              tooltip: 'Biarkan kosong untuk menjadikannya root (Tanpa Induk).',
+              placeholder: 'Tanpa Induk',
+              options: parentOptions,
+              allowClear: true,
+              controlProps: {
+                size: 'large',
+                showSearch: true,
+                optionFilterProp: 'label',
+                filterOption: (input, option) =>
+                  String(option?.label ?? '')
+                    .toLowerCase()
+                    .includes(String(input ?? '').toLowerCase()),
+              },
+            },
+          ]}
           onFinish={(values) => {
-            if (vm.modal.mode === "edit" && values.id_induk_jabatan === vm.modal.id) {
-              return message.error(
-                "Induk jabatan tidak boleh sama dengan jabatan itu sendiri."
-              );
+            if (vm.modal.mode === 'edit' && values.id_induk_jabatan === vm.modal.id) {
+              AppMessage.error('Induk jabatan tidak boleh sama dengan jabatan itu sendiri.');
+              return;
             }
             vm.submit(values);
           }}
-          initialValues={{
-            nama_jabatan: "",
-            id_induk_jabatan: undefined,
-          }}
-        >
-          {/* Nama */}
-          <Form.Item
-            name="nama_jabatan"
-            label={
-              <span className="font-medium">
-                Nama <span className="text-red-500">*</span>
-              </span>
-            }
-            rules={[{ required: true, message: "Nama jabatan wajib diisi" }]}
-            required
-          >
-            <Input placeholder="cth: Manager Operasional" size="large" allowClear />
-          </Form.Item>
-
-          {/* Induk */}
-          <Form.Item
-            name="id_induk_jabatan"
-            label={<span className="font-medium">Induk</span>}
-            tooltip="Biarkan kosong untuk menjadikannya root (Tanpa Induk)."
-          >
-            <Select
-              size="large"
-              placeholder="Tanpa Induk"
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              options={vm.parentOptions.filter(
-                (o) => !(vm.modal.mode === "edit" && o.value === vm.modal.id)
-              )}
-              filterOption={(input, option) =>
-                (option?.label ?? "").toLowerCase().includes(input.toLowerCase())
-              }
-            />
-          </Form.Item>
-        </Form>
-      </Modal>
+        />
+      </AppModal>
     </div>
   );
 }

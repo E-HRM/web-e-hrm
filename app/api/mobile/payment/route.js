@@ -105,20 +105,24 @@ export async function ensureAuth(req) {
     } catch (_) {}
   }
 
-  const session = await authenticateRequest(req);
-  if (!session || !session.ok) {
+  const sessionOrRes = await authenticateRequest();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+
+  const actorId = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
+  if (!actorId) {
     return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
 
   return {
     actor: {
-      id: session.user?.id || session.user?.id_user,
-      role: session.user?.role,
-      email: session.user?.email,
+      id: actorId,
+      role: sessionOrRes.user?.role,
+      email: sessionOrRes.user?.email,
     },
-    session,
+    session: sessionOrRes,
   };
 }
+
 
 async function getActorUser(actorId) {
   if (!actorId) return null;

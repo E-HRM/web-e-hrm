@@ -1,23 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import {
-  ConfigProvider,
-  Button,
-  Select,
-  Input,
-  Table,
-  Space,
-  Tooltip,
-  Grid,
-  Card,
-  Dropdown,
-  Modal,
-  message,
-  Typography,
-  Tag,
-  Switch,
-} from "antd";
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import dayjs from "dayjs";
+import "dayjs/locale/id";
+import useKaryawanViewModel from "./useKaryawanViewModel";
+
 import {
   PlusOutlined,
   EditOutlined,
@@ -28,16 +16,46 @@ import {
   SearchOutlined,
   WarningTwoTone,
 } from "@ant-design/icons";
-import dayjs from "dayjs";
-import "dayjs/locale/id";
-import Link from "next/link";
-import useKaryawanViewModel from "./useKaryawanViewModel";
+
+import AppTypography from "../../../component_shared/AppTypography";
+import AppCard from "../../../component_shared/AppCard";
+import AppTable from "../../../component_shared/AppTable";
+import AppInput from "../../../component_shared/AppInput";
+import AppSelect from "../../../component_shared/AppSelect";
+import AppButton from "../../../component_shared/AppButton";
+import AppTooltip from "../../../component_shared/AppTooltip";
+import AppDropdown from "../../../component_shared/AppDropdown";
+import AppModal from "../../../component_shared/AppModal";
+import AppMessage from "../../../component_shared/AppMessage";
+import AppTag from "../../../component_shared/AppTag";
+import AppSwitch from "../../../component_shared/AppSwitch";
+import AppAvatar from "../../../component_shared/AppAvatar";
 
 dayjs.locale("id");
-const BRAND = "#003A6F";
-const { Title } = Typography;
 
-/** Ambil URL foto dari row */
+function useIsMobile(maxWidth = 640) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`);
+    const apply = () => setIsMobile(!!mq.matches);
+
+    apply();
+
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+
+    mq.addListener(apply);
+    return () => mq.removeListener(apply);
+  }, [maxWidth]);
+
+  return isMobile;
+}
+
 function getPhotoUrl(row) {
   return (
     row?.foto_profil_user ||
@@ -52,157 +70,176 @@ function getPhotoUrl(row) {
   );
 }
 
-function CircleImg({ src, size = 44, alt = "Foto" }) {
-  const s = {
-    width: size,
-    height: size,
-    borderRadius: "9999px",
-    overflow: "hidden",
-    border: `1px solid ${BRAND}22`,
-    background: "#E6F0FA",
-    flexShrink: 0,
-    display: "inline-block",
-  };
-  return (
-    <span style={s} className="shrink-0">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src || "/avatar-placeholder.jpg"}
-        alt={alt}
-        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-        onError={(e) => {
-          e.currentTarget.src = "/avatar-placeholder.jpg";
-          e.currentTarget.onerror = null;
-        }}
-      />
-    </span>
-  );
-}
-
-/** Cell untuk kolom Catatan Delete (hanya dipakai saat showDeleted = true) */
 function CatatanDeleteCell({ deletedAt, note }) {
   if (!deletedAt) return null;
-  if (!note) return <Tag color="default">—</Tag>;
+  if (!note) return <AppTag tone="neutral">—</AppTag>;
+
   return (
-    <Tooltip title={note}>
+    <AppTooltip title={note}>
       <div className="truncate" style={{ maxWidth: 320 }}>
         {note}
       </div>
-    </Tooltip>
+    </AppTooltip>
   );
 }
 
-/** Tag status cuti */
 function StatusCutiTag({ v }) {
-  if (!v) return <Tag>—</Tag>;
+  if (!v) return <AppTag tone="neutral">—</AppTag>;
   const isAktif = String(v).toLowerCase() === "aktif";
-  return <Tag color={isAktif ? "green" : "red"}>{isAktif ? "Aktif" : "Nonaktif"}</Tag>;
+  return (
+    <AppTag tone={isAktif ? "success" : "danger"} variant="soft">
+      {isAktif ? "Aktif" : "Nonaktif"}
+    </AppTag>
+  );
 }
 
 export default function KaryawanContent() {
   const vm = useKaryawanViewModel();
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.sm;
+  const isMobile = useIsMobile(640);
 
-  // Modal delete + catatan
   const [del, setDel] = useState({ open: false, row: null, note: "" });
 
   const openDelete = (row) => setDel({ open: true, row, note: "" });
+
   const handleDelete = async () => {
+    if (!del.row) return;
+
     const res = await vm.deleteById(del.row.id, del.note);
-    if (res.ok) message.success(del.row.deletedAt ? "Karyawan dihapus permanen." : "Karyawan dihapus.");
-    else message.error(res.error);
+    if (res?.ok) {
+      AppMessage.success(
+        del.row.deletedAt ? "Karyawan dihapus permanen." : "Karyawan dihapus."
+      );
+    } else {
+      AppMessage.error(res?.error || "Gagal menghapus karyawan.");
+    }
     setDel({ open: false, row: null, note: "" });
   };
 
-  const actionMenu = (row) => ({
-    items: [
-      {
-        key: "edit",
-        label: <Link href={`/home/kelola_karyawan/karyawan/${row.id}/edit`}>Ubah</Link>,
-        icon: <EditOutlined />,
-      },
-      { type: "divider" },
-      {
-        key: "delete",
-        danger: true,
-        icon: <DeleteOutlined />,
-        label: row.deletedAt ? "Hapus Permanen" : "Hapus (soft delete)",
-        onClick: () => openDelete(row),
-      },
-    ],
-  });
-
-  // --- kolom dasar (tanpa Catatan Delete) ---
-  const baseColumns = [
+  const actionItems = (row) => [
     {
-      title: "Nama",
-      dataIndex: "name",
-      key: "name",
-      render: (_, row) => {
-        const photo = getPhotoUrl(row) || "/avatar-placeholder.jpg";
-        return (
-          <Link href={`/home/kelola_karyawan/karyawan/${row.id}`} className="no-underline">
-            <div className="flex items-center gap-3">
-              <CircleImg src={photo} alt={row?.name || "Foto karyawan"} />
-              <div className="min-w-0">
-                <div style={{ fontWeight: 600, color: row.deletedAt ? "#64748b" : "#0f172a" }} className="truncate">
-                  {row.name}
-                </div>
-                <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
-                  {row.jabatan || "—"}
-                  {row.jabatan && " "}
-                  {row.departemen ? `| ${row.departemen}` : row.jabatan ? "" : "—"}
-                </div>
-              </div>
-            </div>
-          </Link>
-        );
-      },
+      key: "edit",
+      label: "Ubah",
+      icon: <EditOutlined />,
+      href: `/home/kelola_karyawan/karyawan/${row.id}/edit`,
     },
+    { type: "divider" },
     {
-      title: "Status Cuti",
-      key: "statusCuti",
-      width: 130,
-      render: (_, row) => <StatusCutiTag v={row.statusCuti} />,
-      responsive: ["sm"],
-    },
-    {
-      title: "Email",
-      dataIndex: "email",
-      key: "email",
-      width: 260,
-      render: (v, row) => (
-        <div style={{ fontSize: 13, color: row.deletedAt ? "#94a3b8" : "#334155" }} className="truncate">
-          {v}
-        </div>
-      ),
-      responsive: ["lg"],
-    },
-    {
-      title: "Dokumen",
-      key: "doc",
-      width: 110,
-      align: "center",
-      render: () => (
-        <Tooltip title="Dokumen karyawan">
-          <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: BRAND }} />
-        </Tooltip>
-      ),
-      responsive: ["sm"],
+      key: "delete",
+      danger: true,
+      icon: <DeleteOutlined />,
+      label: row.deletedAt ? "Hapus Permanen" : "Hapus (soft delete)",
+      onClick: async () => openDelete(row),
     },
   ];
 
-  // --- kolom Catatan Delete (digunakan hanya saat showDeleted = true) ---
-  const catatanDeleteColumn = {
-    title: "Catatan Delete",
-    key: "deleteNote",
-    width: 240,
-    render: (_, row) => <CatatanDeleteCell deletedAt={row.deletedAt} note={row.deleteNote} />,
-    responsive: ["md"],
-  };
+  const baseColumns = useMemo(
+    () => [
+      {
+        title: "Nama",
+        dataIndex: "name",
+        key: "name",
+        render: (_, row) => {
+          const photo = getPhotoUrl(row) || "/avatar-placeholder.jpg";
+          return (
+            <Link
+              href={`/home/kelola_karyawan/karyawan/${row.id}`}
+              className="no-underline"
+            >
+              <div className="flex items-center gap-3">
+                <AppAvatar src={photo} name={row?.name || ""} size={44} />
 
-  // --- susun kolom final secara kondisional ---
+                {/* ✅ FIX: AppTypography.Text biasanya render <span> (inline),
+                    jadi nama + jabatan bisa nyamping.
+                    Paksa jadi 2 baris dengan wrapper <div> dan display:block */}
+                <div className="min-w-0 leading-tight">
+                  <div className="truncate">
+                    <AppTypography.Text
+                      strong
+                      style={{
+                        display: "block",
+                        color: row.deletedAt ? "#64748b" : undefined,
+                      }}
+                    >
+                      {row.name}
+                    </AppTypography.Text>
+                  </div>
+
+                  <div className="truncate">
+                    <AppTypography.Text
+                      tone="muted"
+                      size={12}
+                      style={{ display: "block" }}
+                    >
+                      {row.jabatan || "—"}
+                      {row.departemen
+                        ? ` | ${row.departemen}`
+                        : row.jabatan
+                        ? ""
+                        : "—"}
+                    </AppTypography.Text>
+                  </div>
+                </div>
+              </div>
+            </Link>
+          );
+        },
+      },
+      {
+        title: "Status Cuti",
+        key: "statusCuti",
+        width: 130,
+        render: (_, row) => <StatusCutiTag v={row.statusCuti} />,
+        responsive: ["sm"],
+      },
+      {
+        title: "Email",
+        dataIndex: "email",
+        key: "email",
+        width: 260,
+        render: (v, row) => (
+          <div
+            className="truncate"
+            style={{
+              fontSize: 13,
+              color: row.deletedAt ? "#94a3b8" : "#334155",
+            }}
+          >
+            {v || "—"}
+          </div>
+        ),
+        responsive: ["lg"],
+      },
+      {
+        title: "Dokumen",
+        key: "doc",
+        width: 110,
+        align: "center",
+        render: () => (
+          <AppTooltip title="Dokumen karyawan">
+            <span className="inline-flex">
+              <AppButton variant="text" size="small" icon={<FileTextOutlined />} />
+            </span>
+          </AppTooltip>
+        ),
+        responsive: ["sm"],
+      },
+    ],
+    []
+  );
+
+  const catatanDeleteColumn = useMemo(
+    () => ({
+      title: "Catatan Delete",
+      key: "deleteNote",
+      width: 240,
+      render: (_, row) => (
+        <CatatanDeleteCell deletedAt={row.deletedAt} note={row.deleteNote} />
+      ),
+      responsive: ["md"],
+    }),
+    []
+  );
+
   const columns = useMemo(() => {
     const aksiColumn = {
       title: "Aksi",
@@ -211,237 +248,246 @@ export default function KaryawanContent() {
       fixed: "right",
       render: (_, row) =>
         isMobile ? (
-          <Dropdown trigger={["click"]} menu={actionMenu(row)} placement="bottomRight">
-            <Button size="small" icon={<EllipsisOutlined />} loading={vm.deletingId === row.id} />
-          </Dropdown>
+          <AppDropdown items={actionItems(row)} placement="bottomRight" trigger={["click"]}>
+            <span>
+              <AppButton
+                variant="text"
+                size="small"
+                icon={<EllipsisOutlined />}
+                loading={vm.deletingId === row.id}
+              />
+            </span>
+          </AppDropdown>
         ) : (
-          <Space>
-            <Tooltip title="Ubah (halaman edit)">
-              <Link href={`/home/kelola_karyawan/karyawan/${row.id}/edit`}>
-                <Button size="small" icon={<EditOutlined />} style={{ borderColor: BRAND, color: BRAND }} />
-              </Link>
-            </Tooltip>
-            <Dropdown trigger={["click"]} menu={actionMenu(row)} placement="bottomRight">
-              <Button size="small" icon={<EllipsisOutlined />} loading={vm.deletingId === row.id} />
-            </Dropdown>
-          </Space>
+          <div className="flex items-center gap-2">
+            <AppTooltip title="Ubah (halaman edit)">
+              <span className="inline-flex">
+                <AppButton
+                  variant="outline"
+                  size="small"
+                  icon={<EditOutlined />}
+                  href={`/home/kelola_karyawan/karyawan/${row.id}/edit`}
+                />
+              </span>
+            </AppTooltip>
+
+            <AppDropdown items={actionItems(row)} placement="bottomRight" trigger={["click"]}>
+              <span>
+                <AppButton
+                  variant="text"
+                  size="small"
+                  icon={<EllipsisOutlined />}
+                  loading={vm.deletingId === row.id}
+                />
+              </span>
+            </AppDropdown>
+          </div>
         ),
     };
 
-    // Saat Hanya yang dihapus = ON → sisipkan kolom Catatan Delete
     return vm.showDeleted
       ? [...baseColumns.slice(0, 2), catatanDeleteColumn, ...baseColumns.slice(2), aksiColumn]
       : [...baseColumns, aksiColumn];
-  }, [vm.showDeleted, isMobile, vm.deletingId]); // actionMenu stabil cukup
+  }, [vm.showDeleted, isMobile, vm.deletingId, baseColumns, catatanDeleteColumn]);
 
-  // ===== Header filter container (rapi, ada jarak atas) =====
   const Filters = (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        alignItems: "center",
-        gap: 8,
-        paddingTop: 4,
-      }}
-    >
-      <Input.Search
-        placeholder="Cari nama/email…"
-        allowClear
-        enterButton={<SearchOutlined />}
-        value={vm.q}
-        onChange={(e) => vm.setQ(e.target.value)}
-        onSearch={(v) => vm.setQ(v ?? "")}
-        style={{ width: 280 }}
-      />
-      <Select
-        allowClear
-        showSearch
-        placeholder="Filter Divisi"
-        optionFilterProp="label"
-        value={vm.deptId != null ? String(vm.deptId) : undefined}
-        onChange={(v) => vm.setDeptId(v ?? null)}
-        options={(vm.deptOptions || []).map((o) => ({ label: o.label, value: String(o.value) }))}
-        style={{ minWidth: 200 }}
-      />
-      <Select
-        allowClear
-        showSearch
-        placeholder="Filter Jabatan"
-        optionFilterProp="label"
-        value={vm.jabatanId != null ? String(vm.jabatanId) : undefined}
-        onChange={(v) => vm.setJabatanId(v ?? null)}
-        options={(vm.jabatanOptions || []).map((o) => ({ label: o.label, value: String(o.value) }))}
-        style={{ minWidth: 200 }}
-      />
-      <span className="inline-flex items-center gap-2 ml-2" style={{ marginTop: 2 }}>
-        <Switch checked={vm.showDeleted} onChange={vm.setShowDeleted} />
-        <span style={{ color: "#334155", fontSize: 13 }}>Karyawan yang dihapus</span>
-      </span>
+    <div className="flex flex-wrap items-center gap-2 pt-1">
+      <div className="w-[280px]">
+        <AppInput
+          placeholder="Cari nama/email…"
+          allowClear
+          value={vm.q}
+          onChange={(e) => vm.setQ(e.target.value)}
+          onPressEnter={() => vm.setQ(vm.q ?? "")}
+          prefixIcon={<SearchOutlined />}
+        />
+      </div>
+
+      <div className="min-w-[200px]">
+        <AppSelect
+          allowClear
+          showSearch
+          placeholder="Filter Divisi"
+          optionFilterProp="label"
+          value={vm.deptId != null ? String(vm.deptId) : undefined}
+          onChange={(v) => vm.setDeptId(v ?? null)}
+          options={(vm.deptOptions || []).map((o) => ({
+            label: o.label,
+            value: String(o.value),
+          }))}
+        />
+      </div>
+
+      <div className="min-w-[200px]">
+        <AppSelect
+          allowClear
+          showSearch
+          placeholder="Filter Jabatan"
+          optionFilterProp="label"
+          value={vm.jabatanId != null ? String(vm.jabatanId) : undefined}
+          onChange={(v) => vm.setJabatanId(v ?? null)}
+          options={(vm.jabatanOptions || []).map((o) => ({
+            label: o.label,
+            value: String(o.value),
+          }))}
+        />
+      </div>
+
+      <div className="inline-flex items-center gap-2 ml-2">
+        <AppSwitch checked={vm.showDeleted} onChange={vm.setShowDeleted} />
+        <AppTypography.Text className="!mb-0" style={{ color: "#334155", fontSize: 13 }}>
+          Karyawan yang dihapus
+        </AppTypography.Text>
+      </div>
     </div>
   );
 
   return (
-    <ConfigProvider
-      theme={{
-        token: { colorPrimary: BRAND, borderRadius: 12 },
-        components: {
-          Button: { borderRadius: 10, defaultHoverBorderColor: BRAND },
-          Select: { optionSelectedBg: `${BRAND}10`, optionSelectedColor: BRAND },
-          Table: { headerBg: "#F4F7FB", headerColor: "#0f172a" },
-          Input: { borderRadiusLG: 10, controlHeightSM: 28 },
-        },
-      }}
-    >
-      <div className="p-6">
-        <Title level={2} style={{ marginTop: 0 }}>
-          Karyawan
-        </Title>
+    <div className="p-6">
+      <AppTypography.Title level={2} className="!mt-0">
+        Karyawan
+      </AppTypography.Title>
 
-        <Card
-          bordered
-          style={{ borderRadius: 16 }}
-          headStyle={{ paddingTop: 20, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}
-          bodyStyle={{ paddingTop: 16 }}
-          title={Filters}
-          extra={
-            <Link href="/home/kelola_karyawan/karyawan/add">
-              <Button type="primary" icon={<PlusOutlined />}>
-                Tambah Karyawan
-              </Button>
-            </Link>
-          }
-        >
-          {isMobile ? (
-            <div className="grid grid-cols-1 gap-3">
-              {vm.rows.map((row) => (
-                <Card
-                  key={row.id}
-                  size="small"
-                  style={{ borderRadius: 14 }}
-                  bodyStyle={{ padding: 12 }}
-                  hoverable
-                >
-                  <Link href={`/home/kelola_karyawan/karyawan/${row.id}`} className="no-underline">
-                    <div className="flex items-center gap-3">
-                      <CircleImg
-                        src={getPhotoUrl(row) || "/avatar-placeholder.jpg"}
-                        size={48}
-                        alt={row?.name}
-                      />
-                      <div className="min-w-0">
-                        <div
-                          style={{ fontWeight: 700, color: row.deletedAt ? "#64748b" : "#0f172a" }}
-                          className="truncate"
-                        >
-                          {row.name}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
-                          {(row.jabatan || "—")}
-                          {row.jabatan && " "}
-                          {row.departemen ? `| ${row.departemen}` : row.jabatan ? "" : "—"}
-                        </div>
-                        <div style={{ fontSize: 12, color: "#334155" }} className="truncate">
-                          {row.email}
-                        </div>
-                        <div className="mt-1 flex items-center gap-6">
-                          <div>
-                            <Tag color={String(row.statusCuti).toLowerCase() === "aktif" ? "green" : "red"}>
-                              {row.statusCuti || "—"}
-                            </Tag>
-                          </div>
-                          {row.deletedAt && (
-                            <Tag color="default" icon={<WarningTwoTone twoToneColor="#faad14" />}>
-                              Dihapus
-                            </Tag>
-                          )}
-                        </div>
-
-                        {/* Catatan delete hanya muncul di mobile saat list soft delete */}
-                        {vm.showDeleted && row.deletedAt && (
-                          <div
-                            style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}
-                            className="line-clamp-2"
-                          >
-                            {row.deleteNote || "—"}
-                          </div>
-                        )}
+      <AppCard
+        className="!rounded-2xl"
+        headStyle={{ paddingTop: 20, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 }}
+        bodyStyle={{ paddingTop: 16 }}
+        title={Filters}
+        extra={
+          <AppButton variant="primary" icon={<PlusOutlined />} href="/home/kelola_karyawan/karyawan/add">
+            Tambah Karyawan
+          </AppButton>
+        }
+      >
+        {isMobile ? (
+          <div className="grid grid-cols-1 gap-3">
+            {(vm.rows || []).map((row) => (
+              <AppCard
+                key={row.id}
+                className="!rounded-2xl"
+                shadow="sm"
+                bodyStyle={{ padding: 12 }}
+                hoverable
+              >
+                <Link href={`/home/kelola_karyawan/karyawan/${row.id}`} className="no-underline">
+                  <div className="flex items-center gap-3">
+                    <AppAvatar
+                      src={getPhotoUrl(row) || "/avatar-placeholder.jpg"}
+                      name={row?.name || ""}
+                      size={48}
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold" style={{ color: row.deletedAt ? "#64748b" : "#0f172a" }}>
+                        {row.name}
                       </div>
-                    </div>
-                  </Link>
-                  <div className="flex items-center justify-between mt-2">
-                    <div style={{ fontSize: 12, color: "#64748b" }}>
-                      {row.deletedAt ? `Terhapus ${dayjs(row.deletedAt).format("DD MMM YYYY")}` : "\u00A0"}
-                    </div>
-                    <Dropdown trigger={["click"]} menu={actionMenu(row)} placement="bottomRight">
-                      <Button size="small" icon={<EllipsisOutlined />} loading={vm.deletingId === row.id} />
-                    </Dropdown>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Table
-              rowKey="id"
-              loading={vm.loading}
-              columns={columns}
-              dataSource={vm.rows}
-                pagination={{
-                  current: vm.page,
-                  pageSize: vm.pageSize,
-                  total: vm.total,        
-                  showSizeChanger: true,
-                  onChange: vm.changePage,
-                  size: "small",
-                }}
-              bordered
-              size="middle"
-              scroll={{ x: 900 }}
-              rowClassName={(row) => (row.deletedAt ? "opacity-70" : "")}
-            />
-          )}
-        </Card>
-      </div>
 
-      {/* Modal catatan delete */}
-      <Modal
+                      {/* Mobile sudah 2 baris (div block), aman */}
+                      <div className="truncate text-[12px] text-slate-600">
+                        {row.jabatan || "—"}
+                        {row.departemen ? ` | ${row.departemen}` : row.jabatan ? "" : "—"}
+                      </div>
+
+                      <div className="truncate text-[12px] text-slate-700">{row.email || "—"}</div>
+
+                      <div className="mt-1 flex items-center gap-3 flex-wrap">
+                        <StatusCutiTag v={row.statusCuti} />
+                        {row.deletedAt ? (
+                          <AppTag tone="warning" icon={<WarningTwoTone twoToneColor="#faad14" />}>
+                            Dihapus
+                          </AppTag>
+                        ) : null}
+                      </div>
+
+                      {vm.showDeleted && row.deletedAt ? (
+                        <div className="mt-1 text-[12px] text-slate-500 line-clamp-2">{row.deleteNote || "—"}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                </Link>
+
+                <div className="flex items-center justify-between mt-2">
+                  <div className="text-[12px] text-slate-500">
+                    {row.deletedAt ? `Terhapus ${dayjs(row.deletedAt).format("DD MMM YYYY")}` : "\u00A0"}
+                  </div>
+
+                  <AppDropdown items={actionItems(row)} placement="bottomRight" trigger={["click"]}>
+                    <span>
+                      <AppButton
+                        variant="text"
+                        size="small"
+                        icon={<EllipsisOutlined />}
+                        loading={vm.deletingId === row.id}
+                      />
+                    </span>
+                  </AppDropdown>
+                </div>
+              </AppCard>
+            ))}
+          </div>
+        ) : (
+          <AppTable
+            card={false}
+            rowKey="id"
+            loading={vm.loading}
+            columns={columns}
+            dataSource={vm.rows}
+            pagination={{
+              current: vm.page,
+              pageSize: vm.pageSize,
+              total: vm.total,
+              showSizeChanger: true,
+              onChange: vm.changePage,
+              size: "small",
+            }}
+            scroll={{ x: 900 }}
+            bordered
+            size="middle"
+            rowClassName={(row) => (row.deletedAt ? "opacity-70" : "")}
+          />
+        )}
+      </AppCard>
+
+      <AppModal
         open={del.open}
-        title={<span>{del.row?.deletedAt ? "Hapus permanen?" : "Hapus karyawan?"}</span>}
+        onClose={() => setDel({ open: false, row: null, note: "" })}
+        title={del.row?.deletedAt ? "Hapus permanen?" : "Hapus karyawan?"}
+        subtitle={del.row?.deletedAt ? undefined : "Tambahkan catatan (opsional) untuk soft delete."}
+        variant="danger"
         okText={del.row?.deletedAt ? "Hapus Permanen" : "Hapus"}
-        okButtonProps={{ danger: true, loading: vm.deletingId === del.row?.id }}
         cancelText="Batal"
+        okLoading={vm.deletingId === del.row?.id}
         onOk={handleDelete}
-        onCancel={() => setDel({ open: false, row: null, note: "" })}
+        destroyOnClose
       >
         <div className="space-y-3">
           <div className="flex items-start gap-2">
             <ExclamationCircleFilled style={{ color: "#faad14", marginTop: 3 }} />
-            <span>
+            <div>
               {del.row?.deletedAt ? (
-                <>
+                <AppTypography.Text>
                   Data <b>{del.row?.name}</b> akan <b>DIHAPUS PERMANEN</b> dan tidak bisa dipulihkan.
-                </>
+                </AppTypography.Text>
               ) : (
-                <>
-                  Data <b>{del.row?.name}</b> akan dihapus (soft delete).
-                  <br />
-                  Tindakan ini dapat dipulihkan oleh admin (restore manual).
-                </>
+                <AppTypography.Text>
+                  Data <b>{del.row?.name}</b> akan dihapus (soft delete). Tindakan ini dapat dipulihkan oleh admin
+                  (restore manual).
+                </AppTypography.Text>
               )}
-            </span>
+            </div>
           </div>
-          {/* Catatan hanya diisi saat soft delete */}
-          {!del.row?.deletedAt && (
-            <Input.TextArea
+
+          {!del.row?.deletedAt ? (
+            <AppInput.TextArea
               placeholder="Catatan penghapusan (opsional)"
               rows={3}
               value={del.note}
               onChange={(e) => setDel((s) => ({ ...s, note: e.target.value }))}
               maxLength={2000}
+              allowClear
             />
-          )}
+          ) : null}
         </div>
-      </Modal>
-    </ConfigProvider>
+      </AppModal>
+    </div>
   );
 }
