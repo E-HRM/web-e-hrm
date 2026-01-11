@@ -4,12 +4,11 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
-import { parseDateOnlyToUTC } from '@/helpers/date-helper';
 import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
-import { parseRequestBody, findFileInBody, isNullLike } from '@/app/api/_utils/requestBody';
+import { parseRequestBody } from '@/app/api/_utils/requestBody';
 
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
-const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'tanggal_terbit', 'nama_dokumen']);
+const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_dokumen']);
 
 function getSopDelegate() {
   return db?.sop_karyawan || db?.sopKaryawan || null;
@@ -21,27 +20,35 @@ function getKategoriDelegate() {
 
 async function getActor(req) {
   const auth = req.headers.get('authorization') || '';
-  if (auth.startsWith('Bearer ')) {
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    const token = auth.slice(7).trim();
     try {
-      const payload = verifyAuthToken(auth.slice(7));
-      return { id: payload?.sub || payload?.id_user || payload?.userId, role: payload?.role, source: 'bearer' };
-    } catch (_) {}
+      const payload = await verifyAuthToken(token);
+      const id = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
+      const role = payload?.role || payload?.jabatan || payload?.level || payload?.akses;
+      if (id && role) {
+        return { actor: { id: String(id), role: String(role).toUpperCase(), source: 'token' } };
+      }
+    } catch (_) {
+      /* fallback session */
+    }
   }
 
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
-
-  return { id: sessionOrRes.user.id, role: sessionOrRes.user.role, source: 'session' };
+  return { actor: { id: sessionOrRes.user.id, role: String(sessionOrRes.user.role).toUpperCase(), source: 'session' } };
 }
 
 function guardAdmin(actor) {
-  const role = String(actor?.role || '')
-    .trim()
-    .toUpperCase();
+  const role = String(actor?.role || '').toUpperCase();
   if (!ADMIN_ROLES.has(role)) {
     return NextResponse.json({ message: 'Forbidden: hanya admin yang dapat mengakses resource ini.' }, { status: 403 });
   }
   return null;
+}
+
+function isNullLike(v) {
+  return v === null || v === undefined || String(v).trim() === '';
 }
 
 const SOP_WITH_KATEGORI_INCLUDE = {
@@ -49,7 +56,6 @@ const SOP_WITH_KATEGORI_INCLUDE = {
     select: {
       id_kategori_sop: true,
       nama_kategori: true,
-      deskripsi: true,
     },
   },
 };
@@ -57,7 +63,7 @@ const SOP_WITH_KATEGORI_INCLUDE = {
 export async function GET(req) {
   const actor = await getActor(req);
   if (actor instanceof NextResponse) return actor;
-  const forbidden = guardAdmin(actor);
+  const forbidden = guardAdmin(actor.actor);
   if (forbidden) return forbidden;
 
   const sop = getSopDelegate();
@@ -85,8 +91,12 @@ export async function GET(req) {
     const where = {
       ...(deletedOnly ? { deleted_at: { not: null } } : {}),
       ...(!includeDeleted && !deletedOnly ? { deleted_at: null } : {}),
-      ...(search ? { OR: [{ nama_dokumen: { contains: search } }] } : {}),
       ...(id_kategori_sop ? { id_kategori_sop } : {}),
+      ...(search
+        ? {
+            OR: [{ nama_dokumen: { contains: search, mode: 'insensitive' } }, { deskripsi: { contains: search, mode: 'insensitive' } }],
+          }
+        : {}),
     };
 
     if (all) {
@@ -95,15 +105,18 @@ export async function GET(req) {
         orderBy: { [orderBy]: sort },
         include: SOP_WITH_KATEGORI_INCLUDE,
       });
+
       return NextResponse.json({ total: items.length, items });
     }
 
-    const [total, items] = await Promise.all([
+    const skip = (page - 1) * pageSize;
+
+    const [total, items] = await db.$transaction([
       sop.count({ where }),
       sop.findMany({
         where,
         orderBy: { [orderBy]: sort },
-        skip: (page - 1) * pageSize,
+        skip,
         take: pageSize,
         include: SOP_WITH_KATEGORI_INCLUDE,
       }),
@@ -117,15 +130,15 @@ export async function GET(req) {
       items,
     });
   } catch (err) {
-    console.error('GET /api/admin/sop-perusahaan error:', err);
-    return NextResponse.json({ message: 'Gagal mengambil daftar SOP perusahaan.' }, { status: 500 });
+    console.error('GET /admin/sop-perusahaan error:', err);
+    return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }
 
 export async function POST(req) {
   const actor = await getActor(req);
   if (actor instanceof NextResponse) return actor;
-  const forbidden = guardAdmin(actor);
+  const forbidden = guardAdmin(actor.actor);
   if (forbidden) return forbidden;
 
   const sop = getSopDelegate();
@@ -147,10 +160,8 @@ export async function POST(req) {
     const nama_dokumen = typeof body?.nama_dokumen === 'string' ? body.nama_dokumen.trim() : '';
     if (!nama_dokumen) return NextResponse.json({ message: 'nama_dokumen wajib diisi.' }, { status: 400 });
 
-    const tanggal_terbit = parseDateOnlyToUTC(body?.tanggal_terbit);
-    if (!tanggal_terbit) {
-      return NextResponse.json({ message: 'tanggal_terbit wajib & valid (format: YYYY-MM-DD).' }, { status: 400 });
-    }
+    const deskripsi = typeof body?.deskripsi === 'string' ? body.deskripsi.trim() : '';
+    if (!deskripsi) return NextResponse.json({ message: 'deskripsi wajib diisi.' }, { status: 400 });
 
     const id_kategori_sop = isNullLike(body?.id_kategori_sop) ? null : String(body.id_kategori_sop).trim();
     if (id_kategori_sop) {
@@ -160,44 +171,31 @@ export async function POST(req) {
       }
 
       const exists = await kategori.findFirst({
-        where: { id_kategori_sop, deleted_at: null },
-        select: { id_kategori_sop: true },
+        where: { id_kategori_sop },
+        select: { id_kategori_sop: true, deleted_at: true },
       });
-      if (!exists) return NextResponse.json({ message: 'Kategori SOP tidak ditemukan.' }, { status: 400 });
-    }
 
-    let createdByName = null;
-    if (actor?.id) {
-      const u = await db.user.findUnique({
-        where: { id_user: String(actor.id) },
-        select: { nama_pengguna: true },
-      });
-      createdByName = u?.nama_pengguna || null;
+      if (!exists || exists.deleted_at) {
+        return NextResponse.json({ message: 'Kategori SOP tidak valid.' }, { status: 400 });
+      }
     }
 
     let lampiranUrl = null;
-
-    const lampiranFile = findFileInBody(body, ['lampiran_sop', 'lampiran', 'file', 'lampiran_sop_file']);
-    if (lampiranFile) {
-      try {
-        const uploaded = await uploadMediaWithFallback(lampiranFile, {
-          storageFolder: 'sop-perusahaan',
-          supabasePrefix: 'sop-perusahaan',
-          pathSegments: actor?.id ? [String(actor.id)] : [],
-        });
-
-        lampiranUrl = uploaded.publicUrl || null;
-      } catch (e) {
-        return NextResponse.json({ message: 'Gagal mengunggah lampiran SOP.', detail: e?.message || String(e) }, { status: e?.status || 502 });
-      }
+    if (parsed.files?.lampiran_sop) {
+      const uploaded = await uploadMediaWithFallback(parsed.files.lampiran_sop, {
+        folder: 'sop-perusahaan',
+      });
+      lampiranUrl = uploaded?.url || null;
     } else if (Object.prototype.hasOwnProperty.call(body, 'lampiran_sop_url')) {
       lampiranUrl = isNullLike(body.lampiran_sop_url) ? null : String(body.lampiran_sop_url).trim();
     }
 
+    const createdByName = actor?.actor?.id ? String(actor.actor.id) : null;
+
     const created = await sop.create({
       data: {
         nama_dokumen,
-        tanggal_terbit,
+        deskripsi,
         lampiran_sop_url: lampiranUrl,
         id_kategori_sop,
         created_by_snapshot_nama_pengguna: createdByName,
@@ -207,7 +205,7 @@ export async function POST(req) {
 
     return NextResponse.json({ message: 'SOP perusahaan berhasil dibuat.', data: created }, { status: 201 });
   } catch (err) {
-    console.error('POST /api/admin/sop-perusahaan error:', err);
-    return NextResponse.json({ message: 'Gagal membuat SOP perusahaan.' }, { status: 500 });
+    console.error('POST /admin/sop-perusahaan error:', err);
+    return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
 }

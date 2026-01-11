@@ -1309,9 +1309,8 @@ model ApprovalPocketMoney {
 }
 
 model kategori_sop {
-  id_kategori_sop String  @id @default(uuid()) @db.Char(36)
-  nama_kategori   String  @db.VarChar(255)
-  deskripsi       String? @db.LongText
+  id_kategori_sop String @id @default(uuid()) @db.Char(36)
+  nama_kategori   String @db.VarChar(255)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1324,12 +1323,12 @@ model kategori_sop {
 }
 
 model sop_karyawan {
-  id_sop_karyawan                   String   @id @default(uuid()) @db.Char(36)
-  nama_dokumen                      String   @db.VarChar(255)
-  tanggal_terbit                    DateTime @db.Date
-  lampiran_sop_url                  String?  @db.LongText
-  id_kategori_sop                   String?  @db.Char(36)
-  created_by_snapshot_nama_pengguna String?  @db.VarChar(255)
+  id_sop_karyawan                   String  @id @default(uuid()) @db.Char(36)
+  nama_dokumen                      String  @db.VarChar(255)
+  lampiran_sop_url                  String? @db.LongText
+  deskripsi                         String? @db.LongText
+  id_kategori_sop                   String? @db.Char(36)
+  created_by_snapshot_nama_pengguna String? @db.VarChar(255)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1337,7 +1336,7 @@ model sop_karyawan {
 
   kategori_sop kategori_sop? @relation(fields: [id_kategori_sop], references: [id_kategori_sop], onDelete: SetNull, onUpdate: Cascade)
 
-  @@index([tanggal_terbit])
+  @@index([created_at])
   @@index([id_kategori_sop])
   @@map("sop_karyawan")
 }

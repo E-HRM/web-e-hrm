@@ -14,16 +14,21 @@ function getKategoriDelegate() {
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
-  if (auth.startsWith('Bearer ')) {
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    const token = auth.slice(7).trim();
     try {
-      const payload = verifyAuthToken(auth.slice(7));
-      return {
-        actor: {
-          id: payload?.sub || payload?.id_user || payload?.userId,
-          role: payload?.role,
-          source: 'bearer',
-        },
-      };
+      const payload = await verifyAuthToken(token);
+      const id = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
+      const role = payload?.role || payload?.jabatan || payload?.level || payload?.akses;
+      if (id && role) {
+        return {
+          actor: {
+            id: String(id),
+            role: String(role).toUpperCase(),
+            source: 'token',
+          },
+        };
+      }
     } catch (_) {
       /* fallback ke NextAuth */
     }
@@ -42,9 +47,7 @@ async function ensureAuth(req) {
 }
 
 function guardAdmin(actor) {
-  const role = String(actor?.role || '')
-    .trim()
-    .toUpperCase();
+  const role = String(actor?.role || '').toUpperCase();
   if (!ADMIN_ROLES.has(role)) {
     return NextResponse.json({ message: 'Forbidden: hanya admin yang dapat mengakses resource ini.' }, { status: 403 });
   }
@@ -62,10 +65,10 @@ export async function GET(req, { params }) {
     return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
   }
 
-  try {
-    const { searchParams } = new URL(req.url);
-    const includeDeleted = ['1', 'true'].includes((searchParams.get('includeDeleted') || '').toLowerCase());
+  const { searchParams } = new URL(req.url);
+  const includeDeleted = ['1', 'true'].includes((searchParams.get('includeDeleted') || '').toLowerCase());
 
+  try {
     const data = await kategori.findFirst({
       where: {
         id_kategori_sop: params.id,
@@ -74,7 +77,6 @@ export async function GET(req, { params }) {
       select: {
         id_kategori_sop: true,
         nama_kategori: true,
-        deskripsi: true,
         created_at: true,
         updated_at: true,
         deleted_at: true,
@@ -103,19 +105,31 @@ export async function PUT(req, { params }) {
     return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
   }
 
+  let body;
   try {
-    const body = await req.json();
+    body = await req.json();
+  } catch (_) {
+    return NextResponse.json({ message: 'Body JSON tidak valid.' }, { status: 400 });
+  }
+
+  try {
+    const exists = await kategori.findFirst({
+      where: { id_kategori_sop: params.id },
+      select: { id_kategori_sop: true },
+    });
+
+    if (!exists) {
+      return NextResponse.json({ message: 'Kategori SOP tidak ditemukan.' }, { status: 404 });
+    }
+
     const payload = {};
 
     if (Object.prototype.hasOwnProperty.call(body, 'nama_kategori')) {
-      if (body.nama_kategori === null || String(body.nama_kategori).trim() === '') {
+      const nama_kategori = typeof body.nama_kategori === 'string' ? body.nama_kategori.trim() : '';
+      if (!nama_kategori) {
         return NextResponse.json({ message: "Field 'nama_kategori' tidak boleh kosong." }, { status: 400 });
       }
       payload.nama_kategori = String(body.nama_kategori).trim();
-    }
-
-    if (Object.prototype.hasOwnProperty.call(body, 'deskripsi')) {
-      payload.deskripsi = body.deskripsi === null || body.deskripsi === undefined ? null : String(body.deskripsi).trim() || null;
     }
 
     if (Object.keys(payload).length === 0) {
@@ -128,7 +142,6 @@ export async function PUT(req, { params }) {
       select: {
         id_kategori_sop: true,
         nama_kategori: true,
-        deskripsi: true,
         created_at: true,
         updated_at: true,
         deleted_at: true,
@@ -137,9 +150,6 @@ export async function PUT(req, { params }) {
 
     return NextResponse.json({ message: 'Kategori SOP diupdate.', data: updated });
   } catch (err) {
-    if (err?.code === 'P2025') {
-      return NextResponse.json({ message: 'Kategori SOP tidak ditemukan.' }, { status: 404 });
-    }
     if (err?.code === 'P2002') {
       return NextResponse.json({ message: 'Kategori SOP sudah terdaftar.' }, { status: 409 });
     }
@@ -160,26 +170,33 @@ export async function DELETE(req, { params }) {
   }
 
   try {
-    const { searchParams } = new URL(req.url);
-    const isHardDelete = (searchParams.get('hard') || '').toLowerCase() === 'true';
-
-    if (isHardDelete) {
-      await kategori.delete({
-        where: { id_kategori_sop: params.id },
-      });
-      return NextResponse.json({ message: 'Kategori SOP dihapus secara permanen (hard delete).' });
-    }
-
-    await kategori.update({
+    const exists = await kategori.findFirst({
       where: { id_kategori_sop: params.id },
-      data: { deleted_at: new Date() },
+      select: { id_kategori_sop: true, deleted_at: true },
     });
 
-    return NextResponse.json({ message: 'Kategori SOP dihapus (soft delete).' });
-  } catch (err) {
-    if (err?.code === 'P2025') {
+    if (!exists) {
       return NextResponse.json({ message: 'Kategori SOP tidak ditemukan.' }, { status: 404 });
     }
+
+    if (exists.deleted_at) {
+      return NextResponse.json({ message: 'Kategori SOP sudah dihapus.' }, { status: 400 });
+    }
+
+    const deleted = await kategori.update({
+      where: { id_kategori_sop: params.id },
+      data: { deleted_at: new Date() },
+      select: {
+        id_kategori_sop: true,
+        nama_kategori: true,
+        created_at: true,
+        updated_at: true,
+        deleted_at: true,
+      },
+    });
+
+    return NextResponse.json({ message: 'Kategori SOP dihapus (soft delete).', data: deleted });
+  } catch (err) {
     console.error('DELETE /admin/kategori-sop/[id] error:', err);
     return NextResponse.json({ message: 'Server error.' }, { status: 500 });
   }
