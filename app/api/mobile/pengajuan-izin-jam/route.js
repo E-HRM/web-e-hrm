@@ -172,27 +172,31 @@ async function ensureAuth(req) {
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim();
     try {
-      const payload = await verifyAuthToken(token);
-      const actorId = payload?.sub || payload?.id_user || payload?.userId;
+      const payload = verifyAuthToken(token);
+      const actorId = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
       const actorRole = payload?.role;
+
       if (!actorId) {
-        return { ok: false, response: NextResponse.json({ message: 'Token tidak valid.' }, { status: 401 }) };
+        // jangan langsung stop; masih boleh fallback ke session kalau ada
+      } else {
+        return { ok: true, actorId: String(actorId), actorRole, source: 'bearer' };
       }
-      return { ok: true, actorId, actorRole };
     } catch {
       // fallback to session below
     }
   }
 
-  const session = await authenticateRequest(req);
-  if (session instanceof NextResponse) return { ok: false, response: session };
+  const sessionOrRes = await authenticateRequest();
+  if (sessionOrRes instanceof NextResponse) return { ok: false, response: sessionOrRes };
 
-  const actorId = session?.user?.id_user;
-  const actorRole = session?.user?.role;
+  const actorId = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
+  const actorRole = sessionOrRes?.user?.role;
 
-  if (!actorId) return { ok: false, response: NextResponse.json({ message: 'Unauthorized.' }, { status: 401 }) };
+  if (!actorId) {
+    return { ok: false, response: NextResponse.json({ message: 'Unauthorized.' }, { status: 401 }) };
+  }
 
-  return { ok: true, actorId, actorRole };
+  return { ok: true, actorId: String(actorId), actorRole, source: 'session' };
 }
 
 export async function GET(req) {

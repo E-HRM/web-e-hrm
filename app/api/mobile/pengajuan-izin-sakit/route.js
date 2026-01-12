@@ -177,27 +177,33 @@ function normalizeApprovals(payload) {
 }
 
 async function ensureAuth(req) {
-  const auth = req.headers.get('authorization') || req.headers.get('Authorization');
-  if (auth?.startsWith('Bearer ')) {
-    const token = auth.slice(7).trim();
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+
+  // 1) Bearer token dulu
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
     try {
-      const payload = await verifyAuthToken(token);
-      const id = payload?.sub || payload?.id_user || payload?.userId;
+      const payload = verifyAuthToken(token);
+      const id = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
       const role = payload?.role;
-      if (!id) return NextResponse.json({ message: 'Token tidak valid.' }, { status: 401 });
-      return { actor: { id, role }, authType: 'bearer' };
+
+      if (id) return { actor: { id: String(id), role }, authType: 'bearer' };
+      // kalau id kosong, fallback session
     } catch {
-      return NextResponse.json({ message: 'Token tidak valid.' }, { status: 401 });
+      // fallback session di bawah
     }
   }
 
+  // 2) Fallback ke NextAuth session
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
-  const id = sessionOrRes?.user?.id_user;
+  const id = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
   const role = sessionOrRes?.user?.role;
+
   if (!id) return NextResponse.json({ message: 'Unauthorized.' }, { status: 401 });
-  return { actor: { id, role }, authType: 'session' };
+
+  return { actor: { id: String(id), role }, authType: 'session' };
 }
 
 export async function GET(req) {
