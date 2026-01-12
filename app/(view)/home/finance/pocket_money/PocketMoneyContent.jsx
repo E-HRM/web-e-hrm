@@ -12,10 +12,7 @@ export default function PocketMoneyContent({ filters }) {
 
   return (
     <>
-      <FinanceRequestsTable
-        rows={vm.rows}
-        onRowClick={vm.openDetail}
-      />
+      <FinanceRequestsTable rows={vm.rows} onRowClick={vm.openDetail} />
 
       <PocketMoneyDetailModal
         open={!!vm.selected}

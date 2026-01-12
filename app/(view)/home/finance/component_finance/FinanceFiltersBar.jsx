@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { SearchOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
 
 import AppInput from '@/app/(view)/component_shared/AppInput';
 import AppSegmented from '@/app/(view)/component_shared/AppSegmented';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 import AppDatePicker from '@/app/(view)/component_shared/AppDatePicker';
+
+import { SearchOutlined, CalendarOutlined } from '@ant-design/icons';
 
 export default function FinanceFiltersBar({
   search,
@@ -29,74 +29,61 @@ export default function FinanceFiltersBar({
     []
   );
 
-  const dateOptions = useMemo(
+  const dateModeOptions = useMemo(
     () => [
       { label: 'All', value: 'ALL' },
-      { label: 'Select Date', value: 'DATE' },
+      { label: 'Select Date', value: 'CUSTOM' },
     ],
     []
   );
 
-  const mergedRange = useMemo(() => {
-    const v0 = dateRange?.[0] || null;
-    const v1 = dateRange?.[1] || null;
-    // antd RangePicker value harus dayjs atau null
-    return [
-      v0 && dayjs.isDayjs(v0) ? v0 : v0 ? dayjs(v0) : null,
-      v1 && dayjs.isDayjs(v1) ? v1 : v1 ? dayjs(v1) : null,
-    ];
-  }, [dateRange]);
-
   return (
-    <div className='w-full flex flex-col gap-3'>
+    <div className='flex flex-col gap-4'>
       <AppInput
-        value={search}
-        onChange={(e) => onSearchChange?.(e?.target?.value ?? '')}
-        placeholder='Cari karyawan atau nomor pengajuan...'
-        prefixIcon={<SearchOutlined className='text-slate-400' />}
         allowClear
+        placeholder='Cari karyawan atau nomor pengajuan…'
+        prefixIcon={<SearchOutlined className='text-gray-400' />}
+        value={search}
+        onChange={(e) => onSearchChange?.(e.target.value)}
       />
 
-      <div className='w-full flex flex-wrap items-center justify-between gap-3'>
-        <div className='flex flex-wrap items-center gap-2'>
-          <AppTypography.Text size={13} tone='muted' className='text-slate-600'>
-            Status:
-          </AppTypography.Text>
-
+      <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
+        <div className='flex flex-col gap-2'>
+          <AppTypography.Text className='text-gray-600'>Status:</AppTypography.Text>
           <AppSegmented
-            size='sm'
-            variant='soft'
-            tone='neutral'
             options={statusOptions}
-            value={status}
-            onChange={onStatusChange}
+            value={status || 'ALL'}
+            onChange={(v) => onStatusChange?.(String(v))}
           />
         </div>
 
-        <div className='flex flex-wrap items-center gap-2'>
-          <AppTypography.Text size={13} tone='muted' className='text-slate-600'>
-            Tanggal:
-          </AppTypography.Text>
+        <div className='flex flex-col gap-2'>
+          <AppTypography.Text className='text-gray-600'>Tanggal:</AppTypography.Text>
+          <div className='flex flex-col gap-2 sm:flex-row sm:items-center'>
+            <AppSegmented
+              options={dateModeOptions}
+              value={dateMode || 'ALL'}
+              onChange={(v) => {
+                const mode = String(v);
+                onDateModeChange?.(mode);
+                if (mode !== 'CUSTOM') onDateRangeChange?.(null);
+              }}
+            />
 
-          <AppSegmented
-            size='sm'
-            variant='outline'
-            tone='primary'
-            options={dateOptions}
-            value={dateMode}
-            onChange={onDateModeChange}
-          />
-
-          {String(dateMode || 'ALL').toUpperCase() === 'DATE' ? (
-            <div className='min-w-[280px]'>
-              <AppDatePicker.RangePicker
-                value={mergedRange}
-                onChange={(vals) => onDateRangeChange?.(vals || [null, null])}
-                placeholder={['Pilih tanggal', 'Sampai']}
-                allowEmpty={[false, true]}
-              />
-            </div>
-          ) : null}
+            {String(dateMode) === 'CUSTOM' ? (
+              <div className='min-w-[260px]'>
+                <AppDatePicker.RangePicker
+                  allowClear
+                  placeholder={['Dari', 'Sampai']}
+                  value={Array.isArray(dateRange) ? dateRange : null}
+                  onChange={(values) => {
+                    onDateRangeChange?.(values || null);
+                  }}
+                  prefix={<CalendarOutlined className='text-gray-400' />}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

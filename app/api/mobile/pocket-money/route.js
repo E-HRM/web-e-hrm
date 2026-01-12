@@ -87,7 +87,17 @@ function parseItemsInput(body) {
   });
 }
 
+/** ✅ UPDATED: include user agar FE dapat nama/foto */
 export const pocketMoneyInclude = {
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+      foto_profil_user: true,
+    },
+  },
   departement: {
     select: { id_departement: true, nama_departement: true },
   },
@@ -147,7 +157,6 @@ export async function ensureAuth(req) {
     } catch (_) {}
   }
 
-  // ✅ authenticateRequest() di project ini return: NextResponse (error) atau session (success)
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
@@ -165,7 +174,6 @@ export async function ensureAuth(req) {
     session: sessionOrRes,
   };
 }
-
 
 async function getActorUser(actorId) {
   if (!actorId) return null;
@@ -433,7 +441,7 @@ export async function POST(req) {
       include: pocketMoneyInclude,
     });
 
-    // Notifikasi: supervisor departement + approver(s) + actor
+    // Notifikasi
     const notified = new Set();
     const notifPromises = [];
     const basePayload = {

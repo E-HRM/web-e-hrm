@@ -1,11 +1,21 @@
-"use client";
+'use client';
 
 import { useCallback, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import useSWR from 'swr';
 import { ApiEndpoints } from '../../../../../constrainst/endpoints';
 
-import { mapApiStatusToUI, matchDateFilter, normUpper } from '../component_finance/financeFilterHelpers';
+function normUpper(s) {
+  return String(s || '').trim().toUpperCase();
+}
+
+function mapApiStatusToUI(apiStatus) {
+  const s = String(apiStatus || '').toLowerCase();
+  if (s === 'pending') return { key: 'PENDING', label: 'Pending', tone: 'warning' };
+  if (s === 'disetujui' || s === 'approved') return { key: 'APPROVED', label: 'Approved', tone: 'success' };
+  if (s === 'ditolak' || s === 'rejected') return { key: 'REJECTED', label: 'Rejected', tone: 'danger' };
+  return { key: 'IN_REVIEW', label: 'In Review', tone: 'info' };
+}
 
 function applyClientFilters(rows, filters) {
   const q = String(filters?.search || '').trim().toLowerCase();
@@ -25,9 +35,10 @@ function applyClientFilters(rows, filters) {
     });
   }
 
-  if (st && st !== 'ALL') xs = xs.filter((r) => normUpper(r?.status) === st);
+  if (st && st !== 'ALL' && st !== 'SEMUA') {
+    xs = xs.filter((r) => normUpper(r?.status) === st);
+  }
 
-  xs = xs.filter((r) => matchDateFilter(r?.dateISO, filters));
   return xs;
 }
 
@@ -56,9 +67,23 @@ async function apiForm(url, { method = 'POST', formData }) {
   return data;
 }
 
+function safeNum(v) {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const n = Number(String(v).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function pickApproval(item) {
   const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
-  return approvals.find((a) => !a?.decision) || approvals[0] || null;
+  const pending = approvals.find((a) => String(a?.decision || '').toLowerCase() === 'pending');
+  return pending || approvals[0] || null;
+}
+
+function pickRejectNote(item) {
+  const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
+  const rejected = approvals.find((a) => String(a?.decision || '').toLowerCase() === 'ditolak' && a?.note);
+  return rejected?.note || null;
 }
 
 function pickEmployeeName(item) {
@@ -67,37 +92,53 @@ function pickEmployeeName(item) {
 }
 
 function pickDepartment(item) {
-  return item?.departement?.nama_departement || item?.departement?.name || '—';
+  return item?.departement?.nama_departement || item?.user?.departement?.nama_departement || '—';
+}
+
+function pickAvatarUrl(item) {
+  return item?.user?.foto_profil_user || null;
+}
+
+function buildNumber(id) {
+  const s = String(id || '').trim();
+  if (!s) return '-';
+  return `RB-${s.slice(0, 8).toUpperCase()}`;
 }
 
 export default function useReimbursesViewModel(filters) {
   const [selected, setSelected] = useState(null);
 
-  const qs = useMemo(() => ApiEndpoints.GetReimburseMobile({ page: 1, perPage: 500 }), []);
+  const qs = useMemo(() => ApiEndpoints.GetReimburseMobile({ page: 1, perPage: 5000, all: true }), []);
 
   const { data, error, isLoading, mutate } = useSWR(qs, (u) => apiJson(u), { revalidateOnFocus: false });
 
-  const raw = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data]);
+  const raw = useMemo(() => {
+    if (Array.isArray(data?.data)) return data.data;
+    if (Array.isArray(data?.items)) return data.items;
+    if (Array.isArray(data)) return data;
+    return [];
+  }, [data]);
 
   const rows = useMemo(() => {
     return raw.map((it) => {
       const approval = pickApproval(it);
-      const st = mapApiStatusToUI(it?.status_persetujuan_reimburse);
+      const st = mapApiStatusToUI(it?.status);
 
-      const id =
-        approval?.id ||
-        approval?.id_approval_reimburse ||
-        it?.id_reimburse ||
-        it?.id ||
-        `${it?.nomor_reimburse || ''}`;
+      const approvalId = approval?.id_approval_reimburse || approval?.id;
+      const reimburseId = it?.id_reimburse || it?.id;
+
+      const receiptUrl = it?.bukti_pembayaran_url || null;
+      const adminProofUrl = approval?.bukti_approval_reimburse_url || null;
+
+      const itemsArr = Array.isArray(it?.items) ? it.items : [];
 
       return {
-        id,
-        requestId: it?.id_reimburse || it?.id || null,
+        id: approvalId || reimburseId || null,
+        requestId: reimburseId || null,
 
         type: 'Reimburse',
         title: it?.keterangan || 'Reimburse',
-        number: it?.nomor_reimburse || it?.nomor || '-',
+        number: buildNumber(reimburseId),
 
         status: st.key,
         statusLabel: st.label,
@@ -105,18 +146,22 @@ export default function useReimbursesViewModel(filters) {
 
         employeeName: pickEmployeeName(it),
         department: pickDepartment(it),
+        avatarUrl: pickAvatarUrl(it),
 
-        dateLabel: it?.tanggal_reimburse ? new Date(it.tanggal_reimburse).toLocaleDateString('id-ID') : '-',
-        dateISO: it?.tanggal_reimburse || it?.created_at || null,
+        dateLabel: it?.tanggal ? new Date(it.tanggal).toLocaleDateString('id-ID') : '-',
+        dateISO: it?.tanggal || it?.created_at || null,
 
         method: it?.metode_pembayaran || '-',
-        category: it?.kategori_reimburse?.nama_kategori_reimburse || it?.kategori || '-',
+        category: it?.kategori_keperluan?.nama_keperluan || '-',
 
-        totalAmount: Number(it?.nominal_reimburse || 0),
+        itemsCount: itemsArr.length,
+        totalAmount: safeNum(it?.total_pengeluaran),
+
         note: it?.keterangan || '',
+        rejectReason: pickRejectNote(it),
 
-        rejectReason: approval?.note || it?.note || null,
-        adminProof: approval?.proof_url ? { name: approval.proof_url } : null,
+        receipts: receiptUrl ? [{ name: 'Dokumen', url: receiptUrl }] : [],
+        adminProof: adminProofUrl ? { name: 'Dokumen', url: adminProofUrl } : null,
       };
     });
   }, [raw]);
@@ -124,14 +169,17 @@ export default function useReimbursesViewModel(filters) {
   const filteredRows = useMemo(() => applyClientFilters(rows, filters), [rows, filters]);
 
   const openDetail = useCallback((row) => setSelected(row), []);
+  const closeDetail = useCallback(() => setSelected(null), []);
 
   const approve = useCallback(
     async ({ id, proofFiles }) => {
       const fd = new FormData();
-      fd.append('decision', 'APPROVED');
+      fd.append('decision', 'disetujui');
 
       const fileObj = proofFiles?.[0]?.originFileObj;
-      if (fileObj) fd.append('bukti_approval_reimburse', fileObj);
+      if (fileObj) {
+        fd.append('bukti_approval_reimburse', fileObj);
+      }
 
       await apiForm(ApiEndpoints.DecideReimburseMobile(id), { method: 'PATCH', formData: fd });
       await mutate();
@@ -142,7 +190,7 @@ export default function useReimbursesViewModel(filters) {
   const reject = useCallback(
     async ({ id, reason }) => {
       const fd = new FormData();
-      fd.append('decision', 'REJECTED');
+      fd.append('decision', 'ditolak');
       if (reason) fd.append('note', String(reason));
 
       await apiForm(ApiEndpoints.DecideReimburseMobile(id), { method: 'PATCH', formData: fd });
@@ -159,7 +207,7 @@ export default function useReimbursesViewModel(filters) {
     selected,
 
     openDetail,
-    closeDetail: () => setSelected(null),
+    closeDetail,
 
     approve,
     reject,
