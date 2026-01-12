@@ -1,21 +1,11 @@
-'use client';
+"use client";
 
 import { useCallback, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import useSWR from 'swr';
 import { ApiEndpoints } from '../../../../../constrainst/endpoints';
 
-function normUpper(s) {
-  return String(s || '').trim().toUpperCase();
-}
-
-function mapApiStatusToUI(apiStatus) {
-  const s = String(apiStatus || '').toLowerCase();
-  if (s === 'pending') return { key: 'PENDING', label: 'Pending', tone: 'warning' };
-  if (s === 'disetujui' || s === 'approved') return { key: 'APPROVED', label: 'Approved', tone: 'success' };
-  if (s === 'ditolak' || s === 'rejected') return { key: 'REJECTED', label: 'Rejected', tone: 'danger' };
-  return { key: 'IN_REVIEW', label: 'In Review', tone: 'info' };
-}
+import { mapApiStatusToUI, matchDateFilter, normUpper } from '../component_finance/financeFilterHelpers';
 
 function applyClientFilters(rows, filters) {
   const q = String(filters?.search || '').trim().toLowerCase();
@@ -35,8 +25,9 @@ function applyClientFilters(rows, filters) {
     });
   }
 
-  if (st) xs = xs.filter((r) => normUpper(r?.status) === st);
+  if (st && st !== 'ALL') xs = xs.filter((r) => normUpper(r?.status) === st);
 
+  xs = xs.filter((r) => matchDateFilter(r?.dateISO, filters));
   return xs;
 }
 
@@ -93,7 +84,12 @@ export default function useReimbursesViewModel(filters) {
       const approval = pickApproval(it);
       const st = mapApiStatusToUI(it?.status_persetujuan_reimburse);
 
-      const id = approval?.id || approval?.id_approval_reimburse || it?.id_reimburse || it?.id || `${it?.nomor_reimburse || ''}`;
+      const id =
+        approval?.id ||
+        approval?.id_approval_reimburse ||
+        it?.id_reimburse ||
+        it?.id ||
+        `${it?.nomor_reimburse || ''}`;
 
       return {
         id,
@@ -135,10 +131,7 @@ export default function useReimbursesViewModel(filters) {
       fd.append('decision', 'APPROVED');
 
       const fileObj = proofFiles?.[0]?.originFileObj;
-      if (fileObj) {
-        // backend reimburse approvals cari key "bukti_approval_reimburse"
-        fd.append('bukti_approval_reimburse', fileObj);
-      }
+      if (fileObj) fd.append('bukti_approval_reimburse', fileObj);
 
       await apiForm(ApiEndpoints.DecideReimburseMobile(id), { method: 'PATCH', formData: fd });
       await mutate();

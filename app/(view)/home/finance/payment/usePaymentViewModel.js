@@ -1,21 +1,11 @@
-'use client';
+"use client";
 
 import { useCallback, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import useSWR from 'swr';
 import { ApiEndpoints } from '../../../../../constrainst/endpoints';
 
-function normUpper(s) {
-  return String(s || '').trim().toUpperCase();
-}
-
-function mapApiStatusToUI(apiStatus) {
-  const s = String(apiStatus || '').toLowerCase();
-  if (s === 'pending') return { key: 'PENDING', label: 'Pending', tone: 'warning' };
-  if (s === 'disetujui' || s === 'approved') return { key: 'APPROVED', label: 'Approved', tone: 'success' };
-  if (s === 'ditolak' || s === 'rejected') return { key: 'REJECTED', label: 'Rejected', tone: 'danger' };
-  return { key: 'IN_REVIEW', label: 'In Review', tone: 'info' };
-}
+import { mapApiStatusToUI, matchDateFilter, normUpper } from '../component_finance/financeFilterHelpers';
 
 function applyClientFilters(rows, filters) {
   const q = String(filters?.search || '').trim().toLowerCase();
@@ -37,8 +27,9 @@ function applyClientFilters(rows, filters) {
     });
   }
 
-  if (st) xs = xs.filter((r) => normUpper(r?.status) === st);
+  if (st && st !== 'ALL') xs = xs.filter((r) => normUpper(r?.status) === st);
 
+  xs = xs.filter((r) => matchDateFilter(r?.dateISO, filters));
   return xs;
 }
 
@@ -69,10 +60,11 @@ async function apiForm(url, { method = 'POST', formData }) {
 
 function pickApproval(item) {
   const approvals = Array.isArray(item?.approval_payment) ? item.approval_payment : [];
-  // payment approval status field: status_persetujuan_approval_payment
-  return approvals.find((a) => String(a?.status_persetujuan_approval_payment || '').toLowerCase() === 'pending')
-    || approvals[0]
-    || null;
+  return (
+    approvals.find((a) => String(a?.status_persetujuan_approval_payment || '').toLowerCase() === 'pending') ||
+    approvals[0] ||
+    null
+  );
 }
 
 function pickEmployeeName(item) {
@@ -129,9 +121,7 @@ export default function usePaymentViewModel(filters) {
         note: it?.keterangan || '',
 
         rejectReason: approval?.note || it?.note || null,
-        adminProof: approval?.bukti_approval_payment
-          ? { name: approval.bukti_approval_payment }
-          : null,
+        adminProof: approval?.bukti_approval_payment ? { name: approval.bukti_approval_payment } : null,
       };
     });
   }, [raw]);
@@ -146,10 +136,7 @@ export default function usePaymentViewModel(filters) {
       fd.append('decision', 'APPROVED');
 
       const fileObj = proofFiles?.[0]?.originFileObj;
-      if (fileObj) {
-        // backend payment approvals cari key "bukti_approval_payment"
-        fd.append('bukti_approval_payment', fileObj);
-      }
+      if (fileObj) fd.append('bukti_approval_payment', fileObj);
 
       await apiForm(ApiEndpoints.DecidePaymentMobile(id), { method: 'PATCH', formData: fd });
       await mutate();

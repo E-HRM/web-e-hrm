@@ -51,8 +51,6 @@ function isReactComponent(comp) {
 export default function FinanceContent() {
   const vm = useFinanceViewModel();
 
-  // NOTE: hooks harus selalu dieksekusi dalam urutan yang sama.
-  // Jangan taruh useMemo/useEffect di bawah return kondisional.
   const tabs = useMemo(() => {
     const pmCount = vm.tabCounts?.pocket_money ?? 0;
     const rbCount = vm.tabCounts?.reimburses ?? 0;
@@ -65,8 +63,10 @@ export default function FinanceContent() {
           onSearchChange={vm.setSearch}
           status={vm.status}
           onStatusChange={vm.setStatus}
-          datePreset={vm.datePreset}
-          onDatePresetChange={vm.setDatePreset}
+          dateMode={vm.dateMode}
+          onDateModeChange={vm.setDateMode}
+          dateRange={vm.dateRange}
+          onDateRangeChange={vm.setDateRange}
         />
       </div>
     );
@@ -106,14 +106,14 @@ export default function FinanceContent() {
   }, [
     vm.search,
     vm.status,
-    vm.datePreset,
+    vm.dateMode,
+    vm.dateRange,
     vm.filters,
     vm.tabCounts?.pocket_money,
     vm.tabCounts?.reimburses,
     vm.tabCounts?.payment,
   ]);
 
-  // Guard komponen yang sering bikin "type is invalid"
   const guards = [
     { name: 'FinanceFiltersBar', comp: FinanceFiltersBar },
     { name: 'PocketMoneyContent', comp: PocketMoneyContent },
@@ -143,25 +143,23 @@ export default function FinanceContent() {
 
       <div className='flex items-center gap-2'>
         {vm.viewMode === 'category' ? (
-<AppButton
-  variant='secondary'
-  className='!bg-[#003A6F] !text-white hover:!bg-[#002f59] active:!bg-[#002746]'
-  style={{ borderColor: '#003A6F' }}
-  onClick={() => vm.setViewMode('request')}
->
-  Kembali ke Pengajuan
-</AppButton>
-
+          <AppButton
+            variant='secondary'
+            className='!bg-[#003A6F] !text-white hover:!bg-[#002f59] active:!bg-[#002746]'
+            style={{ borderColor: '#003A6F' }}
+            onClick={() => vm.setViewMode('request')}
+          >
+            Kembali ke Pengajuan
+          </AppButton>
         ) : (
-<AppButton
-  variant='secondary'
-  className='!bg-[#003A6F] !text-white hover:!bg-[#002f59] active:!bg-[#002746]'
-  style={{ borderColor: '#003A6F' }}
-  onClick={() => vm.setViewMode('category')}
->
-  Manajemen Kategori
-</AppButton>
-
+          <AppButton
+            variant='secondary'
+            className='!bg-[#003A6F] !text-white hover:!bg-[#002f59] active:!bg-[#002746]'
+            style={{ borderColor: '#003A6F' }}
+            onClick={() => vm.setViewMode('category')}
+          >
+            Manajemen Kategori
+          </AppButton>
         )}
       </div>
     </div>

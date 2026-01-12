@@ -1,26 +1,15 @@
-'use client';
+"use client";
 
 import { useCallback, useMemo, useState } from 'react';
 import Cookies from 'js-cookie';
 import useSWR from 'swr';
 import { ApiEndpoints } from '../../../../../constrainst/endpoints';
 
-function normUpper(s) {
-  return String(s || '').trim().toUpperCase();
-}
-
-function mapApiStatusToUI(apiStatus) {
-  const s = String(apiStatus || '').toLowerCase();
-  if (s === 'pending') return { key: 'PENDING', label: 'Pending', tone: 'warning' };
-  if (s === 'disetujui' || s === 'approved') return { key: 'APPROVED', label: 'Approved', tone: 'success' };
-  if (s === 'ditolak' || s === 'rejected') return { key: 'REJECTED', label: 'Rejected', tone: 'danger' };
-  return { key: 'IN_REVIEW', label: 'In Review', tone: 'info' };
-}
+import { mapApiStatusToUI, matchDateFilter, normUpper } from '../component_finance/financeFilterHelpers';
 
 function applyClientFilters(rows, filters) {
   const q = String(filters?.search || '').trim().toLowerCase();
   const st = normUpper(filters?.status);
-  const preset = normUpper(filters?.datePreset);
 
   let xs = rows;
 
@@ -36,35 +25,11 @@ function applyClientFilters(rows, filters) {
     });
   }
 
-  if (st) {
+  if (st && st !== 'ALL') {
     xs = xs.filter((r) => normUpper(r?.status) === st);
   }
 
-  // datePreset masih client-side (kalau kamu mau server-side, tinggal kirim param date range)
-  if (preset && preset !== 'ALL') {
-    // kamu sebelumnya pakai TODAY / TOMORROW
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-    if (preset === 'TODAY') {
-      xs = xs.filter((r) => {
-        const d = r?.dateISO ? new Date(r.dateISO) : null;
-        return d && d >= start && d <= end;
-      });
-    }
-    if (preset === 'TOMORROW') {
-      const t0 = new Date(start);
-      t0.setDate(t0.getDate() + 1);
-      const t1 = new Date(end);
-      t1.setDate(t1.getDate() + 1);
-      xs = xs.filter((r) => {
-        const d = r?.dateISO ? new Date(r.dateISO) : null;
-        return d && d >= t0 && d <= t1;
-      });
-    }
-  }
-
+  xs = xs.filter((r) => matchDateFilter(r?.dateISO, filters));
   return xs;
 }
 
@@ -95,7 +60,6 @@ async function apiForm(url, { method = 'POST', formData }) {
 
 function pickApproval(item) {
   const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
-  // pilih yang masih pending (decision null)
   return approvals.find((a) => !a?.decision) || approvals[0] || null;
 }
 
@@ -112,7 +76,6 @@ export default function usePocketMoneyViewModel(filters) {
   const [selected, setSelected] = useState(null);
 
   const qs = useMemo(() => {
-    // Ambil banyak dulu, nanti filter di client agar UX tetap sama dengan sebelumnya
     return ApiEndpoints.GetPocketMoneyMobile({ page: 1, perPage: 500 });
   }, []);
 
@@ -125,12 +88,15 @@ export default function usePocketMoneyViewModel(filters) {
       const approval = pickApproval(it);
       const st = mapApiStatusToUI(it?.status_persetujuan_pocket_money);
 
-      const id = approval?.id || approval?.id_approval_pocket_money || it?.id_pocket_money || it?.id || `${it?.nomor_pocket_money || ''}`;
+      const id =
+        approval?.id ||
+        approval?.id_approval_pocket_money ||
+        it?.id_pocket_money ||
+        it?.id ||
+        `${it?.nomor_pocket_money || ''}`;
 
       return {
-        // IMPORTANT: id dipakai untuk aksi approve/reject => kita pakai approval id kalau ada
         id,
-
         requestId: it?.id_pocket_money || it?.id || null,
 
         type: 'Pocket Money',
@@ -153,7 +119,6 @@ export default function usePocketMoneyViewModel(filters) {
         totalAmount: Number(it?.nominal_pocket_money || 0),
         note: it?.keterangan || '',
 
-        // rekening (kalau ada)
         bankName: it?.bank || it?.nama_bank || '-',
         accountName: it?.nama_rekening || '-',
         accountNumber: it?.nomor_rekening || '-',
@@ -170,15 +135,11 @@ export default function usePocketMoneyViewModel(filters) {
 
   const approve = useCallback(
     async ({ id, proofFiles }) => {
-      // Pocket money backend menerima file optional, tapi UI requireProof=false (boleh kosong)
       const fd = new FormData();
       fd.append('decision', 'APPROVED');
 
       const fileObj = proofFiles?.[0]?.originFileObj;
-      if (fileObj) {
-        // backend pocket-money approvals cari key "bukti_approval_pocket_money"
-        fd.append('bukti_approval_pocket_money', fileObj);
-      }
+      if (fileObj) fd.append('bukti_approval_pocket_money', fileObj);
 
       await apiForm(ApiEndpoints.DecidePocketMoneyMobile(id), { method: 'PATCH', formData: fd });
       await mutate();

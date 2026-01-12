@@ -1,6 +1,7 @@
-'use client';
+"use client";
 
 import { useMemo, useState, useCallback } from 'react';
+import dayjs from 'dayjs';
 import Cookies from 'js-cookie';
 import useSWR from 'swr';
 import { ApiEndpoints } from '../../../../constrainst/endpoints';
@@ -12,12 +13,6 @@ function safePickMessage(err, fallback = 'Terjadi kesalahan') {
   return fallback;
 }
 
-/**
- * Aman untuk semua route kamu:
- * - Selalu kirim cookies (NextAuth session) => credentials: 'include'
- * - Authorization hanya dipasang kalau token cookie benar-benar ada
- * - Tidak akan pernah mengirim "Bearer undefined"
- */
 async function apiJson(url, { method = 'GET', body } = {}) {
   const token = Cookies.get('token');
   const headers = {};
@@ -46,12 +41,26 @@ export default function useFinanceViewModel() {
   const [viewMode, setViewMode] = useState('request'); // 'request' | 'category'
 
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState(''); // '' | 'PENDING' | 'APPROVED' | 'REJECTED' (client-side)
-  const [datePreset, setDatePreset] = useState('ALL'); // client-side
+  const [status, setStatus] = useState('ALL'); // 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'
 
-  const filters = useMemo(() => ({ search, status, datePreset }), [search, status, datePreset]);
+  // ✅ Date filter: ALL / DATE
+  const [dateMode, setDateMode] = useState('ALL'); // 'ALL' | 'DATE'
+  const [dateRange, setDateRange] = useState([null, null]); // [dayjs|null, dayjs|null]
 
-  // ambil counts dari meta.total (request kecil: perPage=1)
+  const filters = useMemo(() => {
+    const mode = String(dateMode || 'ALL').toUpperCase();
+    const d0 = dateRange?.[0] && dayjs.isDayjs(dateRange[0]) ? dateRange[0] : null;
+    const d1 = dateRange?.[1] && dayjs.isDayjs(dateRange[1]) ? dateRange[1] : null;
+
+    return {
+      search,
+      status,
+      dateMode: mode,
+      dateFrom: mode === 'DATE' && d0 ? d0.format('YYYY-MM-DD') : null,
+      dateTo: mode === 'DATE' && d1 ? d1.format('YYYY-MM-DD') : null,
+    };
+  }, [search, status, dateMode, dateRange]);
+
   const qsCount = useMemo(() => ({ page: 1, perPage: 1 }), []);
 
   const { data: pmCountRes } = useSWR(
@@ -82,27 +91,28 @@ export default function useFinanceViewModel() {
   const nowISO = useCallback(() => new Date().toISOString(), []);
 
   return {
-    // state
     activeTab,
     viewMode,
     search,
     status,
-    datePreset,
+    dateMode,
+    dateRange,
 
-    // derived
     filters,
     tabCounts,
 
-    // actions
     setActiveTab,
     setViewMode,
     setSearch,
     setStatus,
-    setDatePreset,
+    setDateMode: (v) => {
+      const next = String(v || 'ALL').toUpperCase();
+      setDateMode(next);
+      if (next === 'ALL') setDateRange([null, null]);
+    },
+    setDateRange,
 
     nowISO,
-
-    // helper (optional)
     safePickMessage,
   };
 }

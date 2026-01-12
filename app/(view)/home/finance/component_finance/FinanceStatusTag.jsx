@@ -4,10 +4,11 @@ import React, { useMemo } from 'react';
 import AppTag from '@/app/(view)/component_shared/AppTag';
 
 const MAP = {
-  PENDING: { label: 'Pending', tone: 'info' },
-  IN_REVIEW: { label: 'In Review', tone: 'warning' },
+  PENDING: { label: 'Pending', tone: 'warning' },
   APPROVED: { label: 'Approved', tone: 'success' },
   REJECTED: { label: 'Rejected', tone: 'danger' },
+  // backward-compat: kalau masih ada status lama di response
+  IN_REVIEW: { label: 'Pending', tone: 'warning' },
 };
 
 export default function FinanceStatusTag({ status }) {
