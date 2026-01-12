@@ -95,7 +95,6 @@ export const pengajuanInclude = {
     },
   },
   tanggal_list: {
-    where: { deleted_at: null },
     orderBy: { tanggal_cuti: 'asc' },
     select: {
       id_pengajuan_cuti_tanggal: true,
