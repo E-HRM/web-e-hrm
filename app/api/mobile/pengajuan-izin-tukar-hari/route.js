@@ -257,12 +257,6 @@ export const izinInclude = {
       },
     },
   },
-  kategori: {
-    select: {
-      id_kategori_tukar_hari: true,
-      nama_kategori: true,
-    },
-  },
   handover_users: {
     include: {
       user: {
