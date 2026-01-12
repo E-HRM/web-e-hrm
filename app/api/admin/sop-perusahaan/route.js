@@ -92,20 +92,22 @@ const SOP_WITH_KATEGORI_INCLUDE = {
 export async function GET(req) {
   const actor = await getActor(req);
   if (actor instanceof NextResponse) return actor;
-  const forbidden = guardAdmin(actor.actor);
-  if (forbidden) return forbidden;
+
+  const role = String(actor.actor.role || '').toUpperCase();
+  const isAdmin = ADMIN_ROLES.has(role);
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan.' }, { status: 500 });
   }
 
   try {
     const { searchParams } = new URL(req.url);
 
     const search = (searchParams.get('search') || '').trim();
-    const includeDeleted = ['1', 'true'].includes((searchParams.get('includeDeleted') || '').toLowerCase());
-    const deletedOnly = ['1', 'true'].includes((searchParams.get('deletedOnly') || '').toLowerCase());
+
+    const includeDeleted = isAdmin ? ['1', 'true'].includes((searchParams.get('includeDeleted') || '').toLowerCase()) : false;
+    const deletedOnly = isAdmin ? ['1', 'true'].includes((searchParams.get('deletedOnly') || '').toLowerCase()) : false;
 
     const id_kategori_sop = (searchParams.get('id_kategori_sop') || searchParams.get('kategoriId') || '').trim();
 
@@ -138,7 +140,6 @@ export async function GET(req) {
     }
 
     const skip = (page - 1) * pageSize;
-
     const [total, items] = await db.$transaction([
       sop.count({ where }),
       sop.findMany({
