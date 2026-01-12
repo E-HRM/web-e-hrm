@@ -421,6 +421,9 @@ model User {
   pocketMonies PocketMoney[]
   payments     Payment[]
 
+  // --- Tambahan Fitur Pin SOP ---
+  pinned_sops PinnedSop[]
+
   @@index([id_departement])
   @@index([id_location])
   @@index([id_jabatan])
@@ -1336,7 +1339,28 @@ model sop_karyawan {
 
   kategori_sop kategori_sop? @relation(fields: [id_kategori_sop], references: [id_kategori_sop], onDelete: SetNull, onUpdate: Cascade)
 
+  // --- Tambahan Fitur Pin SOP ---
+  pinned_by PinnedSop[]
+
   @@index([created_at])
   @@index([id_kategori_sop])
   @@map("sop_karyawan")
+}
+
+// ================= MODEL BARU UNTUK FITUR PIN =================
+
+model PinnedSop {
+  id_pinned_sop String   @id @default(uuid()) @db.Char(36)
+  id_user       String   @db.Char(36)
+  id_sop        String   @db.Char(36)
+  created_at    DateTime @default(now()) @db.DateTime(0)
+
+  // Relasi ke User dan SOP
+  user User         @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
+  sop  sop_karyawan @relation(fields: [id_sop], references: [id_sop_karyawan], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([id_user, id_sop]) // User hanya bisa pin satu SOP yang sama satu kali
+  @@index([id_user])
+  @@index([id_sop])
+  @@map("pinned_sops")
 }

@@ -141,40 +141,51 @@ function formatDateDisplay(value) {
 }
 
 export async function ensureAuth(req) {
-  const auth = req.headers.get('authorization') || '';
-  if (auth.startsWith('Bearer ')) {
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+
+  // 1) Bearer token dulu
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
     try {
-      const payload = verifyAuthToken(auth.slice(7).trim());
-      const id = payload?.id_user || payload?.id || payload?.sub;
+      const payload = verifyAuthToken(token);
+      const id = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
+
       if (id) {
         return {
           actor: {
-            id,
+            id: String(id),
             role: payload?.role,
             source: 'bearer',
           },
+          authType: 'bearer',
         };
       }
-    } catch (_) {}
+      // kalau payload valid tapi id kosong, lanjut fallback session
+    } catch {
+      // fallback session di bawah
+    }
   }
 
-  const sessionOrRes = await authenticateRequest(req);
+  // 2) Fallback ke NextAuth session
+  const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
-  const session = sessionOrRes?.session;
-  const user = session?.user;
+  const user = sessionOrRes?.user;
+  const id = user?.id || user?.id_user; // NextAuth: id, beberapa tempat lama: id_user
+  const role = user?.role;
 
-  if (!user?.id) {
+  if (!id) {
     return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
 
   return {
     actor: {
-      id: user.id,
-      role: user.role,
+      id: String(id),
+      role,
       source: 'session',
     },
-    session,
+    authType: 'session',
+    session: sessionOrRes,
   };
 }
 
