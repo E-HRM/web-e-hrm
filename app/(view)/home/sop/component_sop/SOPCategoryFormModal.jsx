@@ -5,84 +5,44 @@ import React, { useMemo } from 'react';
 import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppForm from '@/app/(view)/component_shared/AppForm';
 import AppButton from '@/app/(view)/component_shared/AppButton';
-import AppAlert from '@/app/(view)/component_shared/AppAlert';
 
-export default function SOPCategoryFormModal({ open, category, existingKeys, onClose, onSave, toSnakeCaseKey, nowISO }) {
+export default function SOPCategoryFormModal({ open, category, onClose, onSave }) {
+  const isEdit = Boolean(category?.key);
+
   const initialValues = useMemo(() => {
     if (!open) return {};
-    if (category) {
+
+    if (isEdit) {
       return {
-        name: category.name,
-        key: category.key,
-        description: category.description,
-        is_active: Boolean(category.is_active),
+        nama_kategori: category?.name || '',
+        deskripsi: category?.description || '',
       };
     }
-    return { is_active: true };
-  }, [open, category]);
+
+    return {
+      nama_kategori: '',
+      deskripsi: '',
+    };
+  }, [open, isEdit, category]);
 
   const fields = useMemo(
     () => [
       {
-        type: 'custom',
-        name: '__info__',
-        render: () => (
-          <AppAlert
-            type='info'
-            showIcon
-            message='Info'
-            description='Key kategori akan dipakai sebagai identifier unik. Gunakan format snake_case (contoh: admin_center, design_sosmed)'
-          />
-        ),
-      },
-      {
         type: 'text',
-        name: 'name',
+        name: 'nama_kategori',
         label: 'Nama Kategori',
-        placeholder: 'contoh: SOP Admin Center',
-        rules: [
-          { required: true, message: 'Nama kategori wajib diisi' },
-          { min: 3, message: 'Nama minimal 3 karakter' },
-        ],
-      },
-      {
-        type: 'text',
-        name: 'key',
-        label: 'Key Kategori',
-        placeholder: 'contoh: admin_center',
-        rules: [
-          { required: true, message: 'Key kategori wajib diisi' },
-          {
-            validator: async (_rule, value) => {
-              const normalized = toSnakeCaseKey?.(value) || '';
-              if (!normalized) return Promise.reject(new Error('Key kategori tidak valid'));
-
-              const dup = (existingKeys || []).some((k) => k === normalized && (!category || category.key !== normalized));
-              if (dup) return Promise.reject(new Error('Key kategori sudah digunakan'));
-
-              return Promise.resolve();
-            },
-          },
-        ],
-        extra: 'Gunakan huruf kecil dan underscore (snake_case).',
+        placeholder: 'Contoh: HR, Finance, SOP Umum',
+        rules: [{ required: true, message: 'Nama kategori wajib diisi' }],
       },
       {
         type: 'textarea',
-        name: 'description',
+        name: 'deskripsi',
         label: 'Deskripsi',
-        placeholder: 'Deskripsi singkat tentang kategori ini',
+        placeholder: 'Opsional',
         controlProps: { rows: 3, maxLength: 200, showCount: true },
-        rules: [{ required: true, message: 'Deskripsi wajib diisi' }],
-      },
-      {
-        type: 'switch',
-        name: 'is_active',
-        label: 'Status',
-        valuePropName: 'checked',
-        controlProps: { checkedChildren: 'Active', unCheckedChildren: 'Inactive' },
       },
     ],
-    [existingKeys, category, toSnakeCaseKey]
+    []
   );
 
   return (
@@ -90,39 +50,48 @@ export default function SOPCategoryFormModal({ open, category, existingKeys, onC
       open={open}
       onClose={onClose}
       onCancel={onClose}
-      title={category ? 'Edit Kategori' : 'Tambah Kategori Baru'}
+      title={isEdit ? 'Edit Kategori' : 'Tambah Kategori'}
+      width={560}
       footer={false}
-      width={620}
       destroyOnClose
     >
       <AppForm
-        key={`${open}-${category?.id || 'new'}`}
+        key={`${open}-${isEdit ? category?.key : 'new'}`}
         initialValues={initialValues}
-        showSubmit={false}
         fields={fields}
+        showSubmit={false}
+        formProps={{
+          onKeyDown: (e) => {
+            if (e.key === 'Enter') e.preventDefault();
+          },
+        }}
         footer={({ submit }) => (
           <div className='flex items-center justify-end gap-2 pt-2'>
-            <AppButton variant='secondary' onClick={onClose}>
+            {/* ✅ BATAL: outlined biru tua */}
+            <AppButton
+              variant='outline'
+              onClick={onClose}
+              className='!border-[#003A6F] !text-[#003A6F] hover:!border-[#003A6F] hover:!text-[#003A6F]'
+            >
               Batal
             </AppButton>
+
             <AppButton variant='primary' onClick={submit}>
-              {category ? 'Update' : 'Simpan'}
+              {isEdit ? 'Update' : 'Tambah'}
             </AppButton>
           </div>
         )}
         onFinish={async (values) => {
-          const now = nowISO?.() || new Date().toISOString();
-          const normalizedKey = toSnakeCaseKey?.(values.key) || values.key;
+          const payload = {
+            id: isEdit ? String(category.key) : undefined,
+            nama_kategori: String(values?.nama_kategori || '').trim(),
+            deskripsi:
+              values?.deskripsi === undefined || values?.deskripsi === null
+                ? null
+                : String(values.deskripsi).trim() || null,
+          };
 
-          onSave?.({
-            id: category?.id || `cat-${Date.now()}`,
-            key: normalizedKey,
-            name: values.name,
-            description: values.description,
-            is_active: Boolean(values.is_active),
-            created_at: category?.created_at || now,
-            updated_at: now,
-          });
+          await onSave?.(payload);
         }}
       />
     </AppModal>

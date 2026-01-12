@@ -11,107 +11,111 @@ async function apiJson(url, { method = 'GET', body } = {}) {
   if (token) headers.authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
 
-  const res = await fetch(url, { method, headers, credentials: 'include', body: body ? JSON.stringify(body) : undefined });
-  const ct = res.headers.get('content-type') || '';
-  const data = ct.includes('application/json') ? await res.json() : await res.text();
-  if (!res.ok) throw new Error(data?.message || `Request gagal (${res.status})`);
-  return data;
-}
+  const res = await fetch(url, {
+    method,
+    headers,
+    credentials: 'include',
+    body: body ? JSON.stringify(body) : undefined,
+  });
 
-async function apiForm(url, { method = 'POST', formData }) {
-  const token = Cookies.get('token');
-  const headers = {};
-  if (token) headers.authorization = `Bearer ${token}`;
-
-  const res = await fetch(url, { method, headers, credentials: 'include', body: formData });
   const ct = res.headers.get('content-type') || '';
-  const data = ct.includes('application/json') ? await res.json() : await res.text();
-  if (!res.ok) throw new Error(data?.message || `Request gagal (${res.status})`);
+  const isJson = ct.includes('application/json');
+  const data = isJson ? await res.json().catch(() => ({})) : await res.text().catch(() => '');
+
+  if (!res.ok) {
+    const msg = typeof data === 'string' ? data : data?.message || data?.error || 'Request gagal';
+    throw new Error(msg);
+  }
+
   return data;
 }
 
 function fileNameFromUrl(url) {
-  if (!url) return '';
   try {
+    if (!url) return '';
     const u = new URL(url);
-    const last = u.pathname.split('/').filter(Boolean).pop();
-    return last || '';
+    const last = u.pathname.split('/').filter(Boolean).pop() || '';
+    return decodeURIComponent(last);
   } catch {
-    const last = String(url).split('/').filter(Boolean).pop();
-    return last || '';
+    const parts = String(url || '').split('/').filter(Boolean);
+    return decodeURIComponent(parts[parts.length - 1] || '');
   }
 }
 
-export default function useSOPViewModel() {
-  const [selectedSOP, setSelectedSOP] = useState(null);
+function inferTipeFile(url) {
+  const u = String(url || '').toLowerCase();
+  if (!u) return 'link';
+  if (u.includes('sop-perusahaan')) return 'upload';
+  if (u.includes('/storage/v1/object/public/') && u.includes('sop')) return 'upload';
+  if (u.endsWith('.pdf')) return 'upload';
+  return 'link';
+}
 
+function nowISO() {
+  return new Date().toISOString();
+}
+
+/**
+ * ✅ FIX UTAMA:
+ * SOP model prisma pakai id_sop_karyawan sebagai PK.
+ * Jadi kita normalize supaya UI selalu punya `id_sop`.
+ */
+function normalizeSopId(obj) {
+  if (!obj) return '';
+  return (
+    obj?.id_sop ??
+    obj?.id_sop_karyawan ?? // ✅ paling penting
+    obj?.id ?? // fallback umum
+    obj?.sop_id ??
+    obj?.id_sop_perusahaan ??
+    ''
+  );
+}
+
+export default function useSOPViewModel() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingSOP, setEditingSOP] = useState(null);
+  const [selectedSOP, setSelectedSOP] = useState(null);
 
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const qs = useMemo(() => ApiEndpoints.GetSOPPerusahaan({ page: 1, pageSize: 200 }), []);
 
-  // NOTE:
-  // Backend SOP kamu (/api/admin/sop-perusahaan) belum punya kategori seperti mock yang kamu tulis.
-  // Jadi kategori kita tetap FE-only agar UI tidak patah.
-  const [categories, setCategories] = useState([
-    {
-      id: 'cat-general',
-      key: 'general',
-      name: 'SOP General',
-      description: 'Kategori default (FE-only)',
-      is_active: true,
-      created_at: '2025-01-01T00:00:00Z',
-      updated_at: '2025-01-01T00:00:00Z',
-    },
-  ]);
-
-  const activeCategories = useMemo(() => categories.filter((c) => c.is_active), [categories]);
-
-  const categoryMap = useMemo(() => {
-    const m = {};
-    categories.forEach((c) => (m[c.key] = c));
-    return m;
-  }, [categories]);
-
-  const qs = useMemo(() => {
-    // endpoint SOP admin memakai page + pageSize
-    return ApiEndpoints.GetSOPPerusahaan({ page: 1, pageSize: 500 });
-  }, []);
-
-  const { data, error, isLoading, mutate } = useSWR(qs, (u) => apiJson(u), { revalidateOnFocus: false });
+  const { data, error, isLoading, mutate } = useSWR(qs, (u) => apiJson(u), {
+    revalidateOnFocus: false,
+  });
 
   const sops = useMemo(() => {
-    const raw = Array.isArray(data?.data) ? data.data : [];
+    const raw =
+      Array.isArray(data?.data) ? data.data : Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+
     return raw.map((it) => {
       const url = it?.lampiran_sop_url || '';
+      const tipe_file = inferTipeFile(url);
       const fname = fileNameFromUrl(url);
 
+      const kategoriId =
+        it?.id_kategori_sop ||
+        it?.kategori_sop?.id_kategori_sop ||
+        it?.kategori_sop?.id ||
+        null;
+
+      const id_sop = normalizeSopId(it); // ✅ FIX
+
       return {
-        id_sop: it?.id_sop,
+        id_sop, // ✅ sekarang pasti terisi (dari id_sop_karyawan)
         judul: it?.nama_dokumen || '-',
-
-        // FE-only fields supaya komponen kamu tetap jalan
-        kategori: 'general',
-        deskripsi: it?.tanggal_terbit ? `Tanggal terbit: ${it.tanggal_terbit}` : '-',
-        versi: '1.0',
-
-        tipe_file: url ? 'upload' : 'link', // URL upload juga bentuknya URL => tetap bisa dipakai "Download"
-        file_url: url || undefined,
-        file_name: fname || undefined,
-        link_url: url || undefined,
-
-        status: 'active',
-        created_by: '—',
+        kategori: kategoriId || 'uncategorized',
+        deskripsi: it?.deskripsi || it?.keterangan || '-',
+        tipe_file,
+        file_url: tipe_file === 'upload' ? (url || undefined) : undefined,
+        file_name: tipe_file === 'upload' ? (fname || 'dokumen.pdf') : undefined,
+        link_url: tipe_file === 'link' ? (url || undefined) : undefined,
+        created_by: it?.created_by_snapshot_nama_pengguna || it?.created_by || '—',
         created_at: it?.created_at || '',
         updated_at: it?.updated_at || '',
-        last_updated_by: '—',
+        last_updated_by: it?.updated_by_snapshot_nama_pengguna || it?.updated_by || '—',
       };
     });
   }, [data]);
-
-  const nowISO = useCallback(() => new Date().toISOString(), []);
-
-  const toSnakeCaseKey = useCallback((s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '_'), []);
 
   const openCreate = useCallback(() => {
     setEditingSOP(null);
@@ -119,120 +123,118 @@ export default function useSOPViewModel() {
   }, []);
 
   const openEdit = useCallback((sop) => {
-    setEditingSOP(sop);
+    setEditingSOP(sop || null);
     setFormOpen(true);
+  }, []);
+
+  const openDetail = useCallback((sop) => {
+    setSelectedSOP(sop || null);
+  }, []);
+
+  const closeDetail = useCallback(() => {
+    setSelectedSOP(null);
   }, []);
 
   const saveSOP = useCallback(
     async (payload) => {
-      // payload dari SOPFormModal kamu:
-      // { judul, kategori, deskripsi, versi, tipe_file, file_url, file_name, link_url }
       const judul = String(payload?.judul || '').trim();
       if (!judul) throw new Error('Judul SOP wajib diisi');
 
-      // backend wajib tanggal_terbit (YYYY-MM-DD)
+      const kategori = String(payload?.kategori || '').trim();
+      if (!kategori) throw new Error('Kategori SOP wajib dipilih');
+
       const today = new Date();
-      const tanggal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const tanggal_terbit = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+        today.getDate()
+      ).padStart(2, '0')}`;
 
       const fd = new FormData();
       fd.append('nama_dokumen', judul);
-      fd.append('tanggal_terbit', tanggal);
+      fd.append('tanggal_terbit', tanggal_terbit);
+      fd.append('id_kategori_sop', kategori);
 
       if (payload?.tipe_file === 'upload') {
-        // SOPFormModal antd Upload: fileList[0].originFileObj
         const f = payload?.fileList?.[0]?.originFileObj;
         if (f) {
-          // backend cari key "lampiran_sop"
           fd.append('lampiran_sop', f);
         } else if (payload?.file_url) {
-          // fallback: kalau tidak upload file, minimal kirim url
           fd.append('lampiran_sop_url', String(payload.file_url));
+        } else {
+          fd.append('lampiran_sop_url', '');
         }
       } else {
-        if (payload?.link_url) fd.append('lampiran_sop_url', String(payload.link_url));
+        const link = String(payload?.link_url || '').trim();
+        if (!link) throw new Error('Link URL wajib diisi');
+        fd.append('lampiran_sop_url', link);
       }
 
-      if (editingSOP?.id_sop) {
-        await apiForm(ApiEndpoints.UpdateSOPPerusahaan(editingSOP.id_sop), { method: 'PUT', formData: fd });
-      } else {
-        await apiForm(ApiEndpoints.CreateSOPPerusahaan, { method: 'POST', formData: fd });
+      // ✅ Pakai normalize supaya edit juga aman walau payload bawa id_sop_karyawan
+      const sopId = normalizeSopId(payload);
+      const isEdit = Boolean(String(sopId || '').trim());
+
+      const token = Cookies.get('token');
+      const headers = {};
+      if (token) headers.authorization = `Bearer ${token}`;
+
+      const url = isEdit ? ApiEndpoints.UpdateSOPPerusahaan(sopId) : ApiEndpoints.CreateSOPPerusahaan();
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, { method, headers, credentials: 'include', body: fd });
+      const ct = res.headers.get('content-type') || '';
+      const isJson = ct.includes('application/json');
+      const resp = isJson ? await res.json().catch(() => ({})) : await res.text().catch(() => '');
+      if (!res.ok) {
+        const msg = typeof resp === 'string' ? resp : resp?.message || resp?.error || 'Request gagal';
+        throw new Error(msg);
       }
 
       await mutate();
       setFormOpen(false);
       setEditingSOP(null);
     },
-    [editingSOP, mutate]
+    [mutate]
   );
 
   const deleteSOP = useCallback(
-    async (id) => {
-      await apiJson(ApiEndpoints.DeleteSOPPerusahaan(id), { method: 'DELETE' });
+    async (idOrRecord) => {
+      // ✅ Bisa dipanggil pakai id, atau langsung record SOP.
+      // Dan kita dukung id_sop_karyawan (PK prisma) juga.
+      const rawId =
+        (idOrRecord && typeof idOrRecord === 'object'
+          ? normalizeSopId(idOrRecord)
+          : idOrRecord) ?? '';
+
+      const sopId = String(rawId || '').trim();
+      if (!sopId) throw new Error('ID SOP tidak valid');
+
+      await apiJson(ApiEndpoints.DeleteSOPPerusahaan(sopId), { method: 'DELETE' });
       await mutate();
-      if (selectedSOP?.id_sop === id) setSelectedSOP(null);
     },
-    [mutate, selectedSOP]
+    [mutate]
   );
 
-  // ===== Category FE-only (karena backend belum ada endpoint kategori SOP)
-  const saveCategory = useCallback((cat) => {
-    setCategories((prev) => {
-      const idx = prev.findIndex((x) => x.id === cat.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = cat;
-        return copy;
-      }
-      return [...prev, cat];
-    });
-  }, []);
-
-  const deleteCategory = useCallback((id) => {
-    setCategories((prev) => prev.filter((x) => x.id !== id));
-  }, []);
-
-  const toggleCategoryStatus = useCallback((id) => {
-    setCategories((prev) =>
-      prev.map((x) => (x.id === id ? { ...x, is_active: !x.is_active, updated_at: new Date().toISOString() } : x))
-    );
-  }, []);
-
   return {
-    // loading
+    sops,
     loading: isLoading,
     error,
 
-    // data
-    sops,
-    categories,
-    activeCategories,
-    categoryMap,
-
-    // state
-    selectedSOP,
     formOpen,
-    editingSOP,
-    categoryModalOpen,
-
-    // setters
-    setSelectedSOP,
     setFormOpen,
-    setEditingSOP,
-    setCategoryModalOpen,
 
-    // actions
+    editingSOP,
+    setEditingSOP,
+
+    selectedSOP,
+    setSelectedSOP,
+
     openCreate,
     openEdit,
+    openDetail,
+    closeDetail,
+
     saveSOP,
     deleteSOP,
 
-    // category actions
-    saveCategory,
-    deleteCategory,
-    toggleCategoryStatus,
-
-    // helpers
-    toSnakeCaseKey,
     nowISO,
   };
 }

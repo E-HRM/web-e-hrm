@@ -1,6 +1,8 @@
+// app/(view)/home/finance/category_management/FinanceCategoryModal.jsx
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { Form } from 'antd';
 
 import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppForm from '@/app/(view)/component_shared/AppForm';
@@ -8,71 +10,78 @@ import AppButton from '@/app/(view)/component_shared/AppButton';
 
 export default function FinanceCategoryModal({
   open,
-  mode, // 'create' | 'edit'
-  kind, // 'payment' | 'pocket_money' | 'reimburses'
+  mode,
   initialName,
-  initialDesc,
   onCancel,
   onSubmit,
+  loading,
 }) {
-  const kindLabel = kind === 'payment' ? 'Payment' : kind === 'pocket_money' ? 'Pocket Money' : 'Reimburse';
+  const isEdit = mode === 'edit';
+  const [form] = Form.useForm();
 
-  const submitText = mode === 'create' ? 'Simpan' : 'Simpan Perubahan';
+  const initialValues = useMemo(() => {
+    return { nama_keperluan: initialName || '' };
+  }, [initialName]);
 
   const fields = useMemo(
     () => [
       {
         type: 'text',
-        name: 'nama_kategori',
-        label: 'Nama Kategori',
-        placeholder: 'Contoh: Sponsorship Event / ATK / Transport',
-        rules: [{ required: true, message: 'Nama kategori wajib diisi' }],
-      },
-      {
-        type: 'text',
-        name: 'deskripsi',
-        label: 'Deskripsi (opsional)',
-        placeholder: 'Contoh: Untuk pembayaran sponsorship event sekolah',
-        rules: [],
+        name: 'nama_keperluan',
+        label: 'Nama Keperluan',
+        placeholder: 'Contoh: Transport / Konsumsi / Operasional',
+        rules: [{ required: true, message: 'Nama keperluan wajib diisi' }],
       },
     ],
     []
   );
 
+  useEffect(() => {
+    if (open) {
+      form.setFieldsValue(initialValues);
+    } else {
+      form.resetFields();
+    }
+  }, [open, form, initialValues]);
+
   return (
     <AppModal
       open={open}
-      onClose={() => onCancel?.()}
-      title={mode === 'create' ? `Tambah Kategori ${kindLabel}` : `Edit Kategori ${kindLabel}`}
-      footer={false}
+      title={isEdit ? 'Edit Kategori Keperluan' : 'Tambah Kategori Keperluan'}
+      onCancel={onCancel}
       destroyOnClose
+      width={520}
+      footer={[
+        <AppButton
+          key="cancel"
+          variant="outline" // ✅ Batal jadi outlined biru tua
+          onClick={() => onCancel?.()}
+          disabled={loading}
+        >
+          Batal
+        </AppButton>,
+        <AppButton
+          key="submit"
+          variant="primary" // ✅ Tambah/Ubah tetap primary
+          loading={loading}
+          onClick={() => form.submit()}
+        >
+          {isEdit ? 'Ubah' : 'Tambah'}
+        </AppButton>,
+      ]}
     >
       <AppForm
-        key={`${mode}-${kind}-${initialName ?? ''}-${initialDesc ?? ''}-${String(open)}`}
-        initialValues={{
-          nama_kategori: initialName || '',
-          deskripsi: initialDesc || '',
-        }}
-        showSubmit={false}
+        form={form}
+        layout="vertical"
+        initialValues={initialValues}
         fields={fields}
-        footer={({ submit }) => (
-          <div className='flex items-center justify-end gap-2 pt-2'>
-            <AppButton
-              variant='secondary'
-              onClick={() => onCancel?.()}
-            >
-              Batal
-            </AppButton>
-            <AppButton
-              variant='primary'
-              onClick={submit}
-            >
-              {submitText}
-            </AppButton>
-          </div>
-        )}
+        showSubmit={false}
         onFinish={async (values) => {
-          await onSubmit?.(values);
+          const payload = {
+            ...values,
+            nama_keperluan: String(values?.nama_keperluan || '').trim(),
+          };
+          await onSubmit?.(payload);
         }}
       />
     </AppModal>

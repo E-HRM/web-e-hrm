@@ -86,6 +86,11 @@ const API_MOBILE_PAYMENT = "/api/mobile/payment";
 // === SOP Admin
 const API_SOP_PERUSAHAAN = "/api/admin/sop-perusahaan";
 
+const API_KATEGORI_SOP = '/api/admin/kategori-sop';
+
+// ===== Finance: Kategori Keperluan (Admin)
+const API_KATEGORI_KEPERLUAN = "/api/admin/kategori-keperluan";
+
 export const ApiEndpoints = {
   // Location
   GetLocation: API_LOCATION,
@@ -267,12 +272,25 @@ export const ApiEndpoints = {
 
   GetPaymentMobile: (qsObj = {}) => `${API_MOBILE_PAYMENT}${buildQS(qsObj)}`,
   DecidePaymentMobile: (approvalId) => `${API_MOBILE_PAYMENT}/approvals/${approvalId}`,
+  RestoreKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}/restore`,
 
   // ===== SOP (Admin) =====
   GetSOPPerusahaan: (qsObj = {}) => `${API_SOP_PERUSAHAAN}${buildQS(qsObj)}`,
-  CreateSOPPerusahaan: API_SOP_PERUSAHAAN,
+  CreateSOPPerusahaan: () => API_SOP_PERUSAHAAN,
   GetSOPPerusahaanById: (id) => `${API_SOP_PERUSAHAAN}/${id}`,
   UpdateSOPPerusahaan: (id) => `${API_SOP_PERUSAHAAN}/${id}`,
   DeleteSOPPerusahaan: (id) => `${API_SOP_PERUSAHAAN}/${id}`,
 
+  GetKategoriSOP: (qsObj = {}) => `${API_KATEGORI_SOP}${buildQS(qsObj)}`,
+  CreateKategoriSOP: API_KATEGORI_SOP,
+  GetKategoriSOPById: (id) => `${API_KATEGORI_SOP}/${id}`,
+  UpdateKategoriSOP: (id) => `${API_KATEGORI_SOP}/${id}`,
+  DeleteKategoriSOP: (id) => `${API_KATEGORI_SOP}/${id}`,
+
+  /* ===== KATEGORI FINANCE (ADMIN) ===== */
+  GetKategoriKeperluan: (qsObj = {}) => `${API_KATEGORI_KEPERLUAN}${buildQS(qsObj)}`,
+  CreateKategoriKeperluan: API_KATEGORI_KEPERLUAN,
+  GetKategoriKeperluanById: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
+  UpdateKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
+  DeleteKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
 };

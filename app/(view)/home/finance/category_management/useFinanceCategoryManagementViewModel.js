@@ -1,180 +1,130 @@
+// app/(view)/home/finance/category_management/useFinanceCategoryManagementViewModel.js
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
+import useSWR from 'swr';
 
-function makeId(prefix) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+import { ApiEndpoints } from '@/constrainst/endpoints';
+import { fetcher } from '@/app/utils/fetcher';
+import { crudService } from '@/app/utils/services/crudService';
+
+function mapItem(it) {
+  if (!it) return null;
+  return {
+    id: it.id_kategori_keperluan,
+    nama: it.nama_keperluan,
+    created_at: it.created_at,
+    updated_at: it.updated_at,
+    deleted_at: it.deleted_at,
+  };
 }
 
-function applySearch(list, q) {
-  const s = (q || '').toLowerCase().trim();
-  if (!s) return list;
-  return list.filter((x) => (x?.nama || '').toLowerCase().includes(s) || (x?.deskripsi || '').toLowerCase().includes(s));
-}
-
-function slicePage(list, page, pageSize) {
-  const p = page || 1;
-  const ps = pageSize || 10;
-  const start = (p - 1) * ps;
-  return list.slice(start, start + ps);
+function pickPagination(res) {
+  const pag = res?.pagination || res?.paginationData || res?.meta?.pagination || null;
+  if (!pag) return { page: 1, pageSize: 10, total: 0, totalPages: 0 };
+  return {
+    page: pag.page ?? 1,
+    pageSize: pag.pageSize ?? 10,
+    total: pag.total ?? 0,
+    totalPages: pag.totalPages ?? 0,
+  };
 }
 
 export default function useFinanceCategoryManagementViewModel() {
-  const [activeTab, setActiveTab] = useState('payment'); // payment | pocket_money | reimburses
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  // dummy data
-  const [itemsPayment, setItemsPayment] = useState([
-    { id: 'pay-1', nama: 'Sponsorship', deskripsi: 'Pembayaran sponsorship event' },
-    { id: 'pay-2', nama: 'Vendor', deskripsi: 'Pembayaran vendor eksternal' },
-  ]);
+  const url = useMemo(
+    () =>
+      ApiEndpoints.GetKategoriKeperluan({
+        page,
+        pageSize,
+        search,
+      }),
+    [page, pageSize, search]
+  );
 
-  const [itemsPocketMoney, setItemsPocketMoney] = useState([
-    { id: 'pm-1', nama: 'Transport', deskripsi: 'Uang muka untuk transport' },
-    { id: 'pm-2', nama: 'Konsumsi', deskripsi: 'Uang muka konsumsi kegiatan' },
-  ]);
+  const { data, error, isLoading, mutate } = useSWR(url, fetcher, { revalidateOnFocus: false });
 
-  const [itemsReimburses, setItemsReimburses] = useState([
-    { id: 'rb-1', nama: 'ATK', deskripsi: 'Reimburse pembelian ATK' },
-    { id: 'rb-2', nama: 'Operasional', deskripsi: 'Reimburse pengeluaran operasional' },
-  ]);
+  const items = useMemo(() => (data?.data || []).map(mapItem).filter(Boolean), [data]);
+  const pagination = useMemo(() => pickPagination(data), [data]);
 
-  // pagination per tab
-  const [pagPayment, setPagPayment] = useState({ page: 1, pageSize: 10 });
-  const [pagPocketMoney, setPagPocketMoney] = useState({ page: 1, pageSize: 10 });
-  const [pagReimburses, setPagReimburses] = useState({ page: 1, pageSize: 10 });
-
-  // modal state
+  // modal
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState('create'); // create | edit
-  const [modalKind, setModalKind] = useState('payment'); // payment | pocket_money | reimburses
+  const [modalMode, setModalMode] = useState('create'); // 'create' | 'edit'
   const [editingItem, setEditingItem] = useState(null);
 
-  const openCreate = useCallback((kind) => {
+  const openCreate = useCallback(() => {
     setModalMode('create');
-    setModalKind(kind);
     setEditingItem(null);
     setModalOpen(true);
   }, []);
 
-  const openEdit = useCallback((kind, item) => {
+  const openEdit = useCallback((item) => {
     setModalMode('edit');
-    setModalKind(kind);
     setEditingItem(item);
     setModalOpen(true);
   }, []);
 
-  const deleteItem = useCallback((kind, item) => {
-    if (!item?.id) return;
-
-    if (kind === 'payment') setItemsPayment((prev) => prev.filter((x) => x.id !== item.id));
-    else if (kind === 'pocket_money') setItemsPocketMoney((prev) => prev.filter((x) => x.id !== item.id));
-    else setItemsReimburses((prev) => prev.filter((x) => x.id !== item.id));
-  }, []);
+  const closeModal = useCallback(() => setModalOpen(false), []);
 
   const submitForm = useCallback(
     async (values) => {
-      const payload = {
-        nama: values?.nama_kategori?.trim() || '',
-        deskripsi: values?.deskripsi?.trim() || '',
-      };
-
-      if (!payload.nama) return;
-
-      const kind = modalKind;
+      const nama_keperluan = String(values?.nama_keperluan || values?.nama || '').trim();
+      if (!nama_keperluan) throw new Error('Nama keperluan wajib diisi.');
 
       if (modalMode === 'create') {
-        const newItem = { id: makeId(kind), ...payload };
-
-        if (kind === 'payment') setItemsPayment((prev) => [newItem, ...prev]);
-        else if (kind === 'pocket_money') setItemsPocketMoney((prev) => [newItem, ...prev]);
-        else setItemsReimburses((prev) => [newItem, ...prev]);
-
-        // reset page to 1 for that tab
-        if (kind === 'payment') setPagPayment((p) => ({ ...p, page: 1 }));
-        if (kind === 'pocket_money') setPagPocketMoney((p) => ({ ...p, page: 1 }));
-        if (kind === 'reimburses') setPagReimburses((p) => ({ ...p, page: 1 }));
+        await crudService.post(ApiEndpoints.CreateKategoriKeperluan, { nama_keperluan }, { useToken: true });
       } else {
         const id = editingItem?.id;
-
-        if (kind === 'payment') setItemsPayment((prev) => prev.map((x) => (x.id === id ? { ...x, ...payload } : x)));
-        else if (kind === 'pocket_money') setItemsPocketMoney((prev) => prev.map((x) => (x.id === id ? { ...x, ...payload } : x)));
-        else setItemsReimburses((prev) => prev.map((x) => (x.id === id ? { ...x, ...payload } : x)));
+        if (!id) throw new Error('ID kategori tidak ditemukan.');
+        await crudService.put(ApiEndpoints.UpdateKategoriKeperluan(id), { nama_keperluan }, { useToken: true });
       }
+
+      closeModal();
+      await mutate();
     },
-    [modalKind, modalMode, editingItem?.id]
+    [modalMode, editingItem?.id, closeModal, mutate]
   );
 
-  const onPageChange = useCallback((kind, page, pageSize) => {
-    if (kind === 'payment') setPagPayment({ page, pageSize });
-    else if (kind === 'pocket_money') setPagPocketMoney({ page, pageSize });
-    else setPagReimburses({ page, pageSize });
+  const deleteItem = useCallback(
+    async (item) => {
+      const id = item?.id;
+      if (!id) throw new Error('ID kategori tidak ditemukan.');
+      await crudService.delete(ApiEndpoints.DeleteKategoriKeperluan(id), undefined, { useToken: true });
+      await mutate();
+    },
+    [mutate]
+  );
+
+  const onPageChange = useCallback((p, ps) => {
+    setPage(p);
+    setPageSize(ps);
   }, []);
 
-  // filtered + paginated views
-  const computed = useMemo(() => {
-    const fPay = applySearch(itemsPayment, search);
-    const fPm = applySearch(itemsPocketMoney, search);
-    const fRb = applySearch(itemsReimburses, search);
-
-    const pay = slicePage(fPay, pagPayment.page, pagPayment.pageSize);
-    const pm = slicePage(fPm, pagPocketMoney.page, pagPocketMoney.pageSize);
-    const rb = slicePage(fRb, pagReimburses.page, pagReimburses.pageSize);
-
-    return {
-      fPay,
-      fPm,
-      fRb,
-      pay,
-      pm,
-      rb,
-      totals: {
-        payment: fPay.length,
-        pocket_money: fPm.length,
-        reimburses: fRb.length,
-      },
-    };
-  }, [
-    itemsPayment,
-    itemsPocketMoney,
-    itemsReimburses,
-    search,
-    pagPayment.page,
-    pagPayment.pageSize,
-    pagPocketMoney.page,
-    pagPocketMoney.pageSize,
-    pagReimburses.page,
-    pagReimburses.pageSize,
-  ]);
-
   return {
-    activeTab,
-    setActiveTab,
+    // data
+    items,
+    pagination,
+    isLoading,
+    error,
 
+    // search + pagination
     search,
     setSearch,
-
-    itemsPaymentView: computed.pay,
-    itemsPocketMoneyView: computed.pm,
-    itemsReimbursesView: computed.rb,
-
-    totals: computed.totals,
-
-    pagPayment: { ...pagPayment, total: computed.totals.payment },
-    pagPocketMoney: { ...pagPocketMoney, total: computed.totals.pocket_money },
-    pagReimburses: { ...pagReimburses, total: computed.totals.reimburses },
-
     onPageChange,
 
+    // modal
     modalOpen,
-    setModalOpen,
     modalMode,
-    modalKind,
     editingItem,
-
     openCreate,
     openEdit,
-    deleteItem,
+    closeModal,
     submitForm,
+
+    // actions
+    deleteItem,
   };
 }

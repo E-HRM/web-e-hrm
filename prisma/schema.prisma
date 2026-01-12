@@ -1034,6 +1034,36 @@ model ApprovalPocketMoney {
   @@map("approval_pocket_money")
 }
 
+model kategori_sop {
+  id_kategori_sop String         @id @default(uuid()) @db.Char(36)
+  nama_kategori   String         @db.VarChar(255)
+  deskripsi       String?        @db.LongText
+  created_at      DateTime       @default(now()) @db.DateTime(0)
+  updated_at      DateTime       @default(now()) @updatedAt @db.DateTime(0)
+  deleted_at      DateTime?      @db.DateTime(0)
+  sop_karyawan    sop_karyawan[]
+
+  @@index([nama_kategori])
+  @@map("kategori_sop")
+}
+
+model sop_karyawan {
+  id_sop_karyawan                   String        @id @default(uuid()) @db.Char(36)
+  nama_dokumen                      String        @db.VarChar(255)
+  tanggal_terbit                    DateTime      @db.Date
+  lampiran_sop_url                  String?       @db.LongText
+  id_kategori_sop                   String?       @db.Char(36)
+  created_by_snapshot_nama_pengguna String?       @db.VarChar(255)
+  created_at                        DateTime      @default(now()) @db.DateTime(0)
+  updated_at                        DateTime      @default(now()) @updatedAt @db.DateTime(0)
+  deleted_at                        DateTime?     @db.DateTime(0)
+  kategori_sop                      kategori_sop? @relation(fields: [id_kategori_sop], references: [id_kategori_sop])
+
+  @@index([tanggal_terbit])
+  @@index([id_kategori_sop])
+  @@map("sop_karyawan")
+}
+
 model absensi {
   id_absensi                                  String                   @id @db.Char(36)
   id_user                                     String                   @db.Char(36)
