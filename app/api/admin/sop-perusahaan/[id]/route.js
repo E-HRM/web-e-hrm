@@ -5,7 +5,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
-import { parseRequestBody } from '@/app/api/_utils/requestBody';
+import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
@@ -50,6 +50,16 @@ function isNullLike(v) {
   return v === null || v === undefined || String(v).trim() === '';
 }
 
+function pickFirstFile(val) {
+  if (!val) return null;
+  if (Array.isArray(val)) {
+    const found = val.find((x) => x && typeof x === 'object' && typeof x.arrayBuffer === 'function' && 'size' in x && x.size > 0);
+    return found || null;
+  }
+  if (val && typeof val === 'object' && typeof val.arrayBuffer === 'function' && 'size' in val && val.size > 0) return val;
+  return null;
+}
+
 const SOP_WITH_KATEGORI_INCLUDE = {
   kategori_sop: {
     select: {
@@ -67,7 +77,10 @@ export async function GET(req, { params }) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(req.url);
@@ -101,7 +114,10 @@ export async function PUT(req, { params }) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   let parsed;
@@ -144,7 +160,10 @@ export async function PUT(req, { params }) {
       if (id_kategori_sop) {
         const kategori = getKategoriDelegate();
         if (!kategori) {
-          return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+          return NextResponse.json(
+            { message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+            { status: 500 }
+          );
         }
 
         const existsKategori = await kategori.findFirst({
@@ -160,11 +179,16 @@ export async function PUT(req, { params }) {
       updateData.id_kategori_sop = id_kategori_sop;
     }
 
-    if (parsed.files?.lampiran_sop) {
-      const uploaded = await uploadMediaWithFallback(parsed.files.lampiran_sop, {
-        folder: 'sop-perusahaan',
+    // ✅ FIX: file ada di body.lampiran_sop
+    const fileFromBody = pickFirstFile(findFileInBody(body, ['lampiran_sop']) || body?.lampiran_sop);
+
+    if (fileFromBody) {
+      const uploaded = await uploadMediaWithFallback(fileFromBody, {
+        storageFolder: 'sop-perusahaan',
+        supabasePrefix: 'sop-perusahaan',
+        isPublic: true,
       });
-      updateData.lampiran_sop_url = uploaded?.url || null;
+      updateData.lampiran_sop_url = uploaded?.publicUrl || null;
     } else if (Object.prototype.hasOwnProperty.call(body, 'lampiran_sop_url')) {
       updateData.lampiran_sop_url = isNullLike(body.lampiran_sop_url) ? null : String(body.lampiran_sop_url).trim();
     }
@@ -194,7 +218,10 @@ export async function DELETE(req, { params }) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   try {

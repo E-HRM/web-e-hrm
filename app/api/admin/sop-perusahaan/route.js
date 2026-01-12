@@ -5,7 +5,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
-import { parseRequestBody } from '@/app/api/_utils/requestBody';
+import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_dokumen']);
@@ -16,6 +16,10 @@ function getSopDelegate() {
 
 function getKategoriDelegate() {
   return db?.kategori_sop || db?.kategoriSop || null;
+}
+
+function getUserDelegate() {
+  return db?.user || db?.User || null;
 }
 
 async function getActor(req) {
@@ -51,6 +55,31 @@ function isNullLike(v) {
   return v === null || v === undefined || String(v).trim() === '';
 }
 
+function pickFirstFile(val) {
+  if (!val) return null;
+  if (Array.isArray(val)) {
+    const found = val.find((x) => x && typeof x === 'object' && typeof x.arrayBuffer === 'function' && 'size' in x && x.size > 0);
+    return found || null;
+  }
+  if (val && typeof val === 'object' && typeof val.arrayBuffer === 'function' && 'size' in val && val.size > 0) return val;
+  return null;
+}
+
+async function getNamaPenggunaSnapshot(actorId) {
+  const user = getUserDelegate();
+  if (!user || !actorId) return null;
+
+  try {
+    const u = await user.findUnique({
+      where: { id_user: String(actorId) },
+      select: { nama_pengguna: true },
+    });
+    return u?.nama_pengguna || null;
+  } catch {
+    return null;
+  }
+}
+
 const SOP_WITH_KATEGORI_INCLUDE = {
   kategori_sop: {
     select: {
@@ -68,7 +97,10 @@ export async function GET(req) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   try {
@@ -94,7 +126,10 @@ export async function GET(req) {
       ...(id_kategori_sop ? { id_kategori_sop } : {}),
       ...(search
         ? {
-            OR: [{ nama_dokumen: { contains: search, mode: 'insensitive' } }, { deskripsi: { contains: search, mode: 'insensitive' } }],
+            OR: [
+              { nama_dokumen: { contains: search, mode: 'insensitive' } },
+              { deskripsi: { contains: search, mode: 'insensitive' } },
+            ],
           }
         : {}),
     };
@@ -105,7 +140,6 @@ export async function GET(req) {
         orderBy: { [orderBy]: sort },
         include: SOP_WITH_KATEGORI_INCLUDE,
       });
-
       return NextResponse.json({ total: items.length, items });
     }
 
@@ -143,7 +177,10 @@ export async function POST(req) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   let parsed;
@@ -167,7 +204,10 @@ export async function POST(req) {
     if (id_kategori_sop) {
       const kategori = getKategoriDelegate();
       if (!kategori) {
-        return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+        return NextResponse.json(
+          { message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+          { status: 500 }
+        );
       }
 
       const exists = await kategori.findFirst({
@@ -180,17 +220,26 @@ export async function POST(req) {
       }
     }
 
+    // ✅ FIX: file ada di body.lampiran_sop, bukan parsed.files
+    const fileFromBody = pickFirstFile(findFileInBody(body, ['lampiran_sop']) || body?.lampiran_sop);
+
     let lampiranUrl = null;
-    if (parsed.files?.lampiran_sop) {
-      const uploaded = await uploadMediaWithFallback(parsed.files.lampiran_sop, {
-        folder: 'sop-perusahaan',
+
+    if (fileFromBody) {
+      const uploaded = await uploadMediaWithFallback(fileFromBody, {
+        storageFolder: 'sop-perusahaan',
+        supabasePrefix: 'sop-perusahaan',
+        isPublic: true,
       });
-      lampiranUrl = uploaded?.url || null;
+
+      // ✅ FIX: return-nya publicUrl, bukan url
+      lampiranUrl = uploaded?.publicUrl || null;
     } else if (Object.prototype.hasOwnProperty.call(body, 'lampiran_sop_url')) {
       lampiranUrl = isNullLike(body.lampiran_sop_url) ? null : String(body.lampiran_sop_url).trim();
     }
 
-    const createdByName = actor?.actor?.id ? String(actor.actor.id) : null;
+    // ✅ Snapshot pakai nama pengguna
+    const createdByName = await getNamaPenggunaSnapshot(actor?.actor?.id);
 
     const created = await sop.create({
       data: {
