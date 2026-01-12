@@ -184,26 +184,32 @@ async function validateAndNormalizePairs(actorId, pairsRaw) {
 }
 
 async function ensureAuth(req) {
-  const auth = req.headers.get('authorization') || req.headers.get('Authorization');
-  if (auth?.startsWith('Bearer ')) {
+  const auth = req.headers.get('authorization') || req.headers.get('Authorization') || '';
+
+  // 1) Coba Bearer token dulu (kalau gagal, JANGAN return 401 — fallback ke session)
+  if (auth.startsWith('Bearer ')) {
     const token = auth.slice(7).trim();
     try {
-      const payload = await verifyAuthToken(token);
-      const id = payload?.sub || payload?.id_user || payload?.userId;
-      if (!id) return NextResponse.json({ ok: false, message: 'Token tidak valid.' }, { status: 401 });
-      return { actor: { id, role: payload?.role, source: 'bearer' } };
+      const payload = verifyAuthToken(token);
+      const id = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
+
+      if (id) {
+        return { actor: { id: String(id), role: payload?.role, source: 'bearer' } };
+      }
+      // payload valid tapi tidak ada id => lanjut fallback session
     } catch {
-      return NextResponse.json({ ok: false, message: 'Token tidak valid.' }, { status: 401 });
+      // token invalid => fallback session
     }
   }
 
+  // 2) Fallback ke NextAuth session
   const sessionOrRes = await authenticateRequest();
   if (sessionOrRes instanceof NextResponse) return sessionOrRes;
 
   const id = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
   if (!id) return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
 
-  return { actor: { id, role: sessionOrRes?.user?.role, source: 'session' } };
+  return { actor: { id: String(id), role: sessionOrRes?.user?.role, source: 'session' } };
 }
 
 export const izinInclude = {
