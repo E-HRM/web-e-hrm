@@ -18,7 +18,7 @@ export default function SOPCategoryModal({ open, categories, onClose, onSave, on
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  // ✅ Modal konfirmasi hapus kategori
+  // ✅ Modal konfirmasi hapus (samakan pola dengan SOPTable)
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -41,16 +41,7 @@ export default function SOPCategoryModal({ open, categories, onClose, onSave, on
 
     try {
       setDeleteLoading(true);
-
-      // record.key biasanya id kategori
-      const id = deleteTarget?.key ?? deleteTarget?.id;
-      if (!id) {
-        AppMessage.error('ID kategori tidak valid');
-        return;
-      }
-
-      await onDelete?.(id);
-
+      await onDelete?.(deleteTarget?.key ?? deleteTarget?.id);
       AppMessage.success('Kategori berhasil dihapus');
       closeDeleteConfirm();
     } catch (e) {
@@ -66,13 +57,10 @@ export default function SOPCategoryModal({ open, categories, onClose, onSave, on
         title: 'NAMA KATEGORI',
         dataIndex: 'name',
         key: 'name',
-        render: (text, record) => (
+        render: (text) => (
           <div className='min-w-0'>
             <AppTypography.Text size={13} weight={800} className='text-slate-900 block truncate' title={text}>
               {text}
-            </AppTypography.Text>
-            <AppTypography.Text size={12} tone='muted' className='text-slate-500 block'>
-              {record.description || '—'}
             </AppTypography.Text>
           </div>
         ),
@@ -97,18 +85,13 @@ export default function SOPCategoryModal({ open, categories, onClose, onSave, on
             </AppTooltip>
 
             <AppTooltip title='Hapus'>
-              <AppButton
-                aria-label='Hapus'
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => openDeleteConfirm(record)}
-              />
+              <AppButton aria-label='Hapus' danger icon={<DeleteOutlined />} onClick={() => openDeleteConfirm(record)} />
             </AppTooltip>
           </AppSpace>
         ),
       },
     ],
-    []
+    [onDelete]
   );
 
   return (
@@ -136,7 +119,6 @@ export default function SOPCategoryModal({ open, categories, onClose, onSave, on
         </div>
       </AppModal>
 
-      {/* Modal tambah/edit kategori */}
       <SOPCategoryFormModal
         open={formOpen}
         category={editing}
@@ -151,14 +133,13 @@ export default function SOPCategoryModal({ open, categories, onClose, onSave, on
         }}
       />
 
-      {/* ✅ Modal konfirmasi hapus kategori */}
+      {/* ✅ Modal konfirmasi hapus */}
       <AppModal
         open={deleteOpen}
         onClose={closeDeleteConfirm}
         onCancel={closeDeleteConfirm}
         title='Konfirmasi Hapus Kategori'
         width={520}
-        destroyOnClose
         footer={
           <div className='flex items-center justify-end gap-2'>
             <AppButton
@@ -180,19 +161,15 @@ export default function SOPCategoryModal({ open, categories, onClose, onSave, on
             </AppButton>
           </div>
         }
+        destroyOnClose
       >
         <div className='space-y-2'>
           <AppTypography.Text>Anda yakin ingin menghapus kategori berikut?</AppTypography.Text>
 
           <div className='rounded-xl bg-slate-50 ring-1 ring-slate-100 p-3'>
-            <AppTypography.Text
-              weight={800}
-              className='block text-slate-900 truncate'
-              title={deleteTarget?.name || ''}
-            >
+            <AppTypography.Text weight={800} className='block text-slate-900 truncate' title={deleteTarget?.name || ''}>
               {deleteTarget?.name || '—'}
             </AppTypography.Text>
-
             <AppTypography.Text tone='muted' className='block'>
               Tindakan ini tidak dapat dibatalkan.
             </AppTypography.Text>

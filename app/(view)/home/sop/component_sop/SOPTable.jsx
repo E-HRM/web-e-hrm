@@ -25,7 +25,6 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
-  // ✅ Modal konfirmasi hapus
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -53,7 +52,12 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
   }, [sops, searchQuery, categoryFilter]);
 
   const openFile = (record) => {
-    const url = record?.tipe_file === 'upload' ? record?.file_url : record?.link_url;
+    const url =
+      (record?.tipe_file === 'upload' ? record?.file_url : record?.link_url) ||
+      record?.file_url ||
+      record?.link_url ||
+      record?.raw_url;
+
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
@@ -74,9 +78,7 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
 
     try {
       setDeleteLoading(true);
-
       const id = deleteTarget?.id_sop ?? deleteTarget?.id;
-
       await onDelete?.(id || deleteTarget);
 
       AppMessage.success('SOP berhasil dihapus');
@@ -91,10 +93,10 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
   const columns = useMemo(
     () => [
       {
-        title: 'JUDUL DOKUMEN',
+        title: 'JUDUL',
         dataIndex: 'judul',
         key: 'judul',
-        width: 340,
+        width: 200,
         render: (text) => (
           <div className='min-w-0'>
             <AppTypography.Text size={13} weight={800} className='text-[#003A6F] block truncate' title={text}>
@@ -104,15 +106,29 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
         ),
       },
       {
+        title: 'DESKRIPSI',
+        dataIndex: 'deskripsi',
+        key: 'deskripsi',
+        width: 220,
+        render: (text) => {
+          const t = String(text || '—');
+          return (
+            <AppTypography.Text size={12} className='block truncate text-slate-700' title={t}>
+              {t}
+            </AppTypography.Text>
+          );
+        },
+      },
+      {
         title: 'KATEGORI',
         dataIndex: 'kategori',
         key: 'kategori',
-        width: 200,
+        width: 130,
         render: (key) => {
           const name = getCategoryName(categoryMap, key);
           return (
             <AppTag tone='info' variant='soft'>
-              <span className='inline-block max-w-[160px] align-middle truncate' title={name}>
+              <span className='inline-block max-w-[100px] align-middle truncate' title={name}>
                 {name}
               </span>
             </AppTag>
@@ -122,7 +138,7 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
       {
         title: 'FILE',
         key: 'file',
-        width: 260,
+        width: 110,
         render: (_, record) => {
           const isUpload = record?.tipe_file === 'upload';
           const label = isUpload ? 'Dokumen' : 'Link';
@@ -136,7 +152,7 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
                 className='!px-0 !h-auto !leading-normal !whitespace-normal text-left'
                 onClick={() => openFile(record)}
               >
-                <span className='inline-block max-w-[200px] truncate align-middle' title={label}>
+                <span className='inline-block max-w-[80px] truncate align-middle' title={label}>
                   {label}
                 </span>
               </AppButton>
@@ -148,13 +164,17 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
         title: 'DIBUAT OLEH',
         dataIndex: 'created_by',
         key: 'created_by',
-        width: 170,
-        render: (t) => <span className='text-slate-700'>{t}</span>,
+        width: 120,
+        render: (t) => (
+          <span className='inline-block max-w-[100px] truncate text-slate-700' title={String(t || '')}>
+            {t}
+          </span>
+        ),
       },
       {
         title: 'AKSI',
         key: 'action',
-        width: 90,
+        width: 60,
         align: 'center',
         render: (_, record) => {
           const items = [
@@ -162,24 +182,13 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
             { key: 'view', label: 'Lihat Detail', onClick: () => onSelectSOP?.(record) },
             { key: 'edit', label: 'Edit', onClick: () => onEdit?.(record) },
             { type: 'divider' },
-            {
-              key: 'delete',
-              label: 'Hapus',
-              danger: true,
-              onClick: () => openDeleteConfirm(record),
-            },
+            { key: 'delete', label: 'Hapus', danger: true, onClick: () => openDeleteConfirm(record) },
           ];
 
           return (
             <div onClick={(e) => e.stopPropagation()}>
               <AppDropdown items={items} placement='bottomRight'>
-                <AppButton
-                  aria-label='Menu'
-                  variant='ghost'
-                  shape='circle'
-                  className='!w-8 !h-8 !p-0'
-                  icon={<MoreOutlined />}
-                />
+                <AppButton aria-label='Menu' variant='ghost' shape='circle' className='!w-8 !h-8 !p-0' icon={<MoreOutlined />} />
               </AppDropdown>
             </div>
           );
@@ -199,7 +208,6 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
         />
-
         <AppSelect
           allowClear
           placeholder='Filter kategori'
@@ -239,7 +247,6 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
         emptyImage={<div className='text-3xl'>🧾</div>}
       />
 
-      {/* ✅ Modal konfirmasi hapus */}
       <AppModal
         open={deleteOpen}
         onClose={closeDeleteConfirm}
@@ -248,7 +255,6 @@ export default function SOPTable({ sops, categories, onSelectSOP, onEdit, onDele
         width={520}
         footer={
           <div className='flex items-center justify-end gap-2'>
-            {/* ✅ Batal jadi outlined merah (bukan biru) */}
             <AppButton
               variant='outline'
               onClick={closeDeleteConfirm}

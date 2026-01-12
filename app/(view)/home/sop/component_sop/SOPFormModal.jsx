@@ -1,6 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+/**
+ * FILE: app/(view)/home/sop/component_sop/SOPFormModal.jsx
+ */
+
+import React, { useMemo } from 'react';
 import { Upload } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 
@@ -10,37 +14,7 @@ import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppMessage from '@/app/(view)/component_shared/AppMessage';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
-function normalizeUploadList(input) {
-  if (Array.isArray(input)) return input;
-  if (input && typeof input === 'object') {
-    if (typeof input.length === 'number') {
-      try {
-        return Array.from(input);
-      } catch {
-        return [];
-      }
-    }
-    if (Array.isArray(input.fileList)) return input.fileList;
-  }
-  return [];
-}
-
 export default function SOPFormModal({ open, sop, activeCategories, onClose, onSave, nowISO }) {
-  const [uploadFileList, setUploadFileList] = useState([]);
-
-  useEffect(() => {
-    if (!open) {
-      setUploadFileList([]);
-      return;
-    }
-
-    if (sop?.file_name && sop?.file_url && (sop?.tipe_file === 'upload' || !sop?.tipe_file)) {
-      setUploadFileList([{ uid: '-1', name: sop.file_name, status: 'done', url: sop.file_url }]);
-    } else {
-      setUploadFileList([]);
-    }
-  }, [open, sop?.id_sop]);
-
   const initialValues = useMemo(() => {
     if (!open) return {};
 
@@ -51,6 +25,10 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
         deskripsi: sop.deskripsi,
         tipe_file: sop.tipe_file || 'upload',
         link_url: sop.link_url || '',
+        fileList:
+          (sop.tipe_file === 'upload' || !sop.tipe_file) && sop.file_name
+            ? [{ uid: '-1', name: sop.file_name, status: 'done', url: sop.file_url }]
+            : [],
       };
     }
 
@@ -60,6 +38,7 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
       deskripsi: '',
       tipe_file: 'upload',
       link_url: '',
+      fileList: [],
     };
   }, [open, sop]);
 
@@ -99,18 +78,63 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
         rules: [{ required: true, message: 'Pilih tipe file' }],
       },
 
-      // Upload (managed by local state)
+      // ✅ FIX: Upload fileList harus selalu array + handler harus (ctx) => fn
       {
         type: 'custom',
-        name: '__upload_pdf_ui__',
+        name: 'fileList',
         label: 'Upload File PDF',
         watch: ['tipe_file'],
         hidden: (ctx) => ctx?.values?.tipe_file !== 'upload',
-        extra: () => {
+        valuePropName: 'fileList',
+
+        getValueFromEvent: (_ctx) => (e) => {
+          if (Array.isArray(e)) return e;
+          if (Array.isArray(e?.fileList)) return e.fileList;
+          return [];
+        },
+
+        normalize: (_ctx) => (value) => {
+          if (Array.isArray(value)) return value;
+          if (Array.isArray(value?.fileList)) return value.fileList;
+          return [];
+        },
+
+        getValueProps: (_ctx) => (value) => {
+          const list = Array.isArray(value) ? value : Array.isArray(value?.fileList) ? value.fileList : [];
+          return { fileList: list };
+        },
+
+        rules: [
+          {
+            validator: async (_rule, value, ctx) => {
+              const tipe = ctx?.getValue?.('tipe_file');
+              if (tipe !== 'upload') return Promise.resolve();
+
+              const hasExisting = Boolean(sop?.file_url);
+              const list = Array.isArray(value) ? value : [];
+              const hasNew = list.length > 0;
+
+              if (!hasExisting && !hasNew) return Promise.reject(new Error('File PDF wajib diupload'));
+
+              if (hasNew) {
+                const f0 = list[0];
+                const name = String(f0?.name || '').toLowerCase();
+                const type = String(f0?.type || '').toLowerCase();
+                const isPdf = type === 'application/pdf' || name.endsWith('.pdf');
+                if (!isPdf) return Promise.reject(new Error('Hanya file PDF yang diperbolehkan'));
+              }
+
+              return Promise.resolve();
+            },
+          },
+        ],
+        extra: (ctx) => {
+          if (ctx?.values?.tipe_file !== 'upload') return null;
           if (!sop?.file_url) return null;
+
           return (
             <AppTypography.Text tone='muted' className='block mt-2'>
-              File saat ini: <b>{sop.file_name || 'PDF'}</b> (kalau tidak memilih file baru, file lama tetap digunakan)
+              File saat ini: <b>{sop.file_name || 'PDF'}</b> (jika tidak memilih file baru, file lama tetap digunakan)
             </AppTypography.Text>
           );
         },
@@ -124,11 +148,6 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
               maxCount={1}
               multiple={false}
               disabled={disabled}
-              fileList={normalizeUploadList(uploadFileList)}
-              onChange={(info) => {
-                const next = normalizeUploadList(info?.fileList);
-                setUploadFileList(next.slice(-1));
-              }}
               beforeUpload={(file) => {
                 const name = String(file?.name || '').toLowerCase();
                 const type = String(file?.type || '').toLowerCase();
@@ -146,7 +165,7 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
                   return Upload.LIST_IGNORE;
                 }
 
-                return false; // manual upload at submit
+                return false;
               }}
               showUploadList={{ showRemoveIcon: !disabled }}
             >
@@ -191,7 +210,7 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
         ],
       },
     ],
-    [activeCategories, sop, uploadFileList]
+    [activeCategories, sop]
   );
 
   return (
@@ -211,7 +230,6 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
         fields={fields}
         footer={({ submit }) => (
           <div className='flex items-center justify-end gap-2 pt-2'>
-            {/* ✅ Batal jadi outlined biru tua */}
             <AppButton
               variant='outline'
               onClick={onClose}
@@ -219,7 +237,6 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
             >
               Batal
             </AppButton>
-
             <AppButton variant='primary' onClick={submit}>
               {sop ? 'Update' : 'Simpan'}
             </AppButton>
@@ -227,47 +244,19 @@ export default function SOPFormModal({ open, sop, activeCategories, onClose, onS
         )}
         onFinish={async (values) => {
           const now = nowISO ? nowISO() : new Date().toISOString();
-
           const tipe_file = values?.tipe_file;
-          if (tipe_file === 'upload') {
-            const list = normalizeUploadList(uploadFileList);
-            const hasExisting = Boolean(sop?.file_url) && list.some((f) => f?.status === 'done' && f?.url);
-            const newFiles = list.filter((f) => !!f?.originFileObj);
+          const fileList = Array.isArray(values?.fileList) ? values.fileList : [];
 
-            if (!hasExisting && newFiles.length === 0) {
-              AppMessage.error('File PDF wajib diupload');
-              return;
-            }
-
-            const payload = {
-              id_sop: sop?.id_sop,
-              judul: values?.judul,
-              kategori: values?.kategori,
-              deskripsi: values?.deskripsi,
-              tipe_file,
-              fileList: newFiles,
-              file_url: sop?.file_url,
-              file_name: sop?.file_name,
-              link_url: undefined,
-              created_at: sop?.created_at || now,
-              updated_at: now,
-            };
-
-            await onSave?.(payload);
-            return;
-          }
-
-          // tipe link
           const payload = {
             id_sop: sop?.id_sop,
             judul: values?.judul,
             kategori: values?.kategori,
             deskripsi: values?.deskripsi,
             tipe_file,
-            fileList: [],
-            file_url: undefined,
-            file_name: undefined,
-            link_url: values?.link_url,
+            fileList: tipe_file === 'upload' ? fileList : [],
+            file_url: tipe_file === 'upload' ? sop?.file_url : undefined,
+            file_name: tipe_file === 'upload' ? sop?.file_name : undefined,
+            link_url: tipe_file === 'link' ? values?.link_url : undefined,
             created_at: sop?.created_at || now,
             updated_at: now,
           };

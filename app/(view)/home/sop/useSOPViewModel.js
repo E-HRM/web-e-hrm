@@ -43,11 +43,20 @@ function fileNameFromUrl(url) {
 }
 
 function inferTipeFile(url) {
-  const u = String(url || '').toLowerCase();
-  if (!u) return 'link';
+  const raw = String(url || '').trim();
+  if (!raw) return 'link';
+
+  const u = raw.toLowerCase();
+
+  // Supabase Storage (public / signed) => pasti file upload
+  if (u.includes('/storage/v1/object/')) return 'upload';
+
+  // Folder SOP (baik provider storage utama maupun supabase)
   if (u.includes('sop-perusahaan')) return 'upload';
-  if (u.includes('/storage/v1/object/public/') && u.includes('sop')) return 'upload';
-  if (u.endsWith('.pdf')) return 'upload';
+
+  // File ekstensi (kadang ada query params)
+  if (/\.pdf(\?|$)/i.test(raw)) return 'upload';
+
   return 'link';
 }
 
@@ -98,14 +107,15 @@ export default function useSOPViewModel() {
         it?.kategori_sop?.id ||
         null;
 
-      const id_sop = normalizeSopId(it); // ✅ FIX
+      const id_sop = normalizeSopId(it);
 
       return {
-        id_sop, // ✅ sekarang pasti terisi (dari id_sop_karyawan)
+        id_sop,
         judul: it?.nama_dokumen || '-',
         kategori: kategoriId || 'uncategorized',
         deskripsi: it?.deskripsi || it?.keterangan || '-',
         tipe_file,
+        raw_url: url || undefined,
         file_url: tipe_file === 'upload' ? (url || undefined) : undefined,
         file_name: tipe_file === 'upload' ? (fname || 'dokumen.pdf') : undefined,
         link_url: tipe_file === 'link' ? (url || undefined) : undefined,
@@ -143,15 +153,13 @@ export default function useSOPViewModel() {
       const kategori = String(payload?.kategori || '').trim();
       if (!kategori) throw new Error('Kategori SOP wajib dipilih');
 
-      const today = new Date();
-      const tanggal_terbit = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
-        today.getDate()
-      ).padStart(2, '0')}`;
+      const deskripsi = String(payload?.deskripsi || '').trim();
+      if (!deskripsi) throw new Error('Deskripsi SOP wajib diisi');
 
       const fd = new FormData();
       fd.append('nama_dokumen', judul);
-      fd.append('tanggal_terbit', tanggal_terbit);
       fd.append('id_kategori_sop', kategori);
+      fd.append('deskripsi', deskripsi);
 
       if (payload?.tipe_file === 'upload') {
         const f = payload?.fileList?.[0]?.originFileObj;
@@ -168,7 +176,6 @@ export default function useSOPViewModel() {
         fd.append('lampiran_sop_url', link);
       }
 
-      // ✅ Pakai normalize supaya edit juga aman walau payload bawa id_sop_karyawan
       const sopId = normalizeSopId(payload);
       const isEdit = Boolean(String(sopId || '').trim());
 
@@ -197,13 +204,7 @@ export default function useSOPViewModel() {
 
   const deleteSOP = useCallback(
     async (idOrRecord) => {
-      // ✅ Bisa dipanggil pakai id, atau langsung record SOP.
-      // Dan kita dukung id_sop_karyawan (PK prisma) juga.
-      const rawId =
-        (idOrRecord && typeof idOrRecord === 'object'
-          ? normalizeSopId(idOrRecord)
-          : idOrRecord) ?? '';
-
+      const rawId = (idOrRecord && typeof idOrRecord === 'object' ? normalizeSopId(idOrRecord) : idOrRecord) ?? '';
       const sopId = String(rawId || '').trim();
       if (!sopId) throw new Error('ID SOP tidak valid');
 

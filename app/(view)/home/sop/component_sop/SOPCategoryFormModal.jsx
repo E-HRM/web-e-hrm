@@ -15,13 +15,11 @@ export default function SOPCategoryFormModal({ open, category, onClose, onSave }
     if (isEdit) {
       return {
         nama_kategori: category?.name || '',
-        deskripsi: category?.description || '',
       };
     }
 
     return {
       nama_kategori: '',
-      deskripsi: '',
     };
   }, [open, isEdit, category]);
 
@@ -33,13 +31,6 @@ export default function SOPCategoryFormModal({ open, category, onClose, onSave }
         label: 'Nama Kategori',
         placeholder: 'Contoh: HR, Finance, SOP Umum',
         rules: [{ required: true, message: 'Nama kategori wajib diisi' }],
-      },
-      {
-        type: 'textarea',
-        name: 'deskripsi',
-        label: 'Deskripsi',
-        placeholder: 'Opsional',
-        controlProps: { rows: 3, maxLength: 200, showCount: true },
       },
     ],
     []
@@ -67,7 +58,6 @@ export default function SOPCategoryFormModal({ open, category, onClose, onSave }
         }}
         footer={({ submit }) => (
           <div className='flex items-center justify-end gap-2 pt-2'>
-            {/* ✅ BATAL: outlined biru tua */}
             <AppButton
               variant='outline'
               onClick={onClose}
@@ -75,7 +65,6 @@ export default function SOPCategoryFormModal({ open, category, onClose, onSave }
             >
               Batal
             </AppButton>
-
             <AppButton variant='primary' onClick={submit}>
               {isEdit ? 'Update' : 'Tambah'}
             </AppButton>
@@ -85,10 +74,6 @@ export default function SOPCategoryFormModal({ open, category, onClose, onSave }
           const payload = {
             id: isEdit ? String(category.key) : undefined,
             nama_kategori: String(values?.nama_kategori || '').trim(),
-            deskripsi:
-              values?.deskripsi === undefined || values?.deskripsi === null
-                ? null
-                : String(values.deskripsi).trim() || null,
           };
 
           await onSave?.(payload);

@@ -37,12 +37,19 @@ export default function SOPDetailModal({ open, sop, categoryMap, onClose, onEdit
   }, [sop?.kategori, categoryMap]);
 
   const isUpload = sop?.tipe_file === 'upload';
+  const sourceUrl =
+    (sop?.tipe_file === 'upload' ? sop?.file_url : sop?.link_url) || sop?.file_url || sop?.link_url || sop?.raw_url || '';
+
   const primaryLabel = isUpload ? 'Buka Dokumen' : 'Buka Link';
   const primaryIcon = isUpload ? <FilePdfOutlined /> : <LinkOutlined />;
 
   const handleOpen = () => {
     if (!sop) return;
-    const url = sop.tipe_file === 'upload' ? sop.file_url : sop.link_url;
+    const url =
+      (sop.tipe_file === 'upload' ? sop.file_url : sop.link_url) ||
+      sop.file_url ||
+      sop.link_url ||
+      sop.raw_url;
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
@@ -124,7 +131,7 @@ export default function SOPDetailModal({ open, sop, categoryMap, onClose, onEdit
                     className='!border-slate-200 !text-slate-800'
                     onClick={handleOpen}
                     disabled={!sop}
-                    title={isUpload ? sop.file_url || '' : sop.link_url || ''}
+                    title={sourceUrl}
                   >
                     {isUpload ? 'Dokumen' : 'Link'}
                   </AppButton>
@@ -135,10 +142,7 @@ export default function SOPDetailModal({ open, sop, categoryMap, onClose, onEdit
                   <InfoRow
                     label='Sumber'
                     value={
-                      <span
-                        className='inline-flex items-center gap-2 max-w-[280px] truncate align-middle'
-                        title={isUpload ? sop.file_url || '' : sop.link_url || ''}
-                      >
+                      <span className='inline-flex items-center gap-2 max-w-[280px] truncate align-middle' title={sourceUrl}>
                         {isUpload ? <FilePdfOutlined /> : <LinkOutlined />}
                         {isUpload ? 'Dokumen' : 'Link'}
                       </span>

@@ -33,13 +33,11 @@ function mapKategoriApiToUi(item) {
     id,
     key: id, // key kita samakan dengan id_kategori_sop agar konsisten dengan SOP (FK)
     name: item?.nama_kategori || '-',
-    description: item?.deskripsi || null,
     is_active: !item?.deleted_at,
 
     // raw meta (kalau butuh)
     id_kategori_sop: id,
     nama_kategori: item?.nama_kategori || '-',
-    deskripsi: item?.deskripsi || null,
     created_at: item?.created_at || null,
     updated_at: item?.updated_at || null,
     deleted_at: item?.deleted_at || null,
@@ -67,7 +65,6 @@ export default function useKategoriSOPViewModel() {
       id: 'uncategorized',
       key: 'uncategorized',
       name: 'Tanpa Kategori',
-      description: 'SOP tanpa kategori',
       is_active: true,
       system: true,
     }),
@@ -97,19 +94,18 @@ export default function useKategoriSOPViewModel() {
     async (payload) => {
       const id = payload?.id ? String(payload.id).trim() : null;
       const nama_kategori = String(payload?.nama_kategori || '').trim();
-      const deskripsi = payload?.deskripsi === null || payload?.deskripsi === undefined ? null : String(payload.deskripsi).trim() || null;
 
       if (!nama_kategori) throw new Error('nama_kategori wajib diisi.');
 
       if (id) {
         await apiJson(`${API_KATEGORI_SOP}/${id}`, {
           method: 'PUT',
-          body: { nama_kategori, deskripsi },
+          body: { nama_kategori },
         });
       } else {
         await apiJson(API_KATEGORI_SOP, {
           method: 'POST',
-          body: { nama_kategori, deskripsi },
+          body: { nama_kategori },
         });
       }
 

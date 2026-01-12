@@ -15,16 +15,21 @@ function getKategoriDelegate() {
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
-  if (auth.startsWith('Bearer ')) {
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    const token = auth.slice(7).trim();
     try {
-      const payload = verifyAuthToken(auth.slice(7));
-      return {
-        actor: {
-          id: payload?.sub || payload?.id_user || payload?.userId,
-          role: payload?.role,
-          source: 'bearer',
-        },
-      };
+      const payload = await verifyAuthToken(token);
+      const id = payload?.sub || payload?.id_user || payload?.userId || payload?.id;
+      const role = payload?.role || payload?.jabatan || payload?.level || payload?.akses;
+      if (id && role) {
+        return {
+          actor: {
+            id: String(id),
+            role: String(role).toUpperCase(),
+            source: 'token',
+          },
+        };
+      }
     } catch (_) {
       /* fallback ke NextAuth */
     }
@@ -43,9 +48,7 @@ async function ensureAuth(req) {
 }
 
 function guardAdmin(actor) {
-  const role = String(actor?.role || '')
-    .trim()
-    .toUpperCase();
+  const role = String(actor?.role || '').toUpperCase();
   if (!ADMIN_ROLES.has(role)) {
     return NextResponse.json({ message: 'Forbidden: hanya admin yang dapat mengakses resource ini.' }, { status: 403 });
   }
@@ -66,11 +69,7 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
-
     const search = (searchParams.get('search') || '').trim();
-
     const includeDeleted = ['1', 'true'].includes((searchParams.get('includeDeleted') || '').toLowerCase());
     const deletedOnly = ['1', 'true'].includes((searchParams.get('deletedOnly') || '').toLowerCase());
 
@@ -79,15 +78,15 @@ export async function GET(req) {
     const sort = (searchParams.get('sort') || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
 
     const all = ['1', 'true'].includes((searchParams.get('all') || '').toLowerCase());
+    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
+    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '10', 10), 1), 100);
 
     const where = {
       ...(deletedOnly ? { deleted_at: { not: null } } : {}),
       ...(!includeDeleted && !deletedOnly ? { deleted_at: null } : {}),
       ...(search
         ? {
-            nama_kategori: {
-              contains: search,
-            },
+            OR: [{ nama_kategori: { contains: search, mode: 'insensitive' } }],
           }
         : {}),
     };
@@ -99,7 +98,6 @@ export async function GET(req) {
         select: {
           id_kategori_sop: true,
           nama_kategori: true,
-          deskripsi: true,
           created_at: true,
           updated_at: true,
           deleted_at: true,
@@ -109,17 +107,18 @@ export async function GET(req) {
       return NextResponse.json({ total: items.length, items });
     }
 
-    const [total, items] = await Promise.all([
+    const skip = (page - 1) * pageSize;
+
+    const [total, items] = await db.$transaction([
       kategori.count({ where }),
       kategori.findMany({
         where,
         orderBy: { [orderBy]: sort },
-        skip: (page - 1) * pageSize,
+        skip,
         take: pageSize,
         select: {
           id_kategori_sop: true,
           nama_kategori: true,
-          deskripsi: true,
           created_at: true,
           updated_at: true,
           deleted_at: true,
@@ -128,7 +127,10 @@ export async function GET(req) {
     ]);
 
     return NextResponse.json({
-      pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
       items,
     });
   } catch (err) {
@@ -148,25 +150,26 @@ export async function POST(req) {
     return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
   }
 
+  let body;
   try {
-    const body = await req.json();
+    body = await req.json();
+  } catch (_) {
+    return NextResponse.json({ message: 'Body JSON tidak valid.' }, { status: 400 });
+  }
 
+  try {
     const nama_kategori = typeof body?.nama_kategori === 'string' ? body.nama_kategori.trim() : '';
     if (!nama_kategori) {
       return NextResponse.json({ message: "Field 'nama_kategori' wajib diisi." }, { status: 400 });
     }
 
-    const deskripsi = body?.deskripsi === null || body?.deskripsi === undefined ? null : String(body.deskripsi).trim() || null;
-
     const created = await kategori.create({
       data: {
         nama_kategori,
-        deskripsi,
       },
       select: {
         id_kategori_sop: true,
         nama_kategori: true,
-        deskripsi: true,
         created_at: true,
         updated_at: true,
         deleted_at: true,
