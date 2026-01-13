@@ -183,7 +183,7 @@ async function validateAndNormalizePairs(actorId, pairsRaw) {
   return { ok: true, value: normalized };
 }
 
-async function ensureAuth(req) {
+export async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || req.headers.get('Authorization') || '';
 
   // 1) Coba Bearer token dulu (kalau gagal, JANGAN return 401 — fallback ke session)

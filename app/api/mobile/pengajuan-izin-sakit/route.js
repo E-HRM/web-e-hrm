@@ -13,7 +13,7 @@ import { sendIzinSakitMessage, sendIzinSakitImage } from '@/app/utils/watzap/wat
 const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']);
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
-const baseInclude = {
+export const baseInclude = {
   user: {
     select: {
       id_user: true,
@@ -144,6 +144,12 @@ function dedupeStringList(values) {
   return Array.from(set);
 }
 
+export function parseTagUserIds(raw) {
+  if (raw === undefined) return undefined;
+  if (raw === null) return [];
+  return dedupeStringList(raw);
+}
+
 async function validateTaggedUsers(userIds) {
   if (!userIds || !userIds.length) return;
   const uniqueIds = Array.from(new Set(userIds));
@@ -160,7 +166,7 @@ async function validateTaggedUsers(userIds) {
   }
 }
 
-function normalizeApprovals(payload) {
+export function normalizeApprovals(payload) {
   if (!payload) return null;
   const raw = payload.approvals ?? payload.approval ?? null;
   if (!raw) return null;
@@ -176,7 +182,7 @@ function normalizeApprovals(payload) {
   return raw;
 }
 
-async function ensureAuth(req) {
+export async function ensureAuth(req) {
   const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
 
   // 1) Bearer token dulu
