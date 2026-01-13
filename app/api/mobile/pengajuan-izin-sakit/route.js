@@ -144,12 +144,6 @@ function dedupeStringList(values) {
   return Array.from(set);
 }
 
-export function parseTagUserIds(raw) {
-  if (raw === undefined) return undefined;
-  if (raw === null) return [];
-  return dedupeStringList(raw);
-}
-
 async function validateTaggedUsers(userIds) {
   if (!userIds || !userIds.length) return;
   const uniqueIds = Array.from(new Set(userIds));
@@ -159,27 +153,51 @@ async function validateTaggedUsers(userIds) {
   });
   if (found.length !== uniqueIds.length) {
     const missing = uniqueIds.filter((id) => !found.some((u) => u.id_user === id));
-    throw NextResponse.json(
-      { message: `User berikut tidak ditemukan: ${missing.join(', ')}` },
-      { status: 400 }
-    );
+    throw NextResponse.json({ message: `User berikut tidak ditemukan: ${missing.join(', ')}` }, { status: 400 });
   }
 }
 
 export function normalizeApprovals(payload) {
   if (!payload) return null;
-  const raw = payload.approvals ?? payload.approval ?? null;
+  let raw = payload.approvals ?? payload.approval ?? null;
   if (!raw) return null;
+
+  // Jika input adalah string (hasil jsonEncode dari Flutter)
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
+      // Jika hasil parse adalah array, langsung kembalikan
+      if (Array.isArray(parsed)) return parsed;
+      // Jika hasil parse adalah satu objek, bungkus dalam array
+      return [parsed];
+    } catch { return null; }
   }
-  if (!Array.isArray(raw)) return null;
-  return raw;
+
+  // Jika input sudah berupa Array (dari parseRequestBody)
+  if (Array.isArray(raw)) {
+    return raw.map(item => {
+      if (typeof item === 'string') {
+        try { return JSON.parse(item); } catch { return item; }
+      }
+      return item;
+    });
+  }
+  
+  return null;
+}
+
+export function parseTagUserIds(body) {
+  const raw = body?.tag_user_ids ?? body?.tagged_user_ids ?? body?.handover_user_ids ?? body?.handover_ids ?? body?.id_user_tagged;
+  if (Array.isArray(raw)) {
+    return raw.map((v) => String(v).trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    return raw
+      .split(',')
+      .map((v) => String(v).trim())
+      .filter(Boolean);
+  }
+  return [];
 }
 
 export async function ensureAuth(req) {
@@ -223,10 +241,7 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const pageSize = Math.min(
-      100,
-      Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10))
-    );
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
 
     const statusParam = searchParams.get('status');
     const userIdParam = searchParams.get('id_user');
@@ -305,6 +320,22 @@ export async function POST(req) {
   try {
     const parsed = await parseRequestBody(req);
     const body = parsed.body || {};
+
+    // 🔥 TAMBAHKAN LOG DI SINI
+    console.log('------------------------------------------------');
+    console.log('🚀 [DEBUG] POST Payload Received:');
+    console.log(JSON.stringify(body, null, 2)); // Menampilkan body dalam format rapi
+    
+    // Jika ingin melihat apakah ada file yang terdeteksi
+    const fileCheck = findFileInBody(parsed, ['lampiran', 'lampiran_izin_sakit', 'file', 'attachment']);
+    if (fileCheck) {
+        console.log('📂 [DEBUG] File detected:', fileCheck.name || 'Unnamed File', 'Size:', fileCheck.size);
+    } else {
+        console.log('📂 [DEBUG] No file uploaded.');
+    }
+    console.log('------------------------------------------------');
+    // 🔥 AKHIR LOG
+
     const approvalsInput = normalizeApprovals(body) ?? [];
 
     const rawTanggalPengajuan = body.tanggal_pengajuan;
@@ -335,8 +366,8 @@ export async function POST(req) {
 
     const normalizedStatus = canManageAll(actorRole) ? normalizeStatusInput(body.status) || 'pending' : 'pending';
 
-    const file = findFileInBody(parsed, ['lampiran', 'lampiran_izin_sakit', 'file', 'attachment']);
-
+    const file = findFileInBody(body, ['lampiran', 'lampiran_izin_sakit', 'file', 'attachment']);
+    
     let uploadMeta = null;
     let lampiranUrl = normalizeLampiranInput(body.lampiran_izin_sakit_url);
 
@@ -392,9 +423,7 @@ export async function POST(req) {
           status: normalizedStatus,
           current_level: currentLevel,
           jenis_pengajuan,
-          ...(tanggalPengajuan !== undefined
-            ? { tanggal_pengajuan: tanggalPengajuan }
-            : {}),
+          ...(tanggalPengajuan !== undefined ? { tanggal_pengajuan: tanggalPengajuan } : {}),
         },
       });
 
