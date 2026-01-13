@@ -3,7 +3,7 @@
 import { Suspense, lazy } from 'react';
 import LoadingSplash from '@/app/(view)/component_shared/LoadingSplash';
 
-const Reimburse = lazy(() => import('./ReimburseContent'));
+const Reimburse = lazy(() => import('./ReimbursesContent'));
 
 export default function Page() {
   return (
