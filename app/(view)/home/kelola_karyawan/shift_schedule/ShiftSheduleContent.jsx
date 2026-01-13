@@ -1,84 +1,58 @@
 "use client";
 
-import {
-  ConfigProvider,
-  Button,
-  Select,
-  DatePicker,
-  Tooltip,
-  theme,
-  Table,
-  Grid,
-} from "antd";
-import {
-  LeftOutlined,
-  RightOutlined,
-  DeleteOutlined,
-} from "@ant-design/icons";
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
-import { useMemo } from "react";
-import Link from "next/link";
 import UseShiftScheduleViewModel from "./UseShiftScheduleViewModel";
+
+import { LeftOutlined, RightOutlined, DeleteOutlined } from "@ant-design/icons";
+
+import AppSelect from "../../../component_shared/AppSelect";
+import AppDatePicker from "../../../component_shared/AppDatePicker";
+import AppTooltip from "../../../component_shared/AppTooltip";
+import AppTable from "../../../component_shared/AppTable";
+import AppButton from "../../../component_shared/AppButton";
+import AppAvatar from "../../../component_shared/AppAvatar";
+import AppTypography from "../../../component_shared/AppTypography";
 
 dayjs.locale("id");
 
-const BRAND_BLUE = "#004A9F";
-const BRAND_BLUE_HOVER = "#0B63C7";
-const BRAND_BLUE_ACTIVE = "#003A80";
-const HEADER_BLUE_BG = "#F0F6FF";
-const BRAND = "#003A6F";
+function useIsMobile(maxWidth = 640) {
+  const [isMobile, setIsMobile] = useState(false);
 
-/** Ambil URL foto dari row */
-function getPhotoUrl(row) {
-  return (
-    row &&
-    (
-      row.foto_profil_user ||
-      row.avatarUrl ||
-      row.foto ||
-      row.foto_url ||
-      row.photoUrl ||
-      row.photo ||
-      row.avatar ||
-      row.gambar
-    )
-  ) || null;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`);
+    const apply = () => setIsMobile(!!mq.matches);
+
+    apply();
+
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    }
+
+    mq.addListener(apply);
+    return () => mq.removeListener(apply);
+  }, [maxWidth]);
+
+  return isMobile;
 }
 
-/** Gambar bulat anti-gepeng */
-function CircleImg(props) {
-  const src = props.src;
-  const size = props.size || 48;
-  const alt = props.alt || "Foto";
-  const s = {
-    width: size,
-    height: size,
-    borderRadius: "9999px",
-    overflow: "hidden",
-    border: "1px solid " + BRAND + "22",
-    background: "#E6F0FA",
-    flexShrink: 0,
-    display: "inline-block",
-  };
+function getPhotoUrl(row) {
   return (
-    <span style={s} className="shrink-0">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src || "/avatar-placeholder.jpg"}
-        alt={alt}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          display: "block",
-        }}
-        onError={function (e) {
-          e.currentTarget.src = "/avatar-placeholder.jpg";
-          e.currentTarget.onerror = null;
-        }}
-      />
-    </span>
+    (row &&
+      (row.foto_profil_user ||
+        row.avatarUrl ||
+        row.foto ||
+        row.foto_url ||
+        row.photoUrl ||
+        row.photo ||
+        row.avatar ||
+        row.gambar)) ||
+    null
   );
 }
 
@@ -86,42 +60,20 @@ function isPastDate(dateStr) {
   return dayjs(dateStr).isBefore(dayjs().startOf("day"), "day");
 }
 
-/* === Cell: sekarang juga punya checkbox Story Planner === */
-function Cell(props) {
-  const cell = props.cell;
-  const polaMap = props.polaMap;
-  const onAssign = props.onAssign;
-  const onDelete = props.onDelete;
-  const disabled = props.disabled;
-  const story = props.story;
-  const onToggleStory = props.onToggleStory;
-
-  const value = cell
-    ? cell.status === "LIBUR"
-      ? "LIBUR"
-      : cell.polaId || undefined
-    : undefined;
+const Cell = React.memo(function Cell({ cell, polaMap, onAssign, onDelete, disabled, story, onToggleStory }) {
+  const value = cell ? (cell.status === "LIBUR" ? "LIBUR" : cell.polaId || undefined) : undefined;
 
   const options = useMemo(() => {
-    const arr = [
-      { value: "LIBUR", label: "Libur — (tidak bekerja)" },
-    ];
-    polaMap.forEach(function (p, id) {
-      arr.push({
-        value: String(id),
-        label: p.nama + " (" + p.jam + ")",
-      });
+    const arr = [{ value: "LIBUR", label: "Libur — (tidak bekerja)" }];
+    polaMap.forEach((p, id) => {
+      arr.push({ value: String(id), label: `${p.nama} (${p.jam})` });
     });
     return arr;
   }, [polaMap]);
 
   const safeAssign = (val) => {
     if (disabled) return;
-    onAssign(
-      cell.userId,
-      cell.date,
-      val === "LIBUR" ? "LIBUR" : String(val)
-    );
+    onAssign(cell.userId, cell.date, val === "LIBUR" ? "LIBUR" : String(val));
   };
 
   const safeDelete = () => {
@@ -133,18 +85,10 @@ function Cell(props) {
 
   return (
     <div className="p-2">
-      <div
-        className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
-        style={
-          disabled
-            ? { opacity: 0.6, pointerEvents: "none" }
-            : undefined
-        }
-      >
-        <div className="text-xs mb-1 text-slate-500">
-          {disabled ? "Jadwal (riwayat)" : "Pilih jadwal"}
-        </div>
-        <Select
+      <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm" style={disabled ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
+        <div className="text-xs mb-1 text-slate-500">{disabled ? "Jadwal (riwayat)" : "Pilih jadwal"}</div>
+
+        <AppSelect
           className="w-full"
           placeholder="— Pilih jadwal —"
           value={value}
@@ -157,40 +101,35 @@ function Cell(props) {
           optionFilterProp="label"
           disabled={disabled}
         />
+
         <div className="mt-2 text-xs text-slate-500 flex items-center justify-between">
           <div>
             {value === "LIBUR"
               ? "Libur"
               : value
-              ? (function () {
+              ? (() => {
                   const p = polaMap.get(String(value));
-                  return p
-                    ? p.nama + " • " + p.jam
-                    : "Kerja";
+                  return p ? `${p.nama} • ${p.jam}` : "Kerja";
                 })()
               : "Belum diatur"}
           </div>
+
           {cell && cell.rawId && !disabled && (
-            <Tooltip title="Hapus jadwal tanggal ini">
-              <Button
-                size="small"
-                type="text"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={safeDelete}
-              />
-            </Tooltip>
+            <AppTooltip title="Hapus jadwal tanggal ini">
+              <span className="inline-flex">
+                <AppButton variant="text" size="small" icon={<DeleteOutlined />} danger onClick={safeDelete} />
+              </span>
+            </AppTooltip>
           )}
         </div>
 
-        {/* Checkbox Story Planner */}
         <label className="mt-2 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
           <input
             type="checkbox"
             className="accent-[#004A9F]"
             disabled={disabled}
             checked={checkedStory}
-            onChange={function (e) {
+            onChange={(e) => {
               if (!onToggleStory) return;
               onToggleStory(e.target.checked);
             }}
@@ -200,15 +139,16 @@ function Cell(props) {
       </div>
     </div>
   );
-}
+});
 
 export default function ShiftScheduleContent() {
   const vm = UseShiftScheduleViewModel();
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.sm;
+  const isMobile = useIsMobile(640);
 
-  const dayColumns = vm.days.map(function (d) {
-    return {
+  const dataSource = useMemo(() => (vm.rows || []).map((r) => ({ ...r, key: r.id })), [vm.rows]);
+
+  const dayColumns = useMemo(() => {
+    return vm.days.map((d) => ({
       title: (
         <div className="font-semibold text-slate-800 text-center">
           {d.labelDay}, {d.labelDate}
@@ -217,16 +157,9 @@ export default function ShiftScheduleContent() {
       dataIndex: d.key,
       key: d.key,
       width: 280,
-      render: function (_, record) {
-        const cell =
-          vm.getCell(record.id, d.dateStr) || {
-            userId: record.id,
-            date: d.dateStr,
-          };
-        const story = vm.getStoryCell(
-          record.id,
-          d.dateStr
-        );
+      render: (_, record) => {
+        const cell = vm.getCell(record.id, d.dateStr) || { userId: record.id, date: d.dateStr };
+        const story = vm.getStoryCell(record.id, d.dateStr);
         const disabled = isPastDate(d.dateStr);
 
         return (
@@ -237,259 +170,162 @@ export default function ShiftScheduleContent() {
             onDelete={vm.deleteCell}
             disabled={disabled}
             story={story}
-            onToggleStory={function (checked) {
-              vm.toggleStoryForDay(
-                record.id,
-                d.dateStr,
-                checked
-              );
-            }}
+            onToggleStory={(checked) => vm.toggleStoryForDay(record.id, d.dateStr, checked)}
           />
         );
       },
-    };
-  });
+    }));
+  }, [vm.days, vm.getCell, vm.getStoryCell, vm.polaMap, vm.assignCell, vm.deleteCell, vm.toggleStoryForDay]);
 
-  const nameColumn = {
-    title: (
-      <div className="text-left font-medium">Nama Karyawan</div>
-    ),
-    dataIndex: "name",
-    key: "name",
-    fixed: "left",
-    width: isMobile ? 220 : 380,
-    render: function (_, r) {
-      const photo = getPhotoUrl(r) || "/avatar-placeholder.jpg";
-      return (
-        <div className="p-1">
-          <Link
-            href={
-              "/home/kelola_karyawan/karyawan/" + r.id
-            }
-            className="no-underline text-inherit hover:text-inherit"
-          >
-            <div className="flex items-center gap-3">
-              <CircleImg
-                src={photo}
-                alt={r.name}
-                size={48}
-              />
-              <div className="min-w-0">
-                <div
-                  style={{
-                    fontWeight: 600,
-                    color: "#0f172a",
-                  }}
-                  className="truncate"
-                >
-                  {r.name}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#475569",
-                  }}
-                  className="truncate"
-                >
-                  {r.jabatan || "—"}
-                  {r.jabatan && r.departemen && " "}
-                  {r.departemen
-                    ? "| " + r.departemen
-                    : r.jabatan
-                    ? ""
-                    : "—"}
+  const nameColumn = useMemo(() => {
+    return {
+      title: <div className="text-left font-medium">Nama Karyawan</div>,
+      dataIndex: "name",
+      key: "name",
+      fixed: "left",
+      width: isMobile ? 220 : 360,
+      render: (_, r) => {
+        const photo = getPhotoUrl(r) || "/avatar-placeholder.jpg";
+        return (
+          <div className="p-1">
+            <Link href={`/home/kelola_karyawan/karyawan/${r.id}`} className="no-underline text-inherit hover:text-inherit">
+              <div className="flex items-center gap-3">
+                <AppAvatar src={photo} name={r.name || ""} size={44} />
+                <div className="min-w-0">
+                  <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
+                    {r.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
+                    {r.jabatan || "—"}
+                    {r.departemen ? ` | ${r.departemen}` : r.jabatan ? "" : "—"}
+                  </div>
                 </div>
               </div>
-            </div>
-          </Link>
+            </Link>
 
-          {/* Checkbox terkontrol oleh data minggu berikutnya (repeat shift) */}
-          <label className="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
-            <input
-              type="checkbox"
-              className="accent-[#004A9F]"
-              checked={vm.isRepeatVisualOn(r.id)}
-              onChange={function (e) {
-                vm.toggleRepeatSchedule(
-                  r.id,
-                  e.target.checked
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+              <input
+                type="checkbox"
+                className="accent-[#004A9F]"
+                checked={vm.isRepeatVisualOn(r.id)}
+                onChange={(e) => vm.toggleRepeatSchedule(r.id, e.target.checked)}
+              />
+              Ulangi minggu ini sampai akhir bulan
+            </label>
+
+            <div className="mt-3 space-y-1 text-xs hidden sm:block">
+              <div className="font-semibold text-slate-600 mb-1">Ringkasan Minggu Ini:</div>
+              {vm.days.map((d) => {
+                const c = vm.getCell(r.id, d.dateStr);
+                let label = "—";
+                let color = "text-slate-500";
+
+                if (c && c.status === "LIBUR") {
+                  label = "Libur";
+                  color = "text-red-500";
+                } else if (c && c.polaId) {
+                  const p = vm.polaMap.get(String(c.polaId));
+                  label = p ? `${p.nama} ${p.jam}` : "Kerja";
+                  color = "text-blue-600";
+                }
+
+                return (
+                  <div key={d.key} className={`${color} flex justify-between`}>
+                    <span className="w-16">{d.short}:</span>
+                    <span className="font-medium truncate">{label}</span>
+                  </div>
                 );
-              }}
-            />
-            Ulangi minggu ini sampai akhir bulan
-          </label>
-
-          <div className="mt-3 space-y-1 text-xs hidden sm:block">
-            <div className="font-semibold text-slate-600 mb-1">
-              Ringkasan Minggu Ini:
+              })}
             </div>
-            {vm.days.map(function (d) {
-              const c = vm.getCell(r.id, d.dateStr);
-              let label = "—";
-              let color = "text-slate-500";
-
-              if (c && c.status === "LIBUR") {
-                label = "Libur";
-                color = "text-red-500";
-              } else if (c && c.polaId) {
-                const p = vm.polaMap.get(
-                  String(c.polaId)
-                );
-                label = p
-                  ? p.nama + " " + p.jam
-                  : "Kerja";
-                color = "text-blue-600";
-              }
-
-              return (
-                <div
-                  key={d.key}
-                  className={
-                    color + " flex justify-between"
-                  }
-                >
-                  <span className="w-16">
-                    {d.short}:
-                  </span>
-                  <span className="font-medium truncate">
-                    {label}
-                  </span>
-                </div>
-              );
-            })}
           </div>
-        </div>
-      );
-    },
-  };
+        );
+      },
+    };
+  }, [isMobile, vm.days, vm.getCell, vm.isRepeatVisualOn, vm.toggleRepeatSchedule, vm.polaMap]);
 
-  const columns = [nameColumn].concat(dayColumns);
-  const dataSource = vm.rows.map(function (r) {
-    return Object.assign({}, r, { key: r.id });
-  });
+  const columns = useMemo(() => [nameColumn, ...dayColumns], [nameColumn, dayColumns]);
 
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: theme.defaultAlgorithm,
-        token: {
-          colorPrimary: BRAND_BLUE,
-          colorPrimaryHover: BRAND_BLUE_HOVER,
-          colorPrimaryActive: BRAND_BLUE_ACTIVE,
-          borderRadius: 12,
-          colorLink: BRAND_BLUE,
-          colorLinkHover: BRAND_BLUE_HOVER,
-          colorLinkActive: BRAND_BLUE_ACTIVE,
-        },
-        components: {
-          Button: {
-            borderRadius: 12,
-            primaryShadow:
-              "0 0 0 2px rgba(0,74,159,0.15)",
-            colorPrimary: BRAND_BLUE,
-            colorPrimaryHover: BRAND_BLUE_HOVER,
-            colorPrimaryActive: BRAND_BLUE_ACTIVE,
-          },
-          Select: {
-            activeBorderColor: BRAND_BLUE,
-            hoverBorderColor: BRAND_BLUE,
-            optionSelectedBg: "#E6F3FF",
-            optionSelectedColor: BRAND_BLUE_ACTIVE,
-          },
-          DatePicker: {
-            activeBorderColor: BRAND_BLUE,
-            hoverBorderColor: BRAND_BLUE,
-          },
-          Table: {
-            headerBg: HEADER_BLUE_BG,
-            headerSortHoverBg: HEADER_BLUE_BG,
-            headerSortActiveBg: HEADER_BLUE_BG,
-            rowHoverBg: "#E6F3FF",
-          },
-        },
-      }}
-    >
-      <div className="p-6">
-        <div className="mb-6 flex flex-wrap items-center gap-2">
-          <Select
+    <div className="p-6">
+      <div className="mb-6 flex flex-wrap lg:flex-nowrap items-center gap-3">
+        <div className="w-[240px] shrink-0">
+          <AppSelect
             value={vm.deptId || undefined}
             placeholder="Semua Tim/Divisi"
             options={vm.deptOptions}
             onChange={vm.setDeptId}
-            className="min-w-[220px]"
             allowClear
+            className="w-full"
+            size="middle"
           />
-          <Select
+        </div>
+
+        <div className="w-[220px] shrink-0">
+          <AppSelect
             allowClear
             showSearch
             placeholder="Filter Jabatan"
             optionFilterProp="label"
             value={vm.jabatanId || undefined}
-            onChange={function (v) {
-              vm.setJabatanId(v || null);
-            }}
+            onChange={(v) => vm.setJabatanId(v || null)}
             options={vm.jabatanOptions}
-            className="min-w-[220px]"
+            className="w-full"
+            size="middle"
           />
-          <Select
-            className="min-w-[160px]"
+        </div>
+
+        <div className="w-[160px] shrink-0">
+          <AppSelect
             value={vm.currentMonthIdx}
-            onChange={function (m) {
-              vm.setMonthYear(vm.currentYear, m);
-            }}
+            onChange={(m) => vm.setMonthYear(vm.currentYear, m)}
             options={vm.monthOptions}
+            className="w-full"
+            size="middle"
           />
+        </div>
 
-          <div className="flex-grow-0 ml-auto flex items-center gap-2">
-            <Button
-              type="primary"
-              icon={<LeftOutlined />}
-              onClick={vm.prevWeek}
-            >
-              Minggu sebelumnya
-            </Button>
-            <Button
-              type="primary"
-              icon={<RightOutlined />}
-              onClick={vm.nextWeek}
-            >
-              Minggu berikutnya
-            </Button>
+        <div className="ml-0 lg:ml-auto flex items-center gap-3 flex-wrap lg:flex-nowrap">
+          <AppButton variant="primary" icon={<LeftOutlined />} onClick={vm.prevWeek} size="middle" className="!px-3 shrink-0">
+            Minggu sebelumnya
+          </AppButton>
 
-            <DatePicker
+          <AppButton variant="primary" icon={<RightOutlined />} onClick={vm.nextWeek} size="middle" className="!px-3 shrink-0">
+            Minggu berikutnya
+          </AppButton>
+
+          <div className="w-[140px] shrink-0">
+            <AppDatePicker
               picker="month"
+              className="w-full"
               value={dayjs(vm.weekStart)}
-              onChange={function (d) {
+              onChange={(d) => {
                 if (!d) return;
                 vm.setMonthYear(d.year(), d.month());
               }}
+              size="middle"
             />
           </div>
         </div>
-
-        <div className="text-xs text-slate-500 mb-3">
-          * Centang “Ulangi minggu ini sampai akhir bulan” → sistem
-          menyalin pola minggu ini. Hari kosong di minggu sumber akan
-          menghapus jadwal di minggu target. Checkbox tetap nyala jika
-          minggu berikutnya ada minimal 1 jadwal.
-        </div>
-
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={dataSource}
-          pagination={false}
-          loading={vm.loading}
-          scroll={{ x: "max-content", y: 640 }}
-          sticky
-          size="middle"
-          bordered={false}
-          className="rounded-2xl overflow-hidden shadow-xl border border-slate-200"
-          rowClassName={function (record, index) {
-            return index % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]";
-          }}
-        />
       </div>
-    </ConfigProvider>
+
+      <AppTypography.Text className="block text-xs text-slate-500 mb-3">
+        * Centang “Ulangi minggu ini sampai akhir bulan” → sistem menyalin pola minggu ini. Hari kosong di minggu sumber akan menghapus jadwal di minggu target.
+      </AppTypography.Text>
+
+      <AppTable
+        rowKey="id"
+        columns={columns}
+        dataSource={dataSource}
+        pagination={false}
+        loading={vm.loading}
+        scroll={{ x: "max-content", y: 640 }}
+        sticky
+        size="middle"
+        bordered={false}
+        className="rounded-2xl overflow-hidden shadow-xl border border-slate-200"
+        rowClassName={(_, index) => (index % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]")}
+        scrollToFirstRowOnChange={false}
+      />
+    </div>
   );
 }

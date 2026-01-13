@@ -1,378 +1,379 @@
-"use client";
+'use client';
 
-import React from "react";
-import {
-  Tabs,
-  Button,
-  Table,
-  ConfigProvider,
-  Card,
-  Space,
-  Tooltip,
-  Modal,
-  Form,
-  Input,
-  Select,
-  Tag,
-} from "antd";
-import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  SearchOutlined,
-} from "@ant-design/icons";
-import useManajemenKategoriviewModel from "./useManajemenKategoriviewModel";
+import React, { useMemo } from 'react';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
 
-const PRIMARY_COLOR = "#003A6F";
-const HEADER_BLUE_BG = "#F0F6FF";
+import AppTabs from '../../../component_shared/AppTabs';
+import AppButton from '../../../component_shared/AppButton';
+import AppTable from '../../../component_shared/AppTable';
+import AppCard from '../../../component_shared/AppCard';
+import AppSpace from '../../../component_shared/AppSpace';
+import AppTooltip from '../../../component_shared/AppTooltip';
+import AppModal from '../../../component_shared/AppModal';
+import AppForm from '../../../component_shared/AppForm';
+import AppInput from '../../../component_shared/AppInput';
+import AppTag from '../../../component_shared/AppTag';
+import AppTypography from '../../../component_shared/AppTypography';
+
+import useManajemenKategoriviewModel from './useManajemenKategoriviewModel';
+
 const DEFAULT_SCROLL_Y = 600;
 
-/* ===== Modal Form (konsisten, simple) ===== */
-function FormKategoriModal({
-  open,
-  mode,
-  kind,
-  initialName,
-  initialReduce = true,
-  onCancel,
-  onSubmit,
-}) {
-  const [form] = Form.useForm();
-
-  React.useEffect(() => {
-    if (open) {
-      form.setFieldsValue({
-        nama_kategori: initialName || "",
-        ...(kind === "cuti" ? { pengurangan_kouta: initialReduce } : {}),
-      });
-    } else {
-      form.resetFields();
-    }
-  }, [open, initialName, initialReduce, kind, form]);
-
-  const kindLabel =
-    kind === "cuti" ? "Cuti" : kind === "sakit" ? "Izin Sakit" : "Izin Jam";
+function TabLabel({ text, count }) {
+  const badgeClass = 'bg-slate-100 text-slate-600';
 
   return (
-    <Modal
-      open={open}
-      onCancel={onCancel}
-      onOk={() => form.submit()}
-      title={mode === "create" ? `Tambah Kategori ${kindLabel}` : `Edit Kategori ${kindLabel}`}
-      okText={mode === "create" ? "Simpan" : "Simpan Perubahan"}
-      cancelText="Batal"
-    >
-      <Form form={form} layout="vertical" onFinish={onSubmit}>
-        <Form.Item
-          label="Nama Kategori"
-          name="nama_kategori"
-          rules={[{ required: true, message: "Nama kategori wajib diisi" }]}
-        >
-          <Input placeholder="Contoh: Cuti Tahunan" />
-        </Form.Item>
+    <span className='inline-flex items-center gap-3 whitespace-nowrap'>
+      <span className='font-semibold'>{text}</span>
+      <span className={`inline-flex items-center justify-center min-w-7 h-7 px-2 rounded-full text-xs font-semibold ${badgeClass}`}>{count}</span>
+    </span>
+  );
+}
 
-        {kind === "cuti" && (
-          <Form.Item
-            label="Pengurangan Kuota"
-            name="pengurangan_kouta"
-            tooltip="Apakah kategori ini mengurangi kuota cuti?"
-            rules={[{ required: true, message: "Pilih status pengurangan kuota" }]}
-          >
-            <Select
-              options={[
-                { value: true, label: "Berkurang" },
-                { value: false, label: "Tidak berkurang" },
-              ]}
-            />
-          </Form.Item>
+function FormKategoriModal({ open, mode, kind, initialName, initialReduce = true, onCancel, onSubmit }) {
+  const kindLabel = kind === 'cuti' ? 'Cuti' : kind === 'sakit' ? 'Izin Sakit' : 'Izin Jam';
+
+  const submitText = mode === 'create' ? 'Simpan' : 'Simpan Perubahan';
+
+  const fields = useMemo(() => {
+    const base = [
+      {
+        type: 'text',
+        name: 'nama_kategori',
+        label: 'Nama Kategori',
+        placeholder: 'Contoh: Cuti Tahunan',
+        rules: [{ required: true, message: 'Nama kategori wajib diisi' }],
+      },
+    ];
+
+    if (kind === 'cuti') {
+      base.push({
+        type: 'select',
+        name: 'pengurangan_kouta',
+        label: 'Pengurangan Kuota',
+        tooltip: 'Apakah kategori ini mengurangi kuota cuti?',
+        placeholder: 'Pilih status',
+        options: [
+          { value: true, label: 'Berkurang' },
+          { value: false, label: 'Tidak berkurang' },
+        ],
+        rules: [{ required: true, message: 'Pilih status pengurangan kuota' }],
+      });
+    }
+
+    return base;
+  }, [kind]);
+
+  return (
+    <AppModal
+      open={open}
+      onClose={() => onCancel?.()}
+      title={mode === 'create' ? `Tambah Kategori ${kindLabel}` : `Edit Kategori ${kindLabel}`}
+      footer={false}
+      destroyOnClose
+    >
+      <AppForm
+        key={`${mode}-${kind}-${initialName ?? ''}-${String(initialReduce)}-${String(open)}`}
+        initialValues={{
+          nama_kategori: initialName || '',
+          ...(kind === 'cuti' ? { pengurangan_kouta: initialReduce } : {}),
+        }}
+        showSubmit={false}
+        fields={fields}
+        footer={({ submit }) => (
+          <div className='flex items-center justify-end gap-2 pt-2'>
+            <AppButton
+              variant='secondary'
+              onClick={() => onCancel?.()}
+            >
+              Batal
+            </AppButton>
+            <AppButton
+              variant='primary'
+              onClick={submit}
+            >
+              {submitText}
+            </AppButton>
+          </div>
         )}
-      </Form>
-    </Modal>
+        onFinish={async (values) => {
+          await onSubmit?.(values);
+        }}
+      />
+    </AppModal>
   );
 }
 
 export default function ManajemenKategoriContent() {
   const vm = useManajemenKategoriviewModel();
 
-  // ====== kolom khusus Cuti ======
-  const colReduce = {
-    title: "Pengurangan Kuota",
-    key: "reduce",
-    width: 180,
-    render: (_, record) => {
-      const isReduce = !!record.reduce;
-      return (
-        <Tag color={isReduce ? "green" : "gold"} className="!rounded-md px-2 py-1">
-          {isReduce ? "Berkurang" : "Tidak berkurang"}
-        </Tag>
-      );
-    },
-  };
+  const colReduce = useMemo(
+    () => ({
+      title: 'Pengurangan Kuota',
+      key: 'reduce',
+      width: 180,
+      render: (_, record) => {
+        const isReduce = !!record?.reduce;
+        return (
+          <AppTag
+            tone={isReduce ? 'success' : 'warning'}
+            variant='soft'
+          >
+            {isReduce ? 'Berkurang' : 'Tidak berkurang'}
+          </AppTag>
+        );
+      },
+    }),
+    []
+  );
 
   const columns = (kind) => {
-    const pag =
-      kind === "cuti" ? vm.pagCuti : kind === "sakit" ? vm.pagSakit : vm.pagIzinJam;
+    const pag = kind === 'cuti' ? vm.pagCuti : kind === 'sakit' ? vm.pagSakit : vm.pagIzinJam;
+
     const current = pag?.page ?? 1;
     const pageSize = pag?.pageSize ?? 10;
     const offset = (current - 1) * pageSize;
 
     const base = [
       {
-        title: "NO",
-        key: "no",
+        title: 'NO',
+        key: 'no',
         width: 70,
-        align: "center",
+        align: 'center',
         render: (_r, __, index) => (
-          <div className="text-sm font-medium text-gray-600">
+          <AppTypography.Text
+            size={12}
+            weight={700}
+            tone='muted'
+          >
             {offset + index + 1}
-          </div>
+          </AppTypography.Text>
         ),
       },
       {
-        title: "NAMA KATEGORI",
-        dataIndex: "nama",
-        key: "nama",
+        title: 'NAMA KATEGORI',
+        dataIndex: 'nama',
+        key: 'nama',
         ellipsis: true,
         render: (text) => (
-          <span className="font-medium text-gray-900 block truncate" title={text}>
+          <AppTypography.Text
+            size={13}
+            weight={700}
+            className='text-slate-900 block truncate'
+            title={text}
+          >
             {text}
-          </span>
+          </AppTypography.Text>
         ),
       },
     ];
 
-    if (kind === "cuti") base.push(colReduce);
+    if (kind === 'cuti') base.push(colReduce);
 
     base.push({
-      title: "AKSI",
-      key: "aksi",
+      title: 'AKSI',
+      key: 'aksi',
       width: 120,
       render: (_, record) => (
-        <Space size="middle">
-          <Tooltip title="Edit">
-            <Button
-              aria-label="Edit"
-              type="default"
-              shape="circle"
-              className="!w-7 !h-7 !p-0 !rounded-full !border !border-[#B9DAFF] !bg-[#F3FAFF] hover:!bg-[#E6F2FF]"
-              icon={<EditOutlined style={{ color: PRIMARY_COLOR, fontSize: 13 }} />}
+        <AppSpace size='sm'>
+          <AppTooltip title='Edit'>
+            <AppButton
+              aria-label='Edit'
+              variant='ghost'
+              shape='circle'
+              className='!w-8 !h-8 !p-0'
+              icon={<EditOutlined />}
               onClick={() => vm.openEdit(kind, record)}
             />
-          </Tooltip>
-          <Tooltip title="Hapus">
-            <Button
-              aria-label="Hapus"
-              type="default"
-              shape="circle"
-              className="!w-7 !h-7 !p-0 !rounded-full !border !border-[#FFC2C8] !bg-[#FFF5F6] hover:!bg-[#FFE8EA]"
-              icon={<DeleteOutlined style={{ color: "#ff4d4f", fontSize: 13 }} />}
+          </AppTooltip>
+
+          <AppTooltip title='Hapus'>
+            <AppButton
+              aria-label='Hapus'
+              variant='ghost'
+              shape='circle'
+              className='!w-8 !h-8 !p-0'
+              style={{ color: '#ff4d4f' }}
+              icon={<DeleteOutlined />}
               onClick={() => vm.confirmDelete(kind, record)}
             />
-          </Tooltip>
-        </Space>
+          </AppTooltip>
+        </AppSpace>
       ),
     });
 
     return base;
   };
 
-  const TabPane = ({ kind, title, items, pag }) => (
-    <Card className="shadow-sm border-0" bodyStyle={{ padding: 0 }}>
-      {/* Header section ala CutiContent */}
-      <div
-        className="p-5 border-b border-slate-100 bg-[var(--header-bg)]"
-        style={{ ["--header-bg"]: HEADER_BLUE_BG }}
-      >
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-1">{title}</h2>
-            <p className="text-gray-500 text-sm">
-              Menampilkan {items.length} dari {pag?.total ?? 0} kategori
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Input
-              allowClear
-              placeholder="Cari kategori…"
-              prefix={<SearchOutlined className="text-gray-400" />}
-              value={vm.search}
-              onChange={(e) => vm.setSearch(e.target.value)}
-              className="w-72 rounded-xl"
-              size="middle"
-            />
-            <Button
-              type="primary"
+  const TabContent = ({ kind, title, items, pag }) => {
+    return (
+      <AppTable
+        card
+        title={title}
+        subtitle={`Menampilkan ${items.length} dari ${pag?.total ?? 0} kategori`}
+        extra={
+          <div className='flex items-center gap-2 flex-wrap justify-end'>
+            <div className='w-72'>
+              <AppInput
+                allowClear
+                placeholder='Cari kategori…'
+                prefixIcon={<SearchOutlined className='text-gray-400' />}
+                value={vm.search}
+                onChange={(e) => vm.setSearch(e.target.value)}
+              />
+            </div>
+            <AppButton
+              variant='primary'
               icon={<PlusOutlined />}
-              size="middle"
-              className="!rounded-lg !bg-[var(--brand)] hover:!bg-[#0B63C7]"
-              style={{ ["--brand"]: PRIMARY_COLOR }}
               onClick={() => vm.openCreate(kind)}
             >
               Tambah Kategori
-            </Button>
+            </AppButton>
           </div>
-        </div>
-      </div>
+        }
+        rowKey='id'
+        dataSource={items}
+        columns={columns(kind)}
+        loading={vm.loading}
+        sticky
+        tableLayout='fixed'
+        scroll={{ y: DEFAULT_SCROLL_Y }}
+        pagination={{
+          current: pag?.page ?? 1,
+          pageSize: pag?.pageSize ?? 10,
+          total: pag?.total ?? 0,
+          showSizeChanger: true,
+          pageSizeOptions: [5, 10, 20, 50, 100],
+          showTotal: (t, range) => `${range[0]}-${range[1]} dari ${t} data`,
+          onChange: (p, ps) => vm.onPageChange(kind, p, ps),
+        }}
+        emptyTitle='Belum ada kategori'
+        emptyDescription='Tambahkan kategori untuk mulai mengelola data.'
+        emptyImage={<div className='text-3xl'>🗂️</div>}
+        rowClassName={() => 'no-hover-row'}
+      />
+    );
+  };
 
-      {/* Table */}
-      <div className="p-4">
-        <Table
-          sticky
-          rowKey={(r) => r.id}
-          dataSource={items}
-          columns={columns(kind)}
-          loading={vm.loading}
-          pagination={{
-            current: pag?.page ?? 1,
-            pageSize: pag?.pageSize ?? 10,
-            total: pag?.total ?? 0,
-            showSizeChanger: true,
-            pageSizeOptions: [5, 10, 20, 50, 100],
-            showTotal: (t, range) => `${range[0]}-${range[1]} dari ${t} data`,
-            onChange: (p, ps) => vm.onPageChange(kind, p, ps),
-          }}
-          scroll={{ y: DEFAULT_SCROLL_Y }}
-          tableLayout="fixed"
-          locale={{
-            emptyText: (
-              <div className="py-10 text-center">
-                <div className="text-3xl mb-3">🗂️</div>
-                <p className="text-slate-500">Belum ada kategori</p>
-              </div>
-            ),
-          }}
-          rowClassName={() => "no-hover-row"}
-        />
-      </div>
-    </Card>
-  );
+  const tabs = useMemo(() => {
+    const cutiTotal = vm.pagCuti?.total ?? 0;
+    const sakitTotal = vm.pagSakit?.total ?? 0;
+    const izinJamTotal = vm.pagIzinJam?.total ?? 0;
 
-  const tabs = [
-    {
-      key: "cuti",
-      label: (
-        <div className="flex items-center gap-2 px-3 py-2">
-          <span className="font-medium">Kategori Cuti</span>
-          <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-            {vm.pagCuti?.total ?? 0}
-          </span>
-        </div>
-      ),
-      content: (
-        <TabPane
-          kind="cuti"
-          title="Kategori Cuti"
-          items={vm.itemsCuti}
-          pag={vm.pagCuti}
-        />
-      ),
-    },
-    {
-      key: "sakit",
-      label: (
-        <div className="flex items-center gap-2 px-3 py-2">
-          <span className="font-medium">Izin Sakit</span>
-          <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-            {vm.pagSakit?.total ?? 0}
-          </span>
-        </div>
-      ),
-      content: (
-        <TabPane
-          kind="sakit"
-          title="Kategori Izin Sakit"
-          items={vm.itemsSakit}
-          pag={vm.pagSakit}
-        />
-      ),
-    },
-    {
-      key: "izinjam",
-      label: (
-        <div className="flex items-center gap-2 px-3 py-2">
-          <span className="font-medium">Izin Jam</span>
-          <span className="bg-slate-100 text-slate-600 rounded-full px-2 py-1 text-xs font-medium min-w-6 text-center">
-            {vm.pagIzinJam?.total ?? 0}
-          </span>
-        </div>
-      ),
-      content: (
-        <TabPane
-          kind="izinjam"
-          title="Kategori Izin Jam"
-          items={vm.itemsIzinJam}
-          pag={vm.pagIzinJam}
-        />
-      ),
-    },
-  ];
+    return [
+      {
+        key: 'cuti',
+        label: (
+          <TabLabel
+            text='Kategori Cuti'
+            count={cutiTotal}
+            tone='warning'
+          />
+        ),
+        children: (
+          <div className='mt-6'>
+            <TabContent
+              kind='cuti'
+              title='Kategori Cuti'
+              items={vm.itemsCuti}
+              pag={vm.pagCuti}
+            />
+          </div>
+        ),
+      },
+      {
+        key: 'sakit',
+        label: (
+          <TabLabel
+            text='Izin Sakit'
+            count={sakitTotal}
+            tone='success'
+          />
+        ),
+        children: (
+          <div className='mt-6'>
+            <TabContent
+              kind='sakit'
+              title='Kategori Izin Sakit'
+              items={vm.itemsSakit}
+              pag={vm.pagSakit}
+            />
+          </div>
+        ),
+      },
+      {
+        key: 'izinjam',
+        label: (
+          <TabLabel
+            text='Izin Jam'
+            count={izinJamTotal}
+            tone='danger'
+          />
+        ),
+        children: (
+          <div className='mt-6'>
+            <TabContent
+              kind='izinjam'
+              title='Kategori Izin Jam'
+              items={vm.itemsIzinJam}
+              pag={vm.pagIzinJam}
+            />
+          </div>
+        ),
+      },
+    ];
+  }, [vm.pagCuti?.total, vm.pagSakit?.total, vm.pagIzinJam?.total, vm.itemsCuti, vm.itemsSakit, vm.itemsIzinJam, vm.pagCuti, vm.pagSakit, vm.pagIzinJam, vm.search, vm.loading]);
 
   return (
-    <ConfigProvider
-      theme={{
-        components: {
-          Tabs: {
-            inkBarColor: PRIMARY_COLOR,
-            itemActiveColor: PRIMARY_COLOR,
-            itemHoverColor: PRIMARY_COLOR,
-            itemSelectedColor: PRIMARY_COLOR,
-          },
-          Card: { borderRadiusLG: 12 },
-          Table: {
-            headerBg: "#f8fafc",
-            headerColor: "#374151",
-            headerSplitColor: "transparent",
-            rowHoverBg: "transparent", // hilangkan hover abu-abu
-          },
-        },
-        token: {
-          colorPrimary: PRIMARY_COLOR,
-          borderRadius: 8,
-          colorBgContainer: "#ffffff",
-          colorBorder: "#e5e7eb",
-        },
-      }}
-    >
-      <div className="min-h-screen bg-gray-50 p-6">
-        {/* Header utama (sama pola dengan Cuti) */}
-        <div className="mb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                Manajemen Kategori
-              </h1>
-              <p className="text-gray-600 text-sm">
-                Kelola kategori cuti, izin sakit, dan izin jam dalam satu tempat
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs ala CutiContent (type=line) */}
-        <Card className="shadow-sm border-0">
-          <Tabs
-            activeKey={vm.activeTab}
-            onChange={vm.setActiveTab}
-            type="line"
-            size="large"
-            items={tabs.map((t) => ({
-              key: t.key,
-              label: t.label,
-              children: <div className="mt-6">{t.content}</div>,
-            }))}
-          />
-        </Card>
-
-        {/* Matikan efek hover abu-abu (fallback CSS) */}
-        <style jsx global>{`
-          .no-hover-row:hover > td {
-            background: transparent !important;
-          }
-          .ant-table-tbody > tr.ant-table-row:hover > td {
-            background: transparent !important;
-          }
-        `}</style>
+    <div className='min-h-screen bg-gray-50 p-6'>
+      <div className='mb-6'>
+        <AppTypography.Title
+          level={3}
+          className='!mb-1'
+        >
+          Manajemen Kategori
+        </AppTypography.Title>
+        <AppTypography.Text tone='secondary'>Kelola kategori cuti, izin sakit, dan izin jam dalam satu tempat</AppTypography.Text>
       </div>
+
+      <AppCard className='shadow-sm border-0'>
+        <AppTabs
+          className='mk-tabs'
+          activeKey={vm.activeTab}
+          onChange={vm.setActiveTab}
+          variant='line'
+          size='large'
+          tabBarGutter={40}
+          items={tabs}
+        />
+      </AppCard>
+
+      <style
+        jsx
+        global
+      >{`
+        .mk-tabs .ant-tabs-nav {
+          margin: 0 !important;
+        }
+
+        .mk-tabs .ant-tabs-tab {
+          margin: 0 !important;
+          padding: 12px 22px !important;
+        }
+
+        .mk-tabs .ant-tabs-tab-btn {
+          display: inline-flex !important;
+          align-items: center !important;
+        }
+
+        .no-hover-row:hover > td {
+          background: transparent !important;
+        }
+
+        .ant-table-tbody > tr.ant-table-row:hover > td {
+          background: transparent !important;
+        }
+      `}</style>
 
       <FormKategoriModal
         open={vm.modalOpen}
@@ -381,8 +382,11 @@ export default function ManajemenKategoriContent() {
         initialName={vm.editingItem?.nama}
         initialReduce={vm.editingItem?.reduce ?? true}
         onCancel={() => vm.setModalOpen(false)}
-        onSubmit={vm.submitForm}
+        onSubmit={async (values) => {
+          await vm.submitForm(values);
+          vm.setModalOpen(false);
+        }}
       />
-    </ConfigProvider>
+    </div>
   );
 }

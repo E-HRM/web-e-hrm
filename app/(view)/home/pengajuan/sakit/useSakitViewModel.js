@@ -1,46 +1,39 @@
-"use client";
+'use client';
 
-import { useMemo, useState, useCallback } from "react";
-import useSWR from "swr";
-import { message } from "antd";
-import { ApiEndpoints } from "@/constrainst/endpoints";
-import { fetcher } from "@/app/utils/fetcher";
-import {
-  handoverPlainText,
-  extractHandoverTags,
-  mergeUsers,
-} from "@/app/api/mobile/tag-users/helpers/tagged-text";
+import { useMemo, useState, useCallback } from 'react';
+import useSWR from 'swr';
+import AppMessage from '@/app/(view)/component_shared/AppMessage';
+import { ApiEndpoints } from '@/constrainst/endpoints';
+import { fetcher } from '@/app/utils/fetcher';
+import { handoverPlainText, extractHandoverTags, mergeUsers } from '@/app/api/mobile/tag-users/helpers/tagged-text';
 
 /* ============ Helpers ============ */
-const norm = (v) => String(v ?? "").trim().toLowerCase();
+const norm = (v) =>
+  String(v ?? '')
+    .trim()
+    .toLowerCase();
 
 function toLabelStatus(s) {
   const v = norm(s);
-  if (v === "disetujui") return "Disetujui";
-  if (v === "ditolak") return "Ditolak";
-  return "Menunggu";
+  if (v === 'disetujui') return 'Disetujui';
+  if (v === 'ditolak') return 'Ditolak';
+  return 'Menunggu';
 }
 function statusFromTab(tab) {
-  if (tab === "disetujui") return "disetujui";
-  if (tab === "ditolak") return "ditolak";
-  return "pending";
+  if (tab === 'disetujui') return 'disetujui';
+  if (tab === 'ditolak') return 'ditolak';
+  return 'pending';
 }
 
 function getApprovalsArray(item) {
-  const candidates = [
-    item?.approvals,
-    item?.approval_izin_sakit,
-    item?.approvalIzinSakit,
-  ];
+  const candidates = [item?.approvals, item?.approval_izin_sakit, item?.approvalIzinSakit];
   for (const c of candidates) if (Array.isArray(c)) return c;
   return [];
 }
 
 function pickApprovalId(item) {
   const approvals = getApprovalsArray(item);
-  const pending = approvals
-    .filter((a) => !a?.deleted_at)
-    .find((a) => ["", "pending", "menunggu"].includes(norm(a?.decision)));
+  const pending = approvals.filter((a) => !a?.deleted_at).find((a) => ['', 'pending', 'menunggu'].includes(norm(a?.decision)));
   return pending?.id_approval_izin_sakit ?? pending?.id ?? null;
 }
 
@@ -48,9 +41,7 @@ function pickLatestDecisionInfo(item, want) {
   const approvals = getApprovalsArray(item);
   if (!approvals.length) return null;
 
-  const desired = ["disetujui", "ditolak"].includes(norm(want))
-    ? norm(want)
-    : null;
+  const desired = ['disetujui', 'ditolak'].includes(norm(want)) ? norm(want) : null;
 
   const filtered = approvals
     .filter((a) => !a?.deleted_at)
@@ -61,15 +52,14 @@ function pickLatestDecisionInfo(item, want) {
 
   if (!filtered.length) return null;
 
-  const top = filtered
-    .sort((a, b) => {
-      const tb = new Date(b?.decided_at ?? b?.updated_at ?? 0).getTime();
-      const ta = new Date(a?.decided_at ?? a?.updated_at ?? 0).getTime();
-      return tb - ta;
-    })[0];
+  const top = filtered.sort((a, b) => {
+    const tb = new Date(b?.decided_at ?? b?.updated_at ?? 0).getTime();
+    const ta = new Date(a?.decided_at ?? a?.updated_at ?? 0).getTime();
+    return tb - ta;
+  })[0];
 
   return {
-    note: top?.note ?? top?.catatan ?? top?.comment ?? "",
+    note: top?.note ?? top?.catatan ?? top?.comment ?? '',
     decided_at: top?.decided_at ?? top?.updated_at ?? null,
   };
 }
@@ -77,10 +67,10 @@ function pickLatestDecisionInfo(item, want) {
 /* attachments normalizer */
 function normalizeAttachments(item) {
   const out = [];
-  const pushUrl = (url, nameFallback = "Lampiran") => {
-    const s = String(url ?? "").trim();
+  const pushUrl = (url, nameFallback = 'Lampiran') => {
+    const s = String(url ?? '').trim();
     if (!s) return;
-    const fileName = s.split("/").pop()?.split("?")[0] || nameFallback;
+    const fileName = s.split('/').pop()?.split('?')[0] || nameFallback;
     out.push({ url: s, name: fileName });
   };
 
@@ -95,13 +85,7 @@ function normalizeAttachments(item) {
     }
   }
 
-  const single = [
-    item?.lampiran_izin_sakit_url,
-    item?.lampiran_url,
-    item?.bukti_url,
-    item?.file_url,
-    item?.file_kelengkapan_url,
-  ];
+  const single = [item?.lampiran_izin_sakit_url, item?.lampiran_url, item?.bukti_url, item?.file_url, item?.file_kelengkapan_url];
   for (const s of single) pushUrl(s);
 
   return out;
@@ -113,27 +97,11 @@ function buildHandoverUsers(item, rawText) {
     ? item.handover_users
         .map((h) => {
           const u = h?.user ?? h;
-          const id =
-            h?.id_user_tagged ??
-            u?.id_user ??
-            u?.id ??
-            u?.uuid ??
-            null;
-          const name =
-            u?.nama_pengguna ??
-            h?.nama_pengguna_tagged ??
-            u?.name ??
-            u?.nama ??
-            u?.full_name ??
-            null;
-          const photo =
-            u?.foto_profil_user ??
-            h?.foto_profil_user ??
-            u?.photo ??
-            u?.avatar ??
-            "/avatar-placeholder.jpg";
+          const id = h?.id_user_tagged ?? u?.id_user ?? u?.id ?? u?.uuid ?? null;
+          const name = u?.nama_pengguna ?? h?.nama_pengguna_tagged ?? u?.name ?? u?.nama ?? u?.full_name ?? null;
+          const photo = u?.foto_profil_user ?? h?.foto_profil_user ?? u?.photo ?? u?.avatar ?? '/avatar-placeholder.jpg';
           if (!id && !name) return null;
-          return { id: String(id ?? name), name: name ?? "—", photo };
+          return { id: String(id ?? name), name: name ?? '—', photo };
         })
         .filter(Boolean)
     : [];
@@ -141,7 +109,7 @@ function buildHandoverUsers(item, rawText) {
   const fromTags = extractHandoverTags(rawText).map((t) => ({
     id: t.id,
     name: t.name,
-    photo: "/avatar-placeholder.jpg",
+    photo: '/avatar-placeholder.jpg',
   }));
 
   return mergeUsers(fromApi, fromTags);
@@ -152,16 +120,11 @@ function mapItemToRow(item) {
   const user = item?.user || {};
 
   const jabatanName = user?.jabatan?.nama_jabatan ?? null;
-  const divisiName =
-    user?.departement?.nama_departement ?? user?.divisi ?? null;
+  const divisiName = user?.departement?.nama_departement ?? user?.divisi ?? null;
 
-  const jabatanDivisi =
-    [jabatanName, divisiName].filter(Boolean).join(" | ") ||
-    user?.role ||
-    "—";
+  const jabatanDivisi = [jabatanName, divisiName].filter(Boolean).join(' | ') || user?.role || '—';
 
-  const rawHandover =
-    item?.handover ?? item?.handover_text ?? item?.keterangan_handover ?? "—";
+  const rawHandover = item?.handover ?? item?.handover_text ?? item?.keterangan_handover ?? '—';
 
   // approvals → ambil note & tanggal keputusan
   const statusRaw = norm(item?.status);
@@ -175,28 +138,23 @@ function mapItemToRow(item) {
     id: item?.id_pengajuan_izin_sakit,
 
     // user
-    nama: user?.nama_pengguna ?? "—",
+    nama: user?.nama_pengguna ?? '—',
     jabatanDivisi,
-    foto: user?.foto_profil_user || "/avatar-placeholder.jpg",
+    foto: user?.foto_profil_user || '/avatar-placeholder.jpg',
 
     // waktu
-    tglPengajuan:
-      item?.tanggal_pengajuan ?? item?.created_at ?? item?.createdAt ?? null,
+    tglPengajuan: item?.tanggal_pengajuan ?? item?.created_at ?? item?.createdAt ?? null,
 
     // konten
-    kategori:
-      item?.kategori?.nama_kategori ??
-      item?.kategori_sakit?.nama_kategori ??
-      "—",
+    kategori: item?.kategori?.nama_kategori ?? item?.kategori_sakit?.nama_kategori ?? '—',
     handover, // @nama rapi
     handoverUsers,
 
     // status & keputusan
-    statusRaw: item?.status ?? "pending",
+    statusRaw: item?.status ?? 'pending',
     status: toLabelStatus(item?.status),
-    alasan: latest?.note ?? "",
-    tglKeputusan:
-      latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
+    alasan: latest?.note ?? '',
+    tglKeputusan: latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
 
     // approvals
     approvalId: pickApprovalId(item),
@@ -209,8 +167,8 @@ function mapItemToRow(item) {
 
 /* ============ Hook ============ */
 export default function useSakitViewModel() {
-  const [search, _setSearch] = useState("");
-  const [tab, _setTab] = useState("pengajuan");
+  const [search, _setSearch] = useState('');
+  const [tab, _setTab] = useState('pengajuan');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
@@ -245,24 +203,19 @@ export default function useSakitViewModel() {
     []
   );
 
-  const swrCntPending = useSWR(countKey("pending"), fetcher, {
+  const swrCntPending = useSWR(countKey('pending'), fetcher, {
     revalidateOnFocus: false,
   });
-  const swrCntApproved = useSWR(countKey("disetujui"), fetcher, {
+  const swrCntApproved = useSWR(countKey('disetujui'), fetcher, {
     revalidateOnFocus: false,
   });
-  const swrCntRejected = useSWR(countKey("ditolak"), fetcher, {
+  const swrCntRejected = useSWR(countKey('ditolak'), fetcher, {
     revalidateOnFocus: false,
   });
 
   const totalOf = (json) => {
     const r = json || {};
-    return (
-      r?.meta?.total ??
-      r?.pagination?.total ??
-      r?.total ??
-      (Array.isArray(r?.data) ? r.data.length : 0)
-    );
+    return r?.meta?.total ?? r?.pagination?.total ?? r?.total ?? (Array.isArray(r?.data) ? r.data.length : 0);
   };
 
   const tabCounts = useMemo(
@@ -284,20 +237,8 @@ export default function useSakitViewModel() {
     const term = String(search).trim().toLowerCase();
     if (!term) return rows;
     return rows.filter((d) =>
-      [
-        d.nama,
-        d.jabatanDivisi,
-        d.kategori,
-        d.handover,
-        d.tglPengajuan,
-        ...(Array.isArray(d.attachments)
-          ? d.attachments.map((a) => a.name)
-          : []),
-        ...(Array.isArray(d.handoverUsers)
-          ? d.handoverUsers.map((u) => u.name)
-          : []),
-      ]
-        .join(" ")
+      [d.nama, d.jabatanDivisi, d.kategori, d.handover, d.tglPengajuan, ...(Array.isArray(d.attachments) ? d.attachments.map((a) => a.name) : []), ...(Array.isArray(d.handoverUsers) ? d.handoverUsers.map((u) => u.name) : [])]
+        .join(' ')
         .toLowerCase()
         .includes(term)
     );
@@ -310,34 +251,23 @@ export default function useSakitViewModel() {
       if (!row) return;
 
       if (!row.approvalId) {
-        message.error(
-          "Tidak menemukan id approval. Pastikan API list mengembalikan approvals."
-        );
+        AppMessage.error('Tidak menemukan id approval. Pastikan API list mengembalikan approvals.');
         return;
       }
 
       try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanIzinSakitMobile(row.approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision: "disetujui", note: note ?? null }),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanIzinSakitMobile(row.approvalId), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision: 'disetujui', note: note ?? null }),
+        });
         const json = await res.json();
-        if (!res.ok || json?.ok === false)
-          throw new Error(json?.message || "Gagal");
-        message.success("Izin sakit disetujui");
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || 'Gagal');
+        AppMessage.success('Izin sakit disetujui');
 
-        await Promise.all([
-          mutate(),
-          swrCntPending.mutate(),
-          swrCntApproved.mutate(),
-          swrCntRejected.mutate(),
-        ]);
+        await Promise.all([mutate(), swrCntPending.mutate(), swrCntApproved.mutate(), swrCntRejected.mutate()]);
       } catch (e) {
-        message.error(e?.message || "Gagal menyimpan keputusan.");
+        AppMessage.error(e?.message || 'Gagal menyimpan keputusan.');
       }
     },
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
@@ -348,42 +278,31 @@ export default function useSakitViewModel() {
       const row = rows.find((r) => r.id === id);
       if (!row) return false;
 
-      const reason = String(note ?? "").trim();
+      const reason = String(note ?? '').trim();
       if (!reason) {
-        message.error("Alasan wajib diisi saat menolak.");
+        AppMessage.error('Alasan wajib diisi saat menolak.');
         return false;
       }
 
       if (!row.approvalId) {
-        message.error(
-          "Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals."
-        );
+        AppMessage.error('Tidak menemukan id approval pada pengajuan ini. Pastikan API list mengembalikan approvals.');
         return false;
       }
 
       try {
-        const res = await fetch(
-          ApiEndpoints.DecidePengajuanIzinSakitMobile(row.approvalId),
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision: "ditolak", note: reason }),
-          }
-        );
+        const res = await fetch(ApiEndpoints.DecidePengajuanIzinSakitMobile(row.approvalId), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision: 'ditolak', note: reason }),
+        });
         const json = await res.json();
-        if (!res.ok || json?.ok === false)
-          throw new Error(json?.message || "Gagal");
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || 'Gagal');
 
-        message.success("Pengajuan izin sakit ditolak");
-        await Promise.all([
-          mutate(),
-          swrCntPending.mutate(),
-          swrCntApproved.mutate(),
-          swrCntRejected.mutate(),
-        ]);
+        AppMessage.success('Pengajuan izin sakit ditolak');
+        await Promise.all([mutate(), swrCntPending.mutate(), swrCntApproved.mutate(), swrCntRejected.mutate()]);
         return true;
       } catch (e) {
-        message.error(e?.message || "Gagal menyimpan keputusan.");
+        AppMessage.error(e?.message || 'Gagal menyimpan keputusan.');
         return false;
       }
     },
@@ -395,16 +314,7 @@ export default function useSakitViewModel() {
     setPerPage(ps);
   }, []);
 
-  const refresh = useCallback(
-    () =>
-      Promise.all([
-        mutate(),
-        swrCntPending.mutate(),
-        swrCntApproved.mutate(),
-        swrCntRejected.mutate(),
-      ]),
-    [mutate, swrCntPending, swrCntApproved, swrCntRejected]
-  );
+  const refresh = useCallback(() => Promise.all([mutate(), swrCntPending.mutate(), swrCntApproved.mutate(), swrCntRejected.mutate()]), [mutate, swrCntPending, swrCntApproved, swrCntRejected]);
 
   return {
     data: rows,

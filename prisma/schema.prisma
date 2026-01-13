@@ -366,7 +366,7 @@ model User {
   divisi                    String?       @db.VarChar(100)
   id_jabatan                String?       @db.Char(36)
   status_kerja              StatusKerja?
-  status_cuti               StatusCuti    @default(nonaktif)
+  status_cuti               StatusCuti    @default(aktif)
   tanggal_mulai_bekerja     DateTime?     @db.Date
   nomor_rekening            String?       @db.VarChar(50)
   jenis_bank                String?       @db.VarChar(50)
@@ -420,6 +420,7 @@ model User {
   reimburses   Reimburse[]
   pocketMonies PocketMoney[]
   payments     Payment[]
+  pinnedSops   PinnedSop[]
 
   @@index([id_departement])
   @@index([id_location])
@@ -770,7 +771,7 @@ model CutiKonfigurasi {
   id_user             String @db.Char(36)
   bulan               Bulan
   kouta_cuti          Int
-  cuti_tabung         Int @default(0)
+  cuti_tabung         Int
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1308,16 +1309,57 @@ model ApprovalPocketMoney {
   @@map("approval_pocket_money")
 }
 
-model sop_karyawan {
-  id_sop_karyawan  String   @id @default(uuid()) @db.Char(36)
-  nama_dokumen     String   @db.VarChar(255)
-  tanggal_terbit   DateTime @db.Date
-  lampiran_sop_url String?  @db.LongText
+model kategori_sop {
+  id_kategori_sop String @id @default(uuid()) @db.Char(36)
+  nama_kategori   String @db.VarChar(255)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  @@index([tanggal_terbit])
+  sop_karyawan sop_karyawan[]
+
+  @@index([nama_kategori])
+  @@map("kategori_sop")
+}
+
+model sop_karyawan {
+  id_sop_karyawan                   String  @id @default(uuid()) @db.Char(36)
+  nama_dokumen                      String  @db.VarChar(255)
+  lampiran_sop_url                  String? @db.LongText
+  deskripsi                         String? @db.LongText
+  id_kategori_sop                   String? @db.Char(36)
+  created_by_snapshot_nama_pengguna String? @db.VarChar(255)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  kategori_sop kategori_sop? @relation(fields: [id_kategori_sop], references: [id_kategori_sop], onDelete: SetNull, onUpdate: Cascade)
+  pinnedSops   PinnedSop[]
+
+  @@index([created_at])
+  @@index([id_kategori_sop])
   @@map("sop_karyawan")
+}
+
+model PinnedSop {
+  id_pinned_sop String @id @default(uuid()) @db.Char(36)
+
+  id_user String @db.Char(36)
+
+  id_sop String @db.Char(36)
+
+  created_at DateTime @default(now()) @db.DateTime(0)
+
+  // Relasi ke User dan SOP
+
+  user User @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
+
+  sop sop_karyawan @relation(fields: [id_sop], references: [id_sop_karyawan], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([id_user, id_sop]) // User hanya bisa pin satu SOP yang sama satu kali
+  @@index([id_user])
+  @@index([id_sop])
+  @@map("pinned_sops")
 }

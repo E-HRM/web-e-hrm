@@ -78,6 +78,18 @@ const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-as-read";
 // === Story Planner
 const API_STORY_PLANNER = "/api/admin/story-planner";
 
+// === Finance Mobile
+const API_MOBILE_POCKET_MONEY = "/api/mobile/pocket-money";
+const API_MOBILE_REIMBURSE = "/api/mobile/reimburse";
+const API_MOBILE_PAYMENT = "/api/mobile/payment";
+
+// === SOP Admin
+const API_SOP_PERUSAHAAN = "/api/admin/sop-perusahaan";
+
+const API_KATEGORI_SOP = '/api/admin/kategori-sop';
+
+// ===== Finance: Kategori Keperluan (Admin)
+const API_KATEGORI_KEPERLUAN = "/api/admin/kategori-keperluan";
 
 export const ApiEndpoints = {
   // Location
@@ -251,5 +263,34 @@ export const ApiEndpoints = {
   UpdateStoryPlanner: (id) => `${API_STORY_PLANNER}/${id}`,
   DeleteStoryPlanner: (id) => `${API_STORY_PLANNER}/${id}`,
 
+    // ===== FINANCE (Mobile) =====
+  GetPocketMoneyMobile: (qsObj = {}) => `${API_MOBILE_POCKET_MONEY}${buildQS(qsObj)}`,
+  DecidePocketMoneyMobile: (approvalId) => `${API_MOBILE_POCKET_MONEY}/approvals/${approvalId}`,
 
+  GetReimburseMobile: (qsObj = {}) => `${API_MOBILE_REIMBURSE}${buildQS(qsObj)}`,
+  DecideReimburseMobile: (approvalId) => `${API_MOBILE_REIMBURSE}/approvals/${approvalId}`,
+
+  GetPaymentMobile: (qsObj = {}) => `${API_MOBILE_PAYMENT}${buildQS(qsObj)}`,
+  DecidePaymentMobile: (approvalId) => `${API_MOBILE_PAYMENT}/approvals/${approvalId}`,
+  RestoreKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}/restore`,
+
+  // ===== SOP (Admin) =====
+  GetSOPPerusahaan: (qsObj = {}) => `${API_SOP_PERUSAHAAN}${buildQS(qsObj)}`,
+  CreateSOPPerusahaan: () => API_SOP_PERUSAHAAN,
+  GetSOPPerusahaanById: (id) => `${API_SOP_PERUSAHAAN}/${id}`,
+  UpdateSOPPerusahaan: (id) => `${API_SOP_PERUSAHAAN}/${id}`,
+  DeleteSOPPerusahaan: (id) => `${API_SOP_PERUSAHAAN}/${id}`,
+
+  GetKategoriSOP: (qsObj = {}) => `${API_KATEGORI_SOP}${buildQS(qsObj)}`,
+  CreateKategoriSOP: API_KATEGORI_SOP,
+  GetKategoriSOPById: (id) => `${API_KATEGORI_SOP}/${id}`,
+  UpdateKategoriSOP: (id) => `${API_KATEGORI_SOP}/${id}`,
+  DeleteKategoriSOP: (id) => `${API_KATEGORI_SOP}/${id}`,
+
+  /* ===== KATEGORI FINANCE (ADMIN) ===== */
+  GetKategoriKeperluan: (qsObj = {}) => `${API_KATEGORI_KEPERLUAN}${buildQS(qsObj)}`,
+  CreateKategoriKeperluan: API_KATEGORI_KEPERLUAN,
+  GetKategoriKeperluanById: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
+  UpdateKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
+  DeleteKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
 };

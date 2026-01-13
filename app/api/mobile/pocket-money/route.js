@@ -5,7 +5,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateOnlyToUTC } from '@/helpers/date-helper';
-import storageClient from '@/app/api/_utils/storageClient';
+import { uploadMediaWithFallback } from '@/app/api/_utils/uploadWithFallback';
 import { parseRequestBody, findFileInBody } from '@/app/api/_utils/requestBody';
 import { parseApprovalsFromBody, ensureApprovalUsersExist, syncApprovalRecords } from './_utils/approvals';
 import { sendNotification } from '@/app/utils/services/notificationService';
@@ -87,12 +87,44 @@ function parseItemsInput(body) {
   });
 }
 
+/** ✅ UPDATED: include user agar FE dapat nama/foto */
 export const pocketMoneyInclude = {
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+      foto_profil_user: true,
+    },
+  },
   departement: {
     select: { id_departement: true, nama_departement: true },
   },
   kategori_keperluan: {
     select: { id_kategori_keperluan: true, nama_keperluan: true },
+  },
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+      foto_profil_user: true,
+      id_departement: true,
+      departement: {
+        select: {
+          id_departement: true,
+          nama_departement: true,
+        },
+      },
+      jabatan: {
+        select: {
+          id_jabatan: true,
+          nama_jabatan: true,
+        },
+      },
+    },
   },
   items: {
     where: { deleted_at: null },
@@ -147,18 +179,21 @@ export async function ensureAuth(req) {
     } catch (_) {}
   }
 
-  const session = await authenticateRequest(req);
-  if (!session || !session.ok) {
+  const sessionOrRes = await authenticateRequest();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+
+  const actorId = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
+  if (!actorId) {
     return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
 
   return {
     actor: {
-      id: session.user?.id || session.user?.id_user,
-      role: session.user?.role,
-      email: session.user?.email,
+      id: actorId,
+      role: sessionOrRes.user?.role,
+      email: sessionOrRes.user?.email,
     },
-    session,
+    session: sessionOrRes,
   };
 }
 
@@ -342,11 +377,34 @@ export async function POST(req) {
     const buktiFile = findFileInBody(body, ['bukti_pembayaran', 'bukti', 'file', 'bukti_pembayaran_file']);
     if (buktiFile) {
       try {
-        const res = await storageClient.uploadBufferWithPresign(buktiFile, { folder: 'financial' });
-        buktiUrl = res.publicUrl || null;
-        uploadMeta = { key: res.key, publicUrl: res.publicUrl, etag: res.etag, size: res.size };
+        const uploaded = await uploadMediaWithFallback(buktiFile, {
+          storageFolder: 'financial',
+          supabasePrefix: 'financial',
+          pathSegments: [String(actorId)],
+        });
+
+        buktiUrl = uploaded.publicUrl || null;
+
+        uploadMeta = {
+          provider: uploaded.provider,
+          publicUrl: uploaded.publicUrl || null,
+          key: uploaded.key,
+          etag: uploaded.etag,
+          size: uploaded.size,
+          bucket: uploaded.bucket,
+          path: uploaded.path,
+          fallbackFromStorageError: uploaded.errors?.storage || undefined,
+        };
       } catch (e) {
-        return NextResponse.json({ ok: false, message: 'Gagal upload bukti pembayaran.', detail: e?.message || String(e) }, { status: 502 });
+        return NextResponse.json(
+          {
+            ok: false,
+            message: 'Gagal upload bukti pembayaran.',
+            detail: e?.message || String(e),
+            errors: e?.errors,
+          },
+          { status: e?.status || 502 }
+        );
       }
     } else if (!isNullLike(body.bukti_pembayaran_url)) {
       buktiUrl = String(body.bukti_pembayaran_url).trim() || null;
@@ -405,7 +463,7 @@ export async function POST(req) {
       include: pocketMoneyInclude,
     });
 
-    // Notifikasi: supervisor departement + approver(s) + actor
+    // Notifikasi
     const notified = new Set();
     const notifPromises = [];
     const basePayload = {

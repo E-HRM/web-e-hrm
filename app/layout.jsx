@@ -1,29 +1,32 @@
-import "antd/dist/reset.css";
-import "./globals.css";
-import { Poppins } from "next/font/google";
-import LayoutClient from "./layout-client";
-import { App } from "antd"; 
+import 'antd/dist/reset.css';
+import './globals.css';
 import 'react-quill/dist/quill.snow.css';
 
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-poppins",
-  display: "swap",
-});
+import LayoutClient from './layout-client';
+import { App, ConfigProvider } from 'antd';
+import { fontBodyClassName, fontFamily } from './(view)/component_shared/Font';
 
 export const metadata = {
-  title: "E-HRM",
-  description: "HR Management System",
+  title: 'E-HRM',
+  description: 'HR Management System',
 };
 
- export default function RootLayout({ children }) {
+export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className={poppins.variable}>
-        <App>
-          <LayoutClient>{children}</LayoutClient>
-        </App>
+    <html lang='en'>
+      <body className={fontBodyClassName}>
+        <ConfigProvider
+          theme={{
+            token: {
+              fontFamily,
+              fontFamilyCode: fontFamily,
+            },
+          }}
+        >
+          <App>
+            <LayoutClient>{children}</LayoutClient>
+          </App>
+        </ConfigProvider>
       </body>
     </html>
   );

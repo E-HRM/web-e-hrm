@@ -1,19 +1,18 @@
-import { Suspense, lazy } from "react";
-import { Spin } from "antd";
-import LoadingSplash from "@/app/components/common/LoadingSplash";
+import { Suspense, lazy } from 'react';
+import LoadingSplash from '@/app/(view)/component_shared/LoadingSplash';
 
-const AbsensiContent = lazy(() => import("./AbsensiContent"));
+const AbsensiContent = lazy(() => import('./AbsensiContent'));
 
 export default function Page() {
   return (
     <Suspense
       fallback={
-        <div className="grid place-items-center min-h-[calc(100dvh-64px-56px)]">
+        <div className='grid place-items-center min-h-[calc(100dvh-64px-56px)]'>
           <LoadingSplash
-            label="Menyiapkan Halaman…"
-            brand="#003A6F"
+            label='Menyiapkan Halaman…'
+            brand='#003A6F'
             size={124}
-            fullscreen={false}   
+            fullscreen={false}
           />
         </div>
       }

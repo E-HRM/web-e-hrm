@@ -1,0 +1,22 @@
+/* app/(view)/component_shared/AppForm.css */
+
+.app-form-root,
+.app-form-root .ant-typography,
+.app-form-root .ant-btn,
+.app-form-root .ant-input,
+.app-form-root .ant-input-affix-wrapper,
+.app-form-root .ant-select,
+.app-form-root .ant-picker,
+.app-form-root .ant-radio-wrapper,
+.app-form-root .ant-checkbox-wrapper {
+  font-family: var(--app-form-font, Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif);
+}
+
+.app-form-root .sp-form-picker.ant-picker,
+.app-form-root .sp-form-picker.ant-picker * {
+  font-family: var(--app-form-font, Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif);
+}
+
+.app-form-root .sp-form-picker.ant-picker {
+  border-radius: 12px;
+}
