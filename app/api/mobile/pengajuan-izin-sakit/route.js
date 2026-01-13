@@ -13,7 +13,7 @@ import { sendIzinSakitMessage, sendIzinSakitImage } from '@/app/utils/watzap/wat
 const APPROVE_STATUSES = new Set(['disetujui', 'ditolak', 'pending']);
 const ADMIN_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
-const baseInclude = {
+export const baseInclude = {
   user: {
     select: {
       id_user: true,
@@ -157,7 +157,7 @@ async function validateTaggedUsers(userIds) {
   }
 }
 
-function normalizeApprovals(payload) {
+export function normalizeApprovals(payload) {
   if (!payload) return null;
   const raw = payload.approvals ?? payload.approval ?? null;
   if (!raw) return null;
@@ -173,7 +173,21 @@ function normalizeApprovals(payload) {
   return raw;
 }
 
-async function ensureAuth(req) {
+export function parseTagUserIds(body) {
+  const raw = body?.tag_user_ids ?? body?.tagged_user_ids ?? body?.handover_user_ids ?? body?.handover_ids ?? body?.id_user_tagged;
+  if (Array.isArray(raw)) {
+    return raw.map((v) => String(v).trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    return raw
+      .split(',')
+      .map((v) => String(v).trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+export async function ensureAuth(req) {
   const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
 
   // 1) Bearer token dulu

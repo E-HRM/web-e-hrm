@@ -166,7 +166,7 @@ export async function validateTaggedUsers(userIds) {
   }
 }
 
-async function ensureAuth(req) {
+export async function ensureAuth(req) {
   // bearer first
   const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
   if (authHeader?.startsWith('Bearer ')) {

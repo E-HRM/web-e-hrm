@@ -219,7 +219,7 @@ function sanitizeHandoverIds(input) {
   return Array.from(new Set(ids));
 }
 
-function summarizeDatesByMonth(dateList) {
+export function summarizeDatesByMonth(dateList) {
   const groups = new Map();
   for (const dateVal of dateList || []) {
     const d = dateVal instanceof Date ? dateVal : new Date(dateVal);
