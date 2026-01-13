@@ -7,6 +7,11 @@ const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
   day: '2-digit',
 });
 
+function stripUserIds(text) {
+  if (!text) return '-';
+  return text.replace(/@\[[^\]]+\]\s*\(\s*([^)]+)\s*\)/g, '$1');
+}
+
 function formatDateDisplay(value) {
   if (!value) return '-';
   try {
@@ -23,21 +28,6 @@ function escapeHtml(value) {
   return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
-function getBaseUrlFromRequest(req) {
-  try {
-    const origin = req?.headers?.get?.('origin');
-    if (origin) return origin;
-
-    const host = req?.headers?.get?.('x-forwarded-host') || req?.headers?.get?.('host');
-    if (!host) return null;
-
-    const proto = req?.headers?.get?.('x-forwarded-proto') || 'https';
-    return `${proto}://${host}`;
-  } catch {
-    return null;
-  }
-}
-
 function normalizeEmail(email) {
   const v = String(email || '')
     .trim()
@@ -49,15 +39,12 @@ function normalizeEmail(email) {
 function uniqueEmails(emails) {
   const out = [];
   const seen = new Set();
-
   for (const e of emails || []) {
     const v = normalizeEmail(e);
-    if (!v) continue;
-    if (seen.has(v)) continue;
+    if (!v || seen.has(v)) continue;
     seen.add(v);
     out.push(v);
   }
-
   return out;
 }
 
@@ -67,7 +54,6 @@ function makeEmailHtml({ title, introLines = [], fields = [], buttonUrl, buttonT
     .filter(Boolean)
     .map((l) => `<p style="margin:0 0 10px 0;">${escapeHtml(l)}</p>`)
     .join('');
-
   const rowsHtml = (fields || [])
     .filter((f) => f && f.label)
     .map((f) => {
@@ -81,7 +67,6 @@ function makeEmailHtml({ title, introLines = [], fields = [], buttonUrl, buttonT
       `;
     })
     .join('');
-
   const table = rowsHtml
     ? `
       <table cellpadding="0" cellspacing="0" style="border-collapse:collapse; width:100%; margin-top:14px;">
@@ -91,7 +76,6 @@ function makeEmailHtml({ title, introLines = [], fields = [], buttonUrl, buttonT
       </table>
     `
     : '';
-
   const btn = buttonUrl
     ? `
       <div style="margin-top:18px;">
@@ -102,9 +86,8 @@ function makeEmailHtml({ title, introLines = [], fields = [], buttonUrl, buttonT
       </div>
     `
     : '';
-
   return `
-    <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:#111827; padding:16px;">
+    <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:#111827; padding:166px;">
       <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
         <div style="padding:16px 18px; background:#f3f4f6;">
           <h2 style="margin:0; font-size:18px;">${titleHtml}</h2>
@@ -125,7 +108,6 @@ function makeEmailHtml({ title, introLines = [], fields = [], buttonUrl, buttonT
 async function sendBatch({ from, to, subject, html }) {
   const recipients = uniqueEmails(to);
   if (!recipients.length) return [];
-
   const tasks = recipients.map((email) =>
     transporter.sendMail({
       from,
@@ -134,7 +116,6 @@ async function sendBatch({ from, to, subject, html }) {
       html,
     })
   );
-
   const results = await Promise.allSettled(tasks);
   return results;
 }
@@ -142,14 +123,12 @@ async function sendBatch({ from, to, subject, html }) {
 function formatPairs(pairs) {
   const list = Array.isArray(pairs) ? pairs : [];
   if (!list.length) return '-';
-
   const lines = list.map((p) => {
     const a = formatDateDisplay(p?.hari_izin);
     const b = formatDateDisplay(p?.hari_pengganti);
     const note = (p?.catatan_pair || '').trim();
     return note ? `${a} → ${b} (${note})` : `${a} → ${b}`;
   });
-
   return lines.join('\n');
 }
 
@@ -157,23 +136,15 @@ export async function sendPengajuanIzinTukarHariEmailNotifications(req, pengajua
   const username = process.env.MAIL_USERNAME;
   const password = process.env.MAIL_PASSWORD;
   const from = process.env.MAIL_FROM || username;
-
-  if (!from || !username || !password) return;
-  if (!pengajuan) return;
-
-  const baseUrl = getBaseUrlFromRequest(req);
-  const deeplink = `/izin-tukar-hari/${pengajuan.id_izin_tukar_hari}`;
-  const url = baseUrl ? `${baseUrl}${deeplink}` : deeplink;
-
+  if (!from || !username || !password || !pengajuan) return;
+  const url = 'https://e-hrm.onestepsolutionbali.com/home/pengajuan/tukarHari';
   const pemohonName = pengajuan.user?.nama_pengguna || 'Karyawan';
   const pemohonEmail = normalizeEmail(pengajuan.user?.email);
-
   const kategori = (pengajuan.kategori || '').trim() || '-';
-  const keperluan = (pengajuan.keperluan || '').trim() || '-';
-  const handover = (pengajuan.handover || '').trim() || '-';
+  const keperluan = stripUserIds(pengajuan.keperluan);
+  const handover = stripUserIds(pengajuan.handover);
   const lampiranUrl = (pengajuan.lampiran_izin_tukar_hari_url || '').trim() || '-';
   const pairsText = formatPairs(pengajuan.pairs);
-
   const fields = [
     { label: 'Pemohon', value: pemohonName },
     { label: 'Kategori', value: kategori },
@@ -181,16 +152,12 @@ export async function sendPengajuanIzinTukarHariEmailNotifications(req, pengajua
     { label: 'Handover', value: handover },
     { label: 'Tanggal Tukar', value: pairsText },
   ];
-
   if (lampiranUrl && lampiranUrl !== '-') {
     fields.push({ label: 'Lampiran', value: lampiranUrl });
   }
-
   const approverEmails = uniqueEmails((pengajuan.approvals || []).map((a) => a?.approver?.email));
   const handoverEmails = uniqueEmails((pengajuan.handover_users || []).map((h) => h?.user?.email));
-
   const ops = [];
-
   if (pemohonEmail) {
     const subject = `[E-HRM] Pengajuan Tukar Hari Berhasil Dikirim`;
     const html = makeEmailHtml({
@@ -198,11 +165,10 @@ export async function sendPengajuanIzinTukarHariEmailNotifications(req, pengajua
       introLines: ['Pengajuan tukar hari Anda telah berhasil dibuat dan dikirim untuk diproses.'],
       fields,
       buttonUrl: url,
-      buttonText: 'Lihat Pengajuan Tukar Hari',
+      buttonText: 'Lihat Daftar Pengajuan',
     });
     ops.push(sendBatch({ from, to: [pemohonEmail], subject, html }));
   }
-
   if (approverEmails.length) {
     const subject = `[E-HRM] Permintaan Persetujuan Tukar Hari (${pemohonName})`;
     const html = makeEmailHtml({
@@ -210,11 +176,10 @@ export async function sendPengajuanIzinTukarHariEmailNotifications(req, pengajua
       introLines: [`Anda dipilih sebagai approver untuk pengajuan tukar hari dari ${pemohonName}.`],
       fields,
       buttonUrl: url,
-      buttonText: 'Buka Pengajuan Tukar Hari',
+      buttonText: 'Buka Menu Approval',
     });
     ops.push(sendBatch({ from, to: approverEmails, subject, html }));
   }
-
   if (handoverEmails.length) {
     const subject = `[E-HRM] Anda Ditunjuk Sebagai Handover Tukar Hari (${pemohonName})`;
     const html = makeEmailHtml({
@@ -222,12 +187,10 @@ export async function sendPengajuanIzinTukarHariEmailNotifications(req, pengajua
       introLines: [`Anda ditandai sebagai handover untuk pengajuan tukar hari dari ${pemohonName}.`],
       fields,
       buttonUrl: url,
-      buttonText: 'Buka Pengajuan Tukar Hari',
+      buttonText: 'Buka Daftar Pengajuan',
     });
     ops.push(sendBatch({ from, to: handoverEmails, subject, html }));
   }
-
   if (!ops.length) return;
-
   await Promise.allSettled(ops);
 }

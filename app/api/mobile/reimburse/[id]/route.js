@@ -34,7 +34,7 @@ function isNullLike(value) {
   }
   return false;
 }
-
+// function 
 function normalizeMoney(value, fieldName) {
   if (isNullLike(value)) return null;
   const raw = typeof value === 'string' ? value.replace(/,/g, '').trim() : value;

@@ -88,7 +88,7 @@ function parseItemsInput(body) {
     return { nama_item_reimburse: nama, harga };
   });
 }
-
+//export sync
 function sumItemsMoney(items) {
   if (!Array.isArray(items) || !items.length) return '0.00';
   const total = items.reduce((acc, it) => acc + Number.parseFloat(it.harga), 0);
@@ -174,26 +174,28 @@ export async function ensureAuth(req) {
           },
         };
       }
-    } catch (_) {
-      // lanjut fallback ke authenticateRequest
-    }
+    } catch (_) {}
   }
 
-  const session = await authenticateRequest(req);
-  if (!session || !session.ok) {
+  const sessionOrRes = await authenticateRequest();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+
+  const actorId = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
+  if (!actorId) {
     return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
 
   return {
     actor: {
-      id: session.user?.id || session.user?.id_user,
-      role: session.user?.role,
-      email: session.user?.email,
+      id: actorId,
+      role: sessionOrRes.user?.role,
+      email: sessionOrRes.user?.email,
     },
-    session,
+    session: sessionOrRes,
   };
 }
 
+//fallback
 async function getActorUser(actorId) {
   if (!actorId) return null;
   return db.user.findUnique({

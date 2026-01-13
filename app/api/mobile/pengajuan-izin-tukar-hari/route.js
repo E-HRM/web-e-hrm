@@ -362,8 +362,8 @@ export async function POST(req) {
 
     const jenis_pengajuan = normalizeStringOrNull(body.jenis_pengajuan) || 'izin_tukar_hari';
 
-    const file = findFileInBody(parsed, ['lampiran', 'lampiran_izin_tukar_hari', 'file', 'attachment']);
-
+    const file = findFileInBody(body, ['lampiran', 'lampiran_izin_tukar_hari', 'file', 'attachment']);
+    
     let uploadMeta = null;
     let lampiranUrl = normalizeStringOrNull(body.lampiran_izin_tukar_hari_url);
 

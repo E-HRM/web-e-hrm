@@ -77,7 +77,10 @@ export async function GET(req, { params }) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   const { searchParams } = new URL(req.url);
@@ -111,7 +114,10 @@ export async function PUT(req, { params }) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   let parsed;
@@ -154,7 +160,10 @@ export async function PUT(req, { params }) {
       if (id_kategori_sop) {
         const kategori = getKategoriDelegate();
         if (!kategori) {
-          return NextResponse.json({ message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+          return NextResponse.json(
+            { message: 'Prisma model kategori_sop tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+            { status: 500 }
+          );
         }
 
         const existsKategori = await kategori.findFirst({
@@ -209,7 +218,10 @@ export async function DELETE(req, { params }) {
 
   const sop = getSopDelegate();
   if (!sop) {
-    return NextResponse.json({ message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' }, { status: 500 });
+    return NextResponse.json(
+      { message: 'Prisma model sop_karyawan tidak ditemukan. Pastikan schema + prisma generate sudah benar.' },
+      { status: 500 }
+    );
   }
 
   try {

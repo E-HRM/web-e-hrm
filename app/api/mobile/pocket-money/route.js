@@ -87,7 +87,17 @@ function parseItemsInput(body) {
   });
 }
 
+/** ✅ UPDATED: include user agar FE dapat nama/foto */
 export const pocketMoneyInclude = {
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+      foto_profil_user: true,
+    },
+  },
   departement: {
     select: { id_departement: true, nama_departement: true },
   },
@@ -169,18 +179,21 @@ export async function ensureAuth(req) {
     } catch (_) {}
   }
 
-  const session = await authenticateRequest(req);
-  if (!session || !session.ok) {
+  const sessionOrRes = await authenticateRequest();
+  if (sessionOrRes instanceof NextResponse) return sessionOrRes;
+
+  const actorId = sessionOrRes?.user?.id || sessionOrRes?.user?.id_user;
+  if (!actorId) {
     return NextResponse.json({ ok: false, message: 'Unauthorized.' }, { status: 401 });
   }
 
   return {
     actor: {
-      id: session.user?.id || session.user?.id_user,
-      role: session.user?.role,
-      email: session.user?.email,
+      id: actorId,
+      role: sessionOrRes.user?.role,
+      email: sessionOrRes.user?.email,
     },
-    session,
+    session: sessionOrRes,
   };
 }
 
@@ -450,7 +463,7 @@ export async function POST(req) {
       include: pocketMoneyInclude,
     });
 
-    // Notifikasi: supervisor departement + approver(s) + actor
+    // Notifikasi
     const notified = new Set();
     const notifPromises = [];
     const basePayload = {

@@ -205,8 +205,30 @@ function parseDateQuery(value) {
 
 function sanitizeHandoverIds(input) {
   if (input === undefined) return undefined;
-  if (input === null) return [];
-  const rawArr = Array.isArray(input) ? input : [input];
+  if (input === null || input === '' || input === '[]') return [];
+
+  let rawArr = [];
+
+  // Jika input berupa string, coba parse jika itu JSON array atau split jika koma
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        rawArr = JSON.parse(trimmed);
+      } catch (e) {
+        rawArr = [trimmed]; // Gagal parse, anggap satu string biasa
+      }
+    } else if (trimmed.includes(',')) {
+      rawArr = trimmed.split(',').map(v => v.trim());
+    } else {
+      rawArr = [trimmed];
+    }
+  } else if (Array.isArray(input)) {
+    rawArr = input;
+  } else {
+    rawArr = [input];
+  }
+
   const ids = rawArr
     .flatMap((v) => {
       if (v === undefined || v === null) return [];
@@ -505,11 +527,14 @@ export async function POST(req) {
 
       const foundIds = new Set(handoverUsers.map((u) => u.id_user));
       const missing = handoverIds.filter((id) => !foundIds.has(id));
+
       if (missing.length) {
-        return NextResponse.json({ ok: false, message: 'Beberapa handover_tag_user_ids tidak valid.' }, { status: 400 });
+        const validOnes = handoverIds.filter((id) => foundIds.has(id));
+        handoverIds.length = 0;
+        handoverIds.push(...validOnes);
       }
     }
-
+    
     let approvalsInput;
     try {
       approvalsInput = parseApprovalsFromBody(body);

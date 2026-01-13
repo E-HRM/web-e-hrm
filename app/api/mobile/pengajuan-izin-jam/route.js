@@ -290,7 +290,8 @@ export async function POST(req) {
   const actorRole = auth.actorRole;
 
   try {
-    const body = await parseRequestBody(req);
+    const parsed = await parseRequestBody(req); 
+    const body = parsed.body || {};
     const file = findFileInBody(body, ['lampiran', 'lampiran_izin_jam', 'file', 'attachment']);
 
     const idUserRaw = body?.id_user;

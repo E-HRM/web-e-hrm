@@ -159,18 +159,31 @@ async function validateTaggedUsers(userIds) {
 
 export function normalizeApprovals(payload) {
   if (!payload) return null;
-  const raw = payload.approvals ?? payload.approval ?? null;
+  let raw = payload.approvals ?? payload.approval ?? null;
   if (!raw) return null;
+
+  // Jika input adalah string (hasil jsonEncode dari Flutter)
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
+      // Jika hasil parse adalah array, langsung kembalikan
+      if (Array.isArray(parsed)) return parsed;
+      // Jika hasil parse adalah satu objek, bungkus dalam array
+      return [parsed];
+    } catch { return null; }
   }
-  if (!Array.isArray(raw)) return null;
-  return raw;
+
+  // Jika input sudah berupa Array (dari parseRequestBody)
+  if (Array.isArray(raw)) {
+    return raw.map(item => {
+      if (typeof item === 'string') {
+        try { return JSON.parse(item); } catch { return item; }
+      }
+      return item;
+    });
+  }
+  
+  return null;
 }
 
 export function parseTagUserIds(body) {
@@ -307,6 +320,22 @@ export async function POST(req) {
   try {
     const parsed = await parseRequestBody(req);
     const body = parsed.body || {};
+
+    // 🔥 TAMBAHKAN LOG DI SINI
+    console.log('------------------------------------------------');
+    console.log('🚀 [DEBUG] POST Payload Received:');
+    console.log(JSON.stringify(body, null, 2)); // Menampilkan body dalam format rapi
+    
+    // Jika ingin melihat apakah ada file yang terdeteksi
+    const fileCheck = findFileInBody(parsed, ['lampiran', 'lampiran_izin_sakit', 'file', 'attachment']);
+    if (fileCheck) {
+        console.log('📂 [DEBUG] File detected:', fileCheck.name || 'Unnamed File', 'Size:', fileCheck.size);
+    } else {
+        console.log('📂 [DEBUG] No file uploaded.');
+    }
+    console.log('------------------------------------------------');
+    // 🔥 AKHIR LOG
+
     const approvalsInput = normalizeApprovals(body) ?? [];
 
     const rawTanggalPengajuan = body.tanggal_pengajuan;
@@ -337,7 +366,7 @@ export async function POST(req) {
 
     const normalizedStatus = canManageAll(actorRole) ? normalizeStatusInput(body.status) || 'pending' : 'pending';
 
-    const file = findFileInBody(parsed, ['lampiran', 'lampiran_izin_sakit', 'file', 'attachment']);
+    const file = findFileInBody(body, ['lampiran', 'lampiran_izin_sakit', 'file', 'attachment']);
 
     let uploadMeta = null;
     let lampiranUrl = normalizeLampiranInput(body.lampiran_izin_sakit_url);
@@ -466,8 +495,6 @@ export async function POST(req) {
         `🏷️ Kategori: ${basePayload.kategori_sakit}`,
         basePayload.tanggal_pengajuan_display ? `📅 Tanggal: ${basePayload.tanggal_pengajuan_display}` : null,
         basePayload.handover && basePayload.handover !== '-' ? `🤝 Handover: ${basePayload.handover}` : null,
-        '',
-        `🔗 Link: ${deeplink}`,
       ].filter(Boolean);
 
       const whatsappMessage = whatsappPayloadLines.join('\n');

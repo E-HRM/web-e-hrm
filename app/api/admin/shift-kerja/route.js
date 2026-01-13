@@ -179,9 +179,21 @@ export async function POST(req) {
     let tanggalSelesai;
 
     if (weeklyScheduleInput !== undefined) {
-      const fallbackStart = body.tanggal_mulai ?? body.start_date ?? body.startDate ?? body.mulai ?? body.referenceDate ?? body.weekStart;
+      const fallbackStart =
+        body.tanggal_mulai ??
+        body.start_date ??
+        body.startDate ??
+        body.mulai ??
+        body.referenceDate ??
+        body.weekStart;
 
-      const fallbackEnd = body.tanggal_selesai ?? body.end_date ?? body.endDate ?? body.selesai ?? body.until ?? body.weekEnd;
+      const fallbackEnd =
+        body.tanggal_selesai ??
+        body.end_date ??
+        body.endDate ??
+        body.selesai ??
+        body.until ??
+        body.weekEnd;
 
       const normalized = normalizeWeeklySchedule(weeklyScheduleInput, {
         fallbackStartDate: fallbackStart,
@@ -241,6 +253,52 @@ export async function POST(req) {
       id_pola_kerja: statusRaw === 'LIBUR' ? null : idPolaKerja ?? null,
     };
 
+    // =============== DEBUG: sebelum upsert ===============
+    const toIsoOrNull = (d) =>
+      d instanceof Date && !isNaN(+d) ? d.toISOString().slice(0, 10) : d;
+
+    console.info('[DEBUG SHIFT UPSERT REQUEST]', {
+      idUser,
+      statusRaw,
+      hariKerjaValue,
+      tanggalMulai: toIsoOrNull(tanggalMulai),
+      tanggalSelesai: toIsoOrNull(tanggalSelesai),
+      idPolaKerja,
+      payloadCreateOrUpdate,
+    });
+
+    // cek data existing user ini sekitar tanggal tersebut (±3 hari)
+    const rangeBeforeFrom = new Date(tanggalMulai.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const rangeBeforeTo = new Date(tanggalMulai.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+    const sebelum = await db.shiftKerja.findMany({
+      where: {
+        id_user: idUser,
+        tanggal_mulai: {
+          gte: rangeBeforeFrom,
+          lte: rangeBeforeTo,
+        },
+      },
+      select: {
+        id_shift_kerja: true,
+        id_user: true,
+        tanggal_mulai: true,
+        tanggal_selesai: true,
+        status: true,
+        id_pola_kerja: true,
+      },
+    });
+
+    console.info(
+      '[DEBUG SHIFT SEBELUM UPSERT]',
+      sebelum.map((s) => ({
+        ...s,
+        tanggal_mulai: toIsoOrNull(s.tanggal_mulai),
+        tanggal_selesai: toIsoOrNull(s.tanggal_selesai),
+      })),
+    );
+    // ======================================================
+
     // === Perbaikan penting: revive soft-deleted via deleted_at: null
     const upserted = await db.shiftKerja.upsert({
       where: {
@@ -270,6 +328,41 @@ export async function POST(req) {
       },
     });
 
+    // =============== DEBUG: sesudah upsert ===============
+    console.info('[DEBUG SHIFT UPSERT RESULT]', {
+      ...upserted,
+      tanggal_mulai: toIsoOrNull(upserted.tanggal_mulai),
+      tanggal_selesai: toIsoOrNull(upserted.tanggal_selesai),
+    });
+
+    const sesudah = await db.shiftKerja.findMany({
+      where: {
+        id_user: idUser,
+        tanggal_mulai: {
+          gte: rangeBeforeFrom,
+          lte: rangeBeforeTo,
+        },
+      },
+      select: {
+        id_shift_kerja: true,
+        id_user: true,
+        tanggal_mulai: true,
+        tanggal_selesai: true,
+        status: true,
+        id_pola_kerja: true,
+      },
+    });
+
+    console.info(
+      '[DEBUG SHIFT SESUDAH UPSERT]',
+      sesudah.map((s) => ({
+        ...s,
+        tanggal_mulai: toIsoOrNull(s.tanggal_mulai),
+        tanggal_selesai: toIsoOrNull(s.tanggal_selesai),
+      })),
+    );
+    // ======================================================
+
     const formatDateOnly = (value) => {
       if (!value) return '-';
       try {
@@ -285,11 +378,21 @@ export async function POST(req) {
       periode_selesai: formatDateOnly(upserted.tanggal_selesai),
     };
 
-    console.info('[NOTIF] Mengirim notifikasi NEW_SHIFT_PUBLISHED untuk user %s dengan payload %o', upserted.id_user, notificationPayload);
+    console.info(
+      '[NOTIF] Mengirim notifikasi NEW_SHIFT_PUBLISHED untuk user %s dengan payload %o',
+      upserted.id_user,
+      notificationPayload,
+    );
     await sendNotification('NEW_SHIFT_PUBLISHED', upserted.id_user, notificationPayload);
-    console.info('[NOTIF] Notifikasi NEW_SHIFT_PUBLISHED selesai diproses untuk user %s', upserted.id_user);
+    console.info(
+      '[NOTIF] Notifikasi NEW_SHIFT_PUBLISHED selesai diproses untuk user %s',
+      upserted.id_user,
+    );
 
-    return NextResponse.json({ message: 'Shift kerja disimpan.', data: transformShiftRecord(upserted) }, { status: 201 });
+    return NextResponse.json(
+      { message: 'Shift kerja disimpan.', data: transformShiftRecord(upserted) },
+      { status: 201 },
+    );
   } catch (err) {
     console.error('POST /shift-kerja error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
