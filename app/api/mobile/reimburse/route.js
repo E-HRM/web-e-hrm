@@ -88,7 +88,7 @@ function parseItemsInput(body) {
     return { nama_item_reimburse: nama, harga };
   });
 }
-
+//export sync
 function sumItemsMoney(items) {
   if (!Array.isArray(items) || !items.length) return '0.00';
   const total = items.reduce((acc, it) => acc + Number.parseFloat(it.harga), 0);
@@ -101,6 +101,28 @@ export const reimburseInclude = {
   },
   kategori_keperluan: {
     select: { id_kategori_keperluan: true, nama_keperluan: true },
+  },
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+      foto_profil_user: true,
+      id_departement: true,
+      departement: {
+        select: {
+          id_departement: true,
+          nama_departement: true,
+        },
+      },
+      jabatan: {
+        select: {
+          id_jabatan: true,
+          nama_jabatan: true,
+        },
+      },
+    },
   },
   items: {
     where: { deleted_at: null },
@@ -173,7 +195,7 @@ export async function ensureAuth(req) {
   };
 }
 
-
+//fallback
 async function getActorUser(actorId) {
   if (!actorId) return null;
   return db.user.findUnique({

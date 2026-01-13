@@ -45,20 +45,6 @@ export default function FinanceRequestsTable({ rows = [], onRowClick }) {
   const columns = useMemo(
     () => [
       {
-        title: 'NOMOR',
-        dataIndex: 'number',
-        key: 'number',
-        width: 120,
-        render: (v) => (
-          <AppTypography.Text
-            weight={800}
-            className='text-slate-900'
-          >
-            {v}
-          </AppTypography.Text>
-        ),
-      },
-      {
         title: 'KARYAWAN',
         key: 'employee',
         width: 280,

@@ -57,8 +57,20 @@ async function apiJson(url, { method = "GET", body } = {}) {
   });
 
   const ct = res.headers.get("content-type") || "";
-  const data = ct.includes("application/json") ? await res.json() : await res.text();
-  if (!res.ok) throw new Error(data?.message || `Request gagal (${res.status})`);
+  const data = ct.includes("application/json")
+    ? await res.json()
+    : await res.text();
+
+  if (!res.ok) {
+    const msg =
+      typeof data === "object" && data?.message
+        ? data.message
+        : typeof data === "string" && data.trim()
+        ? data
+        : `Request gagal (${res.status})`;
+    throw new Error(`[${res.status}] ${msg}`);
+  }
+
   return data;
 }
 
@@ -75,20 +87,34 @@ async function apiForm(url, { method = "POST", formData }) {
   });
 
   const ct = res.headers.get("content-type") || "";
-  const data = ct.includes("application/json") ? await res.json() : await res.text();
-  if (!res.ok) throw new Error(data?.message || `Request gagal (${res.status})`);
+  const data = ct.includes("application/json")
+    ? await res.json()
+    : await res.text();
+
+  if (!res.ok) {
+    const msg =
+      typeof data === "object" && data?.message
+        ? data.message
+        : typeof data === "string" && data.trim()
+        ? data
+        : `Request gagal (${res.status})`;
+    throw new Error(`[${res.status}] ${msg}`);
+  }
+
   return data;
 }
 
 /** Tambahin all=1 tanpa ngerusak query existing */
 function withAllParam(url) {
   try {
-    const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const base =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost";
     const u = new URL(url, base);
     if (!u.searchParams.get("all")) u.searchParams.set("all", "1");
     return u.pathname + u.search;
   } catch {
-    // fallback sederhana
     if (url.includes("?")) return url + "&all=1";
     return url + "?all=1";
   }
@@ -96,10 +122,14 @@ function withAllParam(url) {
 
 /**
  * Fetch ALL pages sampai habis.
- * NOTE: server kamu nge-cap perPage max 100.
+ * NOTE: server nge-cap perPage max 100.
  */
-async function fetchAllPages(initialUrl, { perPage = 100, maxPages = 300 } = {}) {
-  const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+async function fetchAllPages(
+  initialUrl,
+  { perPage = 100, maxPages = 300 } = {}
+) {
+  const base =
+    typeof window !== "undefined" ? window.location.origin : "http://localhost";
   const u = new URL(initialUrl, base);
 
   const all = [];
@@ -127,7 +157,8 @@ async function fetchAllPages(initialUrl, { perPage = 100, maxPages = 300 } = {})
 
     all.push(...items);
 
-    const meta = resp?.meta || resp?.pagination || resp?.paginate || resp?.pageInfo || {};
+    const meta =
+      resp?.meta || resp?.pagination || resp?.paginate || resp?.pageInfo || {};
     const totalPages =
       Number(meta?.totalPages) ||
       Number(meta?.total_pages) ||
@@ -157,7 +188,6 @@ async function fetchAllPages(initialUrl, { perPage = 100, maxPages = 300 } = {})
 function toNumberSafe(v) {
   if (v === null || v === undefined) return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  // Prisma Decimal sering object (Decimal.js)
   const s = String(v).replace(/,/g, "").trim();
   const n = Number.parseFloat(s);
   return Number.isFinite(n) ? n : 0;
@@ -165,7 +195,11 @@ function toNumberSafe(v) {
 
 function pickApproval(item) {
   const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
-  return approvals.find((a) => !a?.decision || a?.decision === "pending") || approvals[0] || null;
+  return (
+    approvals.find((a) => !a?.decision || a?.decision === "pending") ||
+    approvals[0] ||
+    null
+  );
 }
 
 function pickEmployeeName(item) {
@@ -185,7 +219,13 @@ function pickEmployeePhoto(item) {
 }
 
 function pickDepartment(item) {
-  return item?.departement?.nama_departement || item?.departement?.name || "—";
+  return (
+    item?.departement?.nama_departement ||
+    item?.user?.departement?.nama_departement ||
+    item?.departement?.name ||
+    item?.user?.departement?.name ||
+    "—"
+  );
 }
 
 function pickPocketMoneyId(item) {
@@ -201,8 +241,8 @@ function pickDateValue(item) {
 }
 
 function pickTotal(item) {
-  // Prisma: total_pengeluaran
-  const v = item?.total_pengeluaran ?? item?.nominal_pocket_money ?? item?.total ?? 0;
+  const v =
+    item?.total_pengeluaran ?? item?.nominal_pocket_money ?? item?.total ?? 0;
   return toNumberSafe(v);
 }
 
@@ -241,6 +281,12 @@ function pickStatusRaw(item, approval) {
   );
 }
 
+function fallbackNumber(pocketMoneyId) {
+  if (!pocketMoneyId) return "-";
+  const s = String(pocketMoneyId);
+  return `PM-${s.slice(0, 8)}`;
+}
+
 /* =========================
    VIEW MODEL
 ========================= */
@@ -258,7 +304,10 @@ export default function usePocketMoneyViewModel(filters) {
     { revalidateOnFocus: false }
   );
 
-  const raw = useMemo(() => (Array.isArray(data?.data) ? data.data : []), [data]);
+  const raw = useMemo(
+    () => (Array.isArray(data?.data) ? data.data : []),
+    [data]
+  );
 
   const rows = useMemo(() => {
     return raw.map((it, idx) => {
@@ -266,8 +315,7 @@ export default function usePocketMoneyViewModel(filters) {
 
       const pocketMoneyId = pickPocketMoneyId(it);
       const approvalId = pickApprovalId(approval);
-
-      const uniqueRowId = `${pocketMoneyId || "PM"}:${approvalId || "NA"}:${idx}`;
+      const rowId = approvalId || pocketMoneyId || `PM:${idx}`;
 
       const employeeName = pickEmployeeName(it);
       const employeePhotoUrl = pickEmployeePhoto(it);
@@ -285,38 +333,49 @@ export default function usePocketMoneyViewModel(filters) {
       const accountName = pickAccountName(it);
       const accountNumber = pickAccountNumber(it);
 
+      const nomor =
+        it?.nomor_pocket_money || it?.nomor || fallbackNumber(pocketMoneyId);
+
+      // ✅ Bukti dari user
+      const userProofUrl = it?.bukti_pembayaran_url || null;
+
+      // ✅ Bukti admin (dari approval)
+      const adminProofUrl =
+        approval?.bukti_approval_pocket_money_url ||
+        approval?.bukti_approval_url ||
+        null;
+
       return {
-        id: uniqueRowId,
+        id: rowId,
 
         requestId: pocketMoneyId,
-        approvalId,
+        approvalId: approvalId,
 
         type: "Pocket Money",
         title: it?.keterangan || "Pocket Money",
-        number: it?.nomor_pocket_money || it?.nomor || "-",
+        number: nomor,
 
         status: st.key,
         statusLabel: st.label,
         statusTone: st.tone,
 
-        // ✅ untuk tabel & header
         employeeName,
         department,
 
-        // ✅ foto: kasih beberapa alias biar kompatibel sama komponen mana pun
         employeePhotoUrl,
         employeeAvatar: employeePhotoUrl,
         photoUrl: employeePhotoUrl,
         avatarUrl: employeePhotoUrl,
 
-        // ✅ bentuk object juga (kadang komponen pakai ini)
         employee: {
           name: employeeName,
           department,
           photoUrl: employeePhotoUrl,
         },
 
-        dateLabel: dateValue ? new Date(dateValue).toLocaleDateString("id-ID") : "-",
+        dateLabel: dateValue
+          ? new Date(dateValue).toLocaleDateString("id-ID")
+          : "-",
         dateISO: dateValue,
 
         method: pickMethod(it),
@@ -328,21 +387,21 @@ export default function usePocketMoneyViewModel(filters) {
         totalAmount: pickTotal(it),
         note: it?.keterangan || "",
 
-        // ✅ rekening (top-level + object)
         bankName,
         accountName,
         accountNumber,
-        rekening: {
-          bankName,
-          accountName,
-          accountNumber,
-        },
+        rekening: { bankName, accountName, accountNumber },
 
-        paymentProofUrl: it?.bukti_pembayaran_url || null,
+        // ✅ Bentuk object agar modal bisa preview langsung
+        paymentProofUrl: userProofUrl,
+        paymentProof: userProofUrl
+          ? { url: userProofUrl, label: "Bukti Pembayaran (User)" }
+          : null,
 
         rejectReason: approval?.note || it?.note || null,
-        adminProof: approval?.bukti_approval_pocket_money_url
-          ? { name: approval.bukti_approval_pocket_money_url }
+
+        adminProof: adminProofUrl
+          ? { url: adminProofUrl, label: "Bukti Pembayaran (Admin)" }
           : null,
       };
     });
@@ -356,18 +415,22 @@ export default function usePocketMoneyViewModel(filters) {
   const openDetail = useCallback((row) => setSelected(row), []);
   const closeDetail = useCallback(() => setSelected(null), []);
 
-  /** ✅ FIX: decision harus 'disetujui' / 'ditolak' sesuai API */
   const approve = useCallback(
     async ({ id, proofFiles }) => {
+      const approvalId = selected?.approvalId || selected?.id;
+      if (!approvalId) {
+        throw new Error(
+          "Approval ID tidak ditemukan pada data ini. Pastikan record approvals sudah dibuat untuk pocket money ini."
+        );
+      }
+
       const fd = new FormData();
       fd.append("decision", "disetujui");
 
       const fileObj = proofFiles?.[0]?.originFileObj;
       if (fileObj) fd.append("bukti_approval_pocket_money", fileObj);
 
-      const targetId = selected?.approvalId || selected?.requestId || id;
-
-      await apiForm(ApiEndpoints.DecidePocketMoneyMobile(targetId), {
+      await apiForm(ApiEndpoints.DecidePocketMoneyMobile(approvalId), {
         method: "PATCH",
         formData: fd,
       });
@@ -380,13 +443,18 @@ export default function usePocketMoneyViewModel(filters) {
 
   const reject = useCallback(
     async ({ id, reason }) => {
+      const approvalId = selected?.approvalId || selected?.id;
+      if (!approvalId) {
+        throw new Error(
+          "Approval ID tidak ditemukan pada data ini. Pastikan record approvals sudah dibuat untuk pocket money ini."
+        );
+      }
+
       const fd = new FormData();
       fd.append("decision", "ditolak");
       if (reason) fd.append("note", String(reason));
 
-      const targetId = selected?.approvalId || selected?.requestId || id;
-
-      await apiForm(ApiEndpoints.DecidePocketMoneyMobile(targetId), {
+      await apiForm(ApiEndpoints.DecidePocketMoneyMobile(approvalId), {
         method: "PATCH",
         formData: fd,
       });

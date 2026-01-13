@@ -1,105 +1,178 @@
-'use client';
+"use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 
-import AppModal from '@/app/(view)/component_shared/AppModal';
-import AppTypography from '@/app/(view)/component_shared/AppTypography';
-import AppDivider from '@/app/(view)/component_shared/AppDivider';
-import AppButton from '@/app/(view)/component_shared/AppButton';
-import AppSpace from '@/app/(view)/component_shared/AppSpace';
+import AppModal from "@/app/(view)/component_shared/AppModal";
+import AppTypography from "@/app/(view)/component_shared/AppTypography";
+import AppDivider from "@/app/(view)/component_shared/AppDivider";
+import AppButton from "@/app/(view)/component_shared/AppButton";
+import AppSpace from "@/app/(view)/component_shared/AppSpace";
 
-import FinanceStatusTag from '../../component_finance/FinanceStatusTag';
-import FinanceActionModal from '../../component_finance/FinanceActionModal';
+import FinanceStatusTag from "../../component_finance/FinanceStatusTag";
+import FinanceActionModal from "../../component_finance/FinanceActionModal";
 
 function formatIDR(num) {
   const n = Number(num || 0);
-  return new Intl.NumberFormat('id-ID').format(Number.isFinite(n) ? n : 0);
+  return new Intl.NumberFormat("id-ID").format(Number.isFinite(n) ? n : 0);
 }
 
 function InfoRow({ label, value }) {
   return (
-    <div className='flex items-start justify-between gap-3'>
-      <AppTypography.Text
-        size={12}
-        tone='muted'
-        className='text-slate-500'
-      >
+    <div className="flex items-start justify-between gap-3">
+      <AppTypography.Text size={12} tone="muted" className="text-slate-500">
         {label}
       </AppTypography.Text>
-      <AppTypography.Text className='text-slate-800 text-right'>{value ?? '—'}</AppTypography.Text>
+      <AppTypography.Text className="text-slate-800 text-right">
+        {value ?? "—"}
+      </AppTypography.Text>
     </div>
   );
 }
 
-function FileList({ files }) {
-  const list = Array.isArray(files) ? files : [];
-  if (!list.length) {
+/* =========================
+   MEDIA PREVIEW (force like pocket money)
+========================= */
+function getUrlFromFileLike(f) {
+  if (!f) return null;
+  if (typeof f === "string") return f;
+  if (f.url) return f.url;
+  if (f.publicUrl) return f.publicUrl;
+  if (f.href) return f.href;
+  if (typeof f.name === "string" && f.name.startsWith("http")) return f.name;
+  return null;
+}
+
+function getFileNameFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const last = u.pathname.split("/").filter(Boolean).pop();
+    return last || "file";
+  } catch {
+    const clean = String(url || "").split("?")[0];
+    const last = clean.split("/").filter(Boolean).pop();
+    return last || "file";
+  }
+}
+
+function getLabelFromFileLike(file, url) {
+  if (file && typeof file === "object") {
     return (
-      <AppTypography.Text
-        size={12}
-        tone='muted'
-        className='text-slate-500'
-      >
-        Tidak ada dokumen
+      file.label ||
+      file.filename ||
+      (file.name && !String(file.name).startsWith("http") ? file.name : null) ||
+      null
+    );
+  }
+  return getFileNameFromUrl(url);
+}
+
+function isImageByExt(url) {
+  const u = String(url || "").split("?")[0].toLowerCase();
+  return /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(u);
+}
+
+async function probeIsImage(url) {
+  if (!url) return false;
+  if (isImageByExt(url)) return true;
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    const ct = res.headers.get("content-type") || "";
+    return ct.toLowerCase().startsWith("image/");
+  } catch {
+    return false;
+  }
+}
+
+function MediaPreview({ file, forceImagePreview = true }) {
+  const url = getUrlFromFileLike(file);
+  const [isImg, setIsImg] = useState(() => (url ? isImageByExt(url) : false));
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!url) return;
+      const ok = await probeIsImage(url);
+      if (!alive) return;
+      if (ok) setIsImg(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+
+  if (!url) {
+    return (
+      <AppTypography.Text size={12} tone="muted" className="text-slate-500">
+        Belum ada
       </AppTypography.Text>
     );
   }
 
+  const label = getLabelFromFileLike(file, url);
+  const shouldTryImage = forceImagePreview || isImg;
+
   return (
-    <ul className='list-disc pl-5'>
-      {list.map((f, idx) => (
-        <li key={`${f?.name || 'file'}-${idx}`}>
-          <AppTypography.Text className='text-slate-700'>{f?.name || 'Dokumen'}</AppTypography.Text>
-        </li>
-      ))}
-    </ul>
+    <div className="mt-2">
+      {shouldTryImage && !imgFailed ? (
+        <a href={url} target="_blank" rel="noreferrer">
+          <div className="rounded-xl overflow-hidden ring-1 ring-slate-100 bg-slate-50">
+            <img
+              src={url}
+              alt={label}
+              className="w-full h-[220px] object-contain bg-white"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onError={() => setImgFailed(true)}
+            />
+          </div>
+          <AppTypography.Text size={12} tone="muted" className="mt-2 text-slate-500">
+            Klik gambar untuk membuka ukuran penuh
+          </AppTypography.Text>
+        </a>
+      ) : (
+        <div className="mt-2">
+          <AppTypography.Text size={12} tone="muted" className="text-slate-500">
+            Preview tidak tersedia. Buka dokumen:
+          </AppTypography.Text>
+          <a href={url} target="_blank" rel="noreferrer">
+            <AppTypography.Text className="text-slate-700 underline">{label}</AppTypography.Text>
+          </a>
+        </div>
+      )}
+    </div>
   );
 }
 
 export default function ReimbursesDetailModal({ open, onClose, data, onApprove, onReject }) {
   const [action, setAction] = useState(null);
 
-  const title = useMemo(() => {
-    if (!data) return 'Detail Reimburse';
-    return `Reimburse • ${data.number}`;
-  }, [data]);
-
+  const title = useMemo(() => (!data ? "Detail Reimburse" : "Reimburse"), [data]);
   const items = useMemo(() => data?.items || [], [data]);
 
   const footer = useMemo(() => {
     if (!data) return null;
 
-    const isFinal = data.status === 'APPROVED' || data.status === 'REJECTED';
+    const isFinal = data.status === "APPROVED" || data.status === "REJECTED";
 
     return (
-      <div className='w-full flex items-center justify-between'>
-        <div className='flex items-center gap-2'>
+      <div className="w-full flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <FinanceStatusTag status={data.status} />
           {data?.rejectReason ? (
-            <AppTypography.Text
-              size={12}
-              tone='muted'
-              className='text-slate-500'
-            >
+            <AppTypography.Text size={12} tone="muted" className="text-slate-500">
               • {data.rejectReason}
             </AppTypography.Text>
           ) : null}
         </div>
 
-        <AppSpace size='sm'>
-
+        <AppSpace size="sm">
           {!isFinal ? (
             <>
-              <AppButton
-                variant='danger'
-                onClick={() => setAction('reject')}
-              >
+              <AppButton variant="danger" onClick={() => setAction("reject")}>
                 Tolak
               </AppButton>
-              <AppButton
-                variant='primary'
-                onClick={() => setAction('approve')}
-              >
+              <AppButton variant="primary" onClick={() => setAction("approve")}>
                 Bayar
               </AppButton>
             </>
@@ -107,127 +180,104 @@ export default function ReimbursesDetailModal({ open, onClose, data, onApprove, 
         </AppSpace>
       </div>
     );
-  }, [data, onClose]);
+  }, [data]);
 
   return (
     <>
-      <AppModal
-        open={open}
-        onClose={onClose}
-        onCancel={onClose}
-        title={title}
-        width={860}
-        footer={footer}
-      >
+      <AppModal open={open} onClose={onClose} onCancel={onClose} title={title} width={900} footer={footer}>
         {!data ? null : (
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-5'>
-            <div className='flex flex-col gap-3'>
-              <AppTypography.Text
-                weight={900}
-                className='text-slate-900'
-              >
-                Informasi Pengajuan
-              </AppTypography.Text>
+          <div className="flex flex-col gap-4">
+            {/* Row 1: Ringkasan + Rekening */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
+                  Ringkasan
+                </AppTypography.Text>
+                <AppDivider className="my-3" />
 
-              <div className='rounded-xl bg-slate-50 ring-1 ring-slate-100 p-3 flex flex-col gap-2'>
-                <InfoRow label='Nomor' value={data.number} />
-                <InfoRow label='Karyawan' value={`${data.employeeName} • ${data.department}`} />
-                <InfoRow label='Kategori' value={data.category} />
-                <InfoRow label='Tanggal' value={data.dateLabel} />
-                <InfoRow label='Metode' value={data.method === 'TRANSFER' ? 'Transfer' : 'Cash'} />
+                <div className="flex flex-col gap-2">
+                  <InfoRow label="Karyawan" value={`${data.employeeName} • ${data.department}`} />
+                  <InfoRow label="Tanggal" value={data.dateLabel} />
+                  <InfoRow label="Kategori" value={data.category} />
+                  <InfoRow label="Metode" value={data.method === "TRANSFER" ? "Transfer" : data.method} />
+                </div>
 
-                {data.method === 'TRANSFER' ? (
+                {data.note ? (
                   <>
-                    <InfoRow label='Bank' value={data.bankName} />
-                    <InfoRow label='Nama Rekening' value={data.accountName} />
-                    <InfoRow label='No Rekening' value={data.accountNumber} />
+                    <AppDivider className="my-3" />
+                    <AppTypography.Text size={12} tone="muted" className="text-slate-500">
+                      Catatan
+                    </AppTypography.Text>
+                    <AppTypography.Text className="text-slate-700">{data.note}</AppTypography.Text>
                   </>
                 ) : null}
               </div>
 
-              <div className='rounded-xl ring-1 ring-slate-100 p-3'>
-                <AppTypography.Text
-                  weight={800}
-                  className='text-slate-900 block'
-                >
-                  Catatan
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
+                  Rekening
                 </AppTypography.Text>
-                <AppTypography.Text className='text-slate-700'>{data.note || '—'}</AppTypography.Text>
-              </div>
+                <AppDivider className="my-3" />
 
-              <div className='rounded-xl ring-1 ring-slate-100 p-3'>
-                <AppTypography.Text
-                  weight={800}
-                  className='text-slate-900 block'
-                >
-                  Nota / Dokumen
+                <div className="flex flex-col gap-2">
+                  <InfoRow label="Bank" value={data.bankName || "-"} />
+                  <InfoRow label="Nama" value={data.accountName || "-"} />
+                  <InfoRow label="No. Rekening" value={data.accountNumber || "-"} />
+                </div>
+
+                <AppTypography.Text size={12} tone="muted" className="mt-3 text-slate-500">
+                  Ditampilkan untuk metode transfer.
                 </AppTypography.Text>
-                <FileList files={data.receipts} />
               </div>
             </div>
 
-            <div className='flex flex-col gap-3'>
-              <AppTypography.Text
-                weight={900}
-                className='text-slate-900'
-              >
-                Detail Pengeluaran
-              </AppTypography.Text>
-
-              <div className='rounded-xl ring-1 ring-slate-100 p-3'>
-                <div className='flex flex-col gap-2'>
-                  {(items || []).map((it, idx) => (
-                    <div
-                      key={`${it?.name || 'item'}-${idx}`}
-                      className='flex items-center justify-between gap-4'
-                    >
-                      <AppTypography.Text className='text-slate-700'>{it?.name || '—'}</AppTypography.Text>
-                      <AppTypography.Text
-                        weight={800}
-                        className='text-slate-900'
-                      >
-                        Rp {formatIDR(it?.amount)}
-                      </AppTypography.Text>
-                    </div>
-                  ))}
-
-                  <AppDivider className='!my-2' />
-
-                  <div className='flex items-center justify-between gap-4'>
-                    <AppTypography.Text
-                      weight={900}
-                      className='text-slate-900'
-                    >
-                      Total
-                    </AppTypography.Text>
-                    <AppTypography.Text
-                      weight={900}
-                      className='text-slate-900'
-                    >
-                      Rp {formatIDR(data.totalAmount)}
-                    </AppTypography.Text>
-                  </div>
-                </div>
-              </div>
-
-              <div className='rounded-xl ring-1 ring-slate-100 p-3'>
-                <AppTypography.Text
-                  weight={800}
-                  className='text-slate-900 block'
-                >
-                  Bukti Pembayaran (Admin)
+            {/* Row 2: Bukti user (kiri) + bukti admin (kanan) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
+                  Bukti Pembayaran (User)
                 </AppTypography.Text>
-                {data.adminProof?.name ? (
-                  <AppTypography.Text className='text-slate-700'>{data.adminProof.name}</AppTypography.Text>
+                <AppDivider className="my-3" />
+
+                {(Array.isArray(data.receipts) ? data.receipts : []).length ? (
+                  data.receipts.map((f, idx) => (
+                    <MediaPreview key={`${getUrlFromFileLike(f) || "file"}-${idx}`} file={f} forceImagePreview />
+                  ))
                 ) : (
-                  <AppTypography.Text
-                    size={12}
-                    tone='muted'
-                    className='text-slate-500'
-                  >
+                  <AppTypography.Text size={12} tone="muted" className="text-slate-500">
                     Belum ada
                   </AppTypography.Text>
                 )}
+              </div>
+
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
+                  Bukti Transfer (Admin)
+                </AppTypography.Text>
+                <AppDivider className="my-3" />
+
+                <MediaPreview file={data.adminProof} forceImagePreview />
+              </div>
+            </div>
+
+            {/* Row 3: Detail Pengeluaran */}
+            <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+              <AppTypography.Text weight={800} className="block text-slate-900">
+                Detail Pengeluaran
+              </AppTypography.Text>
+
+              <div className="flex flex-col gap-2">
+
+                <AppDivider className="!my-2" />
+
+                <div className="flex items-center justify-between gap-4">
+                  <AppTypography.Text weight={900} className="text-slate-900">
+                    Total
+                  </AppTypography.Text>
+                  <AppTypography.Text weight={900} className="text-slate-900">
+                    Rp {formatIDR(data.totalAmount)}
+                  </AppTypography.Text>
+                </div>
               </div>
             </div>
           </div>
@@ -235,9 +285,9 @@ export default function ReimbursesDetailModal({ open, onClose, data, onApprove, 
       </AppModal>
 
       <FinanceActionModal
-        open={open && action === 'approve'}
+        open={open && action === "approve"}
         onClose={() => setAction(null)}
-        mode='approve'
+        mode="approve"
         requireProof={false}
         request={{
           number: data?.number,
@@ -249,9 +299,9 @@ export default function ReimbursesDetailModal({ open, onClose, data, onApprove, 
       />
 
       <FinanceActionModal
-        open={open && action === 'reject'}
+        open={open && action === "reject"}
         onClose={() => setAction(null)}
-        mode='reject'
+        mode="reject"
         request={{
           number: data?.number,
           onSubmit: async ({ reason }) => {

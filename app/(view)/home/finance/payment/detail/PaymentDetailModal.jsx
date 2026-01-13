@@ -1,166 +1,192 @@
-'use client';
+"use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 
-import AppModal from '@/app/(view)/component_shared/AppModal';
-import AppTypography from '@/app/(view)/component_shared/AppTypography';
-import AppDivider from '@/app/(view)/component_shared/AppDivider';
-import AppButton from '@/app/(view)/component_shared/AppButton';
-import AppSpace from '@/app/(view)/component_shared/AppSpace';
-import AppInput from '@/app/(view)/component_shared/AppInput';
+import AppModal from "@/app/(view)/component_shared/AppModal";
+import AppTypography from "@/app/(view)/component_shared/AppTypography";
+import AppDivider from "@/app/(view)/component_shared/AppDivider";
+import AppButton from "@/app/(view)/component_shared/AppButton";
+import AppSpace from "@/app/(view)/component_shared/AppSpace";
+import AppInput from "@/app/(view)/component_shared/AppInput";
 
-import FinanceStatusTag from '../../component_finance/FinanceStatusTag';
-import FinanceActionModal from '../../component_finance/FinanceActionModal';
+import FinanceStatusTag from "../../component_finance/FinanceStatusTag";
+import FinanceActionModal from "../../component_finance/FinanceActionModal";
 
 function formatIDR(num) {
   const n = Number(num || 0);
-  return new Intl.NumberFormat('id-ID').format(Number.isFinite(n) ? n : 0);
+  return new Intl.NumberFormat("id-ID").format(Number.isFinite(n) ? n : 0);
 }
 
 function InfoRow({ label, value }) {
   return (
-    <div className='flex items-start justify-between gap-3'>
-      <AppTypography.Text
-        size={12}
-        tone='muted'
-        className='text-slate-500'
-      >
+    <div className="flex items-start justify-between gap-3">
+      <AppTypography.Text size={12} tone="muted" className="text-slate-500">
         {label}
       </AppTypography.Text>
-      <AppTypography.Text className='text-slate-800 text-right'>{value ?? '—'}</AppTypography.Text>
+      <AppTypography.Text className="text-slate-800 text-right">
+        {value ?? "—"}
+      </AppTypography.Text>
     </div>
   );
 }
 
-function FileList({ title, files }) {
-  const list = Array.isArray(files) ? files : files ? [files] : [];
-  return (
-    <div className='rounded-xl bg-slate-50 ring-1 ring-slate-100 p-3'>
-      <AppTypography.Text
-        weight={800}
-        className='block text-slate-900'
-      >
-        {title}
+/* =========================
+   MEDIA PREVIEW (force)
+========================= */
+function getUrlFromFileLike(f) {
+  if (!f) return null;
+  if (typeof f === "string") return f;
+  if (f.url) return f.url;
+  if (f.publicUrl) return f.publicUrl;
+  if (f.href) return f.href;
+  if (typeof f.name === "string" && f.name.startsWith("http")) return f.name;
+  return null;
+}
+
+function getFileNameFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const last = u.pathname.split("/").filter(Boolean).pop();
+    return last || "file";
+  } catch {
+    const clean = String(url || "").split("?")[0];
+    const last = clean.split("/").filter(Boolean).pop();
+    return last || "file";
+  }
+}
+
+function getLabelFromFileLike(file, url) {
+  if (file && typeof file === "object") {
+    return (
+      file.label ||
+      file.filename ||
+      (file.name && !String(file.name).startsWith("http") ? file.name : null) ||
+      null
+    );
+  }
+  return getFileNameFromUrl(url);
+}
+
+function isImageByExt(url) {
+  const u = String(url || "").split("?")[0].toLowerCase();
+  return /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(u);
+}
+
+async function probeIsImage(url) {
+  if (!url) return false;
+  if (isImageByExt(url)) return true;
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    const ct = res.headers.get("content-type") || "";
+    return ct.toLowerCase().startsWith("image/");
+  } catch {
+    return false;
+  }
+}
+
+function MediaPreview({ file, forceImagePreview = true }) {
+  const url = getUrlFromFileLike(file);
+  const [isImg, setIsImg] = useState(() => (url ? isImageByExt(url) : false));
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!url) return;
+      const ok = await probeIsImage(url);
+      if (!alive) return;
+      if (ok) setIsImg(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+
+  if (!url) {
+    return (
+      <AppTypography.Text size={12} tone="muted" className="text-slate-500">
+        Belum ada
       </AppTypography.Text>
-      <div className='mt-2 flex flex-col gap-1'>
-        {list.length ? (
-          list.map((f, idx) => (
-            <AppTypography.Text
-              key={idx}
-              size={13}
-              className='text-slate-700'
-            >
-              • {f?.name || 'file'}
-            </AppTypography.Text>
-          ))
-        ) : (
-          <AppTypography.Text
-            size={12}
-            tone='muted'
-            className='text-slate-500'
-          >
-            Belum ada dokumen.
+    );
+  }
+
+  const label = getLabelFromFileLike(file, url);
+  const shouldTryImage = forceImagePreview || isImg;
+
+  return (
+    <div className="mt-2">
+      {shouldTryImage && !imgFailed ? (
+        <a href={url} target="_blank" rel="noreferrer">
+          <div className="rounded-xl overflow-hidden ring-1 ring-slate-100 bg-slate-50">
+            <img
+              src={url}
+              alt={label}
+              className="w-full h-[220px] object-contain bg-white"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              onError={() => setImgFailed(true)}
+            />
+          </div>
+          <AppTypography.Text size={12} tone="muted" className="mt-2 text-slate-500">
+            Klik gambar untuk membuka ukuran penuh
           </AppTypography.Text>
-        )}
-      </div>
+        </a>
+      ) : (
+        <div className="mt-2">
+          <AppTypography.Text size={12} tone="muted" className="text-slate-500">
+            Preview tidak tersedia. Buka dokumen:
+          </AppTypography.Text>
+          <a href={url} target="_blank" rel="noreferrer">
+            <AppTypography.Text className="text-slate-700 underline">{label}</AppTypography.Text>
+          </a>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function PaymentDetailModal({ open, onClose, data, onApprove, onReject, onMarkReceiptUploaded }) {
-  const [action, setAction] = useState(null); // 'approve' | 'reject' | null
-  const [receiptName, setReceiptName] = useState('');
+  const [action, setAction] = useState(null);
+  const [receiptName, setReceiptName] = useState("");
 
-  const title = useMemo(() => {
-    if (!data) return 'Detail Payment';
-    return `Payment • ${data.number}`;
-  }, [data]);
-
+  const title = useMemo(() => (!data ? "Detail Payment" : "Payment"), [data]);
   const items = useMemo(() => data?.items || [], [data]);
 
   const footer = useMemo(() => {
     if (!data) return null;
 
-    const isFinalReject = data.status === 'REJECTED';
-    const canApprove = data.status === 'PENDING' || data.status === 'IN_REVIEW';
+    const isFinalReject = data.status === "REJECTED";
+    const canApprove = data.status === "PENDING" || data.status === "IN_REVIEW";
 
     return (
-      <div className='w-full flex flex-col gap-3'>
-        <div className='w-full flex items-center justify-between'>
-          <div className='flex items-center gap-2'>
+      <div className="w-full flex flex-col gap-3">
+        <div className="w-full flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <FinanceStatusTag status={data.status} />
             {data?.rejectReason ? (
-              <AppTypography.Text
-                size={12}
-                tone='muted'
-                className='text-slate-500'
-              >
+              <AppTypography.Text size={12} tone="muted" className="text-slate-500">
                 • {data.rejectReason}
               </AppTypography.Text>
             ) : null}
           </div>
 
-          <AppSpace size='sm'>
-
+          <AppSpace size="sm">
             {!isFinalReject ? (
               <>
-                <AppButton
-                  variant='danger'
-                  disabled={data.status === 'APPROVED'}
-                  onClick={() => setAction('reject')}
-                >
+                <AppButton variant="danger" disabled={data.status === "APPROVED"} onClick={() => setAction("reject")}>
                   Reject
                 </AppButton>
 
-                <AppButton
-                  variant='primary'
-                  disabled={!canApprove}
-                  onClick={() => setAction('approve')}
-                >
+                <AppButton variant="primary" disabled={!canApprove} onClick={() => setAction("approve")}>
                   Bayar
                 </AppButton>
               </>
             ) : null}
           </AppSpace>
         </div>
-
-        {data.status === 'APPROVED' ? (
-          <div className='w-full rounded-xl bg-amber-50 ring-1 ring-amber-100 p-3 flex flex-col gap-2'>
-            <AppTypography.Text
-              weight={800}
-              className='text-amber-900'
-            >
-              Tahap Setelah Transfer (Dummy)
-            </AppTypography.Text>
-            <AppTypography.Text className='text-amber-900'>
-              Setelah admin upload bukti transfer, requester biasanya meng-upload kuitansi / bukti share ke vendor.
-            </AppTypography.Text>
-
-            <div className='flex flex-wrap items-end gap-2'>
-              <AppInput
-                label='Nama file kuitansi (simulasi)'
-                value={receiptName}
-                onChange={(e) => setReceiptName(e?.target?.value ?? '')}
-                placeholder='contoh: kuitansi_vendor.pdf'
-                className='min-w-[260px]'
-              />
-
-              <AppButton
-                variant='secondary'
-                disabled={!!data.requesterReceipt}
-                onClick={async () => {
-                  await onMarkReceiptUploaded?.({ id: data.id, receiptName: receiptName || 'kuitansi.pdf' });
-                  setReceiptName('');
-                }}
-              >
-                Upload Kuitansi
-              </AppButton>
-            </div>
-          </div>
-        ) : null}
       </div>
     );
-  }, [data, onClose, receiptName, onMarkReceiptUploaded]);
+  }, [data, receiptName, onMarkReceiptUploaded]);
 
   return (
     <>
@@ -169,152 +195,118 @@ export default function PaymentDetailModal({ open, onClose, data, onApprove, onR
         onClose={onClose}
         onCancel={onClose}
         title={title}
-        subtitle='Detail pengajuan payment (sponsorship/vendor)'
+        subtitle="Detail pengajuan payment"
         footer={() => footer}
         width={900}
       >
         {!data ? null : (
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-5'>
-            <div className='flex flex-col gap-3'>
-              <div className='rounded-xl bg-slate-50 ring-1 ring-slate-100 p-3'>
-                <div className='flex items-center justify-between gap-3'>
-                  <div>
-                    <AppTypography.Text
-                      size={12}
-                      tone='muted'
-                      className='block text-slate-500'
-                    >
-                      Nomor Pengajuan
-                    </AppTypography.Text>
-                    <AppTypography.Text
-                      weight={900}
-                      className='block text-slate-900'
-                    >
-                      {data.number}
-                    </AppTypography.Text>
-                  </div>
-                  <FinanceStatusTag status={data.status} />
-                </div>
-              </div>
-
-              <div className='rounded-xl bg-white ring-1 ring-slate-100 p-3'>
-                <AppTypography.Text
-                  weight={800}
-                  className='block text-slate-900 mb-2'
-                >
+          <div className="flex flex-col gap-4">
+            {/* Row 1: Ringkasan + Rekening */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
                   Ringkasan
                 </AppTypography.Text>
+                <AppDivider className="my-3" />
 
-                <div className='flex flex-col gap-2'>
-                  <InfoRow
-                    label='Karyawan'
-                    value={`${data.employeeName} • ${data.department}`}
-                  />
-                  <InfoRow
-                    label='Tanggal'
-                    value={data.dateLabel}
-                  />
-                  <InfoRow
-                    label='Kategori'
-                    value={data.category}
-                  />
-                  <InfoRow
-                    label='Vendor/Instansi'
-                    value={data.vendorName}
-                  />
-                  <InfoRow
-                    label='Event'
-                    value={data.eventName}
-                  />
-                  <InfoRow
-                    label='Metode'
-                    value={data.method}
-                  />
+                <div className="flex flex-col gap-2">
+                  <InfoRow label="Karyawan" value={`${data.employeeName} • ${data.department}`} />
+                  <InfoRow label="Tanggal" value={data.dateLabel} />
+                  <InfoRow label="Kategori" value={data.category} />
+                  <InfoRow label="Metode" value={data.method} />
                 </div>
 
                 {data.note ? (
                   <>
-                    <AppDivider className='!my-3' />
-                    <AppTypography.Text
-                      size={12}
-                      tone='muted'
-                      className='block text-slate-500'
-                    >
+                    <AppDivider className="my-3" />
+                    <AppTypography.Text size={12} tone="muted" className="block text-slate-500">
                       Catatan
                     </AppTypography.Text>
-                    <AppTypography.Text className='text-slate-700'>{data.note}</AppTypography.Text>
+                    <AppTypography.Text className="text-slate-700">{data.note}</AppTypography.Text>
                   </>
                 ) : null}
               </div>
 
-              <FileList
-                title='Proposal (Requester)'
-                files={data.proposalFiles}
-              />
-            </div>
-
-            <div className='flex flex-col gap-3'>
-              <div className='rounded-xl bg-white ring-1 ring-slate-100 p-3'>
-                <AppTypography.Text
-                  weight={800}
-                  className='block text-slate-900 mb-2'
-                >
-                  Rincian Biaya
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
+                  Rekening
                 </AppTypography.Text>
+                <AppDivider className="my-3" />
 
-                <div className='flex flex-col gap-2'>
-                  {items.map((it, idx) => (
-                    <div
-                      key={idx}
-                      className='flex items-center justify-between gap-3'
-                    >
-                      <AppTypography.Text className='text-slate-700'>{it.name}</AppTypography.Text>
-                      <AppTypography.Text
-                        weight={800}
-                        className='text-slate-900'
-                      >
-                        Rp {formatIDR(it.amount)}
-                      </AppTypography.Text>
-                    </div>
-                  ))}
-
-                  <AppDivider className='!my-2' />
-
-                  <div className='flex items-center justify-between gap-3'>
-                    <AppTypography.Text
-                      weight={900}
-                      className='text-slate-900'
-                    >
-                      Total
-                    </AppTypography.Text>
-                    <AppTypography.Text
-                      weight={900}
-                      className='text-slate-900'
-                    >
-                      Rp {formatIDR(data.totalAmount)}
-                    </AppTypography.Text>
-                  </div>
+                <div className="flex flex-col gap-2">
+                  <InfoRow label="Bank" value={data.bankName || "-"} />
+                  <InfoRow label="Nama" value={data.accountName || "-"} />
+                  <InfoRow label="No. Rekening" value={data.accountNumber || "-"} />
                 </div>
               </div>
+            </div>
 
-              <FileList
-                title='Bukti Transfer (Admin)'
-                files={data.adminProof}
-              />
+            {/* Row 2: Bukti user (kiri) + bukti admin (kanan) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
+                  Bukti / Nota (User)
+                </AppTypography.Text>
+                <AppDivider className="my-3" />
 
-              <FileList
-                title='Kuitansi / Bukti Vendor (Requester)'
-                files={data.requesterReceipt}
-              />
+                {(Array.isArray(data.proposalFiles) ? data.proposalFiles : []).length ? (
+                  data.proposalFiles.map((f, idx) => (
+                    <MediaPreview key={`${getUrlFromFileLike(f) || "file"}-${idx}`} file={f} forceImagePreview />
+                  ))
+                ) : (
+                  <AppTypography.Text size={12} tone="muted" className="text-slate-500">
+                    Belum ada
+                  </AppTypography.Text>
+                )}
+              </div>
+
+              <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+                <AppTypography.Text weight={800} className="block text-slate-900">
+                  Bukti Transfer (Admin)
+                </AppTypography.Text>
+                <AppDivider className="my-3" />
+
+                <MediaPreview file={data.adminProof} forceImagePreview />
+              </div>
+            </div>
+
+            {/* Row 3: Rincian biaya */}
+            <div className="rounded-2xl ring-1 ring-slate-100 bg-white p-4">
+              <AppTypography.Text weight={800} className="block text-slate-900">
+                Rincian Biaya
+              </AppTypography.Text>
+              <AppDivider className="my-3" />
+
+              <div className="flex flex-col gap-2">
+                {items.map((it, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-3">
+                    <AppTypography.Text className="text-slate-700">{it.name}</AppTypography.Text>
+                    <AppTypography.Text weight={800} className="text-slate-900">
+                      Rp {formatIDR(it.amount)}
+                    </AppTypography.Text>
+                  </div>
+                ))}
+
+                <AppDivider className="!my-2" />
+
+                <div className="flex items-center justify-between gap-3">
+                  <AppTypography.Text weight={900} className="text-slate-900">
+                    Total
+                  </AppTypography.Text>
+                  <AppTypography.Text weight={900} className="text-slate-900">
+                    Rp {formatIDR(data.totalAmount)}
+                  </AppTypography.Text>
+                </div>
+              </div>
             </div>
           </div>
         )}
       </AppModal>
 
       <FinanceActionModal
-        open={open && action === 'approve'}
+        open={open && action === "approve"}
         onClose={() => setAction(null)}
-        mode='approve'
+        mode="approve"
         requireProof
         request={{
           number: data?.number,
@@ -326,9 +318,9 @@ export default function PaymentDetailModal({ open, onClose, data, onApprove, onR
       />
 
       <FinanceActionModal
-        open={open && action === 'reject'}
+        open={open && action === "reject"}
         onClose={() => setAction(null)}
-        mode='reject'
+        mode="reject"
         request={{
           number: data?.number,
           onSubmit: async ({ reason }) => {

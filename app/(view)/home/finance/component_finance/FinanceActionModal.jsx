@@ -73,24 +73,6 @@ export default function FinanceActionModal({ open, onClose, mode = 'approve', re
       width={640}
     >
       <div className='flex flex-col gap-4'>
-        {request?.number ? (
-          <div className='rounded-xl bg-slate-50 ring-1 ring-slate-100 p-3'>
-            <AppTypography.Text
-              size={12}
-              tone='muted'
-              className='block'
-            >
-              Nomor Pengajuan
-            </AppTypography.Text>
-            <AppTypography.Text
-              weight={900}
-              className='block text-slate-900'
-            >
-              {request.number}
-            </AppTypography.Text>
-          </div>
-        ) : null}
-
         {isApprove ? (
           <>
             <AppTypography.Text className='text-slate-700'>
@@ -106,7 +88,6 @@ export default function FinanceActionModal({ open, onClose, mode = 'approve', re
               onChange={(info) => setFileList(info?.fileList || [])}
               beforeUpload={() => false}
               accept='.jpg,.jpeg,.png,.pdf'
-              hint='File tidak akan di-upload ke server (dummy).'
             />
           </>
         ) : (

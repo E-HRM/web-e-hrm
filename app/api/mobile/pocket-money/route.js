@@ -104,6 +104,28 @@ export const pocketMoneyInclude = {
   kategori_keperluan: {
     select: { id_kategori_keperluan: true, nama_keperluan: true },
   },
+  user: {
+    select: {
+      id_user: true,
+      nama_pengguna: true,
+      email: true,
+      role: true,
+      foto_profil_user: true,
+      id_departement: true,
+      departement: {
+        select: {
+          id_departement: true,
+          nama_departement: true,
+        },
+      },
+      jabatan: {
+        select: {
+          id_jabatan: true,
+          nama_jabatan: true,
+        },
+      },
+    },
+  },
   items: {
     where: { deleted_at: null },
     orderBy: { created_at: 'asc' },
