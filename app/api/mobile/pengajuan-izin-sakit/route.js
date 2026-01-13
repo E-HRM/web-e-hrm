@@ -367,7 +367,7 @@ export async function POST(req) {
     const normalizedStatus = canManageAll(actorRole) ? normalizeStatusInput(body.status) || 'pending' : 'pending';
 
     const file = findFileInBody(body, ['lampiran', 'lampiran_izin_sakit', 'file', 'attachment']);
-    
+
     let uploadMeta = null;
     let lampiranUrl = normalizeLampiranInput(body.lampiran_izin_sakit_url);
 
@@ -495,8 +495,6 @@ export async function POST(req) {
         `🏷️ Kategori: ${basePayload.kategori_sakit}`,
         basePayload.tanggal_pengajuan_display ? `📅 Tanggal: ${basePayload.tanggal_pengajuan_display}` : null,
         basePayload.handover && basePayload.handover !== '-' ? `🤝 Handover: ${basePayload.handover}` : null,
-        '',
-        `🔗 Link: ${deeplink}`,
       ].filter(Boolean);
 
       const whatsappMessage = whatsappPayloadLines.join('\n');
