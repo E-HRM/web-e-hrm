@@ -16,7 +16,13 @@ const timeDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
 
 function stripUserIds(text) {
   if (!text) return '-';
-  return text.replace(/@\[[^\]]+\]\s*\(\s*([^)]+)\s*\)/g, '$1');
+
+  return text
+    .replace(/@\[[^\]]+\]\s*\(\s*([^)]+)\s*\)/g, '$1')
+    .replace(/_{1,2}([^_]+)_{1,2}/g, '$1')
+    .replace(/@/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function formatDateDisplay(value) {
@@ -85,7 +91,11 @@ function makeEmailHtml({ title, introLines = [], fields = [], buttonUrl, buttonT
     })
     .join('');
   const table = rowsHtml ? `<table cellpadding="0" cellspacing="0" style="border-collapse:collapse; width:100%; margin-top:14px;"><tbody>${rowsHtml}</tbody></table>` : '';
-  const btn = buttonUrl ? `<div style="margin-top:18px;"><a href="${escapeHtml(buttonUrl)}" style="display:inline-block; padding:10px 14px; text-decoration:none; border-radius:10px; background:#111827; color:#ffffff; font-weight:700;">${escapeHtml(buttonText || 'Buka')}</a></div>` : '';
+  const btn = buttonUrl
+    ? `<div style="margin-top:18px;"><a href="${escapeHtml(buttonUrl)}" style="display:inline-block; padding:10px 14px; text-decoration:none; border-radius:10px; background:#111827; color:#ffffff; font-weight:700;">${escapeHtml(
+        buttonText || 'Buka'
+      )}</a></div>`
+    : '';
   return `
     <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; color:#111827; padding:16px;">
       <div style="max-width:640px; margin:0 auto; border:1px solid #e5e7eb; border-radius:14px; overflow:hidden;">
@@ -146,39 +156,54 @@ export async function sendPengajuanIzinJamEmailNotifications(req, pengajuan) {
   const ops = [];
 
   if (pemohonEmail) {
-    ops.push(sendBatch({
-      from, to: [pemohonEmail],
-      subject: `[E-HRM] Pengajuan Izin Jam Berhasil Dikirim`,
-      html: makeEmailHtml({
-        title: 'Pengajuan Izin Jam Berhasil Dikirim',
-        introLines: ['Pengajuan izin jam Anda telah berhasil dibuat dan dikirim untuk diproses.'],
-        fields, buttonUrl: url, buttonText: 'Lihat Daftar Pengajuan'
+    ops.push(
+      sendBatch({
+        from,
+        to: [pemohonEmail],
+        subject: `[E-HRM] Pengajuan Izin Jam Berhasil Dikirim`,
+        html: makeEmailHtml({
+          title: 'Pengajuan Izin Jam Berhasil Dikirim',
+          introLines: ['Pengajuan izin jam Anda telah berhasil dibuat dan dikirim untuk diproses.'],
+          fields,
+          buttonUrl: url,
+          buttonText: 'Lihat Daftar Pengajuan',
+        }),
       })
-    }));
+    );
   }
 
   if (approverEmails.length) {
-    ops.push(sendBatch({
-      from, to: approverEmails,
-      subject: `[E-HRM] Permintaan Persetujuan Izin Jam (${pemohonNama})`,
-      html: makeEmailHtml({
-        title: 'Permintaan Persetujuan Izin Jam',
-        introLines: [`Anda dipilih sebagai approver untuk pengajuan izin jam dari ${pemohonNama}.`],
-        fields, buttonUrl: url, buttonText: 'Buka Menu Approval'
+    ops.push(
+      sendBatch({
+        from,
+        to: approverEmails,
+        subject: `[E-HRM] Permintaan Persetujuan Izin Jam (${pemohonNama})`,
+        html: makeEmailHtml({
+          title: 'Permintaan Persetujuan Izin Jam',
+          introLines: [`Anda dipilih sebagai approver untuk pengajuan izin jam dari ${pemohonNama}.`],
+          fields,
+          buttonUrl: url,
+          buttonText: 'Buka Menu Approval',
+        }),
       })
-    }));
+    );
   }
 
   if (handoverEmails.length) {
-    ops.push(sendBatch({
-      from, to: handoverEmails,
-      subject: `[E-HRM] Anda Ditunjuk Sebagai Handover Izin Jam (${pemohonNama})`,
-      html: makeEmailHtml({
-        title: 'Permintaan Handover Izin Jam',
-        introLines: [`Anda ditandai sebagai pihak handover untuk pengajuan izin jam dari ${pemohonNama}.`],
-        fields, buttonUrl: url, buttonText: 'Lihat Daftar Pengajuan'
+    ops.push(
+      sendBatch({
+        from,
+        to: handoverEmails,
+        subject: `[E-HRM] Anda Ditunjuk Sebagai Handover Izin Jam (${pemohonNama})`,
+        html: makeEmailHtml({
+          title: 'Permintaan Handover Izin Jam',
+          introLines: [`Anda ditandai sebagai pihak handover untuk pengajuan izin jam dari ${pemohonNama}.`],
+          fields,
+          buttonUrl: url,
+          buttonText: 'Lihat Daftar Pengajuan',
+        }),
       })
-    }));
+    );
   }
 
   if (ops.length) await Promise.allSettled(ops);

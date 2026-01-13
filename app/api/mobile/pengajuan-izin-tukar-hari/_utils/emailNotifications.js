@@ -9,7 +9,13 @@ const dateDisplayFormatter = new Intl.DateTimeFormat('id-ID', {
 
 function stripUserIds(text) {
   if (!text) return '-';
-  return text.replace(/@\[[^\]]+\]\s*\(\s*([^)]+)\s*\)/g, '$1');
+
+  return text
+    .replace(/@\[[^\]]+\]\s*\(\s*([^)]+)\s*\)/g, '$1')
+    .replace(/_{1,2}([^_]+)_{1,2}/g, '$1')
+    .replace(/@/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function formatDateDisplay(value) {
