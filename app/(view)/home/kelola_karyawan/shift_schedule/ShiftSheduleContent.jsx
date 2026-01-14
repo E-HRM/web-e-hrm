@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import Link from "next/link";
 import dayjs from "dayjs";
 import "dayjs/locale/id";
@@ -60,8 +60,20 @@ function isPastDate(dateStr) {
   return dayjs(dateStr).isBefore(dayjs().startOf("day"), "day");
 }
 
-const Cell = React.memo(function Cell({ cell, polaMap, onAssign, onDelete, disabled, story, onToggleStory }) {
-  const value = cell ? (cell.status === "LIBUR" ? "LIBUR" : cell.polaId || undefined) : undefined;
+const Cell = React.memo(function Cell({
+  cell,
+  polaMap,
+  onAssign,
+  onDelete,
+  disabled,
+  story,
+  onToggleStory,
+}) {
+  const value = cell
+    ? cell.status === "LIBUR"
+      ? "LIBUR"
+      : cell.polaId || undefined
+    : undefined;
 
   const options = useMemo(() => {
     const arr = [{ value: "LIBUR", label: "Libur — (tidak bekerja)" }];
@@ -85,8 +97,13 @@ const Cell = React.memo(function Cell({ cell, polaMap, onAssign, onDelete, disab
 
   return (
     <div className="p-2">
-      <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm" style={disabled ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
-        <div className="text-xs mb-1 text-slate-500">{disabled ? "Jadwal (riwayat)" : "Pilih jadwal"}</div>
+      <div
+        className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm"
+        style={disabled ? { opacity: 0.6, pointerEvents: "none" } : undefined}
+      >
+        <div className="text-xs mb-1 text-slate-500">
+          {disabled ? "Jadwal (riwayat)" : "Pilih jadwal"}
+        </div>
 
         <AppSelect
           className="w-full"
@@ -117,7 +134,13 @@ const Cell = React.memo(function Cell({ cell, polaMap, onAssign, onDelete, disab
           {cell && cell.rawId && !disabled && (
             <AppTooltip title="Hapus jadwal tanggal ini">
               <span className="inline-flex">
-                <AppButton variant="text" size="small" icon={<DeleteOutlined />} danger onClick={safeDelete} />
+                <AppButton
+                  variant="text"
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={safeDelete}
+                />
               </span>
             </AppTooltip>
           )}
@@ -145,7 +168,105 @@ export default function ShiftScheduleContent() {
   const vm = UseShiftScheduleViewModel();
   const isMobile = useIsMobile(640);
 
-  const dataSource = useMemo(() => (vm.rows || []).map((r) => ({ ...r, key: r.id })), [vm.rows]);
+  const dataSource = useMemo(
+    () => (vm.rows || []).map((r) => ({ ...r, key: r.id })),
+    [vm.rows]
+  );
+
+  // ============================================================
+  // Preserve scroll Y + X untuk AntD Table body (scroll y: 640)
+  // ============================================================
+  const tableWrapRef = useRef(null);
+  const lastScrollRef = useRef({ top: 0, left: 0 });
+
+  const getTableBodyEl = useCallback(() => {
+    const root = tableWrapRef.current;
+    if (!root) return null;
+    return root.querySelector(".ant-table-body");
+  }, []);
+
+  const captureTableScroll = useCallback(() => {
+    const body = getTableBodyEl();
+    if (!body) return;
+    lastScrollRef.current = {
+      top: body.scrollTop || 0,
+      left: body.scrollLeft || 0,
+    };
+  }, [getTableBodyEl]);
+
+  const restoreTableScroll = useCallback(() => {
+    const { top, left } = lastScrollRef.current || { top: 0, left: 0 };
+
+    const apply = () => {
+      const body = getTableBodyEl();
+      if (!body) return;
+      body.scrollTop = top;
+      body.scrollLeft = left;
+    };
+
+    // AntD kadang reset setelah paint/layout → tembak beberapa kali
+    requestAnimationFrame(apply);
+    setTimeout(apply, 0);
+    setTimeout(apply, 60);
+    setTimeout(apply, 200);
+    setTimeout(apply, 400);
+  }, [getTableBodyEl]);
+
+  // update ref saat user scroll manual
+  useEffect(() => {
+    const body = getTableBodyEl();
+    if (!body) return;
+
+    const onScroll = () => {
+      lastScrollRef.current = {
+        top: body.scrollTop || 0,
+        left: body.scrollLeft || 0,
+      };
+    };
+
+    body.addEventListener("scroll", onScroll, { passive: true });
+    return () => body.removeEventListener("scroll", onScroll);
+  }, [getTableBodyEl]);
+
+  // wrappers: restore setelah optimistic rerender & setelah API selesai
+  const assignCellPreserveScroll = useCallback(
+    async (userId, dateKey, value) => {
+      captureTableScroll();
+
+      const p = vm.assignCell(userId, dateKey, value);
+      restoreTableScroll();
+
+      await p;
+      restoreTableScroll();
+    },
+    [vm, captureTableScroll, restoreTableScroll]
+  );
+
+  const deleteCellPreserveScroll = useCallback(
+    async (userId, dateKey) => {
+      captureTableScroll();
+
+      const p = vm.deleteCell(userId, dateKey);
+      restoreTableScroll();
+
+      await p;
+      restoreTableScroll();
+    },
+    [vm, captureTableScroll, restoreTableScroll]
+  );
+
+  const toggleStoryPreserveScroll = useCallback(
+    async (userId, dateKey, checked) => {
+      captureTableScroll();
+
+      const p = vm.toggleStoryForDay(userId, dateKey, checked);
+      restoreTableScroll();
+
+      await p;
+      restoreTableScroll();
+    },
+    [vm, captureTableScroll, restoreTableScroll]
+  );
 
   const dayColumns = useMemo(() => {
     return vm.days.map((d) => ({
@@ -158,7 +279,10 @@ export default function ShiftScheduleContent() {
       key: d.key,
       width: 280,
       render: (_, record) => {
-        const cell = vm.getCell(record.id, d.dateStr) || { userId: record.id, date: d.dateStr };
+        const cell = vm.getCell(record.id, d.dateStr) || {
+          userId: record.id,
+          date: d.dateStr,
+        };
         const story = vm.getStoryCell(record.id, d.dateStr);
         const disabled = isPastDate(d.dateStr);
 
@@ -166,16 +290,26 @@ export default function ShiftScheduleContent() {
           <Cell
             cell={cell}
             polaMap={vm.polaMap}
-            onAssign={vm.assignCell}
-            onDelete={vm.deleteCell}
+            onAssign={assignCellPreserveScroll}
+            onDelete={deleteCellPreserveScroll}
             disabled={disabled}
             story={story}
-            onToggleStory={(checked) => vm.toggleStoryForDay(record.id, d.dateStr, checked)}
+            onToggleStory={(checked) =>
+              toggleStoryPreserveScroll(record.id, d.dateStr, checked)
+            }
           />
         );
       },
     }));
-  }, [vm.days, vm.getCell, vm.getStoryCell, vm.polaMap, vm.assignCell, vm.deleteCell, vm.toggleStoryForDay]);
+  }, [
+    vm.days,
+    vm.getCell,
+    vm.getStoryCell,
+    vm.polaMap,
+    assignCellPreserveScroll,
+    deleteCellPreserveScroll,
+    toggleStoryPreserveScroll,
+  ]);
 
   const nameColumn = useMemo(() => {
     return {
@@ -188,14 +322,23 @@ export default function ShiftScheduleContent() {
         const photo = getPhotoUrl(r) || "/avatar-placeholder.jpg";
         return (
           <div className="p-1">
-            <Link href={`/home/kelola_karyawan/karyawan/${r.id}`} className="no-underline text-inherit hover:text-inherit">
+            <Link
+              href={`/home/kelola_karyawan/karyawan/${r.id}`}
+              className="no-underline text-inherit hover:text-inherit"
+            >
               <div className="flex items-center gap-3">
                 <AppAvatar src={photo} name={r.name || ""} size={44} />
                 <div className="min-w-0">
-                  <div style={{ fontWeight: 600, color: "#0f172a" }} className="truncate">
+                  <div
+                    style={{ fontWeight: 600, color: "#0f172a" }}
+                    className="truncate"
+                  >
                     {r.name}
                   </div>
-                  <div style={{ fontSize: 12, color: "#475569" }} className="truncate">
+                  <div
+                    style={{ fontSize: 12, color: "#475569" }}
+                    className="truncate"
+                  >
                     {r.jabatan || "—"}
                     {r.departemen ? ` | ${r.departemen}` : r.jabatan ? "" : "—"}
                   </div>
@@ -214,7 +357,9 @@ export default function ShiftScheduleContent() {
             </label>
 
             <div className="mt-3 space-y-1 text-xs hidden sm:block">
-              <div className="font-semibold text-slate-600 mb-1">Ringkasan Minggu Ini:</div>
+              <div className="font-semibold text-slate-600 mb-1">
+                Ringkasan Minggu Ini:
+              </div>
               {vm.days.map((d) => {
                 const c = vm.getCell(r.id, d.dateStr);
                 let label = "—";
@@ -241,7 +386,14 @@ export default function ShiftScheduleContent() {
         );
       },
     };
-  }, [isMobile, vm.days, vm.getCell, vm.isRepeatVisualOn, vm.toggleRepeatSchedule, vm.polaMap]);
+  }, [
+    isMobile,
+    vm.days,
+    vm.getCell,
+    vm.isRepeatVisualOn,
+    vm.toggleRepeatSchedule,
+    vm.polaMap,
+  ]);
 
   const columns = useMemo(() => [nameColumn, ...dayColumns], [nameColumn, dayColumns]);
 
@@ -285,11 +437,23 @@ export default function ShiftScheduleContent() {
         </div>
 
         <div className="ml-0 lg:ml-auto flex items-center gap-3 flex-wrap lg:flex-nowrap">
-          <AppButton variant="primary" icon={<LeftOutlined />} onClick={vm.prevWeek} size="middle" className="!px-3 shrink-0">
+          <AppButton
+            variant="primary"
+            icon={<LeftOutlined />}
+            onClick={vm.prevWeek}
+            size="middle"
+            className="!px-3 shrink-0"
+          >
             Minggu sebelumnya
           </AppButton>
 
-          <AppButton variant="primary" icon={<RightOutlined />} onClick={vm.nextWeek} size="middle" className="!px-3 shrink-0">
+          <AppButton
+            variant="primary"
+            icon={<RightOutlined />}
+            onClick={vm.nextWeek}
+            size="middle"
+            className="!px-3 shrink-0"
+          >
             Minggu berikutnya
           </AppButton>
 
@@ -309,23 +473,26 @@ export default function ShiftScheduleContent() {
       </div>
 
       <AppTypography.Text className="block text-xs text-slate-500 mb-3">
-        * Centang “Ulangi minggu ini sampai akhir bulan” → sistem menyalin pola minggu ini. Hari kosong di minggu sumber akan menghapus jadwal di minggu target.
+        * Centang “Ulangi minggu ini sampai akhir bulan” → sistem menyalin pola minggu ini.
+        Hari kosong di minggu sumber akan menghapus jadwal di minggu target.
       </AppTypography.Text>
 
-      <AppTable
-        rowKey="id"
-        columns={columns}
-        dataSource={dataSource}
-        pagination={false}
-        loading={vm.loading}
-        scroll={{ x: "max-content", y: 640 }}
-        sticky
-        size="middle"
-        bordered={false}
-        className="rounded-2xl overflow-hidden shadow-xl border border-slate-200"
-        rowClassName={(_, index) => (index % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]")}
-        scrollToFirstRowOnChange={false}
-      />
+      <div ref={tableWrapRef}>
+        <AppTable
+          rowKey="id"
+          columns={columns}
+          dataSource={dataSource}
+          pagination={false}
+          loading={vm.loading}
+          scroll={{ x: "max-content", y: 640 }}
+          sticky
+          size="middle"
+          bordered={false}
+          className="rounded-2xl overflow-hidden shadow-xl border border-slate-200"
+          rowClassName={(_, index) => (index % 2 === 0 ? "bg-white" : "bg-[#F8FAFF]")}
+          scrollToFirstRowOnChange={false}
+        />
+      </div>
     </div>
   );
 }

@@ -21,41 +21,42 @@ function PerfRow({ userId, name, division, jobTitle, photo, time }) {
   const subtitle = jobTitle && division ? `${jobTitle} | ${division}` : jobTitle || division || '—';
 
   return (
-    <div className='flex items-center justify-between py-3 border-b border-slate-100 last:border-none'>
-      <div className='flex items-center gap-3 min-w-0'>
+    <div className="flex items-center justify-between py-3 border-b border-slate-100 last:border-none">
+      <div className="flex items-center gap-3 min-w-0">
         <AppAvatar
           src={photoUrl}
-          alt={name || 'Foto'}
+          alt={name || "Foto"}
           name={name}
           size={36}
           bordered
-          className='bg-[#E6F0FA] ring-1 ring-[#003A6F22]'
+          className="bg-[#E6F0FA] ring-1 ring-[#003A6F22]"
         />
 
-        <div className='min-w-0'>
-          <Link
-            href={`/home/kelola_karyawan/karyawan/${userId}`}
-            className='no-underline'
-          >
+        {/* INI yang diubah: pastikan stack vertikal */}
+        <div className="min-w-0 flex flex-col">
+          <Link href={`/home/kelola_karyawan/karyawan/${userId}`} className="no-underline min-w-0">
             <AppTypography.Text
               size={13}
               weight={600}
-              className='text-slate-800 truncate'
+              className="text-slate-800 truncate leading-5"
             >
               {name}
             </AppTypography.Text>
           </Link>
+
           <AppTypography.Text
             size={11}
-            tone='muted'
-            className='truncate'
+            tone="muted"
+            className="truncate leading-4 mt-[2px]"
           >
             {subtitle}
           </AppTypography.Text>
         </div>
       </div>
 
-      <span className='text-[11px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-600'>{time ?? '—'}</span>
+      <span className="text-[11px] px-2 py-1 rounded-full bg-indigo-50 text-indigo-600">
+        {time ?? "—"}
+      </span>
     </div>
   );
 }

@@ -518,8 +518,6 @@ export default function UseShiftScheduleViewModel() {
           return m;
         });
 
-        setTimeout(() => mutate(), 600);
-        mutateNextWeek();
       } catch (e) {
         commitUiCellMap((m) => {
           if (existing) m.set(k, existing);
@@ -529,7 +527,7 @@ export default function UseShiftScheduleViewModel() {
         notification.error({ message: "Gagal menyimpan shift" });
       }
     },
-    [assignPayload, commitUiCellMap, mutate, mutateNextWeek, notification]
+    [assignPayload, commitUiCellMap, notification]
   );
 
   const deleteCell = useCallback(
@@ -547,8 +545,6 @@ export default function UseShiftScheduleViewModel() {
 
       try {
         await crudService.delete(ApiEndpoints.DeleteShiftKerja(existing.rawId));
-        setTimeout(() => mutate(), 600);
-        mutateNextWeek();
       } catch (e) {
         commitUiCellMap((m) => {
           m.set(k, existing);
@@ -557,7 +553,7 @@ export default function UseShiftScheduleViewModel() {
         notification.error({ message: "Gagal menghapus shift" });
       }
     },
-    [commitUiCellMap, mutate, mutateNextWeek, notification]
+    [commitUiCellMap, notification]
   );
 
   const toggleStoryForDay = useCallback(
