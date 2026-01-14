@@ -163,12 +163,12 @@ const ALLOWED_ROLES = new Set(['HR', 'DIREKTUR', 'OPERASIONAL', 'SUPERADMIN']);
 function roleAwareDashboard(menu, role) {
   return menu.map((item) => {
     if (item.label !== 'Dashboard') return item;
-    return role === 'OPERASIONAL' ? { ...item, href: '/home/dashboard2', match: ['/home/dashboard2'] } : { ...item, href: '/home/dashboard', match: ['/home/dashboard'] };
+    return role === 'OPERASIONAL' ? { ...item, href: '/home/dashboard-operasional', match: ['/home/dashboard-operasional'] } : { ...item, href: '/home/dashboard', match: ['/home/dashboard'] };
   });
 }
 
 const OPS_CHILD_PREFIX_ALLOW = ['/home/agenda/', '/home/kunjungan/'];
-const OPS_PARENT_ALLOW = new Set(['/home/dashboard2', '/home/kunjungan']);
+const OPS_PARENT_ALLOW = new Set(['/home/dashboard-operasional', '/home/kunjungan']);
 
 function isChildAllowedForOps(href) {
   if (!href) return false;

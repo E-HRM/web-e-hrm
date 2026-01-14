@@ -10,7 +10,7 @@ const DASHBOARD_BY_ROLE = {
   HR: "/home/dashboard",
   DIREKTUR: "/home/dashboard",
   SUPERADMIN: "/home/dashboard",
-  OPERASIONAL: "/home/dashboard2",
+  OPERASIONAL: "/home/dashboard-operasional",
 };
 
 const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL", "SUPERADMIN"]);

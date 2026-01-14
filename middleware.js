@@ -7,7 +7,7 @@ const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL", "SUPERADMIN"]);
 
 // Prefix yang boleh untuk OPERASIONAL
 const OPS_PREFIX_ALLOW = [
-  "/home/dashboard2", // dashboard operasional
+  "/home/dashboard-operasional", // dashboard operasional
   "/home/kunjungan",  // + semua sub-route
   "/home/agenda",     // SELURUH folder agenda/*
 ];
@@ -38,25 +38,25 @@ export async function middleware(req) {
     return NextResponse.redirect(url);
   }
 
-  // Non-OPERASIONAL dilarang ke /home/dashboard2
+
   if (
     role !== "OPERASIONAL" &&
-    (pathname === "/home/dashboard2" || pathname.startsWith("/home/dashboard2/"))
+    (pathname === "/home/dashboard-operasional" || pathname.startsWith("/home/dashboard-operasional/"))
   ) {
     return NextResponse.redirect(new URL("/home/dashboard", req.url));
   }
 
-  // OPERASIONAL yang masuk ke /home/dashboard (HR) → paksa ke /home/dashboard2
+
   if (
     role === "OPERASIONAL" &&
     (pathname === "/home/dashboard" || pathname.startsWith("/home/dashboard/"))
   ) {
-    return NextResponse.redirect(new URL("/home/dashboard2", req.url));
+    return NextResponse.redirect(new URL("/home/dashboard-operasional", req.url));
   }
 
   // Gate prefix untuk OPERASIONAL
   if (role === "OPERASIONAL" && !pathAllowedForOps(pathname)) {
-    return NextResponse.redirect(new URL("/home/dashboard2", req.url));
+    return NextResponse.redirect(new URL("/home/dashboard-operasional", req.url));
   }
 
   return NextResponse.next();
