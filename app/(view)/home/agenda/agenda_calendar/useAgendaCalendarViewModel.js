@@ -4,11 +4,16 @@ import { useCallback, useMemo, useState, useEffect } from "react";
 import useSWR from "swr";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+
+
+
 import { ApiEndpoints } from "../../../../../constrainst/endpoints";
 import { fetcher } from "../../../../utils/fetcher";
 import { crudService } from "../../../../utils/services/crudService";
 
 dayjs.extend(utc);
+dayjs.extend(isSameOrBefore);
 
 /* ========= Helpers TZ-agnostic ========= */
 
@@ -165,6 +170,7 @@ export default function useAgendaCalendarViewModel() {
     start: dayjs().startOf("month").startOf("week").toDate(),
     end: dayjs().endOf("month").endOf("week").toDate(),
   }));
+
   const setRange = useCallback(
     (start, end) => setRangeState({ start, end }),
     []
@@ -174,7 +180,7 @@ export default function useAgendaCalendarViewModel() {
   const fetchAllUsers = useCallback(async () => {
     const perPage = 100;
     let page = 1;
-    let all = [];
+    const all = [];
 
     while (true) {
       const url = `${ApiEndpoints.GetUsers}?page=${page}&perPage=${perPage}&orderBy=nama_pengguna&sort=asc`;
@@ -302,7 +308,7 @@ export default function useAgendaCalendarViewModel() {
   const fetchAllAgendaKerja = useCallback(async (fromDate, toDate) => {
     const perPage = 200;
     let page = 1;
-    let all = [];
+    const all = [];
 
     const from = dayjs(fromDate).format("YYYY-MM-DD");
     const to = dayjs(toDate).format("YYYY-MM-DD");
@@ -342,7 +348,7 @@ export default function useAgendaCalendarViewModel() {
     return all;
   }, []);
 
-  // SWR key pakai range; fetcher gabung semua halaman
+  /* ===== SWR: events ===== */
   const {
     data: agendaKerjaAll,
     mutate,
@@ -356,7 +362,6 @@ export default function useAgendaCalendarViewModel() {
     { revalidateOnFocus: false }
   );
 
-  // apakah data agenda sudah pernah berhasil di-load minimal sekali?
   const [hasLoadedEventsOnce, setHasLoadedEventsOnce] = useState(false);
 
   useEffect(() => {
@@ -378,6 +383,7 @@ export default function useAgendaCalendarViewModel() {
 
   /* ===== CRUD ===== */
 
+  // SINGLE CREATE (loop per user)
   const createEvents = useCallback(
     async ({
       title,
@@ -386,7 +392,7 @@ export default function useAgendaCalendarViewModel() {
       status = "teragenda",
       userIds = [],
       id_agenda,
-      onProgress, // optional
+      onProgress,
     }) => {
       const total = userIds.length || 0;
       let sent = 0;
@@ -405,11 +411,45 @@ export default function useAgendaCalendarViewModel() {
 
         sent += 1;
         if (typeof onProgress === "function") {
-          onProgress({
-            sent,
-            total,
-            userId: uid,
-          });
+          onProgress({ sent, total, userId: uid });
+        }
+      }
+
+      await mutate();
+    },
+    [mutate]
+  );
+
+  // ✅ MULTIPLE CREATE (per user: start_dates[] + duration_seconds)
+  // NOTE: pastikan backend kamu menerima payload ini di endpoint CreateAgendaKerja
+  const createMultipleEvents = useCallback(
+    async ({
+      title,
+      status = "teragenda",
+      userIds = [],
+      id_agenda,
+      start_dates = [], // array string "YYYY-MM-DD HH:mm:ss"
+      duration_seconds = 0,
+      onProgress,
+    }) => {
+      const total = userIds.length || 0;
+      let sent = 0;
+
+      for (const uid of userIds) {
+        const payload = {
+          id_user: uid,
+          id_agenda: id_agenda || null,
+          deskripsi_kerja: title,
+          status,
+          start_dates,
+          duration_seconds,
+        };
+
+        await crudService.post(ApiEndpoints.CreateAgendaKerja, payload);
+
+        sent += 1;
+        if (typeof onProgress === "function") {
+          onProgress({ sent, total, userId: uid });
         }
       }
 
@@ -482,6 +522,7 @@ export default function useAgendaCalendarViewModel() {
     async (ids = [], { hard = false } = {}) => {
       if (!Array.isArray(ids) || ids.length === 0) return 0;
       const delFn = crudService.del || crudService.delete;
+
       await Promise.all(
         ids.map((id) =>
           delFn(
@@ -489,6 +530,7 @@ export default function useAgendaCalendarViewModel() {
           )
         )
       );
+
       await mutate();
       return ids.length;
     },
@@ -511,6 +553,9 @@ export default function useAgendaCalendarViewModel() {
     agendaOptions,
     userOptions,
 
+    // ✅ expose state penting (biar content kamu bisa akses)
+    range,
+
     // user helpers
     getUserById,
     getPhotoUrl,
@@ -520,6 +565,7 @@ export default function useAgendaCalendarViewModel() {
     // actions
     setRange,
     createEvents,
+    createMultipleEvents, // ✅ tambahan
     updateEvent,
     deleteEvent,
     createAgendaMaster,
@@ -531,6 +577,9 @@ export default function useAgendaCalendarViewModel() {
 
     // util
     showFromDB,
+
+    // ✅ expose SWR mutate (kalau content butuh manual refresh)
+    mutate,
 
     // state loading agenda
     loadingInitialEvents,
