@@ -145,6 +145,7 @@ export async function GET(request) {
       : db.shiftKerja.findMany({
           where: {
             deleted_at: null,
+            ...(userIdFilter ? { id_user: targetUserId } : {}),
             tanggal_mulai: { lte: rangeTo },
             tanggal_selesai: { gte: rangeFrom },
           },
