@@ -9,14 +9,14 @@
   // `self.__FIREBASE_CONFIG__` (misalnya dari file public/firebase-config.js).
   // Jika tidak tersedia, fallback ke nilai default berikut—PASTIKAN diganti
   // dengan konfigurasi proyek Anda sendiri.
-  const firebaseConfig = self.__FIREBASE_CONFIG__ || {
-    apiKey: 'AIzaSyBHaHOsrtZghC2JAeP53-rtg9gUKUmmMcM',
+  const firebaseConfig = {
+    apiKey: 'AIzaSyAwMUqqmY_IhBRgHzUVD01wc9HQP7S7CGM',
     authDomain: 'e-hrm-1e3e0.firebaseapp.com',
     projectId: 'e-hrm-1e3e0',
-    storageBucket: 'e-hrm-1e3e.firebasestorage.app',
-    messagingSenderId: '584929841793',
-    appId: '1:584929841793:web:1a1cff15646de867067380',
-    measurementId: 'G-K58K7RVTHS', //s
+    storageBucket: 'e-hrm-1e3e0.firebasestorage.app',
+    messagingSenderId: '653765384227',
+    appId: '1:653765384227:web:2a01c32629d019d634b996',
+    measurementId: 'G-67QZCTNKBW',
   };
   if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
