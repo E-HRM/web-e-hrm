@@ -22,7 +22,14 @@ function sanitizePathPart(value) {
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .replace(/_+/g, '_')
     .slice(0, 120);
-  return safe || 'anon';
+  return safe;
+}
+
+function randomFilenameBase() {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2, 10);
 }
 
 function getSupabase() {
@@ -64,7 +71,7 @@ function extractSupabaseBucketPath(publicUrl) {
  */
 export async function uploadMediaWithFallback(
   file,
-  { storageFolder = 'pengajuan', isPublic = true, expiresIn, supabaseBucket = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm', supabasePrefix = 'uploads', pathSegments = [], forceFilenameBase } = {}
+  { storageFolder = 'pengajuan', isPublic = true, expiresIn, supabaseBucket = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm', supabasePrefix = 'uploads', pathSegments = [], forceFilenameBase } = {},
 ) {
   if (!isFileLike(file)) {
     const err = new Error('File tidak valid untuk diunggah (harus File dari formData).');
@@ -106,7 +113,8 @@ export async function uploadMediaWithFallback(
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  const filenameBase = sanitizePathPart(forceFilenameBase) || `${Date.now()}-${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : Math.random().toString(36).slice(2, 10)}`;
+  const sanitizedBase = sanitizePathPart(forceFilenameBase);
+  const filenameBase = sanitizedBase || `${Date.now()}-${randomFilenameBase()}`;
 
   const segs = [sanitizePathPart(supabasePrefix), ...pathSegments.map(sanitizePathPart).filter(Boolean)].filter(Boolean);
 
