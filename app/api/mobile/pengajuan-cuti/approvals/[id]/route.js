@@ -359,6 +359,12 @@ async function handleDecision(req, { params }) {
       const previousStatus = pengajuanData?.status || null;
       const tanggalPengajuan = Array.isArray(pengajuanData?.tanggal_list) ? pengajuanData.tanggal_list.map((item) => item?.tanggal_cuti) : [];
       const quotaAdjustments = summarizeDatesByMonth(tanggalPengajuan);
+      const quotaByMonth = quotaAdjustments
+        .map((summary) => ({
+          bulan: summary?.monthName,
+          count: Number.isFinite(summary?.totalDays) ? summary.totalDays : 0,
+        }))
+        .filter((item) => item.bulan && item.count > 0);
 
       // Logic "Bebas": Jika ada SATU saja yang setuju, status parent jadi 'disetujui'
       if (anyApproved) {
@@ -390,8 +396,8 @@ async function handleDecision(req, { params }) {
         }
 
         // Potong Kuota
-        if (willApprove && categoryRecord?.pengurangan_kouta && quotaAdjustments.length) {
-          const months = quotaAdjustments.map(([bulan]) => bulan).filter(Boolean);
+        if (willApprove && categoryRecord?.pengurangan_kouta && quotaByMonth.length) {
+          const months = quotaByMonth.map((item) => item.bulan).filter(Boolean);
           if (months.length) {
             const configs = await tx.cutiKonfigurasi.findMany({
               where: { id_user: pengajuanData.id_user, bulan: { in: months }, deleted_at: null },
@@ -400,7 +406,7 @@ async function handleDecision(req, { params }) {
             const configMap = new Map(configs.map((cfg) => [cfg.bulan, cfg]));
             const insufficientMonths = [];
 
-            for (const [bulan, count] of quotaAdjustments) {
+            for (const { bulan, count } of quotaByMonth) {
               if (!bulan || !Number.isFinite(count) || count <= 0) continue;
               const config = configMap.get(bulan);
               if (!config || config.kouta_cuti < count) {
@@ -418,7 +424,7 @@ async function handleDecision(req, { params }) {
               );
             }
 
-            for (const [bulan, count] of quotaAdjustments) {
+            for (const { bulan, count } of quotaByMonth) {
               if (!bulan || !Number.isFinite(count) || count <= 0) continue;
               const config = configMap.get(bulan);
               if (!config) continue;
@@ -432,8 +438,8 @@ async function handleDecision(req, { params }) {
         }
 
         // Refund Kuota (jika batal approve)
-        if (willReject && categoryRecord?.pengurangan_kouta && quotaAdjustments.length) {
-          const months = quotaAdjustments.map(([bulan]) => bulan).filter(Boolean);
+        if (willReject && categoryRecord?.pengurangan_kouta && quotaByMonth.length) {
+          const months = quotaByMonth.map((item) => item.bulan).filter(Boolean);
           if (months.length) {
             const configs = await tx.cutiKonfigurasi.findMany({
               where: { id_user: pengajuanData.id_user, bulan: { in: months } },
@@ -441,7 +447,7 @@ async function handleDecision(req, { params }) {
             });
             const configMap = new Map(configs.map((cfg) => [cfg.bulan, cfg]));
 
-            for (const [bulan, count] of quotaAdjustments) {
+            for (const { bulan, count } of quotaByMonth) {
               if (!bulan || !Number.isFinite(count) || count <= 0) continue;
               const existing = configMap.get(bulan);
               if (existing) {
