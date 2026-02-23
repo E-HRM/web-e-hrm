@@ -172,6 +172,14 @@ function pickApproval(item) {
   return approvals.find((a) => String(a?.decision || "").toLowerCase() === "pending") || approvals[0] || null;
 }
 
+function pickAdminProofUrlFromApprovals(approvals) {
+  if (!Array.isArray(approvals) || approvals.length === 0) return null;
+  const direct = approvals.find((a) => a?.bukti_approval_payment_url);
+  if (direct?.bukti_approval_payment_url) return direct.bukti_approval_payment_url;
+  const fallback = approvals.find((a) => a?.bukti_approval_url);
+  return fallback?.bukti_approval_url || null;
+}
+
 function pickEmployeeName(item) {
   const u = item?.user;
   return u?.nama_pengguna || u?.name || u?.email || "—";
@@ -268,6 +276,7 @@ export default function usePaymentViewModel(filters) {
 
   const rows = useMemo(() => {
     return raw.map((it, idx) => {
+      const approvals = Array.isArray(it?.approvals) ? it.approvals : [];
       const approval = pickApproval(it);
 
       const paymentId = pickPaymentId(it);
@@ -302,10 +311,7 @@ export default function usePaymentViewModel(filters) {
       const proposalUrl = it?.bukti_pembayaran_url || it?.proposal_url || null;
 
       // admin proof
-      const adminProofUrl =
-        approval?.bukti_approval_payment_url ||
-        approval?.bukti_approval_url ||
-        null;
+      const adminProofUrl = pickAdminProofUrlFromApprovals(approvals);
 
       return {
         id: rowId,

@@ -202,6 +202,14 @@ function pickApproval(item) {
   );
 }
 
+function pickAdminProofUrlFromApprovals(approvals) {
+  if (!Array.isArray(approvals) || approvals.length === 0) return null;
+  const direct = approvals.find((a) => a?.bukti_approval_pocket_money_url);
+  if (direct?.bukti_approval_pocket_money_url) return direct.bukti_approval_pocket_money_url;
+  const fallback = approvals.find((a) => a?.bukti_approval_url);
+  return fallback?.bukti_approval_url || null;
+}
+
 function pickEmployeeName(item) {
   const u = item?.user;
   return u?.nama_pengguna || u?.name || u?.email || "—";
@@ -311,6 +319,7 @@ export default function usePocketMoneyViewModel(filters) {
 
   const rows = useMemo(() => {
     return raw.map((it, idx) => {
+      const approvals = Array.isArray(it?.approvals) ? it.approvals : [];
       const approval = pickApproval(it);
 
       const pocketMoneyId = pickPocketMoneyId(it);
@@ -340,10 +349,7 @@ export default function usePocketMoneyViewModel(filters) {
       const userProofUrl = it?.bukti_pembayaran_url || null;
 
       // ✅ Bukti admin (dari approval)
-      const adminProofUrl =
-        approval?.bukti_approval_pocket_money_url ||
-        approval?.bukti_approval_url ||
-        null;
+      const adminProofUrl = pickAdminProofUrlFromApprovals(approvals);
 
       return {
         id: rowId,
