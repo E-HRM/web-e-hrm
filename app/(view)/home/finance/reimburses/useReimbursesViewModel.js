@@ -92,6 +92,14 @@ function pickApproval(item) {
   return pending || approvals[0] || null;
 }
 
+function pickAdminProofUrlFromApprovals(approvals) {
+  if (!Array.isArray(approvals) || approvals.length === 0) return null;
+  const direct = approvals.find((a) => a?.bukti_approval_reimburse_url);
+  if (direct?.bukti_approval_reimburse_url) return direct.bukti_approval_reimburse_url;
+  const fallback = approvals.find((a) => a?.bukti_approval_url);
+  return fallback?.bukti_approval_url || null;
+}
+
 function pickRejectNote(item) {
   const approvals = Array.isArray(item?.approvals) ? item.approvals : [];
   const rejected = approvals.find((a) => String(a?.decision || "").toLowerCase() === "ditolak" && a?.note);
@@ -166,6 +174,7 @@ export default function useReimbursesViewModel(filters) {
 
   const rows = useMemo(() => {
     return raw.map((it) => {
+      const approvals = Array.isArray(it?.approvals) ? it.approvals : [];
       const approval = pickApproval(it);
       const st = mapApiStatusToUI(it?.status);
 
@@ -173,10 +182,7 @@ export default function useReimbursesViewModel(filters) {
       const reimburseId = it?.id_reimburse || it?.id;
 
       const userProofUrl = it?.bukti_pembayaran_url || null;
-      const adminProofUrl =
-        approval?.bukti_approval_reimburse_url ||
-        approval?.bukti_approval_url ||
-        null;
+      const adminProofUrl = pickAdminProofUrlFromApprovals(approvals);
 
       const itemsArr = Array.isArray(it?.items) ? it.items : [];
 
