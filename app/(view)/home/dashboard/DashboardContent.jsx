@@ -599,7 +599,7 @@ export default function DashboardContent() {
         footer={null}
         title={
           selectedDateInfo
-            ? `Karyawan cuti • ${selectedDateInfo.date.toLocaleDateString('id-ID', {
+            ? `Pengajuan disetujui • ${selectedDateInfo.date.toLocaleDateString('id-ID', {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
@@ -627,7 +627,7 @@ export default function DashboardContent() {
             ))}
           </div>
         ) : (
-          <div className='text-xs text-gray-500'>Tidak ada karyawan cuti di tanggal ini.</div>
+          <div className='text-xs text-gray-500'>Tidak ada pengajuan disetujui di tanggal ini.</div>
         )}
       </AppModal>
     </div>

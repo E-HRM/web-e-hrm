@@ -73,16 +73,66 @@ function formatTime(date) {
   return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 }
 
-// Kalender: bangun eventsByDay dari data cuti (disetujui)
-function buildCalendarEventsFromLeaves(leaves, year, monthIndex) {
+const CALENDAR_TYPE_COLORS = {
+  cuti: 'bg-teal-400',
+  izin_sakit: 'bg-rose-400',
+  izin_jam: 'bg-amber-400',
+  tukar_hari: 'bg-indigo-400',
+};
+
+const CALENDAR_TYPE_LABELS = {
+  cuti: 'cuti',
+  izin_sakit: 'izin sakit',
+  izin_jam: 'izin jam',
+  tukar_hari: 'tukar hari',
+};
+
+function formatDateLabel(date) {
+  if (!(date instanceof Date) || isNaN(date)) return '—';
+  return date.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function formatTimeLabel(date) {
+  if (!(date instanceof Date) || isNaN(date)) return '';
+  return date.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  });
+}
+
+// Kalender: bangun eventsByDay dari semua pengajuan disetujui
+function buildCalendarEventsFromApprovals({ cuti = [], sakit = [], izinJam = [], tukarHari = [] }, year, monthIndex) {
   const eventsByDay = {};
 
   // batas bulan di kalender (UTC)
   const monthStart = new Date(Date.UTC(year, monthIndex, 1));
   const monthEnd = new Date(Date.UTC(year, monthIndex + 1, 0, 23, 59, 59, 999));
 
-  for (const leave of leaves || []) {
-    // Ambil semua tanggal cuti dari relasi tanggal_list
+  const addItemForDate = (date, item, type) => {
+    if (!(date instanceof Date) || isNaN(date)) return;
+    if (date < monthStart || date > monthEnd) return;
+
+    const day = date.getUTCDate();
+    if (!eventsByDay[day]) {
+      eventsByDay[day] = {
+        color: '',
+        tip: '',
+        items: [],
+        types: [],
+      };
+    }
+    const bucket = eventsByDay[day];
+    bucket.items.push(item);
+    if (type && !bucket.types.includes(type)) bucket.types.push(type);
+  };
+
+  // CUTI
+  for (const leave of cuti || []) {
     const dates = Array.isArray(leave.tanggal_list)
       ? leave.tanggal_list
           .map((t) => {
@@ -91,61 +141,109 @@ function buildCalendarEventsFromLeaves(leaves, year, monthIndex) {
           })
           .filter(Boolean)
       : [];
-
     if (!dates.length) continue;
-
-    // Urutkan tanggal
     dates.sort((a, b) => a.getTime() - b.getTime());
 
     const first = dates[0];
     const last = dates[dates.length - 1];
-
-    // Label rentang (mis: "1–3 Nov 2025")
     const sameDay = first.getUTCFullYear() === last.getUTCFullYear() && first.getUTCMonth() === last.getUTCMonth() && first.getUTCDate() === last.getUTCDate();
-
     const rangeLabel = sameDay
-      ? first.toLocaleDateString('id-ID', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        })
-      : `${first.toLocaleDateString('id-ID', {
-          day: 'numeric',
-          month: 'short',
-        })} – ${last.toLocaleDateString('id-ID', {
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-        })}`;
+      ? formatDateLabel(first)
+      : `${first.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} - ${formatDateLabel(last)}`;
 
-    // Isi tiap hari cuti yang jatuh di bulan ini
     for (const d of dates) {
-      if (d < monthStart || d > monthEnd) continue;
-
-      const day = d.getUTCDate(); // 1..31
-
-      if (!eventsByDay[day]) {
-        eventsByDay[day] = {
-          color: 'bg-teal-400',
-          tip: '',
-          items: [],
-        };
-      }
-
-      eventsByDay[day].items.push({
-        id: leave.id_pengajuan_cuti,
-        name: leave.user ? leave.user.nama_pengguna : 'Karyawan',
-        categoryName: (leave.kategori_cuti && leave.kategori_cuti.nama_kategori) || 'Cuti',
-        rangeLabel,
-        note: leave.keperluan || '',
-      });
+      addItemForDate(
+        d,
+        {
+          id: leave.id_pengajuan_cuti,
+          name: leave.user ? leave.user.nama_pengguna : 'Karyawan',
+          categoryName: (leave.kategori_cuti && leave.kategori_cuti.nama_kategori) || 'Cuti',
+          rangeLabel,
+          note: leave.keperluan || '',
+        },
+        'cuti'
+      );
     }
   }
 
-  // isi tooltip per hari
+  // IZIN SAKIT
+  for (const item of sakit || []) {
+    const date = item.tanggal_pengajuan ? new Date(item.tanggal_pengajuan) : item.created_at ? new Date(item.created_at) : null;
+    if (!date || isNaN(date)) continue;
+    addItemForDate(
+      date,
+      {
+        id: item.id_pengajuan_izin_sakit,
+        name: item.user ? item.user.nama_pengguna : 'Karyawan',
+        categoryName: 'Izin Sakit',
+        rangeLabel: formatDateLabel(date),
+        note: item.handover || '',
+      },
+      'izin_sakit'
+    );
+  }
+
+  // IZIN JAM
+  for (const item of izinJam || []) {
+    const date = item.tanggal_izin ? new Date(item.tanggal_izin) : item.jam_mulai ? new Date(item.jam_mulai) : null;
+    if (!date || isNaN(date)) continue;
+    const timeStart = item.jam_mulai ? formatTimeLabel(new Date(item.jam_mulai)) : '';
+    const timeEnd = item.jam_selesai ? formatTimeLabel(new Date(item.jam_selesai)) : '';
+    const timeRange = timeStart && timeEnd ? `${timeStart}-${timeEnd}` : timeStart || timeEnd || '';
+    const rangeLabel = timeRange ? `${formatDateLabel(date)} (${timeRange})` : formatDateLabel(date);
+    addItemForDate(
+      date,
+      {
+        id: item.id_pengajuan_izin_jam,
+        name: item.user ? item.user.nama_pengguna : 'Karyawan',
+        categoryName: 'Izin Jam',
+        rangeLabel,
+        note: item.keperluan || item.handover || '',
+      },
+      'izin_jam'
+    );
+  }
+
+  // IZIN TUKAR HARI (pakai hari_izin)
+  for (const item of tukarHari || []) {
+    const pairs = Array.isArray(item.pairs) ? item.pairs : [];
+    for (const pair of pairs) {
+      const izinDate = pair.hari_izin ? new Date(pair.hari_izin) : null;
+      if (!izinDate || isNaN(izinDate)) continue;
+      const penggantiDate = pair.hari_pengganti ? new Date(pair.hari_pengganti) : null;
+      const rangeLabel =
+        penggantiDate && !isNaN(penggantiDate)
+          ? `${formatDateLabel(izinDate)} (pengganti ${formatDateLabel(penggantiDate)})`
+          : formatDateLabel(izinDate);
+      const noteParts = [pair.catatan_pair, item.keperluan, item.handover].filter(Boolean);
+      addItemForDate(
+        izinDate,
+        {
+          id: `${item.id_izin_tukar_hari}:${pair.id_izin_tukar_hari_pair}`,
+          name: item.user ? item.user.nama_pengguna : 'Karyawan',
+          categoryName: 'Izin Tukar Hari',
+          rangeLabel,
+          note: noteParts.join(' | '),
+        },
+        'tukar_hari'
+      );
+    }
+  }
+
+  // isi tooltip + warna per hari
   Object.keys(eventsByDay).forEach((dayStr) => {
     const ev = eventsByDay[dayStr];
-    ev.tip = `${ev.items.length} orang cuti`;
+    const count = ev.items.length;
+    const types = ev.types || [];
+    if (types.length === 1) {
+      const type = types[0];
+      ev.color = CALENDAR_TYPE_COLORS[type] || 'bg-teal-400';
+      ev.tip = `${count} ${CALENDAR_TYPE_LABELS[type] || 'pengajuan'}`;
+    } else {
+      ev.color = 'bg-slate-400';
+      ev.tip = `${count} pengajuan`;
+    }
+    delete ev.types;
   });
 
   return eventsByDay;
@@ -335,7 +433,10 @@ export async function GET(req) {
       topLastMonthAttendance,
       performanceAttendance,
       performanceActiveUsers,
-      calendarLeavesRaw,
+      calendarCutiRaw,
+      calendarSakitRaw,
+      calendarIzinJamRaw,
+      calendarTukarHariRaw,
       todayLeavesRaw,
     ] = await db.$transaction([
       db.user.count({
@@ -474,7 +575,6 @@ export async function GET(req) {
           ...(divisionId && {
             user: { id_departement: divisionId },
           }),
-          // ▶️ filter via relasi tanggal_list
           tanggal_list: {
             some: {
               tanggal_cuti: {
@@ -498,28 +598,67 @@ export async function GET(req) {
           kategori_cuti: {
             select: { nama_kategori: true },
           },
-          // ▶️ kita perlu tanggal_list buat build event per hari
           tanggal_list: {
             select: { tanggal_cuti: true },
           },
         },
       }),
 
-      // ====== CUTI HARI INI (untuk card "Karyawan Cuti") ======
-      db.pengajuanCuti.findMany({
+      // ====== IZIN SAKIT UNTUK KALENDER ======
+      db.pengajuanIzinSakit.findMany({
         where: {
           deleted_at: null,
           status: 'disetujui',
+          jenis_pengajuan: { in: ['sakit', 'izin_sakit'] },
           ...(divisionId && {
             user: { id_departement: divisionId },
           }),
-          tanggal_list: {
-            some: {
-              tanggal_cuti: {
-                gte: todayStart,
-                lte: todayEnd,
+          OR: [
+            {
+              tanggal_pengajuan: {
+                gte: calendarMonthStart,
+                lte: calendarMonthEnd,
               },
             },
+            {
+              AND: [
+                { tanggal_pengajuan: null },
+                {
+                  created_at: {
+                    gte: calendarMonthStart,
+                    lte: calendarMonthEnd,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        include: {
+          user: {
+            select: {
+              id_user: true,
+              nama_pengguna: true,
+              foto_profil_user: true,
+              departement: {
+                select: { nama_departement: true },
+              },
+            },
+          },
+        },
+      }),
+
+      // ====== IZIN JAM UNTUK KALENDER ======
+      db.pengajuanIzinJam.findMany({
+        where: {
+          deleted_at: null,
+          status: 'disetujui',
+          jenis_pengajuan: { in: ['jam', 'izin_jam'] },
+          ...(divisionId && {
+            user: { id_departement: divisionId },
+          }),
+          tanggal_izin: {
+            gte: calendarMonthStart,
+            lte: calendarMonthEnd,
           },
         },
         include: {
@@ -533,24 +672,21 @@ export async function GET(req) {
               },
             },
           },
-          kategori_cuti: {
-            select: { nama_kategori: true },
-          },
         },
       }),
 
-      // ====== CUTI UNTUK KALENDER (bulan yang sedang dilihat) ======
-      db.pengajuanCuti.findMany({
+      // ====== IZIN TUKAR HARI UNTUK KALENDER ======
+      db.izinTukarHari.findMany({
         where: {
           deleted_at: null,
           status: 'disetujui',
+          jenis_pengajuan: { in: ['tukar_hari', 'izin_tukar_hari'] },
           ...(divisionId && {
             user: { id_departement: divisionId },
           }),
-          // ▶️ filter via relasi tanggal_list
-          tanggal_list: {
+          pairs: {
             some: {
-              tanggal_cuti: {
+              hari_izin: {
                 gte: calendarMonthStart,
                 lte: calendarMonthEnd,
               },
@@ -568,16 +704,16 @@ export async function GET(req) {
               },
             },
           },
-          kategori_cuti: {
-            select: { nama_kategori: true },
-          },
-          // ▶️ kita perlu tanggal_list buat build event per hari
-          tanggal_list: {
-            select: { tanggal_cuti: true },
+          pairs: {
+            select: {
+              id_izin_tukar_hari_pair: true,
+              hari_izin: true,
+              hari_pengganti: true,
+              catatan_pair: true,
+            },
           },
         },
       }),
-
 
       // ====== CUTI HARI INI (untuk card "Karyawan Cuti") ======
       db.pengajuanCuti.findMany({
@@ -700,8 +836,17 @@ export async function GET(req) {
       value: d.id_departement,
     }));
 
-    // ====== Build kalender dari cuti disetujui ======
-    const calendarEvents = buildCalendarEventsFromLeaves(calendarLeavesRaw, calendarYear, calendarMonth);
+    // ====== Build kalender dari semua pengajuan disetujui ======
+    const calendarEvents = buildCalendarEventsFromApprovals(
+      {
+        cuti: calendarCutiRaw,
+        sakit: calendarSakitRaw,
+        izinJam: calendarIzinJamRaw,
+        tukarHari: calendarTukarHariRaw,
+      },
+      calendarYear,
+      calendarMonth
+    );
 
     // ====== Karyawan cuti HARI INI ======
     const todayLeaveList = (todayLeavesRaw || []).map((row) => {

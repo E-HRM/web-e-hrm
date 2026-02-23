@@ -2,6 +2,26 @@
 import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+const CORS_ALLOWED_ORIGINS = new Set([
+  "https://m-ehrm.onestepsolutionbali.com",
+]);
+
+function getAllowedOrigin(req) {
+  const origin = req.headers.get("origin");
+  if (!origin) return null;
+  return CORS_ALLOWED_ORIGINS.has(origin) ? origin : null;
+}
+
+function applyCorsHeaders(res, origin) {
+  if (!origin) return res;
+  res.headers.set("Access-Control-Allow-Origin", origin);
+  res.headers.set("Vary", "Origin");
+  res.headers.set("Access-Control-Allow-Credentials", "true");
+  res.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.headers.set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  return res;
+}
+
 // Hanya role ini yang boleh masuk area /home
 const ALLOWED_ROLES = new Set(["HR", "DIREKTUR", "OPERASIONAL", "SUPERADMIN"]);
 
@@ -18,6 +38,18 @@ function pathAllowedForOps(pathname) {
 
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
+
+  if (pathname.startsWith("/api")) {
+    const origin = getAllowedOrigin(req);
+
+    if (req.method === "OPTIONS") {
+      const res = new NextResponse(null, { status: 204 });
+      return applyCorsHeaders(res, origin);
+    }
+
+    const res = NextResponse.next();
+    return applyCorsHeaders(res, origin);
+  }
 
   // Lindungi area /home
   if (!pathname.startsWith("/home")) return NextResponse.next();
@@ -63,5 +95,5 @@ export async function middleware(req) {
 }
 
 export const config = {
-  matcher: ["/home/:path*"],
+  matcher: ["/home/:path*", "/api/:path*"],
 };
