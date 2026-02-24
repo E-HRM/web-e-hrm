@@ -87,6 +87,7 @@ function MediaPreview({ file, forceImagePreview = true }) {
   const url = getUrlFromFileLike(file);
   const [isImg, setIsImg] = useState(() => (url ? isImageByExt(url) : false));
   const [imgFailed, setImgFailed] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -115,21 +116,45 @@ function MediaPreview({ file, forceImagePreview = true }) {
   return (
     <div className="mt-2">
       {shouldTryImage && !imgFailed ? (
-        <a href={url} target="_blank" rel="noreferrer">
-          <div className="rounded-xl overflow-hidden ring-1 ring-slate-100 bg-slate-50">
-            <img
-              src={url}
-              alt={label}
-              className="w-full h-[220px] object-contain bg-white"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              onError={() => setImgFailed(true)}
-            />
-          </div>
-          <AppTypography.Text size={12} tone="muted" className="mt-2 text-slate-500">
-            Klik gambar untuk membuka ukuran penuh
-          </AppTypography.Text>
-        </a>
+        <>
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            className="w-full text-left bg-transparent border-0 p-0"
+          >
+            <div className="rounded-xl overflow-hidden ring-1 ring-slate-100 bg-slate-50">
+              <img
+                src={url}
+                alt={label}
+                className="w-full h-[220px] object-contain bg-white"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={() => setImgFailed(true)}
+              />
+            </div>
+            <AppTypography.Text size={12} tone="muted" className="mt-2 text-slate-500">
+              Klik gambar untuk membuka ukuran penuh
+            </AppTypography.Text>
+          </button>
+
+          <AppModal
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            onCancel={() => setPreviewOpen(false)}
+            title={label || "Preview"}
+            footer={null}
+            width={900}
+          >
+            <div className="w-full flex items-center justify-center">
+              <img
+                src={url}
+                alt={label}
+                className="max-h-[70vh] w-auto object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </AppModal>
+        </>
       ) : (
         <div className="mt-2">
           <AppTypography.Text size={12} tone="muted" className="text-slate-500">
