@@ -6,12 +6,17 @@ import AppMessage from '@/app/(view)/component_shared/AppMessage';
 import { ApiEndpoints } from '@/constrainst/endpoints';
 import { fetcher } from '@/app/utils/fetcher';
 import { handoverPlainText, extractHandoverTags, mergeUsers } from '@/app/api/mobile/tag-users/helpers/tagged-text';
+import { useAuth } from '@/app/utils/auth/authService';
 
 /* ===================== Utils ====================== */
 const norm = (v) =>
   String(v ?? '')
     .trim()
     .toLowerCase();
+const normRole = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase();
 
 function isPendingDecision(d) {
   return ['', 'pending', 'menunggu'].includes(norm(d));
@@ -64,7 +69,7 @@ function getApprovalsArray(item) {
 }
 
 /** Ambil id approval pending level terendah (atau berbagai shortcut field umum) */
-function pickApprovalId(item) {
+function pickApprovalId(item, actorId, actorRole) {
   if (item?.my_pending_approval_id) return item.my_pending_approval_id;
   if (item?.next_approval_id_for_me) return item.next_approval_id_for_me;
   if (item?.current_approval_id) return item.current_approval_id;
@@ -75,9 +80,25 @@ function pickApprovalId(item) {
   const pending = approvals
     .filter((a) => !a?.deleted_at)
     .sort((a, b) => (a?.level ?? 0) - (b?.level ?? 0))
-    .find((a) => isPendingDecision(a?.decision));
+    .filter((a) => isPendingDecision(a?.decision));
 
-  return pending?.id_approval_izin_tukar_hari ?? pending?.id ?? null;
+  if (!pending.length) return null;
+
+  const actorIdStr = actorId ? String(actorId) : '';
+  const actorRoleNorm = actorRole ? normRole(actorRole) : '';
+
+  if (actorIdStr) {
+    const byUser = pending.find((a) => String(a?.approver_user_id ?? a?.approver?.id_user ?? '') === actorIdStr);
+    if (byUser) return byUser?.id_approval_izin_tukar_hari ?? byUser?.id ?? null;
+  }
+
+  if (actorRoleNorm) {
+    const byRole = pending.find((a) => normRole(a?.approver_role ?? a?.approver?.role) === actorRoleNorm);
+    if (byRole) return byRole?.id_approval_izin_tukar_hari ?? byRole?.id ?? null;
+  }
+
+  const fallback = pending[0];
+  return fallback?.id_approval_izin_tukar_hari ?? fallback?.id ?? null;
 }
 
 /** Ambil note & tanggal keputusan dari approval terbaru (bisa difilter by status) */
@@ -165,7 +186,9 @@ function normalizeAttachments(item) {
 }
 
 /* ===================== Mapper Row ====================== */
-function mapItemToRow(item) {
+function mapItemToRow(item, actor) {
+  const actorId = actor?.id ?? null;
+  const actorRole = actor?.role ?? null;
   const pairsRaw = Array.isArray(item?.pairs) ? item.pairs : [];
   const pairs = pairsRaw.map((p) => ({
     izin: p?.hari_izin ?? null,
@@ -238,13 +261,14 @@ function mapItemToRow(item) {
     tempAlasan: '',
     tglKeputusan: latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
 
-    approvalId: pickApprovalId(item),
+    approvalId: pickApprovalId(item, actorId, actorRole),
     pairs,
   };
 }
 
 /* ===================== Hook ViewModel ====================== */
 export default function useTukarHariViewModel() {
+  const auth = useAuth();
   const [search, _setSearch] = useState('');
   const [tab, _setTab] = useState('pengajuan');
   const [page, setPage] = useState(1);
@@ -299,8 +323,8 @@ export default function useTukarHariViewModel() {
 
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
-    return items.map(mapItemToRow);
-  }, [data]);
+    return items.map((item) => mapItemToRow(item, { id: auth.userId, role: auth.role }));
+  }, [data, auth.userId, auth.role]);
 
   const filteredData = useMemo(() => {
     const term = String(search).trim().toLowerCase();
@@ -319,7 +343,7 @@ export default function useTukarHariViewModel() {
       const res = await fetch(detailUrl, { cache: 'no-store' });
       const json = await res.json();
       const raw = (json?.data && !Array.isArray(json.data) && json.data) || (Array.isArray(json?.data) && json.data[0]) || json?.result || null;
-      return raw ? pickApprovalId(raw) : null;
+      return raw ? pickApprovalId(raw, auth.userId, auth.role) : null;
     } catch {
       return null;
     }

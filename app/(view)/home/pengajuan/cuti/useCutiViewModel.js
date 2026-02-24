@@ -6,12 +6,17 @@ import AppMessage from '@/app/(view)/component_shared/AppMessage';
 import { ApiEndpoints } from '@/constrainst/endpoints';
 import { fetcher } from '@/app/utils/fetcher';
 import { handoverPlainText, extractHandoverTags, mergeUsers } from '@/app/api/mobile/tag-users/helpers/tagged-text';
+import { useAuth } from '@/app/utils/auth/authService';
 
 /* ===== Utils kecil ===== */
 const norm = (v) =>
   String(v ?? '')
     .trim()
     .toLowerCase();
+const normRole = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase();
 const toLabelStatus = (s) => (norm(s) === 'disetujui' ? 'Disetujui' : norm(s) === 'ditolak' ? 'Ditolak' : 'Menunggu');
 
 function getApprovalsArray(item) {
@@ -20,10 +25,26 @@ function getApprovalsArray(item) {
   return [];
 }
 
-function pickApprovalId(item) {
+function pickApprovalId(item, actorId, actorRole) {
   const approvals = getApprovalsArray(item);
-  const pending = approvals.filter((a) => !a?.deleted_at).find((a) => norm(a?.decision) === 'pending'); // ← hanya pending
-  return pending?.id_approval_pengajuan_cuti || pending?.id || null;
+  const pending = approvals.filter((a) => !a?.deleted_at).filter((a) => norm(a?.decision) === 'pending'); // ← hanya pending
+  if (!pending.length) return null;
+
+  const actorIdStr = actorId ? String(actorId) : '';
+  const actorRoleNorm = actorRole ? normRole(actorRole) : '';
+
+  if (actorIdStr) {
+    const byUser = pending.find((a) => String(a?.approver_user_id ?? a?.approver?.id_user ?? '') === actorIdStr);
+    if (byUser) return byUser?.id_approval_pengajuan_cuti || byUser?.id || null;
+  }
+
+  if (actorRoleNorm) {
+    const byRole = pending.find((a) => normRole(a?.approver_role ?? a?.approver?.role) === actorRoleNorm);
+    if (byRole) return byRole?.id_approval_pengajuan_cuti || byRole?.id || null;
+  }
+
+  const fallback = pending[0];
+  return fallback?.id_approval_pengajuan_cuti || fallback?.id || null;
 }
 
 function pickLatestDecisionInfo(item, want) {
@@ -46,7 +67,9 @@ function safeToDate(v) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function mapItemToRow(item) {
+function mapItemToRow(item, actor) {
+  const actorId = actor?.id ?? null;
+  const actorRole = actor?.role ?? null;
   const statusRaw = norm(item?.status);
   const latest = pickLatestDecisionInfo(item, statusRaw);
 
@@ -120,7 +143,7 @@ function mapItemToRow(item) {
     status: toLabelStatus(item?.status),
     alasan: latest?.note || '',
     tglKeputusan: latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
-    approvalId: pickApprovalId(item),
+    approvalId: pickApprovalId(item, actorId, actorRole),
   };
 }
 
@@ -149,6 +172,7 @@ function toPolaOptions(list) {
 }
 
 export default function useCutiViewModel() {
+  const auth = useAuth();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -199,8 +223,8 @@ export default function useCutiViewModel() {
   // Mapping rows untuk tabel
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
-    return items.map(mapItemToRow);
-  }, [data]);
+    return items.map((item) => mapItemToRow(item, { id: auth.userId, role: auth.role }));
+  }, [data, auth.userId, auth.role]);
 
   // Pencarian lokal (ikut tanggal-tanggal cuti + penerima handover)
   const filteredData = useMemo(() => {
