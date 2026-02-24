@@ -6,12 +6,17 @@ import AppMessage from '@/app/(view)/component_shared/AppMessage';
 import { ApiEndpoints } from '@/constrainst/endpoints';
 import { fetcher } from '@/app/utils/fetcher';
 import { handoverPlainText, extractHandoverTags, mergeUsers } from '@/app/api/mobile/tag-users/helpers/tagged-text';
+import { useAuth } from '@/app/utils/auth/authService';
 
 /* ============ Helpers ============ */
 const norm = (v) =>
   String(v ?? '')
     .trim()
     .toLowerCase();
+const normRole = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase();
 
 function statusFromTab(tab) {
   if (tab === 'disetujui') return 'disetujui';
@@ -41,10 +46,26 @@ function getApprovalsArray(item) {
   return [];
 }
 
-function pickApprovalId(item) {
+function pickApprovalId(item, actorId, actorRole) {
   const approvals = getApprovalsArray(item);
-  const pending = approvals.filter((a) => !a?.deleted_at).find((a) => ['', 'pending', 'menunggu'].includes(norm(a?.decision)));
-  return pending?.id_approval_pengajuan_izin_jam ?? pending?.id_approval_izin_jam ?? pending?.id ?? null;
+  const pending = approvals.filter((a) => !a?.deleted_at).filter((a) => ['', 'pending', 'menunggu'].includes(norm(a?.decision)));
+  if (!pending.length) return null;
+
+  const actorIdStr = actorId ? String(actorId) : '';
+  const actorRoleNorm = actorRole ? normRole(actorRole) : '';
+
+  if (actorIdStr) {
+    const byUser = pending.find((a) => String(a?.approver_user_id ?? a?.approver?.id_user ?? '') === actorIdStr);
+    if (byUser) return byUser?.id_approval_pengajuan_izin_jam ?? byUser?.id_approval_izin_jam ?? byUser?.id ?? null;
+  }
+
+  if (actorRoleNorm) {
+    const byRole = pending.find((a) => normRole(a?.approver_role ?? a?.approver?.role) === actorRoleNorm);
+    if (byRole) return byRole?.id_approval_pengajuan_izin_jam ?? byRole?.id_approval_izin_jam ?? byRole?.id ?? null;
+  }
+
+  const fallback = pending[0];
+  return fallback?.id_approval_pengajuan_izin_jam ?? fallback?.id_approval_izin_jam ?? fallback?.id ?? null;
 }
 
 function pickLatestDecisionInfo(item, want) {
@@ -75,7 +96,9 @@ function pickLatestDecisionInfo(item, want) {
 }
 
 /* ============ Map API item -> Row ============ */
-function mapItemToRow(item) {
+function mapItemToRow(item, actor) {
+  const actorId = actor?.id ?? null;
+  const actorRole = actor?.role ?? null;
   const u = item?.user || {};
   const jabatanName = u?.jabatan?.nama_jabatan ?? null;
   const divisiName = u?.departement?.nama_departement ?? u?.divisi ?? null;
@@ -144,12 +167,13 @@ function mapItemToRow(item) {
     tglKeputusan: latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
 
     // approval
-    approvalId: pickApprovalId(item),
+    approvalId: pickApprovalId(item, actorId, actorRole),
   };
 }
 
 /* ============ Hook ============ */
 export default function useIzinJamViewModel() {
+  const auth = useAuth();
   const [tab, _setTab] = useState('pengajuan');
   const [search, _setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -213,8 +237,8 @@ export default function useIzinJamViewModel() {
   // rows
   const rows = useMemo(() => {
     const items = Array.isArray(data?.data) ? data.data : [];
-    return items.map(mapItemToRow);
-  }, [data]);
+    return items.map((item) => mapItemToRow(item, { id: auth.userId, role: auth.role }));
+  }, [data, auth.userId, auth.role]);
 
   // filter lokal
   const filteredData = useMemo(() => {

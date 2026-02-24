@@ -7,7 +7,7 @@ const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
 const PENDING_DECISIONS = new Set(['pending']); // selaras Prisma
 
 // --- Helper Roles ---
-const SUPER_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN']);
+const SUPER_ROLES = new Set(['HR', 'OPERASIONAL', 'DIREKTUR', 'SUPERADMIN', 'SUBADMIN', 'SUPERVISI']);
 
 function normalizeRole(role) {
   return String(role || '')
