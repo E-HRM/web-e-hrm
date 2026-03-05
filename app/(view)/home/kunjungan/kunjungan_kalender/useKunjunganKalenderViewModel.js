@@ -140,19 +140,56 @@ export default function useKunjunganKalenderViewModel() {
     );
   }, []);
 
-  /* ==== KATEGORI ==== */
-  const { data: katRes } = useSWR(
-    `${ApiEndpoints.GetKategoriKunjungan}?perPage=1000`,
-    fetcher,
+  /* ==== KATEGORI: ambil semua halaman (API pakai page/pageSize, max 100) ==== */
+  const fetchAllKategori = useCallback(async () => {
+    const pageSize = 100;
+    let page = 1;
+    let all = [];
+
+    while (true) {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
+      params.set("orderBy", "kategori_kunjungan");
+      params.set("sort", "asc");
+
+      const url = `${ApiEndpoints.GetKategoriKunjungan}?${params.toString()}`;
+      const json = await fetcher(url);
+
+      const items = Array.isArray(json?.data)
+        ? json.data
+        : Array.isArray(json?.items)
+        ? json.items
+        : [];
+      all.push(...items);
+
+      const totalPages =
+        json?.pagination?.totalPages ?? json?.meta?.totalPages ?? null;
+
+      if (totalPages) {
+        if (page >= totalPages) break;
+        page += 1;
+      } else {
+        if (items.length < pageSize) break;
+        page += 1;
+      }
+    }
+
+    return all;
+  }, []);
+
+  const { data: katAll } = useSWR(
+    "kunjungan:kategori:allpages",
+    fetchAllKategori,
     { revalidateOnFocus: false }
   );
   const kategoriOptions = useMemo(() => {
-    const xs = Array.isArray(katRes?.data) ? katRes.data : [];
+    const xs = Array.isArray(katAll) ? katAll : [];
     return xs.map((k) => ({
       value: k.id_kategori_kunjungan,
       label: k.kategori_kunjungan,
     }));
-  }, [katRes]);
+  }, [katAll]);
   const kategoriRequired = !DEFAULT_KATEGORI_ID;
 
   /* ==== RANGE KALENDER ==== */
