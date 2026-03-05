@@ -216,9 +216,9 @@ export default function KunjunganKalenderContent() {
       setSavingCreate(true);
       await vm.createPlansForUsers({
         userIds: createVal.user_ids,
-        tanggal: createVal.tanggal?.toDate(),
-        jam_mulai: createVal.jam_mulai?.toDate() || null,
-        jam_selesai: createVal.jam_selesai?.toDate() || null,
+        tanggal: createVal.tanggal || null,
+        jam_mulai: createVal.jam_mulai || null,
+        jam_selesai: createVal.jam_selesai || null,
         deskripsi: createVal.deskripsi,
         kategoriId: createVal.id_kategori_kunjungan || null,
       });
@@ -241,9 +241,9 @@ export default function KunjunganKalenderContent() {
     try {
       setSavingEdit(true);
       await vm.updatePlan(activeRow.id_kunjungan, {
-        tanggal: editVal.tanggal?.toDate() || null,
-        jam_mulai: editVal.jam_mulai?.toDate() || null,
-        jam_selesai: editVal.jam_selesai?.toDate() || null,
+        tanggal: editVal.tanggal || null,
+        jam_mulai: editVal.jam_mulai || null,
+        jam_selesai: editVal.jam_selesai || null,
         deskripsi: editVal.deskripsi,
         id_kategori_kunjungan: editVal.id_kategori_kunjungan,
       });
