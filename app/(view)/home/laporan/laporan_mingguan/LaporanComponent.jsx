@@ -493,18 +493,36 @@ export default function LaporanComponent() {
                   Belum ada revenue yang cocok dengan karyawan terpilih pada periode ini.
                 </div>
               ) : (
-                <div className='mt-5 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]'>
-                  <div className='space-y-3'>
+                <div className='mt-5'>
+                  <div
+                    className={`grid gap-4 ${
+                      vm.revenueByProduct.length > 1 ? "md:grid-cols-2" : "grid-cols-1"
+                    } ${
+                      vm.revenueByProduct.length > 2 ? "xl:grid-cols-3" : ""
+                    }`}
+                  >
                     {vm.revenueByProduct.slice(0, 5).map((item, index) => (
-                      <div key={item.key} className='rounded-2xl border border-slate-200 p-4'>
+                      <div
+                        key={item.key}
+                        className={`rounded-2xl border border-slate-200 p-4 ${
+                          vm.revenueByProduct.length === 1 ? "max-w-4xl" : ""
+                        }`}
+                      >
                         <div className='flex items-start justify-between gap-4'>
                           <div>
+                            <div className='text-xs uppercase tracking-[0.16em] text-slate-400'>Peringkat {index + 1}</div>
                             <div className='mt-1 text-base font-semibold text-slate-900'>{item.label}</div>
                           </div>
                           <div className='text-right text-sm text-slate-500'>
                             <div>{vm.formatCurrency(item.totalRevenue)}</div>
                             <div>{item.totalTransactions} transaksi</div>
                           </div>
+                        </div>
+                        <div className='mt-4 h-2 rounded-full bg-emerald-100'>
+                          <div
+                            className='h-2 rounded-full bg-emerald-600'
+                            style={{ width: `${Math.max((item.totalRevenue / Math.max(vm.revenueByProduct[0]?.totalRevenue || 1, 1)) * 100, 8)}%` }}
+                          />
                         </div>
                       </div>
                     ))}
