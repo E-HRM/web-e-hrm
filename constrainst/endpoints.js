@@ -28,16 +28,19 @@ const API_AGENDA_KERJA_IMPORT_TEMPLATE = "/api/admin/agenda-kerja-admin/import/t
 
 // === NEW: Jabatan
 const API_JABATAN = "/api/admin/jabatans";
+const API_KPI_PLANS = "/api/admin/kpi-plans";
 
 // POLA & SHIFT KERJA
 const API_POLA_KERJA = "/api/admin/pola-kerja";
 const API_SHIFT_KERJA = "/api/admin/shift-kerja";
 const API_SHIFT_KERJA_USER = "/api/admin/shift-kerja/user";
+const API_REPORT_SALES_WEEKLY = "/api/admin/reports/sales-weekly";
 
 
 // === NEW: Absensi
 const API_ABSENSI_RECORDS = "/api/admin/absensi/history";
 const API_ABSENSI_APPROVALS = "/api/admin/absensi";
+const API_LEMBUR = "/api/admin/lembur";
 
 // === Kunjungan
 const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
@@ -141,6 +144,13 @@ export const ApiEndpoints = {
   UpdateJabatan: (id) => `${API_JABATAN}/${id}`,
   DeleteJabatan: (id) => `${API_JABATAN}/${id}`,
 
+  // KPI Plans
+  GetKpiPlans: (qsObj = {}) => `${API_KPI_PLANS}${buildQS(qsObj)}`,
+  CreateKpiPlan: API_KPI_PLANS,
+  GetKpiPlanById: (id) => `${API_KPI_PLANS}/${id}`,
+  UpdateKpiPlan: (id) => `${API_KPI_PLANS}/${id}`,
+  DeleteKpiPlan: (id) => `${API_KPI_PLANS}/${id}`,
+
   // Pola Kerja
   GetPolaKerja: API_POLA_KERJA,
   CreatePolaKerja: API_POLA_KERJA,
@@ -155,11 +165,13 @@ export const ApiEndpoints = {
   UpdateShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
   DeleteShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
   GetShiftKerjaByUser: (userId) => `${API_SHIFT_KERJA_USER}/${userId}`,
+  GetSalesWeeklyReport: (qsObj = {}) => `${API_REPORT_SALES_WEEKLY}${buildQS(qsObj)}`,
 
   // Absensi
   GetAbsensiRecords: (qsObj = {}) => `${API_ABSENSI_RECORDS}${buildQS(qsObj)}`,
   GetAbsensiApprovals: (qsObj = {}) => `${API_ABSENSI_APPROVALS}${buildQS(qsObj)}`,
   UpdateAbsensiApproval: (id) => `${API_ABSENSI_APPROVALS}/${id}`,
+  GetLembur: (qsObj = {}) => `${API_LEMBUR}${buildQS(qsObj)}`,
 
   // Kunjungan
   GetKunjungan: API_KUNJUNGAN,

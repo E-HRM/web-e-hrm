@@ -229,6 +229,39 @@ const IDS = {
   sop1: makeId(58),
   pinnedSop1: makeId(59),
   istirahat1: makeId(60),
+  userKaryawan2: makeId(61),
+  userKaryawan3: makeId(62),
+  agenda2: makeId(63),
+  agenda3: makeId(64),
+  agenda4: makeId(65),
+  kategoriKunjungan2: makeId(66),
+  agendaKerjaWeek1: makeId(67),
+  agendaKerjaWeek2: makeId(68),
+  agendaKerjaWeek3: makeId(69),
+  agendaKerjaWeek4: makeId(70),
+  agendaKerjaWeek5: makeId(71),
+  agendaKerjaWeek6: makeId(72),
+  agendaKerjaWeek7: makeId(73),
+  agendaKerjaWeek8: makeId(74),
+  kunjunganWeek1: makeId(75),
+  kunjunganWeek2: makeId(76),
+  kunjunganWeek3: makeId(77),
+  kunjunganWeek4: makeId(78),
+  kunjunganWeek5: makeId(79),
+  absensiWeek1: makeId(80),
+  absensiWeek2: makeId(81),
+  absensiWeek3: makeId(82),
+  absensiWeek4: makeId(83),
+  absensiWeek5: makeId(84),
+  absensiWeek6: makeId(85),
+  absensiWeek7: makeId(86),
+  istirahatWeek1: makeId(87),
+  istirahatWeek2: makeId(88),
+  istirahatWeek3: makeId(89),
+  istirahatWeek4: makeId(90),
+  istirahatWeek5: makeId(91),
+  istirahatWeek6: makeId(92),
+  istirahatWeek7: makeId(93),
 };
 
 const dates = {
@@ -245,6 +278,308 @@ const dates = {
   day3End: new Date('2026-02-03T12:00:00.000Z'),
   year2026: new Date('2026-01-01T00:00:00.000Z'),
 };
+
+const weeklyReportAgendaSeeds = [
+  {
+    id: IDS.agendaKerjaWeek1,
+    userId: IDS.userKaryawan,
+    agendaId: IDS.agenda2,
+    description: 'Follow up prospek hotel untuk penawaran HRIS.',
+    start: new Date('2026-03-30T08:00:00.000Z'),
+    end: new Date('2026-03-30T10:00:00.000Z'),
+    durationSeconds: 7200,
+    status: 'selesai',
+    kebutuhan: 'Call script',
+  },
+  {
+    id: IDS.agendaKerjaWeek2,
+    userId: IDS.userKaryawan,
+    agendaId: IDS.agenda3,
+    description: 'Menyiapkan demo produk untuk calon klien F&B.',
+    start: new Date('2026-03-31T13:00:00.000Z'),
+    end: new Date('2026-03-31T16:00:00.000Z'),
+    durationSeconds: 10800,
+    status: 'diproses',
+    kebutuhan: 'Laptop presentasi',
+  },
+  {
+    id: IDS.agendaKerjaWeek3,
+    userId: IDS.userKaryawan,
+    agendaId: IDS.agenda4,
+    description: 'Rekap kebutuhan implementasi dan checklist onboarding klien.',
+    start: new Date('2026-04-02T09:00:00.000Z'),
+    end: new Date('2026-04-02T10:30:00.000Z'),
+    durationSeconds: 5400,
+    status: 'teragenda',
+    kebutuhan: 'Template onboarding',
+  },
+  {
+    id: IDS.agendaKerjaWeek4,
+    userId: IDS.userKaryawan2,
+    agendaId: IDS.agenda3,
+    description: 'Demo dashboard absensi untuk cabang Denpasar.',
+    start: new Date('2026-03-30T09:00:00.000Z'),
+    end: new Date('2026-03-30T12:00:00.000Z'),
+    durationSeconds: 10800,
+    status: 'selesai',
+    kebutuhan: 'Materi demo',
+  },
+  {
+    id: IDS.agendaKerjaWeek5,
+    userId: IDS.userKaryawan2,
+    agendaId: IDS.agenda2,
+    description: 'Follow up revisi proposal harga enterprise.',
+    start: new Date('2026-04-01T13:00:00.000Z'),
+    end: new Date('2026-04-01T15:00:00.000Z'),
+    durationSeconds: 7200,
+    status: 'ditunda',
+    kebutuhan: 'Draft proposal',
+  },
+  {
+    id: IDS.agendaKerjaWeek6,
+    userId: IDS.userKaryawan2,
+    agendaId: IDS.agenda4,
+    description: 'Sinkronisasi data kebutuhan training user baru.',
+    start: new Date('2026-04-03T10:00:00.000Z'),
+    end: new Date('2026-04-03T12:00:00.000Z'),
+    durationSeconds: 7200,
+    status: 'selesai',
+    kebutuhan: 'Spreadsheet training',
+  },
+  {
+    id: IDS.agendaKerjaWeek7,
+    userId: IDS.userKaryawan3,
+    agendaId: IDS.agenda2,
+    description: 'Follow up jadwal meeting dengan prospek retail.',
+    start: new Date('2026-04-01T08:00:00.000Z'),
+    end: new Date('2026-04-01T11:00:00.000Z'),
+    durationSeconds: 10800,
+    status: 'diproses',
+    kebutuhan: 'Daftar prospek',
+  },
+  {
+    id: IDS.agendaKerjaWeek8,
+    userId: IDS.userKaryawan3,
+    agendaId: IDS.agenda3,
+    description: 'Persiapan demo mobile attendance untuk calon partner.',
+    start: new Date('2026-04-04T09:00:00.000Z'),
+    end: new Date('2026-04-04T10:00:00.000Z'),
+    durationSeconds: 3600,
+    status: 'teragenda',
+    kebutuhan: 'Device testing',
+  },
+];
+
+const weeklyReportVisitSeeds = [
+  {
+    id: IDS.kunjunganWeek1,
+    userId: IDS.userKaryawan,
+    kategoriId: IDS.kategoriKunjungan1,
+    tanggal: new Date('2026-03-31T00:00:00.000Z'),
+    jamMulai: new Date('2026-03-31T10:00:00.000Z'),
+    jamSelesai: new Date('2026-03-31T12:00:00.000Z'),
+    deskripsi: 'Kunjungan presentasi solusi HRIS ke klien hospitality.',
+    status: 'selesai',
+    handOver: 'Tindak lanjut proposal oleh tim sales.',
+  },
+  {
+    id: IDS.kunjunganWeek2,
+    userId: IDS.userKaryawan,
+    kategoriId: IDS.kategoriKunjungan2,
+    tanggal: new Date('2026-04-03T00:00:00.000Z'),
+    jamMulai: new Date('2026-04-03T14:00:00.000Z'),
+    jamSelesai: new Date('2026-04-03T16:00:00.000Z'),
+    deskripsi: 'Pendampingan implementasi awal dan pengecekan kebutuhan user.',
+    status: 'berlangsung',
+    handOver: 'Koordinasi jadwal training lanjutan.',
+  },
+  {
+    id: IDS.kunjunganWeek3,
+    userId: IDS.userKaryawan2,
+    kategoriId: IDS.kategoriKunjungan1,
+    tanggal: new Date('2026-04-01T00:00:00.000Z'),
+    jamMulai: new Date('2026-04-01T09:00:00.000Z'),
+    jamSelesai: new Date('2026-04-01T11:00:00.000Z'),
+    deskripsi: 'Survey proses absensi dan kebutuhan approval klien manufaktur.',
+    status: 'diproses',
+    handOver: 'Tim produk menyiapkan catatan gap analysis.',
+  },
+  {
+    id: IDS.kunjunganWeek4,
+    userId: IDS.userKaryawan3,
+    kategoriId: IDS.kategoriKunjungan2,
+    tanggal: new Date('2026-04-02T00:00:00.000Z'),
+    jamMulai: new Date('2026-04-02T13:00:00.000Z'),
+    jamSelesai: new Date('2026-04-02T15:00:00.000Z'),
+    deskripsi: 'Jadwal demo dibatalkan karena pihak klien meminta reschedule.',
+    status: 'diproses',
+    handOver: 'Buat jadwal ulang untuk minggu berikutnya.',
+  },
+  {
+    id: IDS.kunjunganWeek5,
+    userId: IDS.userKaryawan3,
+    kategoriId: IDS.kategoriKunjungan1,
+    tanggal: new Date('2026-04-05T00:00:00.000Z'),
+    jamMulai: new Date('2026-04-05T08:00:00.000Z'),
+    jamSelesai: new Date('2026-04-05T10:00:00.000Z'),
+    deskripsi: 'Kunjungan finalisasi penawaran dan pengumpulan requirement akhir.',
+    status: 'selesai',
+    handOver: 'Masukkan hasil meeting ke CRM.',
+  },
+];
+
+const weeklyReportAbsensiSeeds = [
+  {
+    id: IDS.absensiWeek1,
+    userId: IDS.userKaryawan,
+    tanggal: new Date('2026-03-27T00:00:00.000Z'),
+    jamMasuk: new Date('2026-03-27T08:00:00.000Z'),
+    jamPulang: new Date('2026-03-27T17:05:00.000Z'),
+    statusMasuk: 'tepat',
+    statusPulang: 'tepat',
+    inLatitude: -8.650000,
+    inLongitude: 115.216667,
+    outLatitude: -8.650000,
+    outLongitude: 115.216667,
+  },
+  {
+    id: IDS.absensiWeek2,
+    userId: IDS.userKaryawan2,
+    tanggal: new Date('2026-03-27T00:00:00.000Z'),
+    jamMasuk: new Date('2026-03-27T08:12:00.000Z'),
+    jamPulang: new Date('2026-03-27T17:14:00.000Z'),
+    statusMasuk: 'terlambat',
+    statusPulang: 'tepat',
+    inLatitude: -8.650000,
+    inLongitude: 115.216667,
+    outLatitude: -8.650000,
+    outLongitude: 115.216667,
+  },
+  {
+    id: IDS.absensiWeek3,
+    userId: IDS.userKaryawan,
+    tanggal: new Date('2026-03-30T00:00:00.000Z'),
+    jamMasuk: new Date('2026-03-30T08:03:00.000Z'),
+    jamPulang: new Date('2026-03-30T17:02:00.000Z'),
+    statusMasuk: 'tepat',
+    statusPulang: 'tepat',
+    inLatitude: -8.650000,
+    inLongitude: 115.216667,
+    outLatitude: -8.650000,
+    outLongitude: 115.216667,
+  },
+  {
+    id: IDS.absensiWeek4,
+    userId: IDS.userKaryawan2,
+    tanggal: new Date('2026-03-30T00:00:00.000Z'),
+    jamMasuk: new Date('2026-03-30T09:05:00.000Z'),
+    jamPulang: new Date('2026-03-30T18:00:00.000Z'),
+    statusMasuk: 'terlambat',
+    statusPulang: 'tepat',
+    inLatitude: -8.650000,
+    inLongitude: 115.216667,
+    outLatitude: -8.652500,
+    outLongitude: 115.221500,
+  },
+  {
+    id: IDS.absensiWeek5,
+    userId: IDS.userKaryawan3,
+    tanggal: new Date('2026-03-31T00:00:00.000Z'),
+    jamMasuk: new Date('2026-03-31T08:00:00.000Z'),
+    jamPulang: new Date('2026-03-31T17:00:00.000Z'),
+    statusMasuk: 'tepat',
+    statusPulang: 'tepat',
+    inLatitude: -8.650000,
+    inLongitude: 115.216667,
+    outLatitude: -8.650000,
+    outLongitude: 115.216667,
+  },
+  {
+    id: IDS.absensiWeek6,
+    userId: IDS.userKaryawan3,
+    tanggal: new Date('2026-04-01T00:00:00.000Z'),
+    jamMasuk: new Date('2026-04-01T08:20:00.000Z'),
+    jamPulang: new Date('2026-04-01T17:15:00.000Z'),
+    statusMasuk: 'terlambat',
+    statusPulang: 'terlambat',
+    inLatitude: -8.653000,
+    inLongitude: 115.220500,
+    outLatitude: -8.650000,
+    outLongitude: 115.216667,
+  },
+  {
+    id: IDS.absensiWeek7,
+    userId: IDS.userKaryawan2,
+    tanggal: new Date('2026-04-02T00:00:00.000Z'),
+    jamMasuk: new Date('2026-04-02T08:00:00.000Z'),
+    jamPulang: new Date('2026-04-02T16:40:00.000Z'),
+    statusMasuk: 'tepat',
+    statusPulang: 'tepat',
+    inLatitude: -8.650000,
+    inLongitude: 115.216667,
+    outLatitude: -8.650000,
+    outLongitude: 115.216667,
+  },
+];
+
+const weeklyReportIstirahatSeeds = [
+  {
+    id: IDS.istirahatWeek1,
+    absensiId: IDS.absensiWeek1,
+    userId: IDS.userKaryawan,
+    tanggal: new Date('2026-03-27T00:00:00.000Z'),
+    start: new Date('2026-03-27T12:00:00.000Z'),
+    end: new Date('2026-03-27T12:30:00.000Z'),
+  },
+  {
+    id: IDS.istirahatWeek2,
+    absensiId: IDS.absensiWeek2,
+    userId: IDS.userKaryawan2,
+    tanggal: new Date('2026-03-27T00:00:00.000Z'),
+    start: new Date('2026-03-27T12:10:00.000Z'),
+    end: new Date('2026-03-27T13:15:00.000Z'),
+  },
+  {
+    id: IDS.istirahatWeek3,
+    absensiId: IDS.absensiWeek3,
+    userId: IDS.userKaryawan,
+    tanggal: new Date('2026-03-30T00:00:00.000Z'),
+    start: new Date('2026-03-30T12:05:00.000Z'),
+    end: new Date('2026-03-30T12:40:00.000Z'),
+  },
+  {
+    id: IDS.istirahatWeek4,
+    absensiId: IDS.absensiWeek4,
+    userId: IDS.userKaryawan2,
+    tanggal: new Date('2026-03-30T00:00:00.000Z'),
+    start: new Date('2026-03-30T12:30:00.000Z'),
+    end: new Date('2026-03-30T13:00:00.000Z'),
+  },
+  {
+    id: IDS.istirahatWeek5,
+    absensiId: IDS.absensiWeek5,
+    userId: IDS.userKaryawan3,
+    tanggal: new Date('2026-03-31T00:00:00.000Z'),
+    start: new Date('2026-03-31T11:55:00.000Z'),
+    end: new Date('2026-03-31T12:25:00.000Z'),
+  },
+  {
+    id: IDS.istirahatWeek6,
+    absensiId: IDS.absensiWeek6,
+    userId: IDS.userKaryawan3,
+    tanggal: new Date('2026-04-01T00:00:00.000Z'),
+    start: new Date('2026-04-01T12:15:00.000Z'),
+    end: new Date('2026-04-01T12:55:00.000Z'),
+  },
+  {
+    id: IDS.istirahatWeek7,
+    absensiId: IDS.absensiWeek7,
+    userId: IDS.userKaryawan2,
+    tanggal: new Date('2026-04-02T00:00:00.000Z'),
+    start: new Date('2026-04-02T12:00:00.000Z'),
+    end: new Date('2026-04-02T12:50:00.000Z'),
+  },
+];
 
 async function main() {
   console.log('Mulai proses seeding...');
@@ -357,6 +692,42 @@ async function main() {
     },
   });
 
+  await prisma.user.upsert({
+    where: { id_user: IDS.userKaryawan2 },
+    update: {},
+    create: {
+      id_user: IDS.userKaryawan2,
+      nama_pengguna: 'Ayu Sales',
+      email: 'ayu.sales@ehrm.local',
+      password_hash: 'password_hash_placeholder',
+      role: 'KARYAWAN',
+      status_kerja: 'AKTIF',
+      status_cuti: 'aktif',
+      id_departement: IDS.departementOps,
+      id_location: IDS.locationHq,
+      id_jabatan: IDS.jabatanStaff,
+      nomor_induk_karyawan: 'EMP-0004',
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { id_user: IDS.userKaryawan3 },
+    update: {},
+    create: {
+      id_user: IDS.userKaryawan3,
+      nama_pengguna: 'Budi Operasional',
+      email: 'budi.operasional@ehrm.local',
+      password_hash: 'password_hash_placeholder',
+      role: 'KARYAWAN',
+      status_kerja: 'AKTIF',
+      status_cuti: 'aktif',
+      id_departement: IDS.departementOps,
+      id_location: IDS.locationHq,
+      id_jabatan: IDS.jabatanStaff,
+      nomor_induk_karyawan: 'EMP-0005',
+    },
+  });
+
   await prisma.departement.update({
     where: { id_departement: IDS.departementHr },
     data: { id_supervisor: IDS.userHr },
@@ -396,6 +767,33 @@ async function main() {
     create: {
       id_agenda: IDS.agenda1,
       nama_agenda: 'Agenda Harian',
+    },
+  });
+
+  await prisma.agenda.upsert({
+    where: { id_agenda: IDS.agenda2 },
+    update: {},
+    create: {
+      id_agenda: IDS.agenda2,
+      nama_agenda: 'Follow Up Prospek',
+    },
+  });
+
+  await prisma.agenda.upsert({
+    where: { id_agenda: IDS.agenda3 },
+    update: {},
+    create: {
+      id_agenda: IDS.agenda3,
+      nama_agenda: 'Demo Produk',
+    },
+  });
+
+  await prisma.agenda.upsert({
+    where: { id_agenda: IDS.agenda4 },
+    update: {},
+    create: {
+      id_agenda: IDS.agenda4,
+      nama_agenda: 'Administrasi Implementasi',
     },
   });
 
@@ -547,6 +945,15 @@ async function main() {
     },
   });
 
+  await prisma.kategoriKunjungan.upsert({
+    where: { id_kategori_kunjungan: IDS.kategoriKunjungan2 },
+    update: {},
+    create: {
+      id_kategori_kunjungan: IDS.kategoriKunjungan2,
+      kategori_kunjungan: 'Presentasi Produk',
+    },
+  });
+
   await prisma.kunjungan.upsert({
     where: { id_kunjungan: IDS.kunjungan1 },
     update: {},
@@ -585,6 +992,95 @@ async function main() {
       status: 'terkirim',
     },
   });
+
+  for (const item of weeklyReportAgendaSeeds) {
+    await prisma.agendaKerja.upsert({
+      where: { id_agenda_kerja: item.id },
+      update: {},
+      create: {
+        id_agenda_kerja: item.id,
+        id_agenda: item.agendaId,
+        id_user: item.userId,
+        deskripsi_kerja: item.description,
+        start_date: item.start,
+        end_date: item.end,
+        duration_seconds: item.durationSeconds,
+        status: item.status,
+        kebutuhan_agenda: item.kebutuhan,
+        created_by_snapshot: 'Admin HR',
+      },
+    });
+  }
+
+  for (const item of weeklyReportVisitSeeds) {
+    await prisma.kunjungan.upsert({
+      where: { id_kunjungan: item.id },
+      update: {},
+      create: {
+        id_kunjungan: item.id,
+        id_user: item.userId,
+        id_kategori_kunjungan: item.kategoriId,
+        tanggal: item.tanggal,
+        jam_mulai: item.jamMulai,
+        jam_selesai: item.jamSelesai,
+        deskripsi: item.deskripsi,
+        jam_checkin: item.jamMulai,
+        jam_checkout: item.jamSelesai,
+        start_latitude: -8.650000,
+        start_longitude: 115.216667,
+        end_latitude: -8.650000,
+        end_longitude: 115.216667,
+        lampiran_kunjungan_url: 'https://example.com/kunjungan-laporan-mingguan.pdf',
+        status_kunjungan: item.status,
+        duration: Math.floor((item.jamSelesai - item.jamMulai) / 1000),
+        hand_over: item.handOver,
+        created_by_snapshot: 'Admin HR',
+      },
+    });
+  }
+
+  for (const item of weeklyReportAbsensiSeeds) {
+    await prisma.absensi.upsert({
+      where: { id_absensi: item.id },
+      update: {},
+      create: {
+        id_absensi: item.id,
+        id_user: item.userId,
+        face_verified_masuk: true,
+        face_verified_pulang: true,
+        tanggal: item.tanggal,
+        id_lokasi_datang: IDS.locationHq,
+        id_lokasi_pulang: IDS.locationHq,
+        jam_masuk: item.jamMasuk,
+        jam_pulang: item.jamPulang,
+        status_masuk: item.statusMasuk,
+        status_pulang: item.statusPulang,
+        in_latitude: item.inLatitude,
+        in_longitude: item.inLongitude,
+        out_latitude: item.outLatitude,
+        out_longitude: item.outLongitude,
+      },
+    });
+  }
+
+  for (const item of weeklyReportIstirahatSeeds) {
+    await prisma.istirahat.upsert({
+      where: { id_istirahat: item.id },
+      update: {},
+      create: {
+        id_istirahat: item.id,
+        id_user: item.userId,
+        id_absensi: item.absensiId,
+        tanggal_istirahat: item.tanggal,
+        start_istirahat: item.start,
+        end_istirahat: item.end,
+        start_istirahat_latitude: -8.650000,
+        start_istirahat_longitude: 115.216667,
+        end_istirahat_latitude: -8.650000,
+        end_istirahat_longitude: 115.216667,
+      },
+    });
+  }
 
   await prisma.broadcast.upsert({
     where: { id_broadcasts: IDS.broadcast1 },

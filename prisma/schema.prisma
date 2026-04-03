@@ -116,6 +116,26 @@ enum NotificationStatus {
   archived
 }
 
+enum KPIValueType {
+  number
+  currency
+  percent
+}
+
+enum KPITermType {
+  term_1
+  term_2
+  term_3
+  term_4
+}
+
+enum KPIPlanStatus {
+  draft
+  active
+  locked
+  archived
+}
+
 // ================= MODELS =================
 
 model Location {
@@ -131,6 +151,7 @@ model Location {
   Absensi_datang Absensi[] @relation("absen_datang")
   Absensi_pulang Absensi[] @relation("absen_pulang")
   User           User[]
+  kpi_plans      KPIPlan[]
 
   @@map("location")
 }
@@ -421,6 +442,7 @@ model User {
   pocketMonies PocketMoney[]
   payments     Payment[]
   pinnedSops   PinnedSop[]
+  kpi_plans    KPIPlan[]
 
   @@index([id_departement])
   @@index([id_location])
@@ -464,6 +486,8 @@ model Jabatan {
   induk       Jabatan?     @relation("HirarkiJabatan", fields: [id_induk_jabatan], references: [id_jabatan], onDelete: SetNull, onUpdate: NoAction)
   bawahan     Jabatan[]    @relation("HirarkiJabatan")
   users       User[]
+  kpi_jabatans KPIJabatan[]
+  kpi_plans    KPIPlan[]
 
   @@index([id_departement])
   @@index([id_induk_jabatan])
@@ -1362,4 +1386,121 @@ model PinnedSop {
   @@index([id_user])
   @@index([id_sop])
   @@map("pinned_sops")
+}
+
+model KPI {
+  id_kpi         String       @id @default(uuid()) @db.Char(36)
+  kode_kpi       String?      @unique @db.VarChar(100)
+  nama_kpi       String       @db.VarChar(255)
+  deskripsi      String?      @db.LongText
+  default_satuan String?      @db.VarChar(100)
+  value_type     KPIValueType @default(number)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  kpi_jabatans KPIJabatan[]
+  plan_items   KPIPlanItem[]
+
+  @@index([nama_kpi])
+  @@map("kpi")
+}
+
+model KPIJabatan {
+  id_kpi_jabatan String   @id @default(uuid()) @db.Char(36)
+  id_kpi         String   @db.Char(36)
+  id_jabatan     String   @db.Char(36)
+  urutan         Int      @default(0)
+  target_default Decimal? @db.Decimal(18, 2)
+  satuan_override String? @db.VarChar(100)
+  bobot          Decimal? @db.Decimal(5, 2)
+  wajib          Boolean  @default(true)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  kpi     KPI     @relation(fields: [id_kpi], references: [id_kpi], onDelete: Cascade, onUpdate: Cascade)
+  jabatan Jabatan @relation(fields: [id_jabatan], references: [id_jabatan], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([id_kpi, id_jabatan])
+  @@index([id_kpi])
+  @@index([id_jabatan])
+  @@index([id_jabatan, urutan])
+  @@map("kpi_jabatan")
+}
+
+model KPIPlan {
+  id_kpi_plan String        @id @default(uuid()) @db.Char(36)
+  id_user     String        @db.Char(36)
+  id_jabatan  String        @db.Char(36)
+  id_location String?       @db.Char(36)
+  tahun       Int
+  status      KPIPlanStatus @default(draft)
+
+  nama_user_snapshot String? @db.VarChar(255)
+  jabatan_snapshot   String? @db.VarChar(255)
+  location_snapshot  String? @db.VarChar(255)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user    User      @relation(fields: [id_user], references: [id_user], onDelete: Cascade, onUpdate: Cascade)
+  jabatan Jabatan   @relation(fields: [id_jabatan], references: [id_jabatan], onDelete: Restrict, onUpdate: Cascade)
+  kantor  Location? @relation(fields: [id_location], references: [id_location], onDelete: SetNull, onUpdate: Cascade)
+
+  items KPIPlanItem[]
+
+  @@unique([id_user, tahun])
+  @@index([id_user])
+  @@index([id_jabatan, tahun])
+  @@index([id_location, tahun])
+  @@index([tahun, status])
+  @@map("kpi_plan")
+}
+
+model KPIPlanItem {
+  id_kpi_plan_item String  @id @default(uuid()) @db.Char(36)
+  id_kpi_plan      String  @db.Char(36)
+  id_kpi           String  @db.Char(36)
+  urutan           Int     @default(0)
+  nama_kpi_snapshot String @db.VarChar(255)
+  satuan_snapshot   String? @db.VarChar(100)
+  target_tahunan    Decimal @db.Decimal(18, 2)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  plan KPIPlan @relation(fields: [id_kpi_plan], references: [id_kpi_plan], onDelete: Cascade, onUpdate: Cascade)
+  kpi  KPI     @relation(fields: [id_kpi], references: [id_kpi], onDelete: Restrict, onUpdate: Cascade)
+
+  terms KPIPlanItemTerm[]
+
+  @@unique([id_kpi_plan, id_kpi])
+  @@index([id_kpi_plan])
+  @@index([id_kpi])
+  @@index([id_kpi_plan, urutan])
+  @@map("kpi_plan_item")
+}
+
+model KPIPlanItemTerm {
+  id_kpi_plan_term String      @id @default(uuid()) @db.Char(36)
+  id_kpi_plan_item String      @db.Char(36)
+  term             KPITermType
+  target_term      Decimal?    @db.Decimal(18, 2)
+  achievement      Decimal?    @db.Decimal(18, 2)
+  catatan          String?     @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  plan_item KPIPlanItem @relation(fields: [id_kpi_plan_item], references: [id_kpi_plan_item], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([id_kpi_plan_item, term], name: "unique_term_per_plan_item")
+  @@index([id_kpi_plan_item])
+  @@map("kpi_plan_item_term")
 }
