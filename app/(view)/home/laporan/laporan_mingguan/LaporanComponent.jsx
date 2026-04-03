@@ -485,7 +485,6 @@ export default function LaporanComponent() {
               <div className='flex items-center justify-between gap-4'>
                 <div>
                   <h2 className='text-xl font-semibold text-slate-900'>Revenue Mingguan</h2>
-                  <p className='mt-1 text-sm text-slate-500'>Revenue dari weekly sales report yang sudah disesuaikan ke nama karyawan.</p>
                 </div>
               </div>
 
@@ -500,7 +499,6 @@ export default function LaporanComponent() {
                       <div key={item.key} className='rounded-2xl border border-slate-200 p-4'>
                         <div className='flex items-start justify-between gap-4'>
                           <div>
-                            <div className='text-xs uppercase tracking-[0.16em] text-slate-400'>Peringkat {index + 1}</div>
                             <div className='mt-1 text-base font-semibold text-slate-900'>{item.label}</div>
                           </div>
                           <div className='text-right text-sm text-slate-500'>
@@ -508,52 +506,8 @@ export default function LaporanComponent() {
                             <div>{item.totalTransactions} transaksi</div>
                           </div>
                         </div>
-                        <div className='mt-3 h-2 rounded-full bg-emerald-100'>
-                          <div
-                            className='h-2 rounded-full bg-emerald-600'
-                            style={{ width: `${Math.max((item.totalRevenue / Math.max(vm.revenueByProduct[0]?.totalRevenue || 1, 1)) * 100, 8)}%` }}
-                          />
-                        </div>
                       </div>
                     ))}
-                  </div>
-
-                  <div className='overflow-x-auto'>
-                    <table className='min-w-full divide-y divide-slate-200 text-sm'>
-                      <thead className='bg-slate-50 text-left text-xs uppercase tracking-[0.14em] text-slate-500'>
-                          <tr>
-                            <th className='px-4 py-3'>Konsultan</th>
-                            <th className='px-4 py-3'>Match</th>
-                            <th className='px-4 py-3'>Produk</th>
-                            <th className='px-4 py-3'>Revenue</th>
-                            <th className='px-4 py-3'>Periode</th>
-                          </tr>
-                      </thead>
-                      <tbody className='divide-y divide-slate-100 bg-white'>
-                        {vm.revenueItems.map((item) => (
-                          <tr key={item.id}>
-                            <td className='px-4 py-4'>
-                              <div className='font-medium text-slate-900'>{item.matchedUser?.nama || item.consultantName || "-"}</div>
-                              <div className='text-xs text-slate-500'>Sumber: {item.consultantName || "-"}</div>
-                            </td>
-                            <td className='px-4 py-4'>
-                              <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                                  item.matchedUser
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-amber-100 text-amber-700"
-                                }`}
-                              >
-                                {item.matchedUser ? `Match ${item.matchedScore}` : "Belum match"}
-                              </span>
-                            </td>
-                            <td className='px-4 py-4 text-slate-700'>{item.productName}</td>
-                            <td className='px-4 py-4 font-medium text-slate-900'>{vm.formatCurrency(item.revenue)}</td>
-                            <td className='px-4 py-4 text-slate-600'>{item.dateLabel || `${item.weekStart} - ${item.weekEnd}`}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
                   </div>
                 </div>
               )}

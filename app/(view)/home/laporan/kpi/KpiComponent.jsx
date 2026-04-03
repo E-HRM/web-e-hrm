@@ -39,14 +39,6 @@ export default function KpiComponent() {
                 Form KPI sekarang berada di halaman detail per karyawan.
               </p>
             </div>
-
-            <button
-              type="button"
-              onClick={vm.refresh}
-              className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/20"
-            >
-              Muat Ulang Referensi
-            </button>
           </div>
         </div>
 
