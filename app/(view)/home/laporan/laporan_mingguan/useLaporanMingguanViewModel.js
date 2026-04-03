@@ -139,25 +139,124 @@ function normalizeMatchText(value) {
     .trim();
 }
 
-function isPersonNameMatched(sourceName, candidateName) {
-  const source = normalizeMatchText(sourceName);
-  const candidate = normalizeMatchText(candidateName);
-  if (!source || !candidate) return false;
-  if (source === candidate) return true;
-  if (source.includes(candidate) || candidate.includes(source)) return true;
-
-  const sourceTokens = buildMatchTokens(source);
-  const candidateTokens = new Set(buildMatchTokens(candidate));
-  if (sourceTokens.length === 0) return false;
-
-  return sourceTokens.every((token) => candidateTokens.has(token));
-}
-
 function buildMatchTokens(value) {
   return normalizeMatchText(value)
     .split(" ")
     .map((token) => token.trim())
     .filter((token) => token.length >= 3);
+}
+
+function buildPersonNameVariants(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return EMPTY;
+
+  const variants = new Set();
+  const normalized = normalizeMatchText(raw);
+  if (normalized) variants.add(normalized);
+
+  const withoutParentheses = raw.replace(/\([^)]*\)/g, " ").trim();
+  const normalizedWithoutParentheses = normalizeMatchText(withoutParentheses);
+  if (normalizedWithoutParentheses) variants.add(normalizedWithoutParentheses);
+
+  for (const separator of [" - ", "-", "|", "/"]) {
+    const head = withoutParentheses.split(separator)[0]?.trim();
+    const normalizedHead = normalizeMatchText(head);
+    if (normalizedHead) variants.add(normalizedHead);
+  }
+
+  const firstToken = buildMatchTokens(withoutParentheses)[0];
+  if (firstToken) variants.add(firstToken);
+
+  return Array.from(variants).filter(Boolean);
+}
+
+function scorePersonNameMatch(sourceName, candidateName) {
+  const sourceVariants = buildPersonNameVariants(sourceName);
+  const candidateVariants = buildPersonNameVariants(candidateName);
+
+  if (sourceVariants.length === 0 || candidateVariants.length === 0) return 0;
+
+  let bestScore = 0;
+
+  for (const sourceVariant of sourceVariants) {
+    const sourceTokens = buildMatchTokens(sourceVariant);
+    if (sourceTokens.length === 0) continue;
+
+    for (const candidateVariant of candidateVariants) {
+      const candidateTokens = buildMatchTokens(candidateVariant);
+      if (candidateTokens.length === 0) continue;
+
+      let score = 0;
+
+      if (sourceVariant === candidateVariant) {
+        score += 200;
+      } else if (candidateVariant.includes(sourceVariant) || sourceVariant.includes(candidateVariant)) {
+        score += 140;
+      }
+
+      const sourceFirst = sourceTokens[0];
+      const candidateFirst = candidateTokens[0];
+      if (
+        sourceFirst &&
+        candidateFirst &&
+        (candidateFirst === sourceFirst ||
+          candidateFirst.startsWith(sourceFirst) ||
+          sourceFirst.startsWith(candidateFirst))
+      ) {
+        score += 90;
+      }
+
+      let matchedTokens = 0;
+      for (const sourceToken of sourceTokens) {
+        const hasExact = candidateTokens.some((candidateToken) => candidateToken === sourceToken);
+        const hasPrefix = candidateTokens.some(
+          (candidateToken) =>
+            candidateToken.startsWith(sourceToken) || sourceToken.startsWith(candidateToken)
+        );
+
+        if (hasExact) {
+          score += 40;
+          matchedTokens += 1;
+        } else if (hasPrefix) {
+          score += 28;
+          matchedTokens += 1;
+        }
+      }
+
+      if (matchedTokens === sourceTokens.length) {
+        score += 35;
+      }
+
+      bestScore = Math.max(bestScore, score);
+    }
+  }
+
+  return bestScore;
+}
+
+function findBestMatchedUserByConsultantName(sourceName, users) {
+  let bestUser = null;
+  let bestScore = 0;
+
+  for (const user of users) {
+    const score = scorePersonNameMatch(sourceName, user?.nama);
+    if (score > bestScore) {
+      bestScore = score;
+      bestUser = user;
+    }
+  }
+
+  if (bestScore < 90) {
+    return {
+      matchedUser: null,
+      matchedScore: bestScore,
+    };
+  }
+
+  return {
+    matchedUser: bestUser,
+    matchedScore: bestScore,
+  };
 }
 
 function getItemMatchCandidates(item) {
@@ -546,7 +645,7 @@ function normalizeAbsensiItem(item, usersById) {
 
 function normalizeRevenueItem(item, users) {
   const consultantName = String(item?.nama_konsultan || "").trim();
-  const matchedUser = users.find((user) => isPersonNameMatched(consultantName, user?.nama)) || null;
+  const { matchedUser, matchedScore } = findBestMatchedUserByConsultantName(consultantName, users);
 
   return {
     id: `${item?.week_start || ""}:${consultantName}:${item?.nama_produk || ""}`,
@@ -558,6 +657,7 @@ function normalizeRevenueItem(item, users) {
     weekEnd: String(item?.week_end || "").trim(),
     matchedUserId: matchedUser?.id || "",
     matchedUser,
+    matchedScore,
   };
 }
 
