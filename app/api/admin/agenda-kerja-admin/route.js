@@ -70,6 +70,15 @@ function formatDateTimeDisplay(value) {
   }
 }
 
+function normalizeDetailPenyelesaianInput(input) {
+  if (input === undefined) return { value: undefined };
+  if (input === null) return { value: null };
+
+  const trimmed = String(input).trim();
+  if (!trimmed) return { value: null };
+  return { value: trimmed };
+}
+
 const VALID_STATUS = ['teragenda', 'diproses', 'ditunda', 'selesai'];
 const MIN_RANGE_DATE = startOfUTCDay('1970-01-01') ?? new Date(Date.UTC(1970, 0, 1));
 const MAX_RANGE_DATE = endOfUTCDay('2999-12-31') ?? new Date(Date.UTC(2999, 11, 31, 23, 59, 59, 999));
@@ -224,6 +233,18 @@ export async function POST(request) {
     if (!['teragenda', 'diproses', 'ditunda', 'selesai'].includes(statusValue)) {
       return NextResponse.json({ ok: false, message: 'status tidak valid' }, { status: 400 });
     }
+    const detailPenyelesaian = normalizeDetailPenyelesaianInput(
+      body.detail_penyelesaian
+    );
+    if (statusValue === 'selesai' && !detailPenyelesaian.value) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'detail_penyelesaian wajib diisi saat status pekerjaan selesai.',
+        },
+        { status: 400 }
+      );
+    }
 
     const rawStartDates = body.start_dates;
     const hasStartDates = rawStartDates !== undefined;
@@ -312,6 +333,9 @@ export async function POST(request) {
           duration_seconds: durationSeconds,
           id_absensi: body.id_absensi ?? null,
           created_by_snapshot,
+          ...(detailPenyelesaian.value !== undefined && {
+            detail_penyelesaian: detailPenyelesaian.value,
+          }),
         };
 
         return db.agendaKerja.create({

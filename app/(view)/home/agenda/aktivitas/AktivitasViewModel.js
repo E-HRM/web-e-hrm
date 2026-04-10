@@ -156,7 +156,8 @@ export default function useAktivitasTimesheetViewModel() {
         const s1 = (r.deskripsi_kerja || "").toLowerCase();
         const s2 = (r.agenda?.nama_agenda || "").toLowerCase();
         const s3 = (r.kebutuhan_agenda || "").toLowerCase();
-        return s1.includes(q) || s2.includes(q) || s3.includes(q);
+        const s4 = (r.detail_penyelesaian || "").toLowerCase();
+        return s1.includes(q) || s2.includes(q) || s3.includes(q) || s4.includes(q);
       });
     }
     return xs

@@ -59,7 +59,12 @@ function pickLatestDecisionInfo(item, want) {
     return tb - ta;
   });
   const top = sorted[0];
-  return { note: top?.note || '', decided_at: top?.decided_at || null };
+  return {
+    id: top?.id_approval_pengajuan_cuti || top?.id || null,
+    note: top?.note || '',
+    decided_at: top?.decided_at || null,
+    decision: top?.decision || null,
+  };
 }
 
 function safeToDate(v) {
@@ -144,6 +149,7 @@ function mapItemToRow(item, actor) {
     alasan: latest?.note || '',
     tglKeputusan: latest?.decided_at ?? item?.updated_at ?? item?.updatedAt ?? null,
     approvalId: pickApprovalId(item, actorId, actorRole),
+    cancelApprovalId: latest?.id || null,
   };
 }
 
@@ -318,6 +324,36 @@ export default function useCutiViewModel() {
     [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
   );
 
+  const cancelDecision = useCallback(
+    async (id) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) return false;
+
+      if (!row.cancelApprovalId) {
+        AppMessage.error('Tidak menemukan approval yang bisa dikembalikan ke pending.');
+        return false;
+      }
+
+      try {
+        const res = await fetch(ApiEndpoints.DecidePengajuanCutiMobile(row.cancelApprovalId), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ decision: 'pending' }),
+        });
+        const json = await res.json();
+        if (!res.ok || json?.ok === false) throw new Error(json?.message || 'Gagal');
+
+        AppMessage.success('Status approval berhasil dikembalikan ke pending');
+        await Promise.all([mutate(), swrCntPending.mutate(), swrCntApproved.mutate(), swrCntRejected.mutate()]);
+        return true;
+      } catch (e) {
+        AppMessage.error(e?.message || 'Gagal mengembalikan approval ke pending.');
+        return false;
+      }
+    },
+    [rows, mutate, swrCntPending, swrCntApproved, swrCntRejected]
+  );
+
   const refresh = useCallback(() => Promise.all([mutate(), swrCntPending.mutate(), swrCntApproved.mutate(), swrCntRejected.mutate()]), [mutate, swrCntPending, swrCntApproved, swrCntRejected]);
 
   return {
@@ -340,6 +376,7 @@ export default function useCutiViewModel() {
     // actions
     approve,
     reject,
+    cancelDecision,
     refresh,
 
     // pola kerja

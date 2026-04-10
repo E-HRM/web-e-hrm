@@ -127,11 +127,32 @@ export async function PUT(request, { params }) {
     if (kebutuhanAgenda.error) {
       return NextResponse.json({ ok: false, message: kebutuhanAgenda.error }, { status: 400 });
     }
+    const detailPenyelesaian = normalizeDetailPenyelesaianInput(
+      body.detail_penyelesaian
+    );
+    const nextStatus =
+      body.status !== undefined ? String(body.status).toLowerCase() : current.status;
+    const nextDetailPenyelesaian =
+      detailPenyelesaian.value !== undefined
+        ? detailPenyelesaian.value
+        : current.detail_penyelesaian;
+    if (nextStatus === 'selesai' && !String(nextDetailPenyelesaian || '').trim()) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'detail_penyelesaian wajib diisi saat status pekerjaan selesai.',
+        },
+        { status: 400 }
+      );
+    }
 
     const data = {
       ...(body.id_user !== undefined && { id_user: String(body.id_user) }),
       ...(body.id_agenda !== undefined && { id_agenda: String(body.id_agenda) }),
       ...(body.deskripsi_kerja !== undefined && { deskripsi_kerja: String(body.deskripsi_kerja) }),
+      ...(detailPenyelesaian.value !== undefined && {
+        detail_penyelesaian: detailPenyelesaian.value,
+      }),
       ...(body.status !== undefined && { status: String(body.status).toLowerCase() }),
       ...(start_date !== undefined && { start_date }),
       ...(end_date !== undefined && { end_date }),
@@ -200,6 +221,15 @@ export async function PUT(request, { params }) {
 }
 
 function normalizeKebutuhanInput(input) {
+  if (input === undefined) return { value: undefined };
+  if (input === null) return { value: null };
+
+  const trimmed = String(input).trim();
+  if (!trimmed) return { value: null };
+  return { value: trimmed };
+}
+
+function normalizeDetailPenyelesaianInput(input) {
   if (input === undefined) return { value: undefined };
   if (input === null) return { value: null };
 
