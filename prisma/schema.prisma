@@ -259,6 +259,7 @@ model AgendaKerja {
   id_agenda           String       @db.Char(36)
   id_user             String       @db.Char(36)
   deskripsi_kerja     String       @db.LongText
+  detail_penyelesaian String?      @db.LongText
   start_date          DateTime?    @db.DateTime(0)
   end_date            DateTime?    @db.DateTime(0)
   duration_seconds    Int?

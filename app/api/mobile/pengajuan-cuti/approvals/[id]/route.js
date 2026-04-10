@@ -3,7 +3,7 @@ import db from '@/lib/prisma';
 import { ensureAuth, pengajuanInclude, summarizeDatesByMonth } from '../../route';
 import { sendNotification } from '@/app/utils/services/notificationService';
 
-const DECISION_ALLOWED = new Set(['disetujui', 'ditolak']);
+const DECISION_ALLOWED = new Set(['disetujui', 'ditolak', 'pending']);
 const PENDING_DECISIONS = new Set(['pending']);
 
 // --- (Fungsi-fungsi helper) ---
@@ -119,6 +119,7 @@ function buildInclude() {
 function summarizeApprovalStatus(approvals) {
   const approved = approvals.filter((item) => item.decision === 'disetujui');
   const anyApproved = approved.length > 0;
+  const anyPending = approvals.some((item) => PENDING_DECISIONS.has(item.decision));
 
   // Jika semua yang ada menolak -> Parent Rejected
   const allRejected = approvals.length > 0 && approvals.every((item) => item.decision === 'ditolak');
@@ -126,7 +127,7 @@ function summarizeApprovalStatus(approvals) {
   // Ambil level tertinggi yang sudah approve untuk tracking
   const highestApprovedLevel = anyApproved ? approved.reduce((acc, curr) => (curr.level > acc ? curr.level : acc), approved[0].level) : null;
 
-  return { anyApproved, allRejected, highestApprovedLevel };
+  return { anyApproved, anyPending, allRejected, highestApprovedLevel };
 }
 
 // Sinkronisasi Shift (Upsert)
@@ -261,7 +262,7 @@ async function handleDecision(req, { params }) {
 
   const decision = normalizeDecision(body?.decision);
   if (!decision) {
-    return NextResponse.json({ ok: false, message: 'decision harus diisi dengan nilai disetujui atau ditolak.' }, { status: 400 });
+    return NextResponse.json({ ok: false, message: 'decision harus diisi dengan nilai disetujui, ditolak, atau pending.' }, { status: 400 });
   }
 
   const note = body?.note === undefined || body?.note === null ? null : String(body.note);
@@ -315,8 +316,14 @@ async function handleDecision(req, { params }) {
         throw NextResponse.json({ ok: false, message: 'Anda tidak memiliki akses untuk approval ini.' }, { status: 403 });
       }
 
-      if (!PENDING_DECISIONS.has(approvalRecord.decision)) {
+      const isResetToPending = decision === 'pending';
+
+      if (!isResetToPending && !PENDING_DECISIONS.has(approvalRecord.decision)) {
         throw NextResponse.json({ ok: false, message: 'Approval sudah memiliki keputusan.' }, { status: 409 });
+      }
+
+      if (isResetToPending && PENDING_DECISIONS.has(approvalRecord.decision)) {
+        throw NextResponse.json({ ok: false, message: 'Approval ini sudah berada pada status pending.' }, { status: 409 });
       }
 
       // 3. Update Status Item Approval Ini
@@ -324,8 +331,8 @@ async function handleDecision(req, { params }) {
         where: { id_approval_pengajuan_cuti: id },
         data: {
           decision,
-          note,
-          decided_at: new Date(),
+          note: isResetToPending ? null : note,
+          decided_at: isResetToPending ? null : new Date(),
           // Jika di-bypass admin/user lain, catat siapa yang sebenarnya melakukan aksi
           approver_user_id: actorId,
         },
@@ -352,7 +359,7 @@ async function handleDecision(req, { params }) {
         },
       });
 
-      const { anyApproved, allRejected, highestApprovedLevel } = summarizeApprovalStatus(approvals);
+      const { anyApproved, anyPending, allRejected, highestApprovedLevel } = summarizeApprovalStatus(approvals);
       const parentUpdate = {};
 
       const pengajuanData = approvalRecord.pengajuan_cuti;
@@ -370,6 +377,9 @@ async function handleDecision(req, { params }) {
       if (anyApproved) {
         parentUpdate.current_level = highestApprovedLevel;
         if (previousStatus !== 'disetujui') parentUpdate.status = 'disetujui';
+      } else if (anyPending) {
+        parentUpdate.current_level = null;
+        if (previousStatus !== 'pending') parentUpdate.status = 'pending';
       } else if (allRejected) {
         parentUpdate.current_level = null;
         if (previousStatus !== 'ditolak') parentUpdate.status = 'ditolak';
@@ -511,9 +521,13 @@ async function handleDecision(req, { params }) {
     const shiftSyncResult = result?.shiftSyncResult || createDefaultShiftSyncResult();
 
     if (submission?.id_user) {
-      const decisionDisplay = decision === 'disetujui' ? 'disetujui' : 'ditolak';
+      const decisionDisplay =
+        decision === 'disetujui' ? 'disetujui' : decision === 'ditolak' ? 'ditolak' : 'dikembalikan ke pending';
       const overrideTitle = `Pengajuan cuti ${decisionDisplay}`;
-      const overrideBody = `Pengajuan cuti Anda telah ${decisionDisplay}.`;
+      const overrideBody =
+        decision === 'pending'
+          ? 'Pengajuan cuti Anda dikembalikan ke status pending.'
+          : `Pengajuan cuti Anda telah ${decisionDisplay}.`;
       const deeplink = `/pengajuan-cuti/${submission.id_pengajuan_cuti}`;
 
       await sendNotification(

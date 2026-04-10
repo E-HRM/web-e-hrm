@@ -228,6 +228,18 @@ export async function POST(request) {
     if (kebutuhanAgenda.error) {
       return NextResponse.json({ ok: false, message: kebutuhanAgenda.error }, { status: 400 });
     }
+    const detailPenyelesaian = normalizeDetailPenyelesaianInput(
+      body.detail_penyelesaian
+    );
+    if (statusValue === 'selesai' && !detailPenyelesaian.value) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'detail_penyelesaian wajib diisi saat status pekerjaan selesai.',
+        },
+        { status: 400 }
+      );
+    }
 
     // Snapshot pembuat (umumnya user mobile itu sendiri)
     let created_by_snapshot = null;
@@ -273,6 +285,9 @@ export async function POST(request) {
           duration_seconds: durationSeconds,
           id_absensi: body.id_absensi ?? null,
           created_by_snapshot,
+          ...(detailPenyelesaian.value !== undefined && {
+            detail_penyelesaian: detailPenyelesaian.value,
+          }),
           ...(kebutuhanAgenda.value !== undefined && { kebutuhan_agenda: kebutuhanAgenda.value }),
         };
 
@@ -325,6 +340,15 @@ export async function POST(request) {
 }
 
 function normalizeKebutuhanInput(input) {
+  if (input === undefined) return { value: undefined };
+  if (input === null) return { value: null };
+
+  const trimmed = String(input).trim();
+  if (!trimmed) return { value: null };
+  return { value: trimmed };
+}
+
+function normalizeDetailPenyelesaianInput(input) {
   if (input === undefined) return { value: undefined };
   if (input === null) return { value: null };
 
