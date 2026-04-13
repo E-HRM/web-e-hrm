@@ -8,6 +8,11 @@ import { fetcher } from "@/app/utils/fetcher";
 
 const EMPTY = Object.freeze([]);
 const OVER_BREAK_THRESHOLD_SECONDS = 60 * 60;
+const LEADS_BY_CONSULTANT_API_URL =
+  process.env.NEXT_PUBLIC_REPORT_LEADS_BY_CONSULTANT_API_URL ||
+  "https://onestepsolutionbali.com/api/leads_by_consultant";
+const LEADS_BY_CONSULTANT_API_KEY =
+  process.env.NEXT_PUBLIC_REPORT_LEADS_BY_CONSULTANT_API_KEY || "";
 
 function getWeekStartFriday(value = dayjs()) {
   const base = dayjs(value).startOf("day");
@@ -289,6 +294,75 @@ function isKpiMatchedByItem(kpiName, item) {
   });
 }
 
+
+function extractLeadRows(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  if (Array.isArray(payload?.leads)) return payload.leads;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return EMPTY;
+}
+
+function normalizeLeadRow(item, index) {
+  return {
+    id:
+      item?.id_lead ??
+      item?.id ??
+      item?.uuid ??
+      item?.lead_id ??
+      `${String(item?.name ?? item?.nama ?? "lead").trim()}-${String(item?.created_at ?? item?.tanggal ?? index)}`,
+    nama: String(
+      item?.nama ??
+        item?.name ??
+        item?.nama_lengkap ??
+        item?.full_name ??
+        item?.lead_name ??
+        item?.student_name ??
+        "Tanpa Nama"
+    ).trim(),
+    email: String(item?.email ?? item?.email_address ?? "").trim(),
+    phone: String(item?.phone ?? item?.nomor_hp ?? item?.no_hp ?? item?.whatsapp ?? item?.wa ?? "").trim(),
+    country: String(item?.country ?? item?.negara ?? item?.destination_country ?? item?.tujuan_negara ?? "").trim(),
+    source: String(item?.source ?? item?.sumber ?? item?.channel ?? "").trim(),
+    status: String(item?.status ?? item?.lead_status ?? item?.stage ?? "baru").trim(),
+    consultantName: String(
+      item?.consultant_name ?? item?.nama_konsultan ?? item?.consultant ?? item?.owner_name ?? ""
+    ).trim(),
+    createdAt: item?.created_at ?? item?.tanggal ?? item?.createdAt ?? item?.submitted_at ?? null,
+    notes: String(item?.notes ?? item?.catatan ?? item?.keterangan ?? "").trim(),
+    raw: item,
+  };
+}
+
+function summarizeLeadRows(rows) {
+  const statusMap = new Map();
+  const sourceMap = new Map();
+  const countrySet = new Set();
+
+  for (const row of rows) {
+    const statusKey = String(row?.status || "baru").trim().toLowerCase() || "baru";
+    statusMap.set(statusKey, (statusMap.get(statusKey) || 0) + 1);
+
+    const sourceKey = String(row?.source || "").trim();
+    if (sourceKey) sourceMap.set(sourceKey, (sourceMap.get(sourceKey) || 0) + 1);
+
+    const countryKey = String(row?.country || "").trim();
+    if (countryKey) countrySet.add(countryKey);
+  }
+
+  return {
+    total: rows.length,
+    countryCount: countrySet.size,
+    statusBreakdown: Array.from(statusMap.entries())
+      .map(([label, total]) => ({ label, total }))
+      .sort((a, b) => b.total - a.total),
+    sourceBreakdown: Array.from(sourceMap.entries())
+      .map(([label, total]) => ({ label, total }))
+      .sort((a, b) => b.total - a.total),
+  };
+}
+
 function countFridayWeeksInYear(year) {
   const safeYear = Number(year);
   if (!Number.isInteger(safeYear)) return 52;
@@ -504,6 +578,64 @@ async function fetchRevenueWeeklySales(from, to) {
       data: [],
     };
   }
+}
+
+
+
+async function fetchFreelanceWeeklyReport(from, to) {
+  return fetcher(
+    ApiEndpoints.GetFreelanceWeeklyReport({
+      from,
+      to,
+    })
+  );
+}
+
+async function fetchLeadsByConsultantReport(name) {
+  if (!name) {
+    return {
+      query: { name: "" },
+      summary: {
+        total: 0,
+        countryCount: 0,
+        statusBreakdown: [],
+        sourceBreakdown: [],
+      },
+      data: [],
+    };
+  }
+
+  if (!LEADS_BY_CONSULTANT_API_KEY) {
+    throw new Error("NEXT_PUBLIC_REPORT_LEADS_BY_CONSULTANT_API_KEY belum diset.");
+  }
+
+  const url = new URL(String(LEADS_BY_CONSULTANT_API_URL).replace(/\/+$|$/, ""));
+  url.searchParams.set("name", name);
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${LEADS_BY_CONSULTANT_API_KEY}`,
+      "X-API-Key": LEADS_BY_CONSULTANT_API_KEY,
+      "api-key": LEADS_BY_CONSULTANT_API_KEY,
+    },
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      payload?.message ||
+        payload?.error?.message ||
+        `HTTP error! status: ${response.status}`
+    );
+  }
+
+  const rows = extractLeadRows(payload).map(normalizeLeadRow);
+  return {
+    query: { name },
+    summary: summarizeLeadRows(rows),
+    data: rows,
+  };
 }
 
 async function fetchAllKpiPlans(years, userId = "") {
@@ -754,6 +886,24 @@ export default function useLaporanMingguanViewModel() {
     }
   );
 
+  const freelanceWeeklySwr = useSWR(
+    ["laporan-mingguan:freelance-weekly", week.from, week.to],
+    () => fetchFreelanceWeeklyReport(week.from, week.to),
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    }
+  );
+
+  const leadsByConsultantSwr = useSWR(
+    selectedUserId ? ["laporan-mingguan:leads-by-consultant", selectedUserId] : null,
+    () => fetchLeadsByConsultantReport(selectedUserMeta?.nama || ""),
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    }
+  );
+
   const kpiYears = useMemo(
     () => Array.from(new Set([week.start.year(), week.end.year()])),
     [week.end, week.start]
@@ -800,6 +950,11 @@ export default function useLaporanMingguanViewModel() {
       setSelectedUserId(karyawanOptions[0].value);
     }
   }, [karyawanOptions, selectedUserId]);
+
+  const selectedUserMeta = useMemo(
+    () => (selectedUserId ? usersById.get(selectedUserId) || null : null),
+    [selectedUserId, usersById]
+  );
 
   const agendaItems = useMemo(() => {
     const rows = Array.isArray(agendaSwr.data) ? agendaSwr.data : EMPTY;
@@ -984,6 +1139,38 @@ export default function useLaporanMingguanViewModel() {
       averageRevenue: filteredRevenueItems.length ? totalRevenue / filteredRevenueItems.length : 0,
     };
   }, [filteredRevenueItems]);
+
+  const freelanceWeeklySummary = useMemo(() => {
+    const payload = freelanceWeeklySwr.data;
+    return payload?.summary || {
+      total_supervisors: 0,
+      total_freelance: 0,
+      total_forms: 0,
+      full_day: 0,
+      half_day: 0,
+      pending: 0,
+      disetujui: 0,
+      ditolak: 0,
+    };
+  }, [freelanceWeeklySwr.data]);
+
+  const freelanceSupervisorRows = useMemo(() => {
+    const rows = Array.isArray(freelanceWeeklySwr.data?.supervisors) ? freelanceWeeklySwr.data.supervisors : EMPTY;
+    return rows;
+  }, [freelanceWeeklySwr.data]);
+
+  const leadsByConsultantSummary = useMemo(() => {
+    return leadsByConsultantSwr.data?.summary || {
+      total: 0,
+      countryCount: 0,
+      statusBreakdown: [],
+      sourceBreakdown: [],
+    };
+  }, [leadsByConsultantSwr.data]);
+
+  const leadsByConsultantRows = useMemo(() => {
+    return Array.isArray(leadsByConsultantSwr.data?.data) ? leadsByConsultantSwr.data.data : EMPTY;
+  }, [leadsByConsultantSwr.data]);
 
   const revenueByProduct = useMemo(() => {
     const map = new Map();
@@ -1383,10 +1570,11 @@ export default function useLaporanMingguanViewModel() {
     const hasPerformanceData =
       summary.agendaCount > 0 ||
       summary.visitCount > 0 ||
-      attendanceSummary.presentDays > 0;
+      attendanceSummary.presentDays > 0 ||
+      freelanceWeeklySummary.total_forms > 0;
 
     if (!hasPerformanceData) {
-      return `Belum ada data agenda kerja, kunjungan klien, atau absensi yang tercatat pada minggu ${week.label}.`;
+      return `Belum ada data agenda kerja, kunjungan klien, absensi, atau freelance yang tercatat pada minggu ${week.label}.`;
     }
 
     const topEmployee = detailedInsights.topEmployee;
@@ -1420,6 +1608,18 @@ export default function useLaporanMingguanViewModel() {
       );
     }
 
+    if (freelanceWeeklySummary.total_forms > 0) {
+      parts.push(
+        `Laporan freelance minggu ini terdiri dari ${freelanceWeeklySummary.total_forms} form dari ${freelanceWeeklySummary.total_freelance} freelance yang terdistribusi ke ${freelanceWeeklySummary.total_supervisors} supervisor.`
+      );
+    }
+
+    if (leadsByConsultantSummary.total > 0 && selectedUserMeta?.nama) {
+      parts.push(
+        `Lead consultant untuk ${selectedUserMeta.nama} berjumlah ${leadsByConsultantSummary.total} data dengan ${leadsByConsultantSummary.countryCount} negara tujuan teridentifikasi.`
+      );
+    }
+
     if (revenueSummary.totalRevenue > 0) {
       parts.push(
         `Revenue terhubung untuk periode ini mencapai ${formatCurrency(revenueSummary.totalRevenue)} dari ${revenueSummary.transactionCount} transaksi pada ${revenueSummary.productCount} produk.`
@@ -1445,12 +1645,13 @@ export default function useLaporanMingguanViewModel() {
     }
 
     return parts.join(" ");
-  }, [attendanceSummary, detailedInsights, kpiSummary, revenueSummary, summary, week.label]);
+  }, [attendanceSummary, detailedInsights, freelanceWeeklySummary, kpiSummary, leadsByConsultantSummary, revenueSummary, selectedUserMeta, summary, week.label]);
 
   const narrativeBlocks = useMemo(() => {
     const hasPerformanceData =
       summary.totalTrackedItems > 0 ||
-      attendanceSummary.presentDays > 0;
+      attendanceSummary.presentDays > 0 ||
+      freelanceWeeklySummary.total_forms > 0;
 
     if (!hasPerformanceData) {
       return [];
@@ -1507,6 +1708,20 @@ export default function useLaporanMingguanViewModel() {
       });
     }
 
+    if (freelanceWeeklySummary.total_forms > 0) {
+      blocks.push({
+        title: "Freelance",
+        text: `${freelanceWeeklySummary.total_forms} form freelance masuk pada minggu ini, terdiri dari ${freelanceWeeklySummary.full_day} full day dan ${freelanceWeeklySummary.half_day} half day. Status approval saat ini: ${freelanceWeeklySummary.disetujui} disetujui, ${freelanceWeeklySummary.pending} pending, ${freelanceWeeklySummary.ditolak} ditolak.`,
+      });
+    }
+
+    if (leadsByConsultantSummary.total > 0 && selectedUserMeta?.nama) {
+      blocks.push({
+        title: "Leads Consultant",
+        text: `${selectedUserMeta.nama} memiliki ${leadsByConsultantSummary.total} lead pada integrasi consultant lead, dengan ${leadsByConsultantSummary.countryCount} negara tujuan dan status dominan ${leadsByConsultantSummary.statusBreakdown[0]?.label || "baru"}.`,
+      });
+    }
+
     if (revenueSummary.totalRevenue > 0) {
       blocks.push({
         title: "Revenue",
@@ -1521,7 +1736,10 @@ export default function useLaporanMingguanViewModel() {
     detailedInsights.avgAgendaDurationSeconds,
     kpiSummary,
     outstandingAgenda,
+    freelanceWeeklySummary,
+    leadsByConsultantSummary,
     revenueSummary,
+    selectedUserMeta,
     summary,
     topProjects,
     topVisitCategories,
@@ -1548,9 +1766,11 @@ export default function useLaporanMingguanViewModel() {
       kunjunganSwr.mutate(),
       absensiSwr.mutate(),
       revenueSwr.mutate(),
+      freelanceWeeklySwr.mutate(),
+      leadsByConsultantSwr?.mutate?.(),
       kpiPlansSwr.mutate(),
     ]);
-  }, [absensiSwr, agendaSwr, kpiPlansSwr, kunjunganSwr, revenueSwr, usersSwr]);
+  }, [absensiSwr, agendaSwr, freelanceWeeklySwr, kpiPlansSwr, kunjunganSwr, leadsByConsultantSwr, revenueSwr, usersSwr]);
 
   const hasAnyData =
     combinedFeed.length > 0 ||
@@ -1562,6 +1782,7 @@ export default function useLaporanMingguanViewModel() {
     setWeekStart,
     selectedUserId,
     setSelectedUserId,
+    selectedUserMeta,
     loading,
     error,
     refresh,
@@ -1575,6 +1796,14 @@ export default function useLaporanMingguanViewModel() {
     revenueItems: filteredRevenueItems,
     revenueSummary,
     revenueByProduct,
+    freelanceWeeklyLoading: freelanceWeeklySwr.isLoading,
+    freelanceWeeklyError: freelanceWeeklySwr.error || null,
+    freelanceWeeklySummary,
+    freelanceSupervisorRows,
+    leadsByConsultantLoading: leadsByConsultantSwr?.isLoading || false,
+    leadsByConsultantError: leadsByConsultantSwr?.error || null,
+    leadsByConsultantSummary,
+    leadsByConsultantRows,
     kpiLoading: kpiPlansSwr.isLoading,
     kpiError: kpiPlansSwr.error || null,
     weeklyKpiRows,

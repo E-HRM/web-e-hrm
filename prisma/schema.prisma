@@ -136,6 +136,12 @@ enum KPIPlanStatus {
   archived
 }
 
+
+enum StatusHariFreelance {
+  FULL_DAY
+  HALF_DAY
+}
+
 // ================= MODELS =================
 
 model Location {
@@ -424,9 +430,10 @@ model User {
   approvals_izin_jam       ApprovalPengajuanIzinJam[] @relation("ApprovalIzinJam_approver")
   approvals_tukar_hari     ApprovalIzinTukarHari[]    @relation("ApprovalTukarHari_approver")
 
-  approvals_reimburse    ApprovalReimburse[]   @relation("ApprovalReimburse_approver")
-  approvals_payment      ApprovalPayment[]     @relation("ApprovalPayment_approver")
-  approvals_pocket_money ApprovalPocketMoney[] @relation("ApprovalPocketMoney_approver")
+  approvals_reimburse      ApprovalReimburse[]   @relation("ApprovalReimburse_approver")
+  approvals_payment        ApprovalPayment[]     @relation("ApprovalPayment_approver")
+  approvals_pocket_money   ApprovalPocketMoney[] @relation("ApprovalPocketMoney_approver")
+  approvals_form_freelance FormFreelance[]       @relation("ApprovalFormFreelance_approver")
 
   pengajuan_cuti       PengajuanCuti[]
   pengajuan_izin_sakit PengajuanIzinSakit[]
@@ -444,11 +451,56 @@ model User {
   payments     Payment[]
   pinnedSops   PinnedSop[]
   kpi_plans    KPIPlan[]
+  freelance    Freelance[]   @relation("SupervisorForFreelance")
 
   @@index([id_departement])
   @@index([id_location])
   @@index([id_jabatan])
   @@map("user")
+}
+
+model Freelance {
+  id_freelance  String  @id @default(uuid()) @db.Char(36)
+  nama          String  @db.VarChar(255)
+  alamat        String? @db.VarChar(255)
+  kontak        String? @db.VarChar(32)
+  email         String? @db.VarChar(255)
+  id_supervisor String? @db.Char(36)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  supervisor     User?            @relation("SupervisorForFreelance", fields: [id_supervisor], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
+  form_freelance FormFreelance[]
+
+  @@index([id_supervisor])
+  @@map("freelance")
+}
+
+model FormFreelance {
+  id_form_freelance String               @id @default(uuid()) @db.Char(36)
+  id_freelance      String               @db.Char(36)
+  tanggal_kerja     DateTime?            @db.Date
+  status_hari_kerja StatusHariFreelance
+  todo_list         String               @db.LongText
+  decision          ApproveStatus        @default(pending)
+  approver_user_id  String?              @db.Char(36)
+  approver_role     Role?
+  decided_at        DateTime?            @db.DateTime(0)
+  note              String?              @db.LongText
+
+  created_at        DateTime             @default(now()) @db.DateTime(0)
+  updated_at        DateTime             @updatedAt @db.DateTime(0)
+  deleted_at        DateTime?            @db.DateTime(0)
+
+  freelance Freelance @relation(fields: [id_freelance], references: [id_freelance], onDelete: Cascade, onUpdate: Cascade)
+  approver  User?     @relation("ApprovalFormFreelance_approver", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([id_freelance])
+  @@index([tanggal_kerja])
+  @@index([approver_user_id])
+  @@map("form_freelance")
 }
 
 model Departement {
@@ -483,10 +535,10 @@ model Jabatan {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  departement Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
-  induk       Jabatan?     @relation("HirarkiJabatan", fields: [id_induk_jabatan], references: [id_jabatan], onDelete: SetNull, onUpdate: NoAction)
-  bawahan     Jabatan[]    @relation("HirarkiJabatan")
-  users       User[]
+  departement  Departement? @relation(fields: [id_departement], references: [id_departement], onDelete: SetNull, onUpdate: Cascade)
+  induk        Jabatan?     @relation("HirarkiJabatan", fields: [id_induk_jabatan], references: [id_jabatan], onDelete: SetNull, onUpdate: NoAction)
+  bawahan      Jabatan[]    @relation("HirarkiJabatan")
+  users        User[]
   kpi_jabatans KPIJabatan[]
   kpi_plans    KPIPlan[]
 
@@ -1409,14 +1461,14 @@ model KPI {
 }
 
 model KPIJabatan {
-  id_kpi_jabatan String   @id @default(uuid()) @db.Char(36)
-  id_kpi         String   @db.Char(36)
-  id_jabatan     String   @db.Char(36)
-  urutan         Int      @default(0)
-  target_default Decimal? @db.Decimal(18, 2)
-  satuan_override String? @db.VarChar(100)
-  bobot          Decimal? @db.Decimal(5, 2)
-  wajib          Boolean  @default(true)
+  id_kpi_jabatan  String   @id @default(uuid()) @db.Char(36)
+  id_kpi          String   @db.Char(36)
+  id_jabatan      String   @db.Char(36)
+  urutan          Int      @default(0)
+  target_default  Decimal? @db.Decimal(18, 2)
+  satuan_override String?  @db.VarChar(100)
+  bobot           Decimal? @db.Decimal(5, 2)
+  wajib           Boolean  @default(true)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1463,11 +1515,11 @@ model KPIPlan {
 }
 
 model KPIPlanItem {
-  id_kpi_plan_item String  @id @default(uuid()) @db.Char(36)
-  id_kpi_plan      String  @db.Char(36)
-  id_kpi           String  @db.Char(36)
-  urutan           Int     @default(0)
-  nama_kpi_snapshot String @db.VarChar(255)
+  id_kpi_plan_item  String  @id @default(uuid()) @db.Char(36)
+  id_kpi_plan       String  @db.Char(36)
+  id_kpi            String  @db.Char(36)
+  urutan            Int     @default(0)
+  nama_kpi_snapshot String  @db.VarChar(255)
   satuan_snapshot   String? @db.VarChar(100)
   target_tahunan    Decimal @db.Decimal(18, 2)
 
