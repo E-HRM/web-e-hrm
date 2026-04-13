@@ -613,11 +613,9 @@ async function fetchLeadsByConsultantReport(name) {
   url.searchParams.set("name", name);
 
   const response = await fetch(url.toString(), {
+    method: "GET",
     headers: {
-      Accept: "application/json",
-      Authorization: `Bearer ${LEADS_BY_CONSULTANT_API_KEY}`,
-      "X-API-Key": LEADS_BY_CONSULTANT_API_KEY,
-      "api-key": LEADS_BY_CONSULTANT_API_KEY,
+      "x-api-key": LEADS_BY_CONSULTANT_API_KEY,
     },
   });
 
