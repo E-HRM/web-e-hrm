@@ -72,6 +72,14 @@ const MENU = [
     ],
   },
   {
+    key: "Freelance",
+    href: "/home/freelance",
+    match: ["/home/freelance"],
+    label: "Freelance",
+    icon: UserOutlined,
+    hasCaret: true,
+  },
+  {
     key: "kunjungan",
     href: "/home/kunjungan",
     match: ["/home/kunjungan", "/kunjungan"],

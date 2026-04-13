@@ -35,6 +35,7 @@ const API_POLA_KERJA = "/api/admin/pola-kerja";
 const API_SHIFT_KERJA = "/api/admin/shift-kerja";
 const API_SHIFT_KERJA_USER = "/api/admin/shift-kerja/user";
 const API_REPORT_SALES_WEEKLY = "/api/admin/reports/sales-weekly";
+const API_REPORT_FREELANCE_WEEKLY = "/api/admin/reports/freelance-weekly";
 
 
 // === NEW: Absensi
@@ -93,6 +94,9 @@ const API_KATEGORI_SOP = '/api/admin/kategori-sop';
 
 // ===== Finance: Kategori Keperluan (Admin)
 const API_KATEGORI_KEPERLUAN = "/api/admin/kategori-keperluan";
+const API_FREELANCE = "/api/admin/freelance";
+const API_PUBLIC_FREELANCE_FORM = "/api/public/freelance-form";
+const API_FREELANCE_FORM_ADMIN = "/api/admin/freelance/forms";
 
 export const ApiEndpoints = {
   // Location
@@ -166,6 +170,7 @@ export const ApiEndpoints = {
   DeleteShiftKerja: (id) => `${API_SHIFT_KERJA}/${id}`,
   GetShiftKerjaByUser: (userId) => `${API_SHIFT_KERJA_USER}/${userId}`,
   GetSalesWeeklyReport: (qsObj = {}) => `${API_REPORT_SALES_WEEKLY}${buildQS(qsObj)}`,
+  GetFreelanceWeeklyReport: (qsObj = {}) => `${API_REPORT_FREELANCE_WEEKLY}${buildQS(qsObj)}`,
 
   // Absensi
   GetAbsensiRecords: (qsObj = {}) => `${API_ABSENSI_RECORDS}${buildQS(qsObj)}`,
@@ -201,6 +206,16 @@ export const ApiEndpoints = {
   GetKategoriSakitById: (id) => `${API_KATEGORI_SAKIT}/${id}`,
   UpdateKategoriSakit: (id) => `${API_KATEGORI_SAKIT}/${id}`,
   DeleteKategoriSakit: (id) => `${API_KATEGORI_SAKIT}/${id}`,
+
+  // Freelance
+  GetFreelance: (qsObj = {}) => `${API_FREELANCE}${buildQS(qsObj)}`,
+  CreateFreelance: API_FREELANCE,
+  GetFreelanceById: (id) => `${API_FREELANCE}/${id}`,
+  UpdateFreelance: (id) => `${API_FREELANCE}/${id}`,
+  DeleteFreelance: (id) => `${API_FREELANCE}/${id}`,
+  GetPublicFreelanceForm: (id) => `${API_PUBLIC_FREELANCE_FORM}/${id}`,
+  SubmitPublicFreelanceForm: (id) => `${API_PUBLIC_FREELANCE_FORM}/${id}`,
+  UpdateFreelanceFormApproval: (id) => `${API_FREELANCE_FORM_ADMIN}/${id}`,
 
   // Cuti Konfigurasi
   GetCutiKonfigurasi: API_CUTI_KONFIG,
