@@ -120,4 +120,3 @@ export async function GET(req, { params }) {
   }
 }
 
-export { ensureAuth };

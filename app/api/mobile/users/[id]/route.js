@@ -140,7 +140,7 @@ function parseDateTimeNoTzString(value) {
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second), Number(ms)));
 }
 
-export function parseDateOnlyToUTC(value) {
+function parseDateOnlyToUTC(value) {
   if (value === undefined || value === null) return null;
 
   if (value instanceof Date) {
@@ -163,7 +163,7 @@ export function parseDateOnlyToUTC(value) {
   return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
 }
 
-export function parseDateTimeToUTC(value) {
+function parseDateTimeToUTC(value) {
   if (value === undefined || value === null) return null;
 
   if (value instanceof Date) {
@@ -183,14 +183,14 @@ export function parseDateTimeToUTC(value) {
   return cloneDateToUTC(parsed);
 }
 
-export function startOfUTCDay(value) {
+function startOfUTCDay(value) {
   const parsed = value instanceof Date ? cloneDateToUTC(value) : parseDateTimeToUTC(value);
   if (!parsed) return null;
   parsed.setUTCHours(0, 0, 0, 0);
   return parsed;
 }
 
-export function endOfUTCDay(value) {
+function endOfUTCDay(value) {
   const parsed = value instanceof Date ? cloneDateToUTC(value) : parseDateTimeToUTC(value);
   if (!parsed) return null;
   parsed.setUTCHours(23, 59, 59, 999);

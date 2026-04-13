@@ -344,4 +344,3 @@ export async function DELETE(req, { params }) {
   }
 }
 
-export { getPengajuanOr404 };
