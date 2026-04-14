@@ -366,8 +366,19 @@ export default function LaporanComponent() {
                   <p className="mt-1 text-sm text-slate-500">
                     Data leads berdasarkan nama consultant yang dipilih pada filter karyawan.
                   </p>
-                  <div className="mt-3 text-sm text-slate-700">
-                    Consultant aktif: <span className="font-semibold">{vm.selectedUserMeta?.nama || "-"}</span>
+                  <div className="mt-3 space-y-1 text-sm text-slate-700">
+                    <div>
+                      Consultant aktif: <span className="font-semibold">{vm.selectedUserMeta?.nama || "-"}</span>
+                    </div>
+                    <div>
+                      Query API: <span className="font-semibold">{vm.leadsByConsultantMeta.query.name || "-"}</span>
+                    </div>
+                    <div>
+                      Range Date: <span className="font-semibold">{vm.leadsByConsultantMeta.query.range_date || "-"}</span>
+                    </div>
+                    <div>
+                      Match Consultant: <span className="font-semibold">{vm.leadsByConsultantMeta.matchedConsultant?.name || "-"}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -424,7 +435,7 @@ export default function LaporanComponent() {
                             {lead.nama}
                           </div>
                           <div className="mt-1 text-xs text-slate-500">
-                            {lead.consultantName || vm.selectedUserMeta?.nama || "-"}
+                            {vm.leadsByConsultantMeta.matchedConsultant?.name || lead.consultantName || vm.selectedUserMeta?.nama || "-"}
                           </div>
                         </div>
                         <span
@@ -435,10 +446,13 @@ export default function LaporanComponent() {
                       </div>
 
                       <div className="mt-4 space-y-2 text-sm text-slate-600">
-                        <div>{lead.phone || "-"}</div>
-                        <div>{lead.email || "-"}</div>
+                        <div>Whatsapp: {lead.phone || "-"}</div>
+                        <div>Email: {lead.email || "-"}</div>
+                        <div>Domisili: {lead.domicile || "-"}</div>
+                        <div>Pendidikan: {lead.educationLast || "-"}</div>
                         <div>{[lead.country, lead.source].filter(Boolean).join(" • ") || "-"}</div>
                         <div>Dibuat: {vm.formatDateTime(lead.createdAt)}</div>
+                        <div>Assigned: {vm.formatDateTime(lead.assignedAt)}</div>
                       </div>
 
                       {lead.notes ? (

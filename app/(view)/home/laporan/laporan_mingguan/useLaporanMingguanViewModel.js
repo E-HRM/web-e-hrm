@@ -298,10 +298,19 @@ function isKpiMatchedByItem(kpiName, item) {
 function extractLeadRows(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.leads)) return payload.data.leads;
   if (Array.isArray(payload?.results)) return payload.results;
   if (Array.isArray(payload?.leads)) return payload.leads;
   if (Array.isArray(payload?.items)) return payload.items;
   return EMPTY;
+}
+
+function normalizeLeadDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "string" || typeof value === "number") return value;
+  if (typeof value === "object" && Object.keys(value).length === 0) return null;
+  return null;
 }
 
 function normalizeLeadRow(item, index) {
@@ -311,7 +320,7 @@ function normalizeLeadRow(item, index) {
       item?.id ??
       item?.uuid ??
       item?.lead_id ??
-      `${String(item?.name ?? item?.nama ?? "lead").trim()}-${String(item?.created_at ?? item?.tanggal ?? index)}`,
+      `${String(item?.name ?? item?.nama ?? item?.full_name ?? "lead").trim()}-${String(item?.created_at ?? item?.tanggal ?? index)}`,
     nama: String(
       item?.nama ??
         item?.name ??
@@ -324,12 +333,15 @@ function normalizeLeadRow(item, index) {
     email: String(item?.email ?? item?.email_address ?? "").trim(),
     phone: String(item?.phone ?? item?.nomor_hp ?? item?.no_hp ?? item?.whatsapp ?? item?.wa ?? "").trim(),
     country: String(item?.country ?? item?.negara ?? item?.destination_country ?? item?.tujuan_negara ?? "").trim(),
+    domicile: String(item?.domicile ?? item?.domisili ?? item?.alamat ?? "").trim(),
+    educationLast: String(item?.education_last ?? item?.pendidikan_terakhir ?? item?.education ?? "").trim(),
     source: String(item?.source ?? item?.sumber ?? item?.channel ?? "").trim(),
     status: String(item?.status ?? item?.lead_status ?? item?.stage ?? "baru").trim(),
     consultantName: String(
       item?.consultant_name ?? item?.nama_konsultan ?? item?.consultant ?? item?.owner_name ?? ""
     ).trim(),
-    createdAt: item?.created_at ?? item?.tanggal ?? item?.createdAt ?? item?.submitted_at ?? null,
+    assignedAt: normalizeLeadDateValue(item?.assigned_at ?? item?.assignedAt ?? null),
+    createdAt: normalizeLeadDateValue(item?.created_at ?? item?.tanggal ?? item?.createdAt ?? item?.submitted_at ?? null),
     notes: String(item?.notes ?? item?.catatan ?? item?.keterangan ?? "").trim(),
     raw: item,
   };
@@ -591,10 +603,10 @@ async function fetchFreelanceWeeklyReport(from, to) {
   );
 }
 
-async function fetchLeadsByConsultantReport(name) {
+async function fetchLeadsByConsultantReport(name, rangeDate = "") {
   if (!name) {
     return {
-      query: { name: "" },
+      query: { name: "", range_date: rangeDate || "" },
       summary: {
         total: 0,
         countryCount: 0,
@@ -611,6 +623,7 @@ async function fetchLeadsByConsultantReport(name) {
 
   const url = new URL(String(LEADS_BY_CONSULTANT_API_URL).replace(/\/+$|$/, ""));
   url.searchParams.set("name", name);
+  if (rangeDate) url.searchParams.set("range_date", rangeDate);
 
   const response = await fetch(url.toString(), {
     method: "GET",
@@ -629,8 +642,14 @@ async function fetchLeadsByConsultantReport(name) {
   }
 
   const rows = extractLeadRows(payload).map(normalizeLeadRow);
+  const responseData = payload?.data && typeof payload.data === "object" ? payload.data : {};
   return {
-    query: { name },
+    query: {
+      name: responseData?.query_name || name,
+      normalized_query: responseData?.normalized_query || "",
+      range_date: responseData?.range_date || rangeDate || "",
+    },
+    matchedConsultant: responseData?.matched_consultant || null,
     summary: summarizeLeadRows(rows),
     data: rows,
   };
@@ -894,8 +913,8 @@ export default function useLaporanMingguanViewModel() {
   );
 
   const leadsByConsultantSwr = useSWR(
-    selectedUserId ? ["laporan-mingguan:leads-by-consultant", selectedUserId] : null,
-    () => fetchLeadsByConsultantReport(selectedUserMeta?.nama || ""),
+    selectedUserId ? ["laporan-mingguan:leads-by-consultant", selectedUserId, week.from, week.to] : null,
+    () => fetchLeadsByConsultantReport(selectedUserMeta?.nama || "", `${week.from},${week.to}`),
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
@@ -1163,6 +1182,13 @@ export default function useLaporanMingguanViewModel() {
       countryCount: 0,
       statusBreakdown: [],
       sourceBreakdown: [],
+    };
+  }, [leadsByConsultantSwr.data]);
+
+  const leadsByConsultantMeta = useMemo(() => {
+    return {
+      query: leadsByConsultantSwr.data?.query || { name: "", normalized_query: "", range_date: "" },
+      matchedConsultant: leadsByConsultantSwr.data?.matchedConsultant || null,
     };
   }, [leadsByConsultantSwr.data]);
 
@@ -1801,6 +1827,7 @@ export default function useLaporanMingguanViewModel() {
     leadsByConsultantLoading: leadsByConsultantSwr?.isLoading || false,
     leadsByConsultantError: leadsByConsultantSwr?.error || null,
     leadsByConsultantSummary,
+    leadsByConsultantMeta,
     leadsByConsultantRows,
     kpiLoading: kpiPlansSwr.isLoading,
     kpiError: kpiPlansSwr.error || null,
