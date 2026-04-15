@@ -120,7 +120,16 @@ function leadStatusClass(status) {
   if (["hot", "deal", "closed", "approved", "success"].includes(value)) {
     return "bg-emerald-100 text-emerald-700";
   }
-  if (["follow up", "follow-up", "process", "proses", "contacted", "qualified"].includes(value)) {
+  if (
+    [
+      "follow up",
+      "follow-up",
+      "process",
+      "proses",
+      "contacted",
+      "qualified",
+    ].includes(value)
+  ) {
     return "bg-amber-100 text-amber-700";
   }
   if (["lost", "cancel", "canceled", "rejected"].includes(value)) {
@@ -364,22 +373,9 @@ export default function LaporanComponent() {
                     Leads By Consultant
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Data leads berdasarkan nama consultant yang dipilih pada filter karyawan.
+                    Data leads berdasarkan nama consultant yang dipilih pada
+                    filter karyawan.
                   </p>
-                  <div className="mt-3 space-y-1 text-sm text-slate-700">
-                    <div>
-                      Consultant aktif: <span className="font-semibold">{vm.selectedUserMeta?.nama || "-"}</span>
-                    </div>
-                    <div>
-                      Query API: <span className="font-semibold">{vm.leadsByConsultantMeta.query.name || "-"}</span>
-                    </div>
-                    <div>
-                      Range Date: <span className="font-semibold">{vm.leadsByConsultantMeta.query.range_date || "-"}</span>
-                    </div>
-                    <div>
-                      Match Consultant: <span className="font-semibold">{vm.leadsByConsultantMeta.matchedConsultant?.name || "-"}</span>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -392,19 +388,8 @@ export default function LaporanComponent() {
                     </div>
                   </div>
                   <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                      Negara
-                    </div>
                     <div className="mt-2 text-2xl font-semibold text-slate-900">
                       {vm.leadsByConsultantSummary.countryCount}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                      Status Dominan
-                    </div>
-                    <div className="mt-2 text-sm font-semibold text-slate-900">
-                      {vm.leadsByConsultantSummary.statusBreakdown[0]?.label || "-"}
                     </div>
                   </div>
                 </div>
@@ -416,7 +401,8 @@ export default function LaporanComponent() {
                 </div>
               ) : vm.leadsByConsultantError ? (
                 <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
-                  {vm.leadsByConsultantError.message || "Gagal memuat leads by consultant."}
+                  {vm.leadsByConsultantError.message ||
+                    "Gagal memuat leads by consultant."}
                 </div>
               ) : vm.leadsByConsultantRows.length === 0 ? (
                 <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
@@ -435,7 +421,10 @@ export default function LaporanComponent() {
                             {lead.nama}
                           </div>
                           <div className="mt-1 text-xs text-slate-500">
-                            {vm.leadsByConsultantMeta.matchedConsultant?.name || lead.consultantName || vm.selectedUserMeta?.nama || "-"}
+                            {vm.leadsByConsultantMeta.matchedConsultant?.name ||
+                              lead.consultantName ||
+                              vm.selectedUserMeta?.nama ||
+                              "-"}
                           </div>
                         </div>
                         <span
@@ -450,9 +439,15 @@ export default function LaporanComponent() {
                         <div>Email: {lead.email || "-"}</div>
                         <div>Domisili: {lead.domicile || "-"}</div>
                         <div>Pendidikan: {lead.educationLast || "-"}</div>
-                        <div>{[lead.country, lead.source].filter(Boolean).join(" • ") || "-"}</div>
+                        <div>
+                          {[lead.country, lead.source]
+                            .filter(Boolean)
+                            .join(" • ") || "-"}
+                        </div>
                         <div>Dibuat: {vm.formatDateTime(lead.createdAt)}</div>
-                        <div>Assigned: {vm.formatDateTime(lead.assignedAt)}</div>
+                        <div>
+                          Assigned: {vm.formatDateTime(lead.assignedAt)}
+                        </div>
                       </div>
 
                       {lead.notes ? (
