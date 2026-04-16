@@ -347,8 +347,18 @@ function getActivityAnchorId(source, id) {
 }
 
 function resolveKpiMetricSource(kpiName, satuan = "") {
+  const normalizedName = normalizeMatchText(kpiName);
   const normalized = normalizeMatchText(`${kpiName} ${satuan}`);
   if (!normalized) return "activity";
+
+  if (
+    normalizedName.includes("konsultasi") ||
+    normalizedName.includes("consultation") ||
+    normalizedName.includes("kunjungan") ||
+    normalizedName.includes("visit")
+  ) {
+    return "activity";
+  }
 
   if (
     normalized.includes("revenue") ||
@@ -361,18 +371,49 @@ function resolveKpiMetricSource(kpiName, satuan = "") {
     return "revenue";
   }
 
-  if (
-    normalized.includes("lead") ||
-    normalized.includes("konsultasi") ||
-    normalized.includes("consultation") ||
-    normalized.includes("consultant") ||
-    normalized.includes("siswa") ||
-    normalized.includes("student")
-  ) {
+  if (normalizedName.includes("lead")) {
     return "lead";
   }
 
+  if (
+    normalizedName.includes("student") ||
+    normalizedName.includes("siswa") ||
+    normalizedName.includes("english course") ||
+    normalizedName.includes("english group")
+  ) {
+    return "student";
+  }
+
   return "activity";
+}
+
+function normalizeStudentProgramBucket(programName) {
+  const normalized = normalizeMatchText(programName);
+  if (!normalized) return "";
+
+  if (normalized.includes("group class")) return "english-group";
+  if (normalized.includes("professional class")) return "english-course-professional";
+  if (normalized.includes("ielts general")) return "english-course-general";
+  if (normalized.includes("ielts academic")) return "english-course-ielts-prep";
+  if (normalized.includes("ielts")) return "english-course-ielts-prep";
+  return "";
+}
+
+function normalizeStudentKpiBucket(kpiName) {
+  const normalized = normalizeMatchText(kpiName);
+  if (!normalized) return "";
+
+  if (normalized.includes("english group")) return "english-group";
+  if (normalized.includes("professional")) return "english-course-professional";
+  if (normalized.includes("course general")) return "english-course-general";
+  if (normalized.includes("ielts prep")) return "english-course-ielts-prep";
+  return "";
+}
+
+function isStudentProgramMatchedToKpi(programName, kpiName) {
+  const programBucket = normalizeStudentProgramBucket(programName);
+  const kpiBucket = normalizeStudentKpiBucket(kpiName);
+  return Boolean(programBucket && kpiBucket && programBucket === kpiBucket);
 }
 
 
@@ -485,11 +526,12 @@ function normalizeStudentRow(item, index) {
       item?.consultant_name ?? item?.nama_konsultan ?? item?.consultant ?? item?.owner_name ?? ""
     ).trim(),
     programName: String(
+      item?.program?.name ??
       item?.program_name ??
-        item?.nama_program ??
-        item?.product_name ??
-        item?.nama_produk ??
-        item?.program ??
+      item?.nama_program ??
+      item?.product_name ??
+      item?.nama_produk ??
+      item?.program ??
         ""
     ).trim(),
     status: String(item?.status ?? item?.student_status ?? item?.stage ?? "").trim(),
@@ -1633,10 +1675,23 @@ export default function useLaporanMingguanViewModel() {
             href: null,
           }));
         } else if (metricSource === "lead") {
-          matchedItems = studentByConsultantRows;
-          actualWeekly = Number(studentByConsultantSummary.total || studentByConsultantRows.length || 0);
+          matchedItems = leadsByConsultantRows;
+          actualWeekly = Number(leadsByConsultantSummary.total || leadsByConsultantRows.length || 0);
           completedWeekly = actualWeekly;
-          detailEntries = studentByConsultantRows.slice(0, 3).map((entry) => ({
+          detailEntries = leadsByConsultantRows.slice(0, 3).map((entry) => ({
+            label:
+              entry.nama && entry.nama !== "Tanpa Nama"
+                ? entry.nama
+                : entry.consultantName || selectedUserMeta?.nama || "Leads API",
+            href: null,
+          }));
+        } else if (metricSource === "student") {
+          matchedItems = studentByConsultantRows.filter((entry) =>
+            isStudentProgramMatchedToKpi(entry.programName, item.namaKpi)
+          );
+          actualWeekly = matchedItems.length;
+          completedWeekly = actualWeekly;
+          detailEntries = matchedItems.slice(0, 3).map((entry) => ({
             label:
               entry.nama && entry.nama !== "Tanpa Nama"
                 ? entry.nama
@@ -1657,7 +1712,9 @@ export default function useLaporanMingguanViewModel() {
           if (metricSource === "revenue") {
             detailEntries = [{ label: `Total revenue consultant ${formatCurrency(actualWeekly)}`, href: null }];
           } else if (metricSource === "lead") {
-            detailEntries = [{ label: `${formatNumber(actualWeekly)} data dari consultant API`, href: null }];
+            detailEntries = [{ label: `${formatNumber(actualWeekly)} data dari leads API`, href: null }];
+          } else if (metricSource === "student") {
+            detailEntries = [{ label: `${formatNumber(actualWeekly)} data dari student API`, href: null }];
           }
         }
 
@@ -1697,9 +1754,10 @@ export default function useLaporanMingguanViewModel() {
     combinedFeed,
     filteredRevenueItems,
     kpiPlans,
+    leadsByConsultantRows,
+    leadsByConsultantSummary.total,
     selectedUserMeta?.nama,
     studentByConsultantRows,
-    studentByConsultantSummary.total,
     usersById,
   ]);
 
