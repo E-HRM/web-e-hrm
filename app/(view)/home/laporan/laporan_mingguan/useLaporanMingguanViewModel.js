@@ -13,6 +13,17 @@ const LEADS_BY_CONSULTANT_API_URL =
   "https://onestepsolutionbali.com/api/leads_by_consultant";
 const LEADS_BY_CONSULTANT_API_KEY =
   process.env.NEXT_PUBLIC_REPORT_LEADS_BY_CONSULTANT_API_KEY || "";
+const RAW_STUDENT_BY_CONSULTANT_URL =
+  process.env.NEXT_PUBLIC_REPORT_STUDENT_BY_CONSULTANT_API_URL || "";
+const STUDENT_BY_CONSULTANT_API_URL =
+  /^https?:\/\//i.test(RAW_STUDENT_BY_CONSULTANT_URL)
+    ? RAW_STUDENT_BY_CONSULTANT_URL
+    : "https://oss-english.onestepsolutionbali.com/api/report/student-report-by-consultant";
+const STUDENT_BY_CONSULTANT_API_KEY =
+  process.env.NEXT_PUBLIC_REPORT_STUDENT_BY_CONSULTANT_API_KEY ||
+  (!/^https?:\/\//i.test(RAW_STUDENT_BY_CONSULTANT_URL)
+    ? RAW_STUDENT_BY_CONSULTANT_URL
+    : "");
 
 function getWeekStartFriday(value = dayjs()) {
   const base = dayjs(value).startOf("day");
@@ -95,6 +106,43 @@ function formatCurrency(value) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(safe);
+}
+
+function buildEmptyFreelanceWeeklySummary() {
+  return {
+    total_supervisors: 0,
+    total_freelance: 0,
+    total_forms: 0,
+    full_day: 0,
+    half_day: 0,
+    pending: 0,
+    disetujui: 0,
+    ditolak: 0,
+  };
+}
+
+function summarizeFreelanceWeeklyRows(rows) {
+  const summary = buildEmptyFreelanceWeeklySummary();
+  const freelanceIds = new Set();
+
+  for (const supervisorRow of Array.isArray(rows) ? rows : EMPTY) {
+    summary.total_supervisors += 1;
+
+    for (const freelance of Array.isArray(supervisorRow?.freelancers) ? supervisorRow.freelancers : EMPTY) {
+      if (freelance?.id_freelance) freelanceIds.add(freelance.id_freelance);
+
+      const itemSummary = freelance?.summary || {};
+      summary.total_forms += Number(itemSummary.total_forms || 0);
+      summary.full_day += Number(itemSummary.full_day || 0);
+      summary.half_day += Number(itemSummary.half_day || 0);
+      summary.pending += Number(itemSummary.pending || 0);
+      summary.disetujui += Number(itemSummary.disetujui || 0);
+      summary.ditolak += Number(itemSummary.ditolak || 0);
+    }
+  }
+
+  summary.total_freelance = freelanceIds.size;
+  return summary;
 }
 
 function computeSeconds(start, end) {
@@ -294,6 +342,39 @@ function isKpiMatchedByItem(kpiName, item) {
   });
 }
 
+function getActivityAnchorId(source, id) {
+  return `activity-${source}-${id}`;
+}
+
+function resolveKpiMetricSource(kpiName, satuan = "") {
+  const normalized = normalizeMatchText(`${kpiName} ${satuan}`);
+  if (!normalized) return "activity";
+
+  if (
+    normalized.includes("revenue") ||
+    normalized.includes("sales") ||
+    normalized.includes("omzet") ||
+    normalized.includes("omset") ||
+    normalized.includes("penjualan") ||
+    normalized.includes("rupiah")
+  ) {
+    return "revenue";
+  }
+
+  if (
+    normalized.includes("lead") ||
+    normalized.includes("konsultasi") ||
+    normalized.includes("consultation") ||
+    normalized.includes("consultant") ||
+    normalized.includes("siswa") ||
+    normalized.includes("student")
+  ) {
+    return "lead";
+  }
+
+  return "activity";
+}
+
 
 function extractLeadRows(payload) {
   if (Array.isArray(payload)) return payload;
@@ -301,6 +382,16 @@ function extractLeadRows(payload) {
   if (Array.isArray(payload?.data?.leads)) return payload.data.leads;
   if (Array.isArray(payload?.results)) return payload.results;
   if (Array.isArray(payload?.leads)) return payload.leads;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return EMPTY;
+}
+
+function extractStudentRows(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.students)) return payload.data.students;
+  if (Array.isArray(payload?.students)) return payload.students;
+  if (Array.isArray(payload?.results)) return payload.results;
   if (Array.isArray(payload?.items)) return payload.items;
   return EMPTY;
 }
@@ -370,6 +461,59 @@ function summarizeLeadRows(rows) {
       .map(([label, total]) => ({ label, total }))
       .sort((a, b) => b.total - a.total),
     sourceBreakdown: Array.from(sourceMap.entries())
+      .map(([label, total]) => ({ label, total }))
+      .sort((a, b) => b.total - a.total),
+  };
+}
+
+function normalizeStudentRow(item, index) {
+  return {
+    id:
+      item?.id_student ??
+      item?.id ??
+      item?.uuid ??
+      `${String(item?.student_name ?? item?.nama_siswa ?? item?.nama ?? "student").trim()}-${index}`,
+    nama: String(
+      item?.student_name ??
+        item?.nama_siswa ??
+        item?.nama ??
+        item?.name ??
+        item?.full_name ??
+        "Tanpa Nama"
+    ).trim(),
+    consultantName: String(
+      item?.consultant_name ?? item?.nama_konsultan ?? item?.consultant ?? item?.owner_name ?? ""
+    ).trim(),
+    programName: String(
+      item?.program_name ??
+        item?.nama_program ??
+        item?.product_name ??
+        item?.nama_produk ??
+        item?.program ??
+        ""
+    ).trim(),
+    status: String(item?.status ?? item?.student_status ?? item?.stage ?? "").trim(),
+    createdAt: normalizeLeadDateValue(item?.created_at ?? item?.tanggal ?? item?.createdAt ?? null),
+    raw: item,
+  };
+}
+
+function summarizeStudentRows(rows) {
+  const programSet = new Set();
+  const statusMap = new Map();
+
+  for (const row of rows) {
+    const programKey = String(row?.programName || "").trim();
+    if (programKey) programSet.add(programKey);
+
+    const statusKey = String(row?.status || "").trim().toLowerCase();
+    if (statusKey) statusMap.set(statusKey, (statusMap.get(statusKey) || 0) + 1);
+  }
+
+  return {
+    total: rows.length,
+    programCount: programSet.size,
+    statusBreakdown: Array.from(statusMap.entries())
       .map(([label, total]) => ({ label, total }))
       .sort((a, b) => b.total - a.total),
   };
@@ -655,6 +799,51 @@ async function fetchLeadsByConsultantReport(name, rangeDate = "") {
   };
 }
 
+async function fetchStudentByConsultantReport(name, rangeDate = "") {
+  if (!name) {
+    return {
+      query: { name: "", range_date: rangeDate || "" },
+      summary: {
+        total: 0,
+        programCount: 0,
+        statusBreakdown: [],
+      },
+      data: [],
+    };
+  }
+
+  if (!STUDENT_BY_CONSULTANT_API_KEY) {
+    throw new Error("NEXT_PUBLIC_REPORT_STUDENT_BY_CONSULTANT_API_KEY belum diset.");
+  }
+
+  const url = new URL(String(STUDENT_BY_CONSULTANT_API_URL).replace(/\/+$|$/, ""));
+  url.searchParams.set("name", name);
+  if (rangeDate) url.searchParams.set("range_date", rangeDate);
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: {
+      "x-api-key": STUDENT_BY_CONSULTANT_API_KEY,
+    },
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      payload?.message ||
+        payload?.error?.message ||
+        `HTTP error! status: ${response.status}`
+    );
+  }
+
+  const rows = extractStudentRows(payload).map(normalizeStudentRow);
+  return {
+    query: { name, range_date: rangeDate || "" },
+    summary: summarizeStudentRows(rows),
+    data: rows,
+  };
+}
+
 async function fetchAllKpiPlans(years, userId = "") {
   const all = [];
   const uniqueYears = Array.from(new Set((Array.isArray(years) ? years : EMPTY).filter(Boolean)));
@@ -921,6 +1110,15 @@ export default function useLaporanMingguanViewModel() {
     }
   );
 
+  const studentByConsultantSwr = useSWR(
+    selectedUserId ? ["laporan-mingguan:student-by-consultant", selectedUserId, week.from, week.to] : null,
+    () => fetchStudentByConsultantReport(selectedUserMeta?.nama || "", `${week.from},${week.to}`),
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    }
+  );
+
   const kpiYears = useMemo(
     () => Array.from(new Set([week.start.year(), week.end.year()])),
     [week.end, week.start]
@@ -1157,24 +1355,15 @@ export default function useLaporanMingguanViewModel() {
     };
   }, [filteredRevenueItems]);
 
-  const freelanceWeeklySummary = useMemo(() => {
-    const payload = freelanceWeeklySwr.data;
-    return payload?.summary || {
-      total_supervisors: 0,
-      total_freelance: 0,
-      total_forms: 0,
-      full_day: 0,
-      half_day: 0,
-      pending: 0,
-      disetujui: 0,
-      ditolak: 0,
-    };
-  }, [freelanceWeeklySwr.data]);
-
   const freelanceSupervisorRows = useMemo(() => {
     const rows = Array.isArray(freelanceWeeklySwr.data?.supervisors) ? freelanceWeeklySwr.data.supervisors : EMPTY;
-    return rows;
-  }, [freelanceWeeklySwr.data]);
+    if (!selectedUserId) return rows;
+    return rows.filter((group) => String(group?.supervisor?.id_user || "").trim() === selectedUserId);
+  }, [freelanceWeeklySwr.data, selectedUserId]);
+
+  const freelanceWeeklySummary = useMemo(() => {
+    return summarizeFreelanceWeeklyRows(freelanceSupervisorRows);
+  }, [freelanceSupervisorRows]);
 
   const leadsByConsultantSummary = useMemo(() => {
     return leadsByConsultantSwr.data?.summary || {
@@ -1195,6 +1384,18 @@ export default function useLaporanMingguanViewModel() {
   const leadsByConsultantRows = useMemo(() => {
     return Array.isArray(leadsByConsultantSwr.data?.data) ? leadsByConsultantSwr.data.data : EMPTY;
   }, [leadsByConsultantSwr.data]);
+
+  const studentByConsultantSummary = useMemo(() => {
+    return studentByConsultantSwr.data?.summary || {
+      total: 0,
+      programCount: 0,
+      statusBreakdown: [],
+    };
+  }, [studentByConsultantSwr.data]);
+
+  const studentByConsultantRows = useMemo(() => {
+    return Array.isArray(studentByConsultantSwr.data?.data) ? studentByConsultantSwr.data.data : EMPTY;
+  }, [studentByConsultantSwr.data]);
 
   const revenueByProduct = useMemo(() => {
     const map = new Map();
@@ -1413,9 +1614,52 @@ export default function useLaporanMingguanViewModel() {
         const targetTahunan = Number(item.targetTahunan || 0);
         const weeklyTargetRaw = targetTahunan > 0 ? targetTahunan / weeksInYear : 0;
         const weeklyTarget = weeklyTargetRaw > 0 ? Math.ceil(weeklyTargetRaw) : 0;
-        const matchedItems = userItems.filter((entry) => isKpiMatchedByItem(item.namaKpi, entry));
-        const actualWeekly = matchedItems.length;
-        const completedWeekly = matchedItems.filter((entry) => entry.status === "selesai").length;
+        const metricSource = resolveKpiMetricSource(item.namaKpi, item.satuan);
+
+        let matchedItems = [];
+        let actualWeekly = 0;
+        let completedWeekly = 0;
+        let detailEntries = [];
+
+        if (metricSource === "revenue") {
+          matchedItems = filteredRevenueItems;
+          actualWeekly = filteredRevenueItems.reduce(
+            (sum, entry) => sum + Number(entry?.revenue || 0),
+            0
+          );
+          completedWeekly = actualWeekly;
+          detailEntries = filteredRevenueItems.slice(0, 3).map((entry) => ({
+            label: `${entry.productName || "Produk"} • ${formatCurrency(entry.revenue)}`,
+            href: null,
+          }));
+        } else if (metricSource === "lead") {
+          matchedItems = studentByConsultantRows;
+          actualWeekly = Number(studentByConsultantSummary.total || studentByConsultantRows.length || 0);
+          completedWeekly = actualWeekly;
+          detailEntries = studentByConsultantRows.slice(0, 3).map((entry) => ({
+            label:
+              entry.nama && entry.nama !== "Tanpa Nama"
+                ? entry.nama
+                : entry.consultantName || selectedUserMeta?.nama || "Consultant API",
+            href: null,
+          }));
+        } else {
+          matchedItems = userItems.filter((entry) => isKpiMatchedByItem(item.namaKpi, entry));
+          actualWeekly = matchedItems.length;
+          completedWeekly = matchedItems.filter((entry) => entry.status === "selesai").length;
+          detailEntries = matchedItems.slice(0, 3).map((entry) => ({
+            label: entry.title || entry.projectName || entry.categoryName || "-",
+            href: `#${getActivityAnchorId(entry.source, entry.id)}`,
+          }));
+        }
+
+        if (detailEntries.length === 0 && actualWeekly > 0) {
+          if (metricSource === "revenue") {
+            detailEntries = [{ label: `Total revenue consultant ${formatCurrency(actualWeekly)}`, href: null }];
+          } else if (metricSource === "lead") {
+            detailEntries = [{ label: `${formatNumber(actualWeekly)} data dari consultant API`, href: null }];
+          }
+        }
 
         rows.push({
           key: `${plan.id}:${item.id || item.namaKpi}`,
@@ -1430,12 +1674,14 @@ export default function useLaporanMingguanViewModel() {
           weeksInYear,
           weeklyTargetRaw,
           weeklyTarget,
+          metricSource,
           actualWeekly,
           completedWeekly,
           achievementRate: weeklyTarget > 0 ? (actualWeekly / weeklyTarget) * 100 : 0,
           remainingToWeeklyTarget: Math.max(weeklyTarget - actualWeekly, 0),
           matchedItems,
-          matchedLabels: matchedItems.slice(0, 3).map((entry) => entry.title || entry.projectName || entry.categoryName || "-"),
+          detailEntries,
+          matchedLabels: detailEntries.map((entry) => entry.label),
         });
       }
     }
@@ -1447,7 +1693,15 @@ export default function useLaporanMingguanViewModel() {
       if (a.userName !== b.userName) return a.userName.localeCompare(b.userName);
       return a.namaKpi.localeCompare(b.namaKpi);
     });
-  }, [combinedFeed, kpiPlans, usersById]);
+  }, [
+    combinedFeed,
+    filteredRevenueItems,
+    kpiPlans,
+    selectedUserMeta?.nama,
+    studentByConsultantRows,
+    studentByConsultantSummary.total,
+    usersById,
+  ]);
 
   const kpiSummary = useMemo(() => {
     const totalWeeklyTarget = weeklyKpiRows.reduce((sum, row) => sum + row.weeklyTarget, 0);
@@ -1792,9 +2046,10 @@ export default function useLaporanMingguanViewModel() {
       revenueSwr.mutate(),
       freelanceWeeklySwr.mutate(),
       leadsByConsultantSwr?.mutate?.(),
+      studentByConsultantSwr?.mutate?.(),
       kpiPlansSwr.mutate(),
     ]);
-  }, [absensiSwr, agendaSwr, freelanceWeeklySwr, kpiPlansSwr, kunjunganSwr, leadsByConsultantSwr, revenueSwr, usersSwr]);
+  }, [absensiSwr, agendaSwr, freelanceWeeklySwr, kpiPlansSwr, kunjunganSwr, leadsByConsultantSwr, revenueSwr, studentByConsultantSwr, usersSwr]);
 
   const hasAnyData =
     combinedFeed.length > 0 ||

@@ -483,7 +483,9 @@ export default function LaporanComponent() {
                 </div>
               ) : vm.freelanceSupervisorRows.length === 0 ? (
                 <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-                  Tidak ada form freelance pada minggu ini.
+                  {vm.selectedUserMeta?.nama
+                    ? `Tidak ada form freelance untuk supervisor ${vm.selectedUserMeta.nama} pada minggu ini.`
+                    : "Tidak ada form freelance pada minggu ini."}
                 </div>
               ) : (
                 <div className="mt-6 space-y-4">
@@ -493,6 +495,15 @@ export default function LaporanComponent() {
                       className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5"
                     >
                       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div>
+                          <div className="text-lg font-semibold text-slate-900">
+                            {group.supervisor?.nama_pengguna || "Tanpa Supervisor"}
+                          </div>
+                          <div className="mt-1 text-sm text-slate-500">
+                            {group.supervisor?.email || "Supervisor freelance terkait"}
+                          </div>
+                        </div>
+
                         <div className="flex flex-wrap gap-2 text-xs font-medium">
                           <span className="rounded-full bg-white px-3 py-1.5 text-slate-700">
                             {group.summary.total_freelance} freelance
@@ -990,7 +1001,7 @@ export default function LaporanComponent() {
                         <th className="px-4 py-3">KPI</th>
                         <th className="px-4 py-3">Target Tahunan</th>
                         <th className="px-4 py-3">Target / Minggu</th>
-                        <th className="px-4 py-3">Aktivitas Match</th>
+                        <th className="px-4 py-3">Aktual</th>
                         {showKpiCompletedColumn ? (
                           <th className="px-4 py-3">Selesai</th>
                         ) : null}
@@ -1044,19 +1055,26 @@ export default function LaporanComponent() {
                             </div>
                           </td>
                           <td className="px-4 py-4 text-slate-600">
-                            {row.matchedItems.length > 0 ? (
+                            {Array.isArray(row.detailEntries) &&
+                            row.detailEntries.length > 0 ? (
                               <div className="flex flex-col gap-2">
-                                {row.matchedItems.slice(0, 3).map((item) => (
-                                  <a
-                                    key={`${item.source}-${item.id}`}
-                                    href={`#${getActivityAnchorId(item)}`}
-                                    className="text-sm text-sky-700 underline-offset-2 hover:text-sky-900 hover:underline"
-                                  >
-                                    {item.title ||
-                                      item.projectName ||
-                                      item.categoryName ||
-                                      "-"}
-                                  </a>
+                                {row.detailEntries.slice(0, 3).map((entry, index) => (
+                                  entry.href ? (
+                                    <a
+                                      key={`${row.key}-detail-${index}`}
+                                      href={entry.href}
+                                      className="text-sm text-sky-700 underline-offset-2 hover:text-sky-900 hover:underline"
+                                    >
+                                      {entry.label || "-"}
+                                    </a>
+                                  ) : (
+                                    <div
+                                      key={`${row.key}-detail-${index}`}
+                                      className="text-sm text-slate-600"
+                                    >
+                                      {entry.label || "-"}
+                                    </div>
+                                  )
                                 ))}
                               </div>
                             ) : (
