@@ -5,6 +5,7 @@ import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateTimeToUTC } from '@/helpers/date-helper';
 import { sendNotification } from '@/app/utils/services/notificationService';
+import { syncWeeklyKpiProgressForTargets } from '@/lib/kpi-weekly-progress';
 
 const normRole = (r) =>
   String(r || '')
@@ -268,6 +269,18 @@ export async function PUT(request, { params }) {
     } catch (notifErr) {
       console.error('[NOTIF] (Admin) Gagal mengirim notifikasi AGENDA_COMMENTED untuk user %s: %o', updated.id_user, notifErr);
     }
+
+    await syncWeeklyKpiProgressForTargets([
+      {
+        userId: current.id_user,
+        referenceDate: current.end_date || current.start_date || current.updated_at,
+      },
+      {
+        userId: updated.id_user,
+        referenceDate: updated.end_date || updated.start_date || updated.updated_at,
+      },
+    ]);
+
     return NextResponse.json({ ok: true, data: updated });
   } catch (err) {
     console.error(err);

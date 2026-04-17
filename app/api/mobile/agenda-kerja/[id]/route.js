@@ -5,6 +5,7 @@ import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateTimeToUTC } from '@/helpers/date-helper';
 import { sendNotification } from '@/app/utils/services/notificationService';
+import { syncWeeklyKpiProgressForTargets } from '@/lib/kpi-weekly-progress';
 
 // Autentikasi (JWT/NextAuth)
 async function ensureAuth(req) {
@@ -212,6 +213,17 @@ export async function PUT(request, { params }) {
     console.info('[NOTIF] (Mobile) Mengirim notifikasi AGENDA_COMMENTED untuk user %s dengan payload %o', updated.id_user, notificationPayload);
     await sendNotification('AGENDA_COMMENTED', updated.id_user, notificationPayload);
     console.info('[NOTIF] (Mobile) Notifikasi AGENDA_COMMENTED selesai diproses untuk user %s', updated.id_user);
+
+    await syncWeeklyKpiProgressForTargets([
+      {
+        userId: current.id_user,
+        referenceDate: current.end_date || current.start_date || current.updated_at,
+      },
+      {
+        userId: updated.id_user,
+        referenceDate: updated.end_date || updated.start_date || updated.updated_at,
+      },
+    ]);
 
     return NextResponse.json({ ok: true, message: 'Agenda kerja berhasil diperbarui.', data: updated });
   } catch (err) {

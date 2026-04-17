@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import { syncWeeklyKpiProgressForTargets } from '@/lib/kpi-weekly-progress';
 
 const normRole = (r) => String(r || '').trim().toUpperCase();
 const canSeeAll = (role) => ['OPERASIONAL', 'HR', 'DIREKTUR', 'SUPERADMIN'].includes(normRole(role));
@@ -164,6 +165,17 @@ export async function PUT(req, { params }) {
       data: updates,
       include: kunjunganInclude,
     });
+
+    await syncWeeklyKpiProgressForTargets([
+      {
+        userId: existing.id_user,
+        referenceDate: existing.jam_checkout || existing.jam_selesai || existing.tanggal || existing.updated_at,
+      },
+      {
+        userId: updated.id_user,
+        referenceDate: updated.jam_checkout || updated.jam_selesai || updated.tanggal || updated.updated_at,
+      },
+    ]);
 
     return NextResponse.json({ message: 'Kunjungan diperbarui.', data: updated });
   } catch (err) {

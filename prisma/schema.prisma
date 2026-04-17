@@ -1530,7 +1530,8 @@ model KPIPlanItem {
   plan KPIPlan @relation(fields: [id_kpi_plan], references: [id_kpi_plan], onDelete: Cascade, onUpdate: Cascade)
   kpi  KPI     @relation(fields: [id_kpi], references: [id_kpi], onDelete: Restrict, onUpdate: Cascade)
 
-  terms KPIPlanItemTerm[]
+  terms             KPIPlanItemTerm[]
+  weekly_progresses KPIPlanItemWeekProgress[]
 
   @@unique([id_kpi_plan, id_kpi])
   @@index([id_kpi_plan])
@@ -1556,4 +1557,23 @@ model KPIPlanItemTerm {
   @@unique([id_kpi_plan_item, term], name: "unique_term_per_plan_item")
   @@index([id_kpi_plan_item])
   @@map("kpi_plan_item_term")
+}
+
+model KPIPlanItemWeekProgress {
+  id_kpi_plan_item_week_progress String @id @default(uuid()) @db.Char(36)
+  id_kpi_plan_item               String @db.Char(36)
+  tahun                          Int
+  week_start                     DateTime @db.Date
+  week_end                       DateTime @db.Date
+  completed_count                Int      @default(0)
+
+  created_at DateTime @default(now()) @db.DateTime(0)
+  updated_at DateTime @updatedAt @db.DateTime(0)
+
+  plan_item KPIPlanItem @relation(fields: [id_kpi_plan_item], references: [id_kpi_plan_item], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([id_kpi_plan_item, week_start], name: "unique_week_progress_per_kpi_item")
+  @@index([id_kpi_plan_item])
+  @@index([tahun, week_start])
+  @@map("kpi_plan_item_week_progress")
 }

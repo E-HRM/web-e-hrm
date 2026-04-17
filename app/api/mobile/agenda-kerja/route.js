@@ -5,6 +5,7 @@ import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { endOfUTCDay, parseDateTimeToUTC, startOfUTCDay } from '@/helpers/date-helper';
 import { sendNotification } from '@/app/utils/services/notificationService';
+import { syncWeeklyKpiProgressForTargets } from '@/lib/kpi-weekly-progress';
 
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
@@ -327,6 +328,15 @@ export async function POST(request) {
       await sendNotification('NEW_AGENDA_ASSIGNED', created.id_user, notificationPayload);
       console.info('[NOTIF] (Mobile) Notifikasi NEW_AGENDA_ASSIGNED selesai diproses untuk user %s', created.id_user);
     }
+
+    await syncWeeklyKpiProgressForTargets(
+      createdItems
+        .filter((item) => item.status === 'selesai')
+        .map((item) => ({
+          userId: item.id_user,
+          referenceDate: item.end_date || item.start_date || item.updated_at,
+        }))
+    );
 
     return NextResponse.json({ ok: true, message: 'Anda berhasil menambahkan agenda kerja.', data: createdItems, meta: { created: createdItems.length } }, { status: 201 });
   } catch (err) {

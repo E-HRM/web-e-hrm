@@ -6,6 +6,7 @@ import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 import { parseDateTimeToUTC } from '@/helpers/date-helper';
+import { syncWeeklyKpiProgressForTargets } from '@/lib/kpi-weekly-progress';
 
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 
@@ -286,8 +287,15 @@ export async function PUT(req, { params }) {
 
     const existing = await db.kunjungan.findFirst({
       where: { id_kunjungan: id, id_user: actorId, deleted_at: null },
-      // Kita hanya perlu select jam_checkin untuk durasi
-      select: { id_kunjungan: true, jam_checkin: true },
+      select: {
+        id_kunjungan: true,
+        id_user: true,
+        jam_checkin: true,
+        jam_checkout: true,
+        jam_selesai: true,
+        tanggal: true,
+        updated_at: true,
+      },
     });
 
     if (!existing) {
@@ -452,6 +460,17 @@ export async function PUT(req, { params }) {
 
       return updatedVisit;
     });
+
+    await syncWeeklyKpiProgressForTargets([
+      {
+        userId: existing.id_user,
+        referenceDate: existing.jam_checkout || existing.jam_selesai || existing.tanggal || existing.updated_at,
+      },
+      {
+        userId: actorId,
+        referenceDate: updated.jam_checkout || existing.jam_checkout || existing.jam_selesai || existing.tanggal || updated.updated_at,
+      },
+    ]);
 
     return NextResponse.json({ message: 'Check-out kunjungan berhasil.', data: updated });
   } catch (err) {

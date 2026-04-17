@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
+import { countFridayWeeksInYear, getFridayWeekRange } from '@/lib/kpi-weekly-progress';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
 
@@ -217,6 +218,12 @@ export function buildPlanInclude() {
             term: 'asc',
           },
         },
+        weekly_progresses: {
+          orderBy: {
+            week_start: 'desc',
+          },
+          take: 8,
+        },
       },
     },
     _count: {
@@ -230,6 +237,70 @@ export function buildPlanInclude() {
 export function serializePlan(plan) {
   if (!plan) return null;
 
+  const currentYear = new Date().getUTCFullYear();
+  const currentWeek = getFridayWeekRange(new Date());
+  const latestPlanWeek = (plan.items || [])
+    .flatMap((item) => item.weekly_progresses || [])
+    .sort((left, right) => new Date(right.week_start) - new Date(left.week_start))[0] || null;
+  const monitorWeek =
+    plan.tahun === currentYear
+      ? currentWeek
+      : latestPlanWeek
+        ? {
+            weekStart: latestPlanWeek.week_start,
+            weekEnd: latestPlanWeek.week_end,
+          }
+        : null;
+  const monitorWeekStartIso = monitorWeek?.weekStart ? new Date(monitorWeek.weekStart).toISOString() : null;
+  const weeksInYear = countFridayWeeksInYear(plan.tahun);
+
+  const items = (plan.items || []).map((item, index) => {
+    const terms = Object.fromEntries(
+      (item.terms || []).map((termRow) => [DB_TO_FORM_TERM[termRow.term] || termRow.term, parseNumber(termRow.achievement)])
+    );
+    const targetTahunan = parseNumber(item.target_tahunan);
+    const weeklyTarget = targetTahunan > 0 ? Math.ceil(targetTahunan / weeksInYear) : 0;
+    const weeklyProgress = (item.weekly_progresses || []).map((progressRow) => ({
+      id: progressRow.id_kpi_plan_item_week_progress,
+      tahun: progressRow.tahun,
+      weekStart: progressRow.week_start,
+      weekEnd: progressRow.week_end,
+      completedCount: progressRow.completed_count || 0,
+      updatedAt: progressRow.updated_at,
+    }));
+    const monitorProgress = monitorWeekStartIso
+      ? weeklyProgress.find((progressRow) => {
+          try {
+            return new Date(progressRow.weekStart).toISOString() === monitorWeekStartIso;
+          } catch {
+            return false;
+          }
+        })
+      : null;
+
+    return {
+      id: item.id_kpi_plan_item,
+      kpiId: item.id_kpi,
+      nomor: index + 1,
+      namaKpi: item.nama_kpi_snapshot || item.kpi?.nama_kpi || '',
+      satuan: item.satuan_snapshot || item.kpi?.default_satuan || '',
+      targetTahunan,
+      weeklyTarget,
+      term1: terms.term1 || 0,
+      term2: terms.term2 || 0,
+      term3: terms.term3 || 0,
+      term4: terms.term4 || 0,
+      monitorWeekCompleted: monitorProgress?.completedCount || 0,
+      recentWeeklyProgress: weeklyProgress,
+    };
+  });
+
+  const totalCompletedThisWeek = items.reduce(
+    (sum, item) => sum + Number(item.monitorWeekCompleted || 0),
+    0,
+  );
+  const matchedKpiThisWeek = items.filter((item) => Number(item.monitorWeekCompleted || 0) > 0).length;
+
   return {
     id: plan.id_kpi_plan,
     userId: plan.id_user,
@@ -241,24 +312,11 @@ export function serializePlan(plan) {
     createdAt: plan.created_at,
     updatedAt: plan.updated_at,
     totalItems: plan._count?.items ?? plan.items?.length ?? 0,
-    items: (plan.items || []).map((item, index) => {
-      const terms = Object.fromEntries(
-        (item.terms || []).map((termRow) => [DB_TO_FORM_TERM[termRow.term] || termRow.term, parseNumber(termRow.achievement)])
-      );
-
-      return {
-        id: item.id_kpi_plan_item,
-        kpiId: item.id_kpi,
-        nomor: index + 1,
-        namaKpi: item.nama_kpi_snapshot || item.kpi?.nama_kpi || '',
-        satuan: item.satuan_snapshot || item.kpi?.default_satuan || '',
-        targetTahunan: parseNumber(item.target_tahunan),
-        term1: terms.term1 || 0,
-        term2: terms.term2 || 0,
-        term3: terms.term3 || 0,
-        term4: terms.term4 || 0,
-      };
-    }),
+    monitorWeekStart: monitorWeek?.weekStart || null,
+    monitorWeekEnd: monitorWeek?.weekEnd || null,
+    totalCompletedThisWeek,
+    matchedKpiThisWeek,
+    items,
   };
 }
 

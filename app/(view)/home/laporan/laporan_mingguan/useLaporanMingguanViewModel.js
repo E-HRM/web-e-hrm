@@ -313,14 +313,12 @@ function findBestMatchedUserByConsultantName(sourceName, users) {
 }
 
 function getItemMatchCandidates(item) {
-  return [
-    item?.title,
-    item?.projectName,
-    item?.categoryName,
-    item?.description,
-  ]
-    .map(normalizeMatchText)
-    .filter(Boolean);
+  const primaryCandidates =
+    item?.source === "kunjungan"
+      ? [item?.categoryName, item?.title]
+      : [item?.projectName, item?.title];
+
+  return primaryCandidates.map(normalizeMatchText).filter(Boolean);
 }
 
 function isKpiMatchedByItem(kpiName, item) {
@@ -379,9 +377,15 @@ function resolveKpiMetricSource(kpiName, satuan = "") {
     normalizedName.includes("student") ||
     normalizedName.includes("siswa") ||
     normalizedName.includes("english course") ||
-    normalizedName.includes("english group")
+    normalizedName.includes("english group") ||
+    normalizedName.includes("english professional") ||
+    normalizedName.includes("career program")
   ) {
     return "student";
+  }
+
+  if (normalizedName.includes("potensial study")) {
+    return "lead";
   }
 
   return "activity";
@@ -393,9 +397,18 @@ function normalizeStudentProgramBucket(programName) {
 
   if (normalized.includes("group class")) return "english-group";
   if (normalized.includes("professional class")) return "english-course-professional";
+  if (normalized.includes("general intensive class")) return "english-course-general";
   if (normalized.includes("ielts general")) return "english-course-general";
   if (normalized.includes("ielts academic")) return "english-course-ielts-prep";
   if (normalized.includes("ielts")) return "english-course-ielts-prep";
+  if (
+    normalized.includes("career program") ||
+    normalized.includes("whv") ||
+    normalized.includes("j1") ||
+    normalized.includes("training")
+  ) {
+    return "career-program";
+  }
   return "";
 }
 
@@ -404,9 +417,11 @@ function normalizeStudentKpiBucket(kpiName) {
   if (!normalized) return "";
 
   if (normalized.includes("english group")) return "english-group";
+  if (normalized.includes("english professional")) return "english-course-professional";
   if (normalized.includes("professional")) return "english-course-professional";
   if (normalized.includes("course general")) return "english-course-general";
   if (normalized.includes("ielts prep")) return "english-course-ielts-prep";
+  if (normalized.includes("career program")) return "career-program";
   return "";
 }
 
@@ -1699,11 +1714,13 @@ export default function useLaporanMingguanViewModel() {
             href: null,
           }));
         } else {
-          matchedItems = userItems.filter((entry) => isKpiMatchedByItem(item.namaKpi, entry));
+          matchedItems = userItems.filter(
+            (entry) => entry.status === "selesai" && isKpiMatchedByItem(item.namaKpi, entry)
+          );
           actualWeekly = matchedItems.length;
-          completedWeekly = matchedItems.filter((entry) => entry.status === "selesai").length;
+          completedWeekly = actualWeekly;
           detailEntries = matchedItems.slice(0, 3).map((entry) => ({
-            label: entry.title || entry.projectName || entry.categoryName || "-",
+            label: entry.projectName || entry.categoryName || entry.title || "-",
             href: `#${getActivityAnchorId(entry.source, entry.id)}`,
           }));
         }
@@ -1780,6 +1797,21 @@ export default function useLaporanMingguanViewModel() {
       achievementRate: totalWeeklyTarget > 0 ? (totalActual / totalWeeklyTarget) * 100 : 0,
     };
   }, [weeklyKpiRows]);
+
+  const matchedWeeklyKpiRows = useMemo(() => {
+    return weeklyKpiRows.filter((row) => Number(row.actualWeekly || 0) > 0);
+  }, [weeklyKpiRows]);
+
+  const matchedKpiHighlights = useMemo(() => {
+    return matchedWeeklyKpiRows.slice(0, 3).map((row) => ({
+      key: row.key,
+      userName: row.userName,
+      namaKpi: row.namaKpi,
+      actualWeekly: row.actualWeekly,
+      weeklyTarget: row.weeklyTarget,
+      achievementRate: row.achievementRate,
+    }));
+  }, [matchedWeeklyKpiRows]);
 
   const kpiChartByEmployee = useMemo(() => {
     const map = new Map();
@@ -1907,87 +1939,116 @@ export default function useLaporanMingguanViewModel() {
       summary.agendaCount > 0 ||
       summary.visitCount > 0 ||
       attendanceSummary.presentDays > 0 ||
-      freelanceWeeklySummary.total_forms > 0;
+      freelanceWeeklySummary.total_forms > 0 ||
+      leadsByConsultantSummary.total > 0 ||
+      revenueSummary.totalRevenue > 0 ||
+      matchedWeeklyKpiRows.length > 0;
 
     if (!hasPerformanceData) {
-      return `Belum ada data agenda kerja, kunjungan klien, absensi, atau freelance yang tercatat pada minggu ${week.label}.`;
+      return `Belum ada data operasional, KPI, absensi, freelance, leads, maupun revenue yang tercatat pada minggu ${week.label}.`;
     }
 
     const topEmployee = detailedInsights.topEmployee;
     const busiestDay = detailedInsights.busiestDay;
-    const parts = [`Periode ${week.label} melibatkan ${summary.activeUserCount} karyawan.`];
+    const parts = [
+      `Pada periode ${week.label}, aktivitas mingguan melibatkan ${summary.activeUserCount} karyawan aktif dan menghasilkan ${summary.totalTrackedItems} aktivitas utama dari agenda kerja serta kunjungan klien.`,
+    ];
 
     if (summary.totalTrackedItems > 0) {
       parts.push(
-        `Total aktivitas operasional terdata ${summary.totalTrackedItems} item dengan tingkat penyelesaian ${formatPercent(summary.completionRate)}.`
+        `Dari keseluruhan aktivitas tersebut, ${summary.completedTrackedItems} sudah selesai sehingga tingkat penyelesaian minggu ini mencapai ${formatPercent(summary.completionRate)}.`
       );
       parts.push(
-        `Terdapat ${summary.agendaCount} item timesheet dan agenda kerja dengan total durasi ${formatDuration(summary.agendaDurationSeconds)}.`
+        `Agenda kerja tercatat ${summary.agendaCount} item dengan total durasi ${formatDuration(summary.agendaDurationSeconds)}; sebanyak ${summary.agendaDone} selesai, ${summary.agendaInProgress} sedang berjalan, ${summary.agendaPlanned} masih terjadwal, dan ${summary.agendaPaused} ditunda.`
       );
       parts.push(
-        `${summary.agendaDone} selesai, ${summary.agendaInProgress} diproses, ${summary.agendaPlanned} teragenda, dan ${summary.agendaPaused} ditunda.`
-      );
-      parts.push(
-        `Kunjungan klien berjumlah ${summary.visitCount} item; ${summary.visitDone} selesai, ${summary.visitRunning} berlangsung, ${summary.visitPlanned} teragenda, dan ${summary.visitCanceled} batal.`
+        `Kunjungan klien tercatat ${summary.visitCount} item, terdiri dari ${summary.visitDone} kunjungan selesai, ${summary.visitRunning} yang masih berlangsung, ${summary.visitPlanned} yang masih terjadwal, dan ${summary.visitCanceled} yang dibatalkan.`
       );
     }
 
-    if (kpiSummary.totalKpiItems > 0) {
+    if (topProjects[0]) {
       parts.push(
-        `Target KPI tahunan diterjemahkan menjadi target mingguan dengan formula target tahunan dibagi jumlah minggu laporan Jumat-Kamis dalam tahun berjalan lalu dibulatkan ke atas. Pada minggu ini target ideal mencapai ${formatNumber(kpiSummary.totalWeeklyTarget)} dan realisasi yang match ke KPI mencapai ${formatNumber(kpiSummary.totalActual)} atau ${formatPercent(kpiSummary.achievementRate)}.`
+        `Fokus pekerjaan paling dominan minggu ini berada pada ${topProjects[0].label} dengan ${topProjects[0].total} aktivitas dan durasi ${formatDuration(topProjects[0].durationSeconds)}.`
+      );
+    }
+
+    if (topVisitCategories[0]) {
+      parts.push(
+        `Kategori kunjungan yang paling sering muncul adalah ${topVisitCategories[0].label} sebanyak ${topVisitCategories[0].total} kunjungan.`
+      );
+    }
+
+    if (matchedWeeklyKpiRows.length > 0) {
+      const kpiDetailText = matchedKpiHighlights
+        .map(
+          (row) =>
+            `${row.namaKpi} oleh ${row.userName} dengan realisasi ${formatNumber(row.actualWeekly)} dari sasaran minggu ini ${formatNumber(row.weeklyTarget)}`
+        )
+        .join('; ');
+      parts.push(
+        `Pencapaian KPI minggu ini terlihat pada ${matchedWeeklyKpiRows.length} KPI yang benar-benar memiliki aktivitas pendukung. Total realisasi yang tercatat mencapai ${formatNumber(kpiSummary.totalActual)} dari sasaran minggu ini ${formatNumber(kpiSummary.totalWeeklyTarget)}. ${kpiDetailText ? `Sorotan KPI yang bergerak: ${kpiDetailText}.` : ''}`.trim()
       );
     }
 
     if (attendanceSummary.presentDays > 0) {
       parts.push(
-        `Absensi mencatat ${attendanceSummary.presentDays} hari hadir dengan tingkat ketepatan check-in ${formatPercent(attendanceSummary.onTimeRate)} dan kepatuhan lokasi ${formatPercent(attendanceSummary.locationComplianceRate)}.`
-      );
-    }
-
-    if (freelanceWeeklySummary.total_forms > 0) {
-      parts.push(
-        `Laporan freelance minggu ini terdiri dari ${freelanceWeeklySummary.total_forms} form dari ${freelanceWeeklySummary.total_freelance} freelance yang terdistribusi ke ${freelanceWeeklySummary.total_supervisors} supervisor.`
-      );
-    }
-
-    if (leadsByConsultantSummary.total > 0 && selectedUserMeta?.nama) {
-      parts.push(
-        `Lead consultant untuk ${selectedUserMeta.nama} berjumlah ${leadsByConsultantSummary.total} data dengan ${leadsByConsultantSummary.countryCount} negara tujuan teridentifikasi.`
-      );
-    }
-
-    if (revenueSummary.totalRevenue > 0) {
-      parts.push(
-        `Revenue terhubung untuk periode ini mencapai ${formatCurrency(revenueSummary.totalRevenue)} dari ${revenueSummary.transactionCount} transaksi pada ${revenueSummary.productCount} produk.`
+        `Dari sisi kehadiran, tercatat ${attendanceSummary.presentDays} hari hadir dengan ${attendanceSummary.onTimeCount} check-in tepat waktu dan ${attendanceSummary.lateCount} keterlambatan. Tingkat kepatuhan lokasi berada di ${formatPercent(attendanceSummary.locationComplianceRate)}.`
       );
     }
 
     if (attendanceSummary.breakSessions > 0) {
       parts.push(
-        `Istirahat tercatat ${attendanceSummary.breakSessions} sesi dengan total durasi ${formatDuration(attendanceSummary.totalBreakSeconds)} dan rata-rata ${formatDuration(attendanceSummary.averageBreakSeconds)} per sesi.`
+        `Selama minggu berjalan terdapat ${attendanceSummary.breakSessions} sesi istirahat dengan total durasi ${formatDuration(attendanceSummary.totalBreakSeconds)} dan rata-rata ${formatDuration(attendanceSummary.averageBreakSeconds)} per sesi. ${attendanceSummary.overBreakCount > 0 ? `Ada ${attendanceSummary.overBreakCount} kejadian istirahat yang melebihi 60 menit.` : 'Tidak ada istirahat yang melewati batas 60 menit.'}`
+      );
+    }
+
+    if (freelanceWeeklySummary.total_forms > 0) {
+      parts.push(
+        `Kontribusi freelance masuk melalui ${freelanceWeeklySummary.total_forms} form dari ${freelanceWeeklySummary.total_freelance} freelance yang berada di bawah ${freelanceWeeklySummary.total_supervisors} supervisor. Komposisinya terdiri dari ${freelanceWeeklySummary.full_day} full day dan ${freelanceWeeklySummary.half_day} half day, dengan status ${freelanceWeeklySummary.disetujui} disetujui, ${freelanceWeeklySummary.pending} menunggu review, dan ${freelanceWeeklySummary.ditolak} ditolak.`
+      );
+    }
+
+    if (leadsByConsultantSummary.total > 0 && selectedUserMeta?.nama) {
+      parts.push(
+        `Untuk consultant ${selectedUserMeta.nama}, integrasi leads menampilkan ${leadsByConsultantSummary.total} prospek pada periode ini${leadsByConsultantSummary.countryCount > 0 ? ` dengan ${leadsByConsultantSummary.countryCount} negara tujuan yang teridentifikasi` : ''}. ${leadsByConsultantSummary.statusBreakdown[0]?.label ? `Status yang paling dominan adalah ${leadsByConsultantSummary.statusBreakdown[0].label}.` : ""}`
+      );
+    }
+
+    if (revenueSummary.totalRevenue > 0) {
+      parts.push(
+        `Dari sisi hasil bisnis, revenue yang berhasil terhubung ke karyawan terpilih mencapai ${formatCurrency(revenueSummary.totalRevenue)} dari ${revenueSummary.transactionCount} transaksi pada ${revenueSummary.productCount} produk, dengan rata-rata ${formatCurrency(revenueSummary.averageRevenue)} per transaksi.`
       );
     }
 
     if (topEmployee?.user?.nama) {
       parts.push(
-        `Kontributor paling aktif adalah ${topEmployee.user.nama} dengan ${topEmployee.totalPerformanceRecords} rekaman kerja gabungan.`
+        `Kontributor paling aktif minggu ini adalah ${topEmployee.user.nama} dengan ${topEmployee.totalPerformanceRecords} catatan aktivitas gabungan.`
       );
     }
 
     if (busiestDay?.dateLabel) {
       parts.push(
-        `Hari terpadat terjadi pada ${busiestDay.dayLabel}, ${busiestDay.dateLabel} dengan ${busiestDay.totalItems} item aktivitas.`
+        `Hari dengan intensitas aktivitas tertinggi terjadi pada ${busiestDay.dayLabel}, ${busiestDay.dateLabel}, dengan total ${busiestDay.totalItems} aktivitas.`
+      );
+    }
+
+    if (outstandingAgenda.length > 0 || activeVisits.length > 0) {
+      parts.push(
+        `Masih ada ${outstandingAgenda.length} agenda kerja dan ${activeVisits.length} kunjungan yang memerlukan tindak lanjut pada periode ini.`
       );
     }
 
     return parts.join(" ");
-  }, [attendanceSummary, detailedInsights, freelanceWeeklySummary, kpiSummary, leadsByConsultantSummary, revenueSummary, selectedUserMeta, summary, week.label]);
+  }, [activeVisits.length, attendanceSummary, detailedInsights, freelanceWeeklySummary, kpiSummary, leadsByConsultantSummary, matchedKpiHighlights, matchedWeeklyKpiRows.length, outstandingAgenda.length, revenueSummary, selectedUserMeta, summary, topProjects, topVisitCategories, week.label]);
 
   const narrativeBlocks = useMemo(() => {
     const hasPerformanceData =
       summary.totalTrackedItems > 0 ||
       attendanceSummary.presentDays > 0 ||
-      freelanceWeeklySummary.total_forms > 0;
+      freelanceWeeklySummary.total_forms > 0 ||
+      leadsByConsultantSummary.total > 0 ||
+      revenueSummary.totalRevenue > 0 ||
+      matchedWeeklyKpiRows.length > 0;
 
     if (!hasPerformanceData) {
       return [];
@@ -1998,70 +2059,70 @@ export default function useLaporanMingguanViewModel() {
     if (summary.totalTrackedItems > 0) {
       blocks.push({
         title: "Produktivitas",
-        text: `Tim menyelesaikan ${summary.completedTrackedItems} dari ${summary.totalTrackedItems} aktivitas minggu ini. Completion rate gabungan berada di ${formatPercent(summary.completionRate)} dengan rata-rata durasi timesheet ${formatDuration(detailedInsights.avgAgendaDurationSeconds)} per item.`,
+        text: `Minggu ini tercatat ${summary.totalTrackedItems} aktivitas utama dan ${summary.completedTrackedItems} di antaranya sudah selesai. Penyelesaian keseluruhan berada di ${formatPercent(summary.completionRate)}, dengan agenda kerja menyumbang ${summary.agendaCount} item dan kunjungan klien ${summary.visitCount} item.`,
       });
     }
 
-    if (kpiSummary.totalKpiItems > 0) {
+    if (matchedWeeklyKpiRows.length > 0) {
       blocks.push({
-        title: "KPI Mingguan",
-        text: `${kpiSummary.totalKpiItems} KPI aktif diterjemahkan ke target mingguan total ${formatNumber(kpiSummary.totalWeeklyTarget)} dengan pembulatan ke atas. Minggu ini ${kpiSummary.matchedKpiCount} KPI mendapat aktivitas yang match, dengan realisasi ${formatNumber(kpiSummary.totalActual)} atau ${formatPercent(kpiSummary.achievementRate)} terhadap target mingguan.`,
+        title: "KPI yang Bergerak",
+        text: `${matchedWeeklyKpiRows.length} KPI memiliki aktivitas yang benar-benar mendukung pencapaian minggu ini. Total realisasinya ${formatNumber(kpiSummary.totalActual)} dari sasaran minggu ini ${formatNumber(kpiSummary.totalWeeklyTarget)}. ${matchedKpiHighlights.map((row) => `${row.namaKpi} (${row.userName}) ${formatNumber(row.actualWeekly)}/${formatNumber(row.weeklyTarget)}`).join('; ')}.`,
       });
     }
 
     if (topProjects[0]) {
       blocks.push({
         title: "Agenda Dominan",
-        text: `Proyek/agenda paling aktif adalah ${topProjects[0].label} dengan ${topProjects[0].total} item dan durasi tercatat ${formatDuration(topProjects[0].durationSeconds)}.`,
+        text: `${topProjects[0].label} menjadi fokus pekerjaan terbesar dengan ${topProjects[0].total} aktivitas dan durasi ${formatDuration(topProjects[0].durationSeconds)}.`,
       });
     }
 
     if (topVisitCategories[0]) {
       blocks.push({
         title: "Kunjungan Dominan",
-        text: `Kategori kunjungan paling sering muncul adalah ${topVisitCategories[0].label} dengan ${topVisitCategories[0].total} kunjungan. Tingkat penyelesaian kunjungan minggu ini berada di ${formatPercent(summary.visitCompletionRate)}.`,
-      });
-    }
-
-    if (outstandingAgenda[0] || activeVisits[0]) {
-      blocks.push({
-        title: "Perlu Tindak Lanjut",
-        text: `${outstandingAgenda.length} agenda kerja dan ${activeVisits.length} kunjungan masih memerlukan follow up. Prioritas utama sebaiknya diarahkan ke item yang berstatus diproses atau berlangsung terlebih dahulu.`,
+        text: `${topVisitCategories[0].label} menjadi kategori kunjungan terbanyak dengan ${topVisitCategories[0].total} kunjungan. Tingkat penyelesaian kunjungan minggu ini berada di ${formatPercent(summary.visitCompletionRate)}.`,
       });
     }
 
     if (attendanceSummary.presentDays > 0) {
       blocks.push({
         title: "Kehadiran",
-        text: `${attendanceSummary.presentDays} hari hadir tercatat dengan ${attendanceSummary.onTimeCount} check-in tepat waktu dan ${attendanceSummary.lateCount} keterlambatan. Checkout tercatat pada ${attendanceSummary.checkedOutCount} hari dengan kepatuhan lokasi ${formatPercent(attendanceSummary.locationComplianceRate)}.`,
+        text: `${attendanceSummary.presentDays} hari hadir tercatat, dengan ${attendanceSummary.onTimeCount} check-in tepat waktu, ${attendanceSummary.lateCount} keterlambatan, dan kepatuhan lokasi ${formatPercent(attendanceSummary.locationComplianceRate)}.`,
       });
     }
 
     if (attendanceSummary.breakSessions > 0) {
       blocks.push({
         title: "Istirahat",
-        text: `Total istirahat minggu ini mencapai ${attendanceSummary.breakSessions} sesi dengan durasi ${formatDuration(attendanceSummary.totalBreakSeconds)}. Ada ${attendanceSummary.overBreakCount} hari yang melewati ambang 60 menit.`,
+        text: `${attendanceSummary.breakSessions} sesi istirahat tercatat dengan total durasi ${formatDuration(attendanceSummary.totalBreakSeconds)}. ${attendanceSummary.overBreakCount > 0 ? `Ada ${attendanceSummary.overBreakCount} kejadian yang melebihi 60 menit.` : 'Seluruh durasi istirahat masih dalam batas yang aman.'}`,
       });
     }
 
     if (freelanceWeeklySummary.total_forms > 0) {
       blocks.push({
         title: "Freelance",
-        text: `${freelanceWeeklySummary.total_forms} form freelance masuk pada minggu ini, terdiri dari ${freelanceWeeklySummary.full_day} full day dan ${freelanceWeeklySummary.half_day} half day. Status approval saat ini: ${freelanceWeeklySummary.disetujui} disetujui, ${freelanceWeeklySummary.pending} pending, ${freelanceWeeklySummary.ditolak} ditolak.`,
+        text: `${freelanceWeeklySummary.total_forms} form freelance masuk pada minggu ini dari ${freelanceWeeklySummary.total_freelance} freelance. Komposisinya ${freelanceWeeklySummary.full_day} full day dan ${freelanceWeeklySummary.half_day} half day, dengan ${freelanceWeeklySummary.disetujui} disetujui, ${freelanceWeeklySummary.pending} menunggu review, dan ${freelanceWeeklySummary.ditolak} ditolak.`,
       });
     }
 
     if (leadsByConsultantSummary.total > 0 && selectedUserMeta?.nama) {
       blocks.push({
         title: "Leads Consultant",
-        text: `${selectedUserMeta.nama} memiliki ${leadsByConsultantSummary.total} lead pada integrasi consultant lead, dengan ${leadsByConsultantSummary.countryCount} negara tujuan dan status dominan ${leadsByConsultantSummary.statusBreakdown[0]?.label || "baru"}.`,
+        text: `${selectedUserMeta.nama} menerima ${leadsByConsultantSummary.total} lead pada periode ini${leadsByConsultantSummary.countryCount > 0 ? ` dengan ${leadsByConsultantSummary.countryCount} negara tujuan yang teridentifikasi` : ''}. ${leadsByConsultantSummary.statusBreakdown[0]?.label ? `Status yang paling sering muncul adalah ${leadsByConsultantSummary.statusBreakdown[0].label}.` : ''}`.trim(),
       });
     }
 
     if (revenueSummary.totalRevenue > 0) {
       blocks.push({
         title: "Revenue",
-        text: `Revenue minggu ini mencapai ${formatCurrency(revenueSummary.totalRevenue)} dari ${revenueSummary.transactionCount} transaksi. Produk yang terjual mencakup ${revenueSummary.productCount} jenis dengan rata-rata ${formatCurrency(revenueSummary.averageRevenue)} per transaksi.`,
+        text: `Revenue minggu ini mencapai ${formatCurrency(revenueSummary.totalRevenue)} dari ${revenueSummary.transactionCount} transaksi pada ${revenueSummary.productCount} produk. Nilai rata-ratanya ${formatCurrency(revenueSummary.averageRevenue)} per transaksi.`,
+      });
+    }
+
+    if (outstandingAgenda[0] || activeVisits[0]) {
+      blocks.push({
+        title: "Perlu Tindak Lanjut",
+        text: `${outstandingAgenda.length} agenda kerja dan ${activeVisits.length} kunjungan masih membutuhkan follow up. Prioritas utama ada pada aktivitas yang masih berjalan atau belum selesai.`,
       });
     }
 
@@ -2069,11 +2130,12 @@ export default function useLaporanMingguanViewModel() {
   }, [
     activeVisits,
     attendanceSummary,
-    detailedInsights.avgAgendaDurationSeconds,
-    kpiSummary,
-    outstandingAgenda,
     freelanceWeeklySummary,
+    kpiSummary,
     leadsByConsultantSummary,
+    matchedKpiHighlights,
+    matchedWeeklyKpiRows.length,
+    outstandingAgenda,
     revenueSummary,
     selectedUserMeta,
     summary,
