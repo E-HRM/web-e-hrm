@@ -101,6 +101,15 @@ function normalizeDetailPenyelesaianInput(input) {
   return { value: trimmed };
 }
 
+function normalizeDetailDitundaInput(input) {
+  if (input === undefined) return { value: undefined };
+  if (input === null) return { value: null };
+
+  const trimmed = String(input).trim();
+  if (!trimmed) return { value: null };
+  return { value: trimmed };
+}
+
 export async function GET(request, { params }) {
   const auth = await ensureAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -173,17 +182,31 @@ export async function PUT(request, { params }) {
     const detailPenyelesaian = normalizeDetailPenyelesaianInput(
       body.detail_penyelesaian
     );
+    const detailDitunda = normalizeDetailDitundaInput(body.detail_ditunda);
     const nextStatus =
       body.status !== undefined ? String(body.status).toLowerCase() : current.status;
     const nextDetailPenyelesaian =
       detailPenyelesaian.value !== undefined
         ? detailPenyelesaian.value
         : current.detail_penyelesaian;
+    const nextDetailDitunda =
+      detailDitunda.value !== undefined
+        ? detailDitunda.value
+        : current.detail_ditunda;
     if (nextStatus === 'selesai' && !String(nextDetailPenyelesaian || '').trim()) {
       return NextResponse.json(
         {
           ok: false,
           message: 'detail_penyelesaian wajib diisi saat status pekerjaan selesai.',
+        },
+        { status: 400 }
+      );
+    }
+    if (nextStatus === 'ditunda' && !String(nextDetailDitunda || '').trim()) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'detail_ditunda wajib diisi saat status pekerjaan ditunda.',
         },
         { status: 400 }
       );
@@ -195,6 +218,9 @@ export async function PUT(request, { params }) {
       ...(body.deskripsi_kerja !== undefined && { deskripsi_kerja: String(body.deskripsi_kerja) }),
       ...(detailPenyelesaian.value !== undefined && {
         detail_penyelesaian: detailPenyelesaian.value,
+      }),
+      ...(detailDitunda.value !== undefined && {
+        detail_ditunda: detailDitunda.value,
       }),
       ...(body.status !== undefined && { status: String(body.status).toLowerCase() }),
       ...(start_date !== undefined && { start_date }),

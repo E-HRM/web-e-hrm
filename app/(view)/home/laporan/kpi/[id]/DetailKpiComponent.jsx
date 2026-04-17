@@ -47,6 +47,17 @@ function renderValue(value) {
 export default function DetailKpiComponent({ userId }) {
   const vm = useDetailViewModel({ initialUserId: userId });
 
+  const handleDeleteClick = async () => {
+    if (!vm.hasExistingPlan || vm.isSaving || vm.isDeleting) return;
+
+    const confirmed = window.confirm(
+      "Yakin ingin menghapus KPI ini? Semua item KPI pada plan ini akan ikut terhapus.",
+    );
+
+    if (!confirmed) return;
+    await vm.deletePlan();
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -236,7 +247,7 @@ export default function DetailKpiComponent({ userId }) {
                   </button>
                   <button
                     type="button"
-                    onClick={vm.deletePlan}
+                    onClick={handleDeleteClick}
                     disabled={
                       !vm.hasExistingPlan || vm.isSaving || vm.isDeleting
                     }
