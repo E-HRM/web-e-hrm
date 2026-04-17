@@ -30,6 +30,42 @@ function parseNumber(value) {
   return Number.isFinite(safe) ? safe : 0;
 }
 
+function resolveTermKeyFromWeekStart(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const month = date.getUTCMonth() + 1;
+  if (month <= 3) return 'term1';
+  if (month <= 6) return 'term2';
+  if (month <= 9) return 'term3';
+  return 'term4';
+}
+
+function buildWeeklyTermSummary(progressRows = [], fallbackTerms = {}) {
+  const progressTotals = {
+    term1: 0,
+    term2: 0,
+    term3: 0,
+    term4: 0,
+  };
+
+  for (const row of progressRows) {
+    const termKey = resolveTermKeyFromWeekStart(row?.weekStart);
+    if (!termKey) continue;
+    progressTotals[termKey] += parseNumber(row?.completedCount);
+  }
+
+  const hasProgress = Object.values(progressTotals).some((value) => value > 0);
+  if (hasProgress) return progressTotals;
+
+  return {
+    term1: parseNumber(fallbackTerms.term1),
+    term2: parseNumber(fallbackTerms.term2),
+    term3: parseNumber(fallbackTerms.term3),
+    term4: parseNumber(fallbackTerms.term4),
+  };
+}
+
 function parseOptionalString(value) {
   if (value === undefined || value === null) return null;
   const trimmed = String(value).trim();
@@ -222,7 +258,6 @@ export function buildPlanInclude() {
           orderBy: {
             week_start: 'desc',
           },
-          take: 8,
         },
       },
     },
@@ -255,7 +290,7 @@ export function serializePlan(plan) {
   const weeksInYear = countFridayWeeksInYear(plan.tahun);
 
   const items = (plan.items || []).map((item, index) => {
-    const terms = Object.fromEntries(
+    const fallbackTerms = Object.fromEntries(
       (item.terms || []).map((termRow) => [DB_TO_FORM_TERM[termRow.term] || termRow.term, parseNumber(termRow.achievement)])
     );
     const targetTahunan = parseNumber(item.target_tahunan);
@@ -268,6 +303,7 @@ export function serializePlan(plan) {
       completedCount: progressRow.completed_count || 0,
       updatedAt: progressRow.updated_at,
     }));
+    const termSummary = buildWeeklyTermSummary(weeklyProgress, fallbackTerms);
     const monitorProgress = monitorWeekStartIso
       ? weeklyProgress.find((progressRow) => {
           try {
@@ -286,10 +322,10 @@ export function serializePlan(plan) {
       satuan: item.satuan_snapshot || item.kpi?.default_satuan || '',
       targetTahunan,
       weeklyTarget,
-      term1: terms.term1 || 0,
-      term2: terms.term2 || 0,
-      term3: terms.term3 || 0,
-      term4: terms.term4 || 0,
+      term1: termSummary.term1 || 0,
+      term2: termSummary.term2 || 0,
+      term3: termSummary.term3 || 0,
+      term4: termSummary.term4 || 0,
       monitorWeekCompleted: monitorProgress?.completedCount || 0,
       recentWeeklyProgress: weeklyProgress,
     };
