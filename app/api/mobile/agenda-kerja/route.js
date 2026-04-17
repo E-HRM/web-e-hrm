@@ -232,11 +232,21 @@ export async function POST(request) {
     const detailPenyelesaian = normalizeDetailPenyelesaianInput(
       body.detail_penyelesaian
     );
+    const detailDitunda = normalizeDetailDitundaInput(body.detail_ditunda);
     if (statusValue === 'selesai' && !detailPenyelesaian.value) {
       return NextResponse.json(
         {
           ok: false,
           message: 'detail_penyelesaian wajib diisi saat status pekerjaan selesai.',
+        },
+        { status: 400 }
+      );
+    }
+    if (statusValue === 'ditunda' && !detailDitunda.value) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: 'detail_ditunda wajib diisi saat status pekerjaan ditunda.',
         },
         { status: 400 }
       );
@@ -288,6 +298,9 @@ export async function POST(request) {
           created_by_snapshot,
           ...(detailPenyelesaian.value !== undefined && {
             detail_penyelesaian: detailPenyelesaian.value,
+          }),
+          ...(detailDitunda.value !== undefined && {
+            detail_ditunda: detailDitunda.value,
           }),
           ...(kebutuhanAgenda.value !== undefined && { kebutuhan_agenda: kebutuhanAgenda.value }),
         };
@@ -359,6 +372,15 @@ function normalizeKebutuhanInput(input) {
 }
 
 function normalizeDetailPenyelesaianInput(input) {
+  if (input === undefined) return { value: undefined };
+  if (input === null) return { value: null };
+
+  const trimmed = String(input).trim();
+  if (!trimmed) return { value: null };
+  return { value: trimmed };
+}
+
+function normalizeDetailDitundaInput(input) {
   if (input === undefined) return { value: undefined };
   if (input === null) return { value: null };
 
