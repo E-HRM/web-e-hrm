@@ -144,6 +144,7 @@ enum ArahKomponenPayroll {
 }
 
 enum StatusPinjaman {
+  DRAFT
   AKTIF
   LUNAS
   DIBATALKAN
@@ -507,13 +508,15 @@ model User {
 
   profil_payroll               ProfilPayroll?
   payroll_karyawan             PayrollKaryawan[]
-  item_komponen_payroll_dibuat ItemKomponenPayroll[]       @relation("ItemKomponenPayroll_pembuat")
-  persetujuan_periode_payroll  PersetujuanPeriodePayroll[] @relation("PersetujuanPeriodePayroll_penyetuju")
+  item_komponen_payroll_dibuat ItemKomponenPayroll[] @relation("ItemKomponenPayroll_pembuat")
   pinjaman_karyawan            PinjamanKaryawan[]
-  transaksi_konsultan          TransaksiKonsultan[]        @relation("TransaksiKonsultan_konsultan")
+  transaksi_konsultan          TransaksiKonsultan[]  @relation("TransaksiKonsultan_konsultan")
   payout_konsultan             PayoutKonsultan[]
-  kpi_plans    KPIPlan[]
-  freelance    Freelance[]   @relation("SupervisorForFreelance")
+  kpi_plans                    KPIPlan[]
+  freelance                    Freelance[]           @relation("SupervisorForFreelance")
+
+  // BARU
+  approvals_payroll_karyawan ApprovalPayrollKaryawan[] @relation("ApprovalPayrollKaryawan_approver")
 
   @@index([id_departement])
   @@index([id_location])
@@ -1607,21 +1610,14 @@ model PeriodePayroll {
   tanggal_mulai      DateTime             @db.Date
   tanggal_selesai    DateTime             @db.Date
   status_periode     StatusPeriodePayroll @default(DRAFT)
-  diproses_pada      DateTime?            @db.DateTime(0)
-  difinalkan_pada    DateTime?            @db.DateTime(0)
   catatan            String?              @db.LongText
+  created_at         DateTime             @default(now()) @db.DateTime(0)
+  updated_at         DateTime             @updatedAt @db.DateTime(0)
 
-  created_at DateTime  @default(now()) @db.DateTime(0)
-  updated_at DateTime  @updatedAt @db.DateTime(0)
-  deleted_at DateTime? @db.DateTime(0)
-
-  payroll_karyawan    PayrollKaryawan[]
-  persetujuan_periode PersetujuanPeriodePayroll[]
-  payout_konsultan    PayoutKonsultan[]
+  payroll_karyawan PayrollKaryawan[]
+  payoutKonsultans PayoutKonsultan[]
 
   @@unique([tahun, bulan], name: "uniq_periode_payroll")
-  @@index([status_periode])
-  @@index([deleted_at])
   @@map("periode_payroll")
 }
 
@@ -1652,10 +1648,15 @@ model PayrollKaryawan {
   bank_account String? @db.VarChar(50)
 
   status_payroll StatusPayrollKaryawan @default(DRAFT)
-  dibayar_pada   DateTime?             @db.DateTime(0)
-  finalized_at   DateTime?             @db.DateTime(0)
-  locked_at      DateTime?             @db.DateTime(0)
-  catatan        String?               @db.LongText
+
+  // BARU: status approval dipisah dari status payroll
+  status_approval        ApproveStatus @default(pending)
+  current_level_approval Int?
+
+  dibayar_pada DateTime? @db.DateTime(0)
+  finalized_at DateTime? @db.DateTime(0)
+  locked_at    DateTime? @db.DateTime(0)
+  catatan      String?   @db.LongText
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1668,12 +1669,17 @@ model PayrollKaryawan {
   item_komponen    ItemKomponenPayroll[]
   cicilan_pinjaman CicilanPinjamanKaryawan[]
 
+  // BARU
+  approvals ApprovalPayrollKaryawan[]
+
   @@unique([id_periode_payroll, id_user], name: "uniq_payroll_karyawan_per_periode")
   @@index([id_user])
   @@index([id_profil_payroll])
   @@index([id_tarif_pajak_ter])
   @@index([status_payroll])
+  @@index([status_approval])
   @@index([id_periode_payroll, status_payroll])
+  @@index([id_periode_payroll, status_approval])
   @@index([deleted_at])
   @@map("payroll_karyawan")
 }
@@ -1712,27 +1718,34 @@ model ItemKomponenPayroll {
   @@map("item_komponen_payroll")
 }
 
-model PersetujuanPeriodePayroll {
-  id_persetujuan_periode_payroll String        @id @default(uuid()) @db.Char(36)
-  id_periode_payroll             String        @db.Char(36)
-  level                          Int
-  id_user_penyetuju              String?       @db.Char(36)
-  role_penyetuju                 Role?
-  keputusan                      ApproveStatus @default(pending)
-  diputuskan_pada                DateTime?     @db.DateTime(0)
-  catatan                        String?       @db.LongText
+model ApprovalPayrollKaryawan {
+  id_approval_payroll_karyawan String  @id @default(uuid()) @db.Char(36)
+  id_payroll_karyawan          String  @db.Char(36)
+  level                        Int
+  approver_user_id             String? @db.Char(36)
+  approver_role                Role?
+  approver_nama_snapshot       String? @db.VarChar(255)
+
+  decision   ApproveStatus @default(pending)
+  decided_at DateTime?     @db.DateTime(0)
+  note       String?       @db.LongText
+
+  // sesuai permintaan: image ttd longtext
+  ttd_approval_url String? @db.LongText
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  periode_payroll PeriodePayroll @relation(fields: [id_periode_payroll], references: [id_periode_payroll], onDelete: Cascade, onUpdate: Cascade)
-  penyetuju       User?          @relation("PersetujuanPeriodePayroll_penyetuju", fields: [id_user_penyetuju], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  payroll_karyawan PayrollKaryawan @relation(fields: [id_payroll_karyawan], references: [id_payroll_karyawan], onDelete: Cascade, onUpdate: Cascade)
+  approver         User?           @relation("ApprovalPayrollKaryawan_approver", fields: [approver_user_id], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
 
-  @@unique([id_periode_payroll, level], name: "uniq_persetujuan_level_per_periode")
-  @@index([id_user_penyetuju])
+  @@unique([id_payroll_karyawan, level], name: "uniq_approval_payroll_karyawan_level")
+  @@index([id_payroll_karyawan])
+  @@index([approver_user_id])
+  @@index([decision])
   @@index([deleted_at])
-  @@map("persetujuan_periode_payroll")
+  @@map("approval_payroll_karyawan")
 }
 
 model PinjamanKaryawan {
@@ -1921,7 +1934,6 @@ model PayoutKonsultanDetail {
   @@index([deleted_at])
   @@map("payout_konsultan_detail")
 }
-
 
 model KPI {
   id_kpi         String       @id @default(uuid()) @db.Char(36)

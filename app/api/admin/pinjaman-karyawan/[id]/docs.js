@@ -34,7 +34,7 @@
  *         description: Terjadi kesalahan server.
  *   put:
  *     summary: Perbarui pinjaman karyawan
- *     description: Memperbarui pinjaman karyawan berdasarkan ID. Jika `sisa_saldo` berubah menjadi 0 dan status tidak dikirim, sistem akan mengubah status menjadi `LUNAS` kecuali pinjaman sudah berstatus `DIBATALKAN`.
+ *     description: Memperbarui pinjaman karyawan berdasarkan ID. Setelah data disimpan, cicilan akan disinkronkan ulang berdasarkan status akhir pinjaman: `AKTIF` akan generate ulang cicilan, sedangkan `DRAFT` dan `DIBATALKAN` akan menghapus seluruh cicilan terkait.
  *     tags: [Admin - Pinjaman Karyawan]
  *     security:
  *       - BearerAuth: []
@@ -75,7 +75,7 @@
  *                 nullable: true
  *               status_pinjaman:
  *                 type: string
- *                 enum: [AKTIF, LUNAS, DIBATALKAN]
+ *                 enum: [DRAFT, AKTIF, LUNAS, DIBATALKAN]
  *               catatan:
  *                 type: string
  *                 nullable: true
@@ -103,7 +103,7 @@
  *         description: Terjadi kesalahan server.
  *   delete:
  *     summary: Hapus pinjaman karyawan
- *     description: Secara default melakukan soft delete dan juga menandai seluruh cicilan terkait sebagai soft delete. Tambahkan query `hard=true` atau `force=true` untuk hard delete permanen.
+ *     description: Hanya pinjaman berstatus `DRAFT` atau `DIBATALKAN` yang dapat dihapus. Secara default endpoint melakukan soft delete dan juga menandai seluruh cicilan terkait sebagai soft delete. Tambahkan query `hard=true` atau `force=true` untuk hard delete permanen.
  *     tags: [Admin - Pinjaman Karyawan]
  *     security:
  *       - BearerAuth: []

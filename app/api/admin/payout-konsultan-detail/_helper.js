@@ -235,9 +235,6 @@ export function buildSelect() {
             tanggal_mulai: true,
             tanggal_selesai: true,
             status_periode: true,
-            diproses_pada: true,
-            difinalkan_pada: true,
-            deleted_at: true,
           },
         },
         user: {
@@ -370,9 +367,6 @@ export async function getExistingPayout(id_payout_konsultan, { client = db } = {
           tahun: true,
           bulan: true,
           status_periode: true,
-          diproses_pada: true,
-          difinalkan_pada: true,
-          deleted_at: true,
         },
       },
       user: {

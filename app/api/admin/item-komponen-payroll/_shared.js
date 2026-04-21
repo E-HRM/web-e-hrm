@@ -379,9 +379,6 @@ export function buildSelect() {
             tanggal_mulai: true,
             tanggal_selesai: true,
             status_periode: true,
-            diproses_pada: true,
-            difinalkan_pada: true,
-            deleted_at: true,
           },
         },
         tarif_pajak_ter: {
@@ -469,13 +466,11 @@ export function enrichItem(data) {
     Boolean(data?.payroll_karyawan?.finalized_at);
 
   const periodeImmutable =
-    IMMUTABLE_PERIODE_STATUS.has(periodeStatus) ||
-    Boolean(data?.payroll_karyawan?.periode?.difinalkan_pada);
+    IMMUTABLE_PERIODE_STATUS.has(periodeStatus);
 
   const isDeleted =
     Boolean(data?.deleted_at) ||
-    Boolean(data?.payroll_karyawan?.deleted_at) ||
-    Boolean(data?.payroll_karyawan?.periode?.deleted_at);
+    Boolean(data?.payroll_karyawan?.deleted_at);
 
   return {
     ...data,
@@ -512,8 +507,6 @@ export async function ensurePayrollEditable(
         select: {
           id_periode_payroll: true,
           status_periode: true,
-          difinalkan_pada: true,
-          deleted_at: true,
         },
       },
     },
@@ -531,10 +524,6 @@ export async function ensurePayrollEditable(
 
   if (!payroll.periode) {
     throw new Error("Periode payroll untuk data induk tidak ditemukan.");
-  }
-
-  if (payroll.periode.deleted_at) {
-    throw new Error("Periode payroll untuk data induk sudah dihapus.");
   }
 
   const statusPayroll = String(payroll.status_payroll || "").toUpperCase();
@@ -561,8 +550,7 @@ export async function ensurePayrollEditable(
   }
 
   if (
-    IMMUTABLE_PERIODE_STATUS.has(statusPeriode) ||
-    payroll.periode.difinalkan_pada
+    IMMUTABLE_PERIODE_STATUS.has(statusPeriode)
   ) {
     throw new Error("Periode payroll untuk data induk sudah final/terkunci.");
   }

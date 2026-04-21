@@ -21,7 +21,9 @@ export default function PayrollKaryawanHeader({ vm }) {
           size={16}
           className='text-gray-600'
         >
-          {vm.focusedPeriode ? 'Pantau payroll karyawan untuk periode terpilih lalu lanjutkan ke item komponen payroll.' : 'Kelola transaksi payroll per karyawan dan periode.'}
+          {vm.focusedPeriode
+            ? 'Pantau payroll karyawan untuk periode terpilih, atur approval single atau multi level, lalu lanjutkan ke item komponen payroll.'
+            : 'Kelola payroll per karyawan, approval payroll dinamis, dan status pembayaran tiap periode.'}
         </AppTypography.Text>
       </div>
 

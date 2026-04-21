@@ -148,6 +148,7 @@ export default function DetailCicilanModalSection({ vm }) {
               Posting ke Payroll
             </AppButton>
           ) : null}
+
         </div>
       )}
     >

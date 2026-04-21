@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import pinjamanCicilanSchedule from '@/helpers/pinjamanCicilanSchedule';
 
 const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
-const STATUS_PINJAMAN_VALUES = new Set(['AKTIF', 'LUNAS', 'DIBATALKAN']);
+const STATUS_PINJAMAN_VALUES = new Set(['DRAFT', 'AKTIF', 'LUNAS', 'DIBATALKAN']);
 const DECIMAL_SCALE = 2;
+const { buildGeneratedCicilanSchedule } = pinjamanCicilanSchedule;
 
 const normRole = (role) =>
   String(role || '')
@@ -212,6 +214,39 @@ function validateLoanState({ nominal_pinjaman, nominal_cicilan, sisa_saldo, tang
   }
 }
 
+function buildPinjamanSynchronization({ nominal_pinjaman, nominal_cicilan, tanggal_mulai, status_pinjaman, existingTanggalSelesai = null }) {
+  if (status_pinjaman === 'AKTIF') {
+    const generatedSchedule = buildGeneratedCicilanSchedule({
+      nominal_pinjaman,
+      nominal_cicilan,
+      tanggal_mulai,
+    });
+
+    return {
+      generatedSchedule,
+      resolvedSisaSaldo: nominal_pinjaman,
+      resolvedTanggalSelesai: generatedSchedule.tanggal_selesai,
+      shouldReplaceCicilan: true,
+    };
+  }
+
+  if (status_pinjaman === 'DRAFT' || status_pinjaman === 'DIBATALKAN') {
+    return {
+      generatedSchedule: null,
+      resolvedSisaSaldo: nominal_pinjaman,
+      resolvedTanggalSelesai: null,
+      shouldReplaceCicilan: true,
+    };
+  }
+
+  return {
+    generatedSchedule: null,
+    resolvedSisaSaldo: '0.00',
+    resolvedTanggalSelesai: existingTanggalSelesai,
+    shouldReplaceCicilan: false,
+  };
+}
+
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
 
@@ -301,11 +336,6 @@ export async function PUT(req, { params }) {
         status_pinjaman: true,
         catatan: true,
         deleted_at: true,
-        _count: {
-          select: {
-            cicilan: true,
-          },
-        },
       },
     });
 
@@ -315,7 +345,6 @@ export async function PUT(req, { params }) {
 
     const payload = {};
 
-    let nextIdUser = existing.id_user;
     if (body?.id_user !== undefined) {
       const id_user = normalizeRequiredString(body.id_user, 'id_user', 36);
 
@@ -332,7 +361,6 @@ export async function PUT(req, { params }) {
       }
 
       payload.id_user = id_user;
-      nextIdUser = id_user;
     }
 
     if (body?.nama_pinjaman !== undefined) {
@@ -347,19 +375,11 @@ export async function PUT(req, { params }) {
       payload.nominal_cicilan = normalizeDecimalString(body.nominal_cicilan, 'nominal_cicilan', DECIMAL_SCALE, { min: '0' });
     }
 
-    if (body?.sisa_saldo !== undefined) {
-      payload.sisa_saldo = normalizeDecimalString(body.sisa_saldo, 'sisa_saldo', DECIMAL_SCALE, { min: '0' });
-    }
-
     if (body?.tanggal_mulai !== undefined) {
       payload.tanggal_mulai = parseDateOnly(body.tanggal_mulai, 'tanggal_mulai');
       if (!payload.tanggal_mulai) {
         return NextResponse.json({ message: "Field 'tanggal_mulai' tidak boleh kosong." }, { status: 400 });
       }
-    }
-
-    if (body?.tanggal_selesai !== undefined) {
-      payload.tanggal_selesai = parseDateOnly(body.tanggal_selesai, 'tanggal_selesai');
     }
 
     if (body?.status_pinjaman !== undefined) {
@@ -376,40 +396,70 @@ export async function PUT(req, { params }) {
 
     const nextNominalPinjaman = payload.nominal_pinjaman ?? existing.nominal_pinjaman;
     const nextNominalCicilan = payload.nominal_cicilan ?? existing.nominal_cicilan;
-    const nextSisaSaldo = payload.sisa_saldo ?? existing.sisa_saldo;
     const nextTanggalMulai = payload.tanggal_mulai ?? existing.tanggal_mulai;
-    const nextTanggalSelesai = Object.prototype.hasOwnProperty.call(payload, 'tanggal_selesai') ? payload.tanggal_selesai : existing.tanggal_selesai;
+    const nextStatusPinjaman = payload.status_pinjaman ?? existing.status_pinjaman;
 
-    const statusProvided = Object.prototype.hasOwnProperty.call(payload, 'status_pinjaman');
-    const nextStatusPinjaman = statusProvided
-      ? payload.status_pinjaman
-      : decimalToScaledBigInt(nextSisaSaldo, DECIMAL_SCALE) === 0n
-        ? existing.status_pinjaman === 'DIBATALKAN'
-          ? 'DIBATALKAN'
-          : 'LUNAS'
-        : existing.status_pinjaman === 'LUNAS'
-          ? 'AKTIF'
-          : existing.status_pinjaman;
+    const synchronization = buildPinjamanSynchronization({
+      nominal_pinjaman: nextNominalPinjaman,
+      nominal_cicilan: nextNominalCicilan,
+      tanggal_mulai: nextTanggalMulai,
+      status_pinjaman: nextStatusPinjaman,
+      existingTanggalSelesai: existing.tanggal_selesai,
+    });
 
+    payload.sisa_saldo = synchronization.resolvedSisaSaldo;
+    payload.tanggal_selesai = synchronization.resolvedTanggalSelesai;
     payload.status_pinjaman = nextStatusPinjaman;
 
     validateLoanState({
       nominal_pinjaman: nextNominalPinjaman,
       nominal_cicilan: nextNominalCicilan,
-      sisa_saldo: nextSisaSaldo,
+      sisa_saldo: payload.sisa_saldo,
       tanggal_mulai: nextTanggalMulai,
-      tanggal_selesai: nextTanggalSelesai,
+      tanggal_selesai: payload.tanggal_selesai,
       status_pinjaman: nextStatusPinjaman,
     });
 
-    const updated = await db.pinjamanKaryawan.update({
-      where: { id_pinjaman_karyawan: id },
-      data: payload,
-      select: buildSelect(),
+    const updated = await db.$transaction(async (tx) => {
+      await tx.pinjamanKaryawan.update({
+        where: { id_pinjaman_karyawan: id },
+        data: payload,
+      });
+
+      if (synchronization.shouldReplaceCicilan) {
+        await tx.cicilanPinjamanKaryawan.deleteMany({
+          where: {
+            id_pinjaman_karyawan: id,
+          },
+        });
+
+        if (synchronization.generatedSchedule?.cicilanDrafts?.length) {
+          await tx.cicilanPinjamanKaryawan.createMany({
+            data: synchronization.generatedSchedule.cicilanDrafts.map((cicilan) => ({
+              ...cicilan,
+              id_pinjaman_karyawan: id,
+            })),
+          });
+        }
+      }
+
+      return tx.pinjamanKaryawan.findUnique({
+        where: { id_pinjaman_karyawan: id },
+        select: buildSelect(),
+      });
     });
 
+    const message =
+      nextStatusPinjaman === 'AKTIF'
+        ? 'Pinjaman karyawan berhasil diperbarui dan jadwal cicilan telah digenerate ulang.'
+        : nextStatusPinjaman === 'DRAFT'
+          ? 'Pinjaman karyawan berhasil diperbarui sebagai draft dan seluruh cicilan terkait telah dibersihkan.'
+          : nextStatusPinjaman === 'DIBATALKAN'
+            ? 'Pinjaman karyawan berhasil dibatalkan dan seluruh cicilan terkait telah dihapus.'
+            : 'Pinjaman karyawan berhasil diperbarui.';
+
     return NextResponse.json({
-      message: 'Pinjaman karyawan berhasil diperbarui.',
+      message,
       data: updated,
     });
   } catch (err) {
@@ -443,6 +493,7 @@ export async function DELETE(req, { params }) {
       where: { id_pinjaman_karyawan: id },
       select: {
         id_pinjaman_karyawan: true,
+        status_pinjaman: true,
         deleted_at: true,
         _count: {
           select: {
@@ -454,6 +505,15 @@ export async function DELETE(req, { params }) {
 
     if (!existing) {
       return NextResponse.json({ message: 'Pinjaman karyawan tidak ditemukan.' }, { status: 404 });
+    }
+
+    if (!['DRAFT', 'DIBATALKAN'].includes(String(existing.status_pinjaman || '').toUpperCase())) {
+      return NextResponse.json(
+        {
+          message: 'Pinjaman hanya dapat dihapus jika statusnya DRAFT atau DIBATALKAN.',
+        },
+        { status: 409 },
+      );
     }
 
     if (!hardDelete) {
@@ -487,7 +547,7 @@ export async function DELETE(req, { params }) {
       ]);
 
       return NextResponse.json({
-        message: 'Pinjaman karyawan berhasil dihapus (soft delete).',
+        message: 'Pinjaman karyawan berhasil dihapus.',
         mode: 'soft',
         data: deleted,
         cascade_summary: {
@@ -496,15 +556,25 @@ export async function DELETE(req, { params }) {
       });
     }
 
-    await db.pinjamanKaryawan.delete({
-      where: { id_pinjaman_karyawan: id },
+    const deletedSummary = await db.$transaction(async (tx) => {
+      const affectedCicilan = await tx.cicilanPinjamanKaryawan.deleteMany({
+        where: {
+          id_pinjaman_karyawan: id,
+        },
+      });
+
+      await tx.pinjamanKaryawan.delete({
+        where: { id_pinjaman_karyawan: id },
+      });
+
+      return affectedCicilan.count;
     });
 
     return NextResponse.json({
       message: 'Pinjaman karyawan berhasil dihapus permanen.',
       mode: 'hard',
       relation_summary: {
-        cicilan_terhapus_mengikuti_cascade: existing._count.cicilan,
+        cicilan_terhapus: deletedSummary,
       },
     });
   } catch (err) {

@@ -8,6 +8,7 @@ import { crudServiceAuth } from '@/app/utils/services/crudServiceAuth';
 import { ApiEndpoints } from '@/constrainst/endpoints';
 
 import { STATUS_PINJAMAN, createInitialPinjamanForm, formatCurrency, formatDate, toDateInputValue, toNumber } from './utils/utils';
+
 const FETCH_PAGE_SIZE = 100;
 const PINJAMAN_SWR_KEY = 'payroll:pinjaman-karyawan:list';
 const USERS_SWR_KEY = 'payroll:pinjaman-karyawan:users';
@@ -124,8 +125,9 @@ function calculateProgress(pinjaman) {
   return progress;
 }
 
-function resolveStatusBySaldo(sisaSaldo) {
-  return toNumber(sisaSaldo) <= 0 ? STATUS_PINJAMAN.LUNAS : STATUS_PINJAMAN.AKTIF;
+function canDeletePinjamanItem(pinjaman) {
+  const status = normalizeText(pinjaman?.status_pinjaman).toUpperCase();
+  return status === STATUS_PINJAMAN.DRAFT || status === STATUS_PINJAMAN.DIBATALKAN;
 }
 
 function normalizePinjamanItem(item, usersMap) {
@@ -147,7 +149,7 @@ function normalizePinjamanItem(item, usersMap) {
     sisa_saldo: toNumber(item.sisa_saldo),
     tanggal_mulai: item.tanggal_mulai || null,
     tanggal_selesai: item.tanggal_selesai || null,
-    status_pinjaman: normalizeText(item.status_pinjaman).toUpperCase() || STATUS_PINJAMAN.AKTIF,
+    status_pinjaman: normalizeText(item.status_pinjaman).toUpperCase() || STATUS_PINJAMAN.DRAFT,
     catatan: normalizeText(item.catatan),
     created_at: item.created_at || null,
     updated_at: item.updated_at || null,
@@ -297,6 +299,10 @@ export default function useManajemenPinjamanViewModel() {
       nominal_pinjaman: toNumber(pinjaman.nominal_pinjaman),
       nominal_cicilan: toNumber(pinjaman.nominal_cicilan),
       tanggal_mulai: toDateInputValue(pinjaman.tanggal_mulai),
+      status_pinjaman:
+        pinjaman.status_pinjaman === STATUS_PINJAMAN.LUNAS
+          ? STATUS_PINJAMAN.AKTIF
+          : pinjaman.status_pinjaman || STATUS_PINJAMAN.DRAFT,
       catatan: pinjaman.catatan || '',
     });
     setIsEditModalOpen(true);
@@ -309,12 +315,20 @@ export default function useManajemenPinjamanViewModel() {
     setIsDetailModalOpen(true);
   }, []);
 
-  const openDeleteDialog = useCallback((pinjaman) => {
-    if (!pinjaman) return;
+  const openDeleteDialog = useCallback(
+    (pinjaman) => {
+      if (!pinjaman) return;
 
-    setSelectedPinjaman(pinjaman);
-    setIsDeleteDialogOpen(true);
-  }, []);
+      if (!canDeletePinjamanItem(pinjaman)) {
+        AppMessage.warning('Pinjaman hanya bisa dihapus jika statusnya DRAFT atau DIBATALKAN.');
+        return;
+      }
+
+      setSelectedPinjaman(pinjaman);
+      setIsDeleteDialogOpen(true);
+    },
+    [],
+  );
 
   const duplicateNameForUser = useMemo(() => {
     const idUser = normalizeSearchText(formData.id_user);
@@ -362,8 +376,13 @@ export default function useManajemenPinjamanViewModel() {
       return false;
     }
 
+    if (!normalizeText(formData.status_pinjaman)) {
+      AppMessage.warning('Status pengajuan wajib dipilih.');
+      return false;
+    }
+
     return true;
-  }, [duplicateNameForUser, formData.id_user, formData.nama_pinjaman, formData.nominal_cicilan, formData.nominal_pinjaman, formData.tanggal_mulai]);
+  }, [duplicateNameForUser, formData.id_user, formData.nama_pinjaman, formData.nominal_cicilan, formData.nominal_pinjaman, formData.status_pinjaman, formData.tanggal_mulai]);
 
   const buildCreatePayload = useCallback(() => {
     return {
@@ -372,6 +391,7 @@ export default function useManajemenPinjamanViewModel() {
       nominal_pinjaman: toNumber(formData.nominal_pinjaman),
       nominal_cicilan: toNumber(formData.nominal_cicilan),
       tanggal_mulai: normalizeText(formData.tanggal_mulai),
+      status_pinjaman: normalizeText(formData.status_pinjaman || STATUS_PINJAMAN.DRAFT).toUpperCase(),
       catatan: normalizeText(formData.catatan) || null,
     };
   }, [formData]);
@@ -379,20 +399,13 @@ export default function useManajemenPinjamanViewModel() {
   const buildEditPayload = useCallback(() => {
     if (!resolvedSelectedPinjaman) return null;
 
-    const nextNominalPinjaman = toNumber(formData.nominal_pinjaman);
-    const paidBefore = Math.max(toNumber(resolvedSelectedPinjaman.nominal_pinjaman) - toNumber(resolvedSelectedPinjaman.sisa_saldo), 0);
-    const nextSisaSaldo = Math.max(nextNominalPinjaman - paidBefore, 0);
-    const nextStatus = resolvedSelectedPinjaman.status_pinjaman === STATUS_PINJAMAN.DIBATALKAN ? STATUS_PINJAMAN.DIBATALKAN : resolveStatusBySaldo(nextSisaSaldo);
-
     return {
       id_user: normalizeText(formData.id_user || resolvedSelectedPinjaman.id_user),
       nama_pinjaman: normalizeText(formData.nama_pinjaman),
-      nominal_pinjaman: nextNominalPinjaman,
+      nominal_pinjaman: toNumber(formData.nominal_pinjaman),
       nominal_cicilan: toNumber(formData.nominal_cicilan),
-      sisa_saldo: nextSisaSaldo,
       tanggal_mulai: normalizeText(formData.tanggal_mulai),
-      tanggal_selesai: nextStatus === STATUS_PINJAMAN.LUNAS ? resolvedSelectedPinjaman.tanggal_selesai || new Date().toISOString().slice(0, 10) : null,
-      status_pinjaman: nextStatus,
+      status_pinjaman: normalizeText(formData.status_pinjaman || STATUS_PINJAMAN.DRAFT).toUpperCase(),
       catatan: normalizeText(formData.catatan) || null,
     };
   }, [formData, resolvedSelectedPinjaman]);
@@ -458,6 +471,11 @@ export default function useManajemenPinjamanViewModel() {
       return;
     }
 
+    if (!canDeletePinjamanItem(resolvedSelectedPinjaman)) {
+      AppMessage.warning('Pinjaman hanya bisa dihapus jika statusnya DRAFT atau DIBATALKAN.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -477,9 +495,10 @@ export default function useManajemenPinjamanViewModel() {
 
   const pinjamanList = useMemo(() => {
     const statusWeight = {
-      [STATUS_PINJAMAN.AKTIF]: 0,
-      [STATUS_PINJAMAN.LUNAS]: 1,
-      [STATUS_PINJAMAN.DIBATALKAN]: 2,
+      [STATUS_PINJAMAN.DRAFT]: 0,
+      [STATUS_PINJAMAN.AKTIF]: 1,
+      [STATUS_PINJAMAN.LUNAS]: 2,
+      [STATUS_PINJAMAN.DIBATALKAN]: 3,
     };
 
     return [...pinjamanData].sort((a, b) => {
@@ -512,6 +531,12 @@ export default function useManajemenPinjamanViewModel() {
     [totalAktif, totalLunas, totalNominalAktif],
   );
 
+  const statusFieldHint = useMemo(() => 'Cicilan hanya digenerate saat status pinjaman disimpan sebagai AKTIF.', []);
+
+  const isStatusOptionDisabled = useCallback(() => false, []);
+
+  const canDeletePinjaman = useCallback((pinjaman) => canDeletePinjamanItem(pinjaman), []);
+
   return {
     formData,
     selectedPinjaman: resolvedSelectedPinjaman,
@@ -534,6 +559,7 @@ export default function useManajemenPinjamanViewModel() {
     formatDate,
     calculateProgress,
     duplicateNameForUser,
+    statusFieldHint,
 
     setFormValue,
     resetForm,
@@ -553,6 +579,8 @@ export default function useManajemenPinjamanViewModel() {
     openDeleteDialog,
     closeDeleteDialog,
     handleDelete,
+    canDeletePinjaman,
+    isStatusOptionDisabled,
 
     getUserDisplayName,
     getUserIdentity,

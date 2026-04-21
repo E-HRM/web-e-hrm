@@ -93,8 +93,6 @@ export async function ensurePayrollPostingTarget(
         select: {
           id_periode_payroll: true,
           status_periode: true,
-          difinalkan_pada: true,
-          deleted_at: true,
         },
       },
     },
@@ -104,7 +102,7 @@ export async function ensurePayrollPostingTarget(
     throw new Error("Payroll karyawan tujuan tidak ditemukan.");
   }
 
-  if (payroll.deleted_at || payroll.periode?.deleted_at) {
+  if (payroll.deleted_at) {
     throw new Error(
       "Payroll tujuan untuk posting cicilan pinjaman sudah dihapus.",
     );
@@ -131,8 +129,7 @@ export async function ensurePayrollPostingTarget(
   if (
     IMMUTABLE_PERIODE_STATUS.has(
       String(payroll.periode?.status_periode || "").toUpperCase(),
-    ) ||
-    payroll.periode?.difinalkan_pada
+    )
   ) {
     throw new Error("Periode payroll tujuan sudah final atau terkunci.");
   }
@@ -277,11 +274,13 @@ export async function recalculateLoanSnapshot(tx, id_pinjaman_karyawan) {
 
   const sisa_saldo = scaledBigIntToDecimalString(newSaldo, MONEY_SCALE);
   const status_pinjaman =
-    loan.status_pinjaman === "DIBATALKAN"
-      ? "DIBATALKAN"
-      : newSaldo === 0n
-        ? "LUNAS"
-        : "AKTIF";
+    loan.status_pinjaman === "DRAFT"
+      ? "DRAFT"
+      : loan.status_pinjaman === "DIBATALKAN"
+        ? "DIBATALKAN"
+        : newSaldo === 0n
+          ? "LUNAS"
+          : "AKTIF";
 
   await tx.pinjamanKaryawan.update({
     where: { id_pinjaman_karyawan },

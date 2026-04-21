@@ -9,7 +9,7 @@ const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const STATUS_CICILAN_VALUES = new Set(['MENUNGGU', 'DIPOSTING', 'DIBAYAR', 'DILEWATI']);
-const STATUS_PINJAMAN_VALUES = new Set(['AKTIF', 'LUNAS', 'DIBATALKAN']);
+const STATUS_PINJAMAN_VALUES = new Set(['DRAFT', 'AKTIF', 'LUNAS', 'DIBATALKAN']);
 
 const DECIMAL_SCALE = 2;
 
@@ -506,6 +506,10 @@ async function resolveBusinessState(tx, input, existing = null) {
     throw new Error('Status pinjaman pada data induk tidak valid.');
   }
 
+  if (pinjaman.status_pinjaman === 'DRAFT') {
+    throw new Error('Pinjaman karyawan yang dipilih masih berstatus draft dan belum dapat memiliki cicilan.');
+  }
+
   if (pinjaman.status_pinjaman === 'DIBATALKAN') {
     throw new Error('Pinjaman karyawan yang dipilih sudah dibatalkan.');
   }
@@ -685,6 +689,10 @@ function ensureMutable(existing) {
 
   if (existing.pinjaman_karyawan?.deleted_at) {
     throw new Error('Pinjaman karyawan untuk cicilan ini sudah dihapus.');
+  }
+
+  if (existing.pinjaman_karyawan?.status_pinjaman === 'DRAFT') {
+    throw new Error('Pinjaman karyawan untuk cicilan ini masih draft dan belum dapat memiliki cicilan.');
   }
 
   if (existing.pinjaman_karyawan?.status_pinjaman === 'DIBATALKAN') {

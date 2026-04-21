@@ -7,6 +7,7 @@ import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppSelect from '@/app/(view)/component_shared/AppSelect';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
+import ApprovalStepsSection from './ApprovalStepsSection';
 import { STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
 
 function CreatePayrollForm({ vm }) {
@@ -68,7 +69,7 @@ function CreatePayrollForm({ vm }) {
             size={12}
             className='block text-blue-700 mt-1'
           >
-            Nilai final payroll tetap bisa berubah mengikuti item komponen, payout konsultan, dan cicilan yang diposting ke payroll ini.
+            Data bank otomatis diambil dari tabel user. Nilai final payroll tetap bisa berubah mengikuti item komponen, payout konsultan, dan cicilan yang diposting ke payroll ini.
           </AppTypography.Text>
         </div>
       ) : null}
@@ -108,6 +109,26 @@ function CreatePayrollForm({ vm }) {
           inputClassName='!rounded-lg'
         />
       </div>
+
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+        <AppInput
+          label='Bank'
+          value={vm.formData.nama_bank_snapshot}
+          placeholder='Diambil otomatis dari data user'
+          disabled
+          inputClassName='!rounded-lg'
+        />
+
+        <AppInput
+          label='No. Rekening'
+          value={vm.formData.nomor_rekening_snapshot}
+          placeholder='Diambil otomatis dari data user'
+          disabled
+          inputClassName='!rounded-lg'
+        />
+      </div>
+
+      <ApprovalStepsSection vm={vm} />
 
       <AppSelect
         label='Status Payroll'

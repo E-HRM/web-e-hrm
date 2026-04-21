@@ -118,6 +118,40 @@ export default function PayrollKaryawanDataSection({ vm, buildItemKomponenHref }
       ),
     },
     {
+      title: 'Approval',
+      key: 'approval',
+      render: (_, payroll) => {
+        const approvalStatus = vm.formatStatusApproval(payroll.status_approval);
+
+        return (
+          <div className='min-w-[180px]'>
+            <AppTag
+              tone={approvalStatus.tone}
+              variant='soft'
+              size='sm'
+              className='!font-medium'
+            >
+              {approvalStatus.label}
+            </AppTag>
+
+            <AppTypography.Text
+              size={12}
+              className='block text-gray-500 mt-2'
+            >
+              {payroll.approval_progress_label}
+            </AppTypography.Text>
+
+            <AppTypography.Text
+              size={12}
+              className='block text-gray-500 mt-1'
+            >
+              {payroll.current_approval_label}
+            </AppTypography.Text>
+          </div>
+        );
+      },
+    },
+    {
       title: 'Take Home Pay',
       dataIndex: 'total_dibayarkan',
       key: 'total_dibayarkan',
@@ -155,7 +189,14 @@ export default function PayrollKaryawanDataSection({ vm, buildItemKomponenHref }
               >
                 {vm.formatDate(payroll.dibayar_pada)}
               </AppTypography.Text>
-            ) : null}
+            ) : (
+              <AppTypography.Text
+                size={12}
+                className='block text-gray-500 mt-1'
+              >
+                Belum dibayar
+              </AppTypography.Text>
+            )}
           </div>
         );
       },

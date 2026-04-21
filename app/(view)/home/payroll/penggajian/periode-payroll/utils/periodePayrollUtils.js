@@ -107,27 +107,27 @@ export function getPeriodePayrollStatusMeta(status) {
     DRAFT: {
       label: 'Draft',
       tone: 'warning',
-      helper: 'Periode masih disiapkan dan belum masuk proses payroll final.',
+      helper: 'Periode masih disiapkan dan belum aktif untuk finalisasi payroll.',
     },
     DIPROSES: {
       label: 'Diproses',
       tone: 'info',
-      helper: 'Periode sedang diproses untuk pembentukan payroll karyawan.',
+      helper: 'Periode aktif untuk pengolahan payroll karyawan dan setup approval.',
     },
     DIREVIEW: {
       label: 'Direview',
       tone: 'info',
-      helper: 'Periode sedang direview sebelum finalisasi dan penguncian.',
+      helper: 'Periode sedang direview sebelum status payroll ditutup.',
     },
     FINAL: {
       label: 'Final',
       tone: 'success',
-      helper: 'Periode sudah difinalkan dan siap menjadi acuan slip maupun approval.',
+      helper: 'Periode sudah final dan tidak menerima perubahan payroll baru.',
     },
     TERKUNCI: {
       label: 'Terkunci',
       tone: 'neutral',
-      helper: 'Periode dikunci untuk menjaga konsistensi data payroll.',
+      helper: 'Periode dikunci untuk menjaga konsistensi data payroll dan payout.',
     },
   };
 
@@ -196,8 +196,6 @@ export function createInitialPeriodePayrollForm(referenceDate = new Date()) {
     tanggal_mulai,
     tanggal_selesai,
     status_periode: 'DRAFT',
-    diproses_pada: '',
-    difinalkan_pada: '',
     catatan: '',
   };
 }
@@ -213,8 +211,6 @@ export function serializePeriodePayrollPayload(formData) {
     status_periode: String(formData?.status_periode || 'DRAFT')
       .trim()
       .toUpperCase(),
-    diproses_pada: String(formData?.diproses_pada || '').trim() || null,
-    difinalkan_pada: String(formData?.difinalkan_pada || '').trim() || null,
     catatan: String(formData?.catatan || '').trim() || null,
   };
 }

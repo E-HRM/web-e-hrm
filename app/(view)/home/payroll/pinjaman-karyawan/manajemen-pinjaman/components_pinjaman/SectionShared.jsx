@@ -7,6 +7,8 @@ import AppSelect from '@/app/(view)/component_shared/AppSelect';
 import AppTag from '@/app/(view)/component_shared/AppTag';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
+import { PINJAMAN_FORM_STATUS_OPTIONS, STATUS_PINJAMAN } from '../utils/utils';
+
 export function SummaryCard({ icon, iconWrapClassName, iconClassName, value, label }) {
   return (
     <AppCard
@@ -41,7 +43,20 @@ export function SummaryCard({ icon, iconWrapClassName, iconClassName, value, lab
 }
 
 export function StatusTag({ status }) {
-  if (status === 'AKTIF') {
+  if (status === STATUS_PINJAMAN.DRAFT) {
+    return (
+      <AppTag
+        tone='info'
+        variant='soft'
+        size='sm'
+        className='!font-medium'
+      >
+        DRAFT
+      </AppTag>
+    );
+  }
+
+  if (status === STATUS_PINJAMAN.AKTIF) {
     return (
       <AppTag
         tone='warning'
@@ -54,7 +69,7 @@ export function StatusTag({ status }) {
     );
   }
 
-  if (status === 'LUNAS') {
+  if (status === STATUS_PINJAMAN.LUNAS) {
     return (
       <AppTag
         tone='success'
@@ -67,9 +82,22 @@ export function StatusTag({ status }) {
     );
   }
 
+  if (status === STATUS_PINJAMAN.DIBATALKAN) {
+    return (
+      <AppTag
+        tone='danger'
+        variant='soft'
+        size='sm'
+        className='!font-medium'
+      >
+        DIBATALKAN
+      </AppTag>
+    );
+  }
+
   return (
     <AppTag
-      tone='danger'
+      tone='neutral'
       variant='soft'
       size='sm'
       className='!font-medium'
@@ -170,8 +198,16 @@ function buildUserSelectOptions(users, vm) {
   });
 }
 
+function buildStatusOptions(vm) {
+  return PINJAMAN_FORM_STATUS_OPTIONS.map((option) => ({
+    ...option,
+    disabled: typeof vm.isStatusOptionDisabled === 'function' ? vm.isStatusOptionDisabled(option.value) : false,
+  }));
+}
+
 export function PinjamanForm({ vm, formData, setFormValue, duplicateNameForUser, disableUserField = false }) {
   const userOptions = buildUserSelectOptions(vm.availableUsers, vm);
+  const statusOptions = buildStatusOptions(vm);
 
   return (
     <div className='space-y-4'>
@@ -254,15 +290,30 @@ export function PinjamanForm({ vm, formData, setFormValue, duplicateNameForUser,
         />
       </div>
 
-      <AppInput
-        label='Tanggal Mulai'
-        required
-        type='date'
-        value={formData.tanggal_mulai}
-        onChange={(event) => setFormValue('tanggal_mulai', event.target.value)}
-        disabled={vm.isSubmitting}
-        inputClassName='!rounded-lg'
-      />
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+        <AppInput
+          label='Tanggal Mulai'
+          required
+          type='date'
+          value={formData.tanggal_mulai}
+          onChange={(event) => setFormValue('tanggal_mulai', event.target.value)}
+          disabled={vm.isSubmitting}
+          inputClassName='!rounded-lg'
+        />
+
+        <AppSelect
+          label='Status Pengajuan'
+          required
+          value={formData.status_pinjaman || undefined}
+          onChange={(value) => setFormValue('status_pinjaman', value || STATUS_PINJAMAN.DRAFT)}
+          options={statusOptions}
+          placeholder='Pilih status pengajuan'
+          disabled={vm.isSubmitting}
+          selectClassName='!rounded-lg'
+          hint={vm.statusFieldHint}
+          showSearch={false}
+        />
+      </div>
 
       <AppInput.TextArea
         label='Catatan (Opsional)'

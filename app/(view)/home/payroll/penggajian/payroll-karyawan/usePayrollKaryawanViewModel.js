@@ -10,12 +10,15 @@ import { ApiEndpoints } from '@/constrainst/endpoints';
 
 import {
   buildPayrollKaryawanPayload,
+  createEmptyApprovalStep,
   createInitialPayrollKaryawanForm,
+  formatApproverRole,
   formatBulan,
   formatCurrency,
   formatDate,
   formatJenisHubungan,
   formatPeriodeLabel,
+  formatStatusApproval,
   formatStatusPayroll,
   formatTarifPajakSnapshot,
   normalizePayrollKaryawanItem,
@@ -28,6 +31,23 @@ const FETCH_PAGE_SIZE = 100;
 const PAYROLL_KARYAWAN_SWR_KEY = 'payroll:payroll-karyawan:list';
 const PERIODE_PAYROLL_SWR_KEY = 'payroll:payroll-karyawan:periode';
 const PROFIL_PAYROLL_SWR_KEY = 'payroll:payroll-karyawan:profil-payroll';
+const USERS_SWR_KEY = 'payroll:payroll-karyawan:users';
+
+function buildUrlWithQuery(baseUrl, query = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+
+    const normalized = String(value).trim();
+    if (!normalized) return;
+
+    params.set(key, normalized);
+  });
+
+  const queryString = params.toString();
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+}
 
 async function fetchAllPages(fetcher) {
   const merged = [];
@@ -88,6 +108,19 @@ async function fetchAllProfilPayroll() {
   );
 }
 
+async function fetchAllUsers() {
+  return fetchAllPages((page) =>
+    crudServiceAuth.get(
+      buildUrlWithQuery(ApiEndpoints.GetUsers, {
+        page,
+        pageSize: FETCH_PAGE_SIZE,
+        orderBy: 'nama_pengguna',
+        sort: 'asc',
+      }),
+    ),
+  );
+}
+
 function buildDefaultForm(filterPeriode) {
   return createInitialPayrollKaryawanForm(filterPeriode && filterPeriode !== 'ALL' ? filterPeriode : '');
 }
@@ -125,6 +158,34 @@ function buildEmployeeOption(profile) {
 }
 
 function filterEmployeeOption(input, option) {
+  return String(option?.searchText || '')
+    .toLowerCase()
+    .includes(String(input || '').toLowerCase());
+}
+
+function getUserRole(user) {
+  return String(user?.role || '')
+    .trim()
+    .toUpperCase();
+}
+
+function buildApproverOption(user) {
+  const approverName = String(user?.nama_pengguna || '').trim();
+  const approverRole = getUserRole(user);
+  const email = String(user?.email || '').trim();
+  const nik = String(user?.nomor_induk_karyawan || '').trim();
+  const metadata = [approverRole ? formatApproverRole(approverRole) : '', email].filter(Boolean).join(' | ');
+
+  return {
+    value: user.id_user,
+    label: metadata ? `${approverName} (${metadata})` : approverName,
+    plainLabel: approverName,
+    title: approverName,
+    searchText: [approverName, email, nik, approverRole, formatApproverRole(approverRole), user?.id_user].filter(Boolean).join(' '),
+  };
+}
+
+function filterApproverOption(input, option) {
   return String(option?.searchText || '')
     .toLowerCase()
     .includes(String(input || '').toLowerCase());
@@ -172,8 +233,8 @@ function applyProfilPayrollToForm(previousForm, profile) {
     berlaku_sampai_tarif_snapshot: tarif?.berlaku_sampai || null,
     nama_departement_snapshot: getProfilPayrollEmployeeDepartment(profile),
     nama_jabatan_snapshot: getProfilPayrollEmployeeJob(profile),
-    nama_bank_snapshot: '',
-    nomor_rekening_snapshot: '',
+    nama_bank_snapshot: String(profile?.user?.jenis_bank || '').trim(),
+    nomor_rekening_snapshot: String(profile?.user?.nomor_rekening || '').trim(),
     total_pendapatan_tetap: gajiPokok,
     total_pendapatan_variabel: 0,
     total_bruto_kena_pajak: gajiPokok,
@@ -181,6 +242,23 @@ function applyProfilPayrollToForm(previousForm, profile) {
     total_potongan_lain: 0,
     total_dibayarkan: gajiPokok,
   };
+}
+
+function mapApprovalStepsForForm(payroll) {
+  const sourceSteps = Array.isArray(payroll?.approval_steps)
+    ? payroll.approval_steps
+    : Array.isArray(payroll?.approvals)
+      ? payroll.approvals
+      : [];
+
+  if (!sourceSteps.length) {
+    return [createEmptyApprovalStep()];
+  }
+
+  return sourceSteps.map((step) => ({
+    client_key: createEmptyApprovalStep().client_key,
+    approver_user_id: String(step?.approver_user_id || '').trim(),
+  }));
 }
 
 export default function usePayrollKaryawanViewModel() {
@@ -234,6 +312,16 @@ export default function usePayrollKaryawanViewModel() {
     revalidateOnFocus: false,
   });
 
+  const {
+    data: usersResponse,
+    error: usersError,
+    isLoading: isUsersLoading,
+    isValidating: isUsersValidating,
+    mutate: mutateUsers,
+  } = useSWR(USERS_SWR_KEY, fetchAllUsers, {
+    revalidateOnFocus: false,
+  });
+
   useEffect(() => {
     if (!payrollError) return;
 
@@ -264,18 +352,37 @@ export default function usePayrollKaryawanViewModel() {
     });
   }, [profilPayrollError]);
 
+  useEffect(() => {
+    if (!usersError) return;
+
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'payroll-karyawan-approver-fetch-error',
+      content: usersError?.message || 'Gagal memuat referensi user approval payroll.',
+    });
+  }, [usersError]);
+
   const periodeList = useMemo(() => (Array.isArray(periodeResponse) ? periodeResponse : []), [periodeResponse]);
   const profilPayrollList = useMemo(() => (Array.isArray(profilPayrollResponse) ? profilPayrollResponse : []), [profilPayrollResponse]);
+  const usersList = useMemo(() => (Array.isArray(usersResponse) ? usersResponse : []), [usersResponse]);
   const payrollData = useMemo(() => {
     const rawList = Array.isArray(payrollResponse) ? payrollResponse : [];
     return rawList.map(normalizePayrollKaryawanItem).filter(Boolean);
   }, [payrollResponse]);
+
   const activeProfilPayrollList = useMemo(() => {
     return profilPayrollList.filter((profile) => {
       return !profile?.deleted_at && Boolean(profile?.payroll_aktif) && !profile?.user?.deleted_at && !profile?.tarif_pajak_ter?.deleted_at && String(profile?.id_user || '').trim();
     });
   }, [profilPayrollList]);
+
+  const activeApproverUsers = useMemo(() => {
+    return usersList.filter((user) => !user?.deleted_at && String(user?.id_user || '').trim());
+  }, [usersList]);
+
   const profilPayrollMap = useMemo(() => new Map(activeProfilPayrollList.map((profile) => [String(profile.id_user), profile])), [activeProfilPayrollList]);
+  const approverUsersMap = useMemo(() => new Map(activeApproverUsers.map((user) => [String(user.id_user), user])), [activeApproverUsers]);
+
   const payrollUserIdsByPeriode = useMemo(() => {
     const usageMap = new Map();
 
@@ -307,6 +414,39 @@ export default function usePayrollKaryawanViewModel() {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
+    }));
+  }, []);
+
+  const addApprovalStep = useCallback(() => {
+    setFormData((prev) => ({
+      ...prev,
+      approval_steps: [...(Array.isArray(prev.approval_steps) ? prev.approval_steps : []), createEmptyApprovalStep()],
+    }));
+  }, []);
+
+  const removeApprovalStep = useCallback((clientKey) => {
+    setFormData((prev) => {
+      const existingSteps = Array.isArray(prev.approval_steps) ? prev.approval_steps : [];
+      const nextSteps = existingSteps.filter((step) => step.client_key !== clientKey);
+
+      return {
+        ...prev,
+        approval_steps: nextSteps.length > 0 ? nextSteps : [createEmptyApprovalStep()],
+      };
+    });
+  }, []);
+
+  const updateApprovalStep = useCallback((clientKey, approverUserId) => {
+    setFormData((prev) => ({
+      ...prev,
+      approval_steps: (Array.isArray(prev.approval_steps) ? prev.approval_steps : []).map((step) =>
+        step.client_key === clientKey
+          ? {
+              ...step,
+              approver_user_id: String(approverUserId || '').trim(),
+            }
+          : step,
+      ),
     }));
   }, []);
 
@@ -368,8 +508,27 @@ export default function usePayrollKaryawanViewModel() {
       return false;
     }
 
+    const approvalSteps = Array.isArray(formData.approval_steps) ? formData.approval_steps : [];
+
+    if (approvalSteps.length === 0) {
+      AppMessage.warning('Minimal satu approval payroll wajib dipilih.');
+      return false;
+    }
+
+    const approverIds = approvalSteps.map((step) => String(step?.approver_user_id || '').trim());
+
+    if (approverIds.some((approverId) => !approverId)) {
+      AppMessage.warning('Setiap level approval payroll wajib memilih user approver.');
+      return false;
+    }
+
+    if (new Set(approverIds).size !== approverIds.length) {
+      AppMessage.warning('User approver tidak boleh dipilih lebih dari satu kali pada payroll yang sama.');
+      return false;
+    }
+
     return true;
-  }, [formData.id_periode_payroll, formData.id_user, formData.nama_karyawan_snapshot]);
+  }, [formData.approval_steps, formData.id_periode_payroll, formData.id_user, formData.nama_karyawan_snapshot]);
 
   const openCreateModal = useCallback(() => {
     setSelectedPayroll(null);
@@ -412,6 +571,9 @@ export default function usePayrollKaryawanViewModel() {
       total_potongan_lain: toNumber(payroll.total_potongan_lain),
       total_dibayarkan: toNumber(payroll.total_dibayarkan),
       status_payroll: payroll.status_payroll || 'DRAFT',
+      status_approval: payroll.status_approval || 'pending',
+      current_level_approval: payroll.current_level_approval || 1,
+      approval_steps: mapApprovalStepsForForm(payroll),
       dibayar_pada: payroll.dibayar_pada || null,
       catatan: payroll.catatan || '',
     });
@@ -536,7 +698,8 @@ export default function usePayrollKaryawanViewModel() {
         normalizeText(payroll.nama_departement_snapshot).includes(search) ||
         normalizeText(payroll.nama_jabatan_snapshot).includes(search) ||
         normalizeText(payroll.kode_kategori_pajak_snapshot).includes(search) ||
-        normalizeText(payroll.periode_label).includes(search);
+        normalizeText(payroll.periode_label).includes(search) ||
+        normalizeText(payroll.current_approval_label).includes(search);
 
       return matchStatus && matchPeriode && matchSearch;
     });
@@ -560,6 +723,7 @@ export default function usePayrollKaryawanViewModel() {
   const statistics = useMemo(() => {
     return {
       totalPayroll: payrollData.length,
+      totalApprovalPending: payrollData.filter((item) => item.status_approval === 'pending').length,
       totalDibayar: payrollData.filter((item) => item.status_payroll === 'DIBAYAR').length,
       totalPendapatan: payrollData.reduce((sum, item) => sum + toNumber(item.total_bruto_kena_pajak), 0),
       totalDibayarkan: payrollData.reduce((sum, item) => sum + toNumber(item.total_dibayarkan), 0),
@@ -567,13 +731,12 @@ export default function usePayrollKaryawanViewModel() {
   }, [payrollData]);
 
   const periodeOptions = useMemo(() => {
-    return periodeList
-      .filter((periode) => !periode?.deleted_at)
-      .map((periode) => ({
-        value: periode.id_periode_payroll,
-        label: formatPeriodeLabel(periode),
-      }));
+    return periodeList.map((periode) => ({
+      value: periode.id_periode_payroll,
+      label: formatPeriodeLabel(periode),
+    }));
   }, [periodeList]);
+
   const availableEmployeeProfiles = useMemo(() => {
     const selectedPeriodeId = String(formData.id_periode_payroll || '').trim();
     const selectedUserId = String(formData.id_user || '').trim();
@@ -589,14 +752,19 @@ export default function usePayrollKaryawanViewModel() {
       return !usedUserIds.has(userId);
     });
   }, [activeProfilPayrollList, formData.id_periode_payroll, formData.id_user, payrollUserIdsByPeriode]);
+
   const employeeOptions = useMemo(() => availableEmployeeProfiles.map(buildEmployeeOption), [availableEmployeeProfiles]);
+  const approverOptions = useMemo(() => activeApproverUsers.map(buildApproverOption), [activeApproverUsers]);
+
   const selectedEmployeeProfile = useMemo(() => {
     const selectedUserId = String(formData.id_user || '').trim();
     if (!selectedUserId) return null;
 
     return profilPayrollMap.get(selectedUserId) || null;
   }, [formData.id_user, profilPayrollMap]);
+
   const selectedEmployeeTarifLabel = useMemo(() => formatTarifPajakSnapshot(formData.kode_kategori_pajak_snapshot, formData.persen_tarif_snapshot), [formData.kode_kategori_pajak_snapshot, formData.persen_tarif_snapshot]);
+
   const employeeSelectionHint = useMemo(() => {
     if (isProfilPayrollLoading) {
       return 'Memuat kandidat karyawan payroll...';
@@ -617,6 +785,18 @@ export default function usePayrollKaryawanViewModel() {
     return 'Cari berdasarkan nama, NIK, email, departemen, atau jabatan.';
   }, [activeProfilPayrollList.length, employeeOptions.length, formData.id_periode_payroll, isProfilPayrollLoading]);
 
+  const approverSelectionHint = useMemo(() => {
+    if (isUsersLoading) {
+      return 'Memuat user approver payroll...';
+    }
+
+    if (activeApproverUsers.length === 0) {
+      return 'Belum ada user aktif yang bisa dipilih sebagai approver payroll.';
+    }
+
+    return 'Tambahkan satu level untuk single approver, atau beberapa level untuk approval berjenjang.';
+  }, [activeApproverUsers.length, isUsersLoading]);
+
   const getPeriodeInfo = useCallback(
     (id) => {
       const periode = periodeMap.get(String(id || ''));
@@ -628,8 +808,8 @@ export default function usePayrollKaryawanViewModel() {
   );
 
   const reloadData = useCallback(async () => {
-    await Promise.all([mutatePayroll(), mutatePeriode(), mutateProfilPayroll()]);
-  }, [mutatePayroll, mutatePeriode, mutateProfilPayroll]);
+    await Promise.all([mutatePayroll(), mutatePeriode(), mutateProfilPayroll(), mutateUsers()]);
+  }, [mutatePayroll, mutatePeriode, mutateProfilPayroll, mutateUsers]);
 
   const focusedPeriode = useMemo(() => {
     if (!filterPeriode || filterPeriode === 'ALL') return null;
@@ -644,9 +824,11 @@ export default function usePayrollKaryawanViewModel() {
     periodeOptions,
     focusedPeriode,
     employeeOptions,
+    approverOptions,
     selectedEmployeeProfile,
     selectedEmployeeTarifLabel,
     employeeSelectionHint,
+    approverSelectionHint,
 
     formData,
     filterStatus,
@@ -658,14 +840,16 @@ export default function usePayrollKaryawanViewModel() {
     isDeleteDialogOpen,
     isDetailModalOpen,
 
-    loading: isPayrollLoading || isPeriodeLoading || isProfilPayrollLoading,
-    validating: isPayrollValidating || isPeriodeValidating || isProfilPayrollValidating,
+    loading: isPayrollLoading || isPeriodeLoading || isProfilPayrollLoading || isUsersLoading,
+    validating: isPayrollValidating || isPeriodeValidating || isProfilPayrollValidating || isUsersValidating,
     isSubmitting,
-    error: payrollError || periodeError || profilPayrollError,
+    error: payrollError || periodeError || profilPayrollError || usersError,
 
     formatCurrency,
     formatDate,
     formatStatusPayroll,
+    formatStatusApproval,
+    formatApproverRole,
     formatJenisHubungan,
     formatTarifPajakSnapshot,
     formatBulan,
@@ -674,6 +858,9 @@ export default function usePayrollKaryawanViewModel() {
 
     setFormValue,
     handleEmployeeChange,
+    addApprovalStep,
+    removeApprovalStep,
+    updateApprovalStep,
     resetForm,
     setFilterStatus,
     setFilterPeriode,
@@ -696,5 +883,7 @@ export default function usePayrollKaryawanViewModel() {
 
     statusOptions: STATUS_PAYROLL_OPTIONS,
     filterEmployeeOption,
+    filterApproverOption,
+    getApproverById: (id) => approverUsersMap.get(String(id || '').trim()) || null,
   };
 }

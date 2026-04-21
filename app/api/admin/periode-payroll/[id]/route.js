@@ -8,7 +8,6 @@ const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const BULAN_VALUES = new Set(['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']);
-
 const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']);
 
 const normRole = (role) =>
@@ -18,6 +17,7 @@ const normRole = (role) =>
 
 function normalizeRequiredInt(value, fieldName, options = {}) {
   const { min = null, max = null } = options;
+
   if (value === undefined || value === null || value === '') {
     throw new Error(`Field '${fieldName}' wajib diisi.`);
   }
@@ -76,49 +76,13 @@ function parseDateOnly(value, fieldName) {
   return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
 }
 
-function parseDateTime(value, fieldName) {
-  if (value === undefined) return undefined;
-  if (value === null || value === '') return null;
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`Field '${fieldName}' harus berupa tanggal/waktu yang valid.`);
-  }
-
-  return parsed;
-}
-
-function validatePeriodeState({ tahun, bulan, tanggal_mulai, tanggal_selesai, status_periode, diproses_pada, difinalkan_pada }) {
+function validatePeriodeState({ tahun, bulan, tanggal_mulai, tanggal_selesai }) {
   if (tahun < 2000 || tahun > 9999) {
     throw new Error("Field 'tahun' harus berada pada rentang 2000 sampai 9999.");
   }
 
   if (tanggal_selesai < tanggal_mulai) {
     throw new Error("Field 'tanggal_selesai' tidak boleh lebih kecil dari 'tanggal_mulai'.");
-  }
-
-  if (diproses_pada && difinalkan_pada && difinalkan_pada < diproses_pada) {
-    throw new Error("Field 'difinalkan_pada' tidak boleh lebih kecil dari 'diproses_pada'.");
-  }
-
-  if (['DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI'].includes(status_periode) && !diproses_pada) {
-    throw new Error(`Status periode '${status_periode}' mensyaratkan field 'diproses_pada' terisi.`);
-  }
-
-  if (['FINAL', 'TERKUNCI'].includes(status_periode) && !difinalkan_pada) {
-    throw new Error(`Status periode '${status_periode}' mensyaratkan field 'difinalkan_pada' terisi.`);
-  }
-
-  if (status_periode === 'DRAFT' && difinalkan_pada) {
-    throw new Error("Status periode 'DRAFT' tidak valid jika 'difinalkan_pada' sudah terisi.");
-  }
-
-  if (status_periode === 'DRAFT' && diproses_pada) {
-    throw new Error("Status periode 'DRAFT' tidak valid jika 'diproses_pada' sudah terisi.");
-  }
-
-  if (status_periode === 'DIPROSES' && difinalkan_pada) {
-    throw new Error("Status periode 'DIPROSES' tidak valid jika 'difinalkan_pada' sudah terisi.");
   }
 
   if (!BULAN_VALUES.has(bulan)) {
@@ -172,18 +136,26 @@ function buildSelect() {
     tanggal_mulai: true,
     tanggal_selesai: true,
     status_periode: true,
-    diproses_pada: true,
-    difinalkan_pada: true,
     catatan: true,
     created_at: true,
     updated_at: true,
-    deleted_at: true,
     _count: {
       select: {
         payroll_karyawan: true,
-        persetujuan_periode: true,
-        payout_konsultan: true,
+        payoutKonsultans: true,
       },
+    },
+  };
+}
+
+function enrichPeriode(item) {
+  if (!item) return item;
+
+  return {
+    ...item,
+    _count: {
+      ...item._count,
+      payout_konsultan: Number(item?._count?.payoutKonsultans || 0),
     },
   };
 }
@@ -207,7 +179,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ message: 'Periode payroll tidak ditemukan.' }, { status: 404 });
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: enrichPeriode(data) });
   } catch (err) {
     console.error('GET /api/admin/periode-payroll/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
@@ -234,17 +206,7 @@ export async function PUT(req, { params }) {
         tanggal_mulai: true,
         tanggal_selesai: true,
         status_periode: true,
-        diproses_pada: true,
-        difinalkan_pada: true,
         catatan: true,
-        deleted_at: true,
-        _count: {
-          select: {
-            payroll_karyawan: true,
-            persetujuan_periode: true,
-            payout_konsultan: true,
-          },
-        },
       },
     });
 
@@ -280,14 +242,6 @@ export async function PUT(req, { params }) {
       payload.status_periode = normalizeEnum(body.status_periode, STATUS_PERIODE_VALUES, 'status_periode');
     }
 
-    if (body?.diproses_pada !== undefined) {
-      payload.diproses_pada = parseDateTime(body.diproses_pada, 'diproses_pada');
-    }
-
-    if (body?.difinalkan_pada !== undefined) {
-      payload.difinalkan_pada = parseDateTime(body.difinalkan_pada, 'difinalkan_pada');
-    }
-
     if (body?.catatan !== undefined) {
       payload.catatan = normalizeNullableString(body.catatan, 'catatan');
     }
@@ -300,18 +254,12 @@ export async function PUT(req, { params }) {
     const nextBulan = payload.bulan ?? existing.bulan;
     const nextTanggalMulai = payload.tanggal_mulai ?? existing.tanggal_mulai;
     const nextTanggalSelesai = payload.tanggal_selesai ?? existing.tanggal_selesai;
-    const nextStatusPeriode = payload.status_periode ?? existing.status_periode;
-    const nextDiprosesPada = Object.prototype.hasOwnProperty.call(payload, 'diproses_pada') ? payload.diproses_pada : existing.diproses_pada;
-    const nextDifinalkanPada = Object.prototype.hasOwnProperty.call(payload, 'difinalkan_pada') ? payload.difinalkan_pada : existing.difinalkan_pada;
 
     validatePeriodeState({
       tahun: nextTahun,
       bulan: nextBulan,
       tanggal_mulai: nextTanggalMulai,
       tanggal_selesai: nextTanggalSelesai,
-      status_periode: nextStatusPeriode,
-      diproses_pada: nextDiprosesPada,
-      difinalkan_pada: nextDifinalkanPada,
     });
 
     if (nextTahun !== existing.tahun || nextBulan !== existing.bulan) {
@@ -325,17 +273,11 @@ export async function PUT(req, { params }) {
         },
         select: {
           id_periode_payroll: true,
-          deleted_at: true,
         },
       });
 
       if (duplicate) {
-        return NextResponse.json(
-          {
-            message: duplicate.deleted_at ? 'Tahun dan bulan tersebut sudah digunakan oleh data soft delete lain.' : 'Periode payroll untuk tahun dan bulan tersebut sudah ada.',
-          },
-          { status: 409 },
-        );
+        return NextResponse.json({ message: 'Periode payroll untuk tahun dan bulan tersebut sudah ada.' }, { status: 409 });
       }
     }
 
@@ -347,7 +289,7 @@ export async function PUT(req, { params }) {
 
     return NextResponse.json({
       message: 'Periode payroll berhasil diperbarui.',
-      data: updated,
+      data: enrichPeriode(updated),
     });
   } catch (err) {
     if (err?.code === 'P2002') {
@@ -355,7 +297,7 @@ export async function PUT(req, { params }) {
     }
 
     if (err instanceof Error) {
-      if (err.message.startsWith('Field ') || err.message.includes('tidak valid') || err.message.includes('tanggal') || err.message.includes('Status periode')) {
+      if (err.message.startsWith('Field ') || err.message.includes('tidak valid') || err.message.includes('tanggal')) {
         return NextResponse.json({ message: err.message }, { status: 400 });
       }
     }
@@ -374,22 +316,15 @@ export async function DELETE(req, { params }) {
 
   try {
     const { id } = params;
-    const { searchParams } = new URL(req.url);
-
-    const isHardDelete = ['1', 'true'].includes((searchParams.get('hard') || '').toLowerCase());
-    const isForceDelete = ['1', 'true'].includes((searchParams.get('force') || '').toLowerCase());
-    const hardDelete = isHardDelete || isForceDelete;
 
     const existing = await db.periodePayroll.findUnique({
       where: { id_periode_payroll: id },
       select: {
         id_periode_payroll: true,
-        deleted_at: true,
         _count: {
           select: {
             payroll_karyawan: true,
-            persetujuan_periode: true,
-            payout_konsultan: true,
+            payoutKonsultans: true,
           },
         },
       },
@@ -397,57 +332,6 @@ export async function DELETE(req, { params }) {
 
     if (!existing) {
       return NextResponse.json({ message: 'Periode payroll tidak ditemukan.' }, { status: 404 });
-    }
-
-    if (!hardDelete) {
-      if (existing.deleted_at) {
-        return NextResponse.json(
-          {
-            message: 'Periode payroll sudah dihapus sebelumnya.',
-            mode: 'soft',
-          },
-          { status: 409 },
-        );
-      }
-
-      const deletedAt = new Date();
-
-      const [deleted, affectedPayroll, affectedPersetujuan] = await db.$transaction([
-        db.periodePayroll.update({
-          where: { id_periode_payroll: id },
-          data: { deleted_at: deletedAt },
-          select: buildSelect(),
-        }),
-        db.payrollKaryawan.updateMany({
-          where: {
-            id_periode_payroll: id,
-            deleted_at: null,
-          },
-          data: {
-            deleted_at: deletedAt,
-          },
-        }),
-        db.persetujuanPeriodePayroll.updateMany({
-          where: {
-            id_periode_payroll: id,
-            deleted_at: null,
-          },
-          data: {
-            deleted_at: deletedAt,
-          },
-        }),
-      ]);
-
-      return NextResponse.json({
-        message: 'Periode payroll berhasil dihapus (soft delete).',
-        mode: 'soft',
-        data: deleted,
-        cascade_summary: {
-          payroll_karyawan_soft_deleted: affectedPayroll.count,
-          persetujuan_periode_soft_deleted: affectedPersetujuan.count,
-          payout_konsultan_tetap_terhubung: existing._count.payout_konsultan,
-        },
-      });
     }
 
     await db.periodePayroll.delete({
@@ -459,15 +343,14 @@ export async function DELETE(req, { params }) {
       mode: 'hard',
       relation_summary: {
         payroll_karyawan_terhapus_mengikuti_cascade: existing._count.payroll_karyawan,
-        persetujuan_periode_terhapus_mengikuti_cascade: existing._count.persetujuan_periode,
-        payout_konsultan_yang_id_periode_payroll_menjadi_null: existing._count.payout_konsultan,
+        payout_konsultan_yang_id_periode_payroll_menjadi_null: existing._count.payoutKonsultans,
       },
     });
   } catch (err) {
     if (err?.code === 'P2003') {
       return NextResponse.json(
         {
-          message: 'Periode payroll tidak bisa dihapus permanen karena masih direferensikan oleh data lain.',
+          message: 'Periode payroll tidak bisa dihapus karena masih direferensikan oleh data lain.',
         },
         { status: 409 },
       );

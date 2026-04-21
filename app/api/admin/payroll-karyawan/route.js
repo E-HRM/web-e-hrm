@@ -4,7 +4,9 @@ import db from '@/lib/prisma';
 import {
   ALLOWED_ORDER_BY,
   buildSearchClauses,
+  buildSelect,
   CREATE_ROLES,
+  deriveApprovalState,
   ensureAuth,
   ensurePeriodeExists,
   ensureTarifPajakTerExists,
@@ -18,111 +20,14 @@ import {
   normalizeRequiredId,
   parseDateTime,
   parseNonNegativeDecimal,
+  replaceApprovalSteps,
+  resolveApprovalSteps,
+  STATUS_APPROVAL_VALUES,
   STATUS_PAYROLL_VALUES,
   VIEW_ROLES,
   addDecimalStrings,
   subtractDecimalStrings,
 } from './payrollKaryawan.shared';
-
-function buildSelect() {
-  return {
-    id_payroll_karyawan: true,
-    id_periode_payroll: true,
-    id_user: true,
-    id_profil_payroll: true,
-    id_tarif_pajak_ter: true,
-    nama_karyawan: true,
-    jenis_hubungan_kerja: true,
-    kode_kategori_pajak_snapshot: true,
-    persen_tarif_snapshot: true,
-    penghasilan_dari_snapshot: true,
-    penghasilan_sampai_snapshot: true,
-    berlaku_mulai_tarif_snapshot: true,
-    berlaku_sampai_tarif_snapshot: true,
-    gaji_pokok_snapshot: true,
-    total_pendapatan_bruto: true,
-    total_potongan: true,
-    pph21_nominal: true,
-    pendapatan_bersih: true,
-    bank_name: true,
-    bank_account: true,
-    status_payroll: true,
-    dibayar_pada: true,
-    finalized_at: true,
-    locked_at: true,
-    catatan: true,
-    created_at: true,
-    updated_at: true,
-    deleted_at: true,
-    periode: {
-      select: {
-        id_periode_payroll: true,
-        tahun: true,
-        bulan: true,
-        tanggal_mulai: true,
-        tanggal_selesai: true,
-        status_periode: true,
-        diproses_pada: true,
-        difinalkan_pada: true,
-        deleted_at: true,
-      },
-    },
-    user: {
-      select: {
-        id_user: true,
-        nama_pengguna: true,
-        email: true,
-        nomor_induk_karyawan: true,
-        status_kerja: true,
-        nomor_rekening: true,
-        jenis_bank: true,
-        foto_profil_user: true,
-        deleted_at: true,
-        departement: {
-          select: {
-            id_departement: true,
-            nama_departement: true,
-          },
-        },
-        jabatan: {
-          select: {
-            id_jabatan: true,
-            nama_jabatan: true,
-          },
-        },
-      },
-    },
-    profil_payroll: {
-      select: {
-        id_profil_payroll: true,
-        id_user: true,
-        jenis_hubungan_kerja: true,
-        gaji_pokok: true,
-        payroll_aktif: true,
-        tanggal_mulai_payroll: true,
-        deleted_at: true,
-      },
-    },
-    tarif_pajak_ter: {
-      select: {
-        id_tarif_pajak_ter: true,
-        kode_kategori_pajak: true,
-        persen_tarif: true,
-        penghasilan_dari: true,
-        penghasilan_sampai: true,
-        berlaku_mulai: true,
-        berlaku_sampai: true,
-        deleted_at: true,
-      },
-    },
-    _count: {
-      select: {
-        item_komponen: true,
-        cicilan_pinjaman: true,
-      },
-    },
-  };
-}
 
 async function ensureProfilPayrollAktifExists(id_user) {
   return db.profilPayroll.findFirst({
@@ -205,11 +110,11 @@ async function resolveCreatePayload(body = {}) {
 
   if (!periode) {
     return {
-      error: NextResponse.json({ message: 'Periode payroll tidak ditemukan atau sudah dihapus.' }, { status: 404 }),
+      error: NextResponse.json({ message: 'Periode payroll tidak ditemukan.' }, { status: 404 }),
     };
   }
 
-  if (IMMUTABLE_PERIODE_STATUS.has(String(periode.status_periode || '').toUpperCase()) || periode.difinalkan_pada) {
+  if (IMMUTABLE_PERIODE_STATUS.has(String(periode.status_periode || '').toUpperCase())) {
     return {
       error: NextResponse.json({ message: 'Periode payroll sudah final/terkunci dan tidak bisa menerima payroll baru.' }, { status: 409 }),
     };
@@ -291,6 +196,20 @@ async function resolveCreatePayload(body = {}) {
   };
 }
 
+function normalizeOptionalApprovalStatus(value, fieldName = 'status_approval') {
+  if (value === undefined || value === null || value === '') return undefined;
+
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+
+  if (!STATUS_APPROVAL_VALUES.has(normalized)) {
+    throw new Error(`${fieldName} tidak valid. Nilai yang diizinkan: ${Array.from(STATUS_APPROVAL_VALUES).join(', ')}`);
+  }
+
+  return normalized;
+}
+
 export async function GET(req) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
@@ -316,6 +235,7 @@ export async function GET(req) {
     const deletedOnly = ['1', 'true'].includes((searchParams.get('deletedOnly') || '').toLowerCase());
 
     const status_payroll = searchParams.get('status_payroll') ? normalizeEnum(searchParams.get('status_payroll'), STATUS_PAYROLL_VALUES, 'status_payroll') : undefined;
+    const status_approval = normalizeOptionalApprovalStatus(searchParams.get('status_approval'));
 
     if (periode_status && !new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']).has(periode_status)) {
       return NextResponse.json({ message: 'periode_status tidak valid.' }, { status: 400 });
@@ -333,6 +253,7 @@ export async function GET(req) {
       ...(id_profil_payroll ? { id_profil_payroll } : {}),
       ...(id_tarif_pajak_ter ? { id_tarif_pajak_ter } : {}),
       ...(status_payroll ? { status_payroll } : {}),
+      ...(status_approval ? { status_approval } : {}),
       ...(periode_status
         ? {
             periode: {
@@ -388,6 +309,9 @@ export async function POST(req) {
 
     if (resolved.error) return resolved.error;
 
+    const approvalSteps = await resolveApprovalSteps(body?.approval_steps);
+    const approvalState = deriveApprovalState(approvalSteps);
+
     const existing = await db.payrollKaryawan.findFirst({
       where: {
         id_periode_payroll: resolved.payload.id_periode_payroll,
@@ -404,10 +328,22 @@ export async function POST(req) {
     }
 
     if (existing && existing.deleted_at !== null) {
-      const restored = await db.payrollKaryawan.update({
-        where: { id_payroll_karyawan: existing.id_payroll_karyawan },
-        data: resolved.payload,
-        select: buildSelect(),
+      const restored = await db.$transaction(async (tx) => {
+        await replaceApprovalSteps(tx, existing.id_payroll_karyawan, approvalSteps);
+
+        await tx.payrollKaryawan.update({
+          where: { id_payroll_karyawan: existing.id_payroll_karyawan },
+          data: {
+            ...resolved.payload,
+            status_approval: approvalState.status_approval,
+            current_level_approval: approvalState.current_level_approval,
+          },
+        });
+
+        return tx.payrollKaryawan.findUnique({
+          where: { id_payroll_karyawan: existing.id_payroll_karyawan },
+          select: buildSelect(),
+        });
       });
 
       return NextResponse.json(
@@ -419,9 +355,24 @@ export async function POST(req) {
       );
     }
 
-    const created = await db.payrollKaryawan.create({
-      data: resolved.payload,
-      select: buildSelect(),
+    const created = await db.$transaction(async (tx) => {
+      const payroll = await tx.payrollKaryawan.create({
+        data: {
+          ...resolved.payload,
+          status_approval: approvalState.status_approval,
+          current_level_approval: approvalState.current_level_approval,
+        },
+        select: {
+          id_payroll_karyawan: true,
+        },
+      });
+
+      await replaceApprovalSteps(tx, payroll.id_payroll_karyawan, approvalSteps);
+
+      return tx.payrollKaryawan.findUnique({
+        where: { id_payroll_karyawan: payroll.id_payroll_karyawan },
+        select: buildSelect(),
+      });
     });
 
     return NextResponse.json(

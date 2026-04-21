@@ -16,12 +16,21 @@ export default function DeletePinjamanModalSection({ vm }) {
       footer={null}
       width={520}
     >
-      <AppTypography.Text
-        size={14}
-        className='text-gray-700 leading-relaxed'
-      >
-        Apakah Anda yakin ingin menghapus pinjaman <strong>"{vm.selectedPinjaman?.nama_pinjaman || '-'}"</strong>? Tindakan ini tidak dapat dibatalkan.
-      </AppTypography.Text>
+      <div className='space-y-3'>
+        <AppTypography.Text
+          size={14}
+          className='text-gray-700 leading-relaxed'
+        >
+          Apakah Anda yakin ingin menghapus pinjaman <strong>"{vm.selectedPinjaman?.nama_pinjaman || '-'}"</strong>?
+        </AppTypography.Text>
+
+        <AppTypography.Text
+          size={13}
+          className='block text-gray-500 leading-relaxed'
+        >
+          Penghapusan hanya diizinkan untuk pinjaman berstatus <strong>DRAFT</strong> atau <strong>DIBATALKAN</strong>. Jika masih ada cicilan terkait, data cicilan akan ikut ditandai terhapus.
+        </AppTypography.Text>
+      </div>
 
       <div className='flex items-center justify-end gap-3 pt-6'>
         <AppButton

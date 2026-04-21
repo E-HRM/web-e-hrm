@@ -21,7 +21,7 @@ export default function DeletePayrollKaryawanDialog({ vm }) {
         size={14}
         className='text-gray-700 leading-relaxed'
       >
-        Apakah Anda yakin ingin menghapus payroll untuk <strong>{vm.selectedPayroll?.nama_karyawan_snapshot || '-'}</strong>? Tindakan ini tidak dapat dibatalkan.
+        Apakah Anda yakin ingin menghapus payroll untuk <strong>{vm.selectedPayroll?.nama_karyawan_snapshot || '-'}</strong>? Item komponen dan approval payroll yang terkait akan ikut terdampak.
       </AppTypography.Text>
 
       <div className='flex justify-end gap-3 pt-6'>

@@ -10,12 +10,27 @@ export const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 export const STATUS_PAYROLL_VALUES = new Set(['DRAFT', 'TERSIMPAN', 'DISETUJUI', 'DIBAYAR']);
 export const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']);
+export const STATUS_APPROVAL_VALUES = new Set(['pending', 'disetujui', 'ditolak']);
 export const JENIS_HUBUNGAN_KERJA_VALUES = new Set(['FREELANCE', 'INTERNSHIP', 'PKWT', 'PKWTT']);
 
 export const IMMUTABLE_PAYROLL_STATUS = new Set(['DISETUJUI', 'DIBAYAR']);
 export const IMMUTABLE_PERIODE_STATUS = new Set(['FINAL', 'TERKUNCI']);
 
-export const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_karyawan', 'status_payroll', 'total_pendapatan_bruto', 'total_potongan', 'pph21_nominal', 'pendapatan_bersih', 'dibayar_pada', 'finalized_at', 'locked_at']);
+export const ALLOWED_ORDER_BY = new Set([
+  'created_at',
+  'updated_at',
+  'nama_karyawan',
+  'status_payroll',
+  'status_approval',
+  'current_level_approval',
+  'total_pendapatan_bruto',
+  'total_potongan',
+  'pph21_nominal',
+  'pendapatan_bersih',
+  'dibayar_pada',
+  'finalized_at',
+  'locked_at',
+]);
 
 export const normRole = (role) =>
   String(role || '')
@@ -31,6 +46,22 @@ export function normalizeRequiredId(value, fieldName = 'id') {
 
   if (normalized.length > 36) {
     throw new Error(`Field '${fieldName}' maksimal 36 karakter.`);
+  }
+
+  return normalized;
+}
+
+function normalizeApprovalStatus(value, fieldName = 'status_approval') {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) {
+    throw new Error(`Field '${fieldName}' wajib diisi.`);
+  }
+
+  if (!STATUS_APPROVAL_VALUES.has(normalized)) {
+    throw new Error(`${fieldName} tidak valid. Nilai yang diizinkan: ${Array.from(STATUS_APPROVAL_VALUES).join(', ')}`);
   }
 
   return normalized;
@@ -216,6 +247,8 @@ export function buildSelect() {
     bank_name: true,
     bank_account: true,
     status_payroll: true,
+    status_approval: true,
+    current_level_approval: true,
     dibayar_pada: true,
     finalized_at: true,
     locked_at: true,
@@ -231,9 +264,9 @@ export function buildSelect() {
         tanggal_mulai: true,
         tanggal_selesai: true,
         status_periode: true,
-        diproses_pada: true,
-        difinalkan_pada: true,
-        deleted_at: true,
+        catatan: true,
+        created_at: true,
+        updated_at: true,
       },
     },
     user: {
@@ -241,6 +274,7 @@ export function buildSelect() {
         id_user: true,
         nama_pengguna: true,
         email: true,
+        role: true,
         nomor_induk_karyawan: true,
         status_kerja: true,
         nomor_rekening: true,
@@ -281,12 +315,90 @@ export function buildSelect() {
         deleted_at: true,
       },
     },
+    approvals: {
+      where: {
+        deleted_at: null,
+      },
+      orderBy: {
+        level: 'asc',
+      },
+      select: {
+        id_approval_payroll_karyawan: true,
+        level: true,
+        approver_user_id: true,
+        approver_role: true,
+        approver_nama_snapshot: true,
+        decision: true,
+        decided_at: true,
+        note: true,
+        ttd_approval_url: true,
+        created_at: true,
+        updated_at: true,
+        deleted_at: true,
+        approver: {
+          select: {
+            id_user: true,
+            nama_pengguna: true,
+            email: true,
+            role: true,
+            foto_profil_user: true,
+            deleted_at: true,
+          },
+        },
+      },
+    },
     _count: {
       select: {
         item_komponen: true,
         cicilan_pinjaman: true,
+        approvals: true,
       },
     },
+  };
+}
+
+export function deriveApprovalState(approvalSteps = []) {
+  const orderedSteps = Array.isArray(approvalSteps)
+    ? approvalSteps
+        .filter((step) => !step?.deleted_at)
+        .sort((a, b) => Number(a?.level || 0) - Number(b?.level || 0))
+    : [];
+
+  const total_steps = orderedSteps.length;
+  const approved_steps = orderedSteps.filter((step) => step?.decision === 'disetujui').length;
+  const rejected_steps = orderedSteps.filter((step) => step?.decision === 'ditolak').length;
+  const pending_steps = orderedSteps.filter((step) => step?.decision === 'pending').length;
+
+  const rejectedStep = orderedSteps.find((step) => step?.decision === 'ditolak') || null;
+  const pendingStep = orderedSteps.find((step) => step?.decision === 'pending') || null;
+  const lastStep = orderedSteps.at(-1) || null;
+
+  let status_approval = 'pending';
+  let current_level_approval = orderedSteps[0]?.level ?? null;
+  let current_step = orderedSteps[0] || null;
+
+  if (rejectedStep) {
+    status_approval = 'ditolak';
+    current_level_approval = rejectedStep.level;
+    current_step = rejectedStep;
+  } else if (pendingStep) {
+    status_approval = 'pending';
+    current_level_approval = pendingStep.level;
+    current_step = pendingStep;
+  } else if (total_steps > 0) {
+    status_approval = 'disetujui';
+    current_level_approval = lastStep?.level ?? null;
+    current_step = lastStep;
+  }
+
+  return {
+    status_approval,
+    current_level_approval,
+    total_steps,
+    approved_steps,
+    rejected_steps,
+    pending_steps,
+    current_step,
   };
 }
 
@@ -295,14 +407,30 @@ export function enrichPayroll(item) {
 
   const payrollStatus = String(item.status_payroll || '').toUpperCase();
   const periodeStatus = String(item?.periode?.status_periode || '').toUpperCase();
+  const approvalState = deriveApprovalState(item.approvals);
+  const resolvedStatusApproval =
+    approvalState.total_steps > 0 ? approvalState.status_approval : normalizeApprovalStatus(item.status_approval || 'pending');
+  const resolvedCurrentLevelApproval =
+    approvalState.total_steps > 0 ? approvalState.current_level_approval : item.current_level_approval ?? null;
+  const approvalImmutable = resolvedStatusApproval === 'disetujui';
+  const payrollImmutable = IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) || Boolean(item.finalized_at) || Boolean(item.locked_at);
+  const periodeImmutable = IMMUTABLE_PERIODE_STATUS.has(periodeStatus);
 
   return {
     ...item,
+    status_approval: resolvedStatusApproval,
+    current_level_approval: resolvedCurrentLevelApproval,
+    approval_state: {
+      ...approvalState,
+      status_approval: resolvedStatusApproval,
+      current_level_approval: resolvedCurrentLevelApproval,
+    },
     business_state: {
-      payroll_immutable: IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) || Boolean(item.finalized_at) || Boolean(item.locked_at),
-      periode_immutable: IMMUTABLE_PERIODE_STATUS.has(periodeStatus) || Boolean(item?.periode?.difinalkan_pada),
-      bisa_diubah: !Boolean(item.deleted_at) && !Boolean(item?.periode?.deleted_at) && !IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) && !IMMUTABLE_PERIODE_STATUS.has(periodeStatus) && !Boolean(item.finalized_at) && !Boolean(item.locked_at),
-      bisa_dihapus: !Boolean(item.deleted_at) && !Boolean(item?.periode?.deleted_at) && !IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) && !IMMUTABLE_PERIODE_STATUS.has(periodeStatus) && !Boolean(item.finalized_at) && !Boolean(item.locked_at),
+      approval_immutable: approvalImmutable,
+      payroll_immutable: payrollImmutable,
+      periode_immutable: periodeImmutable,
+      bisa_diubah: !Boolean(item.deleted_at) && !approvalImmutable && !payrollImmutable && !periodeImmutable,
+      bisa_dihapus: !Boolean(item.deleted_at) && !approvalImmutable && !payrollImmutable && !periodeImmutable,
     },
   };
 }
@@ -321,21 +449,31 @@ export function buildSearchClauses(search) {
     { user: { is: { jabatan: { is: { nama_jabatan: { contains: search } } } } } },
     { periode: { is: { catatan: { contains: search } } } },
     { tarif_pajak_ter: { is: { kode_kategori_pajak: { contains: search } } } },
+    {
+      approvals: {
+        some: {
+          deleted_at: null,
+          OR: [
+            { approver_nama_snapshot: { contains: search } },
+            { approver: { is: { nama_pengguna: { contains: search } } } },
+            { approver: { is: { email: { contains: search } } } },
+          ],
+        },
+      },
+    },
   ];
 }
 
 export async function ensurePeriodeExists(id_periode_payroll) {
-  return db.periodePayroll.findFirst({
+  return db.periodePayroll.findUnique({
     where: {
       id_periode_payroll,
-      deleted_at: null,
     },
     select: {
       id_periode_payroll: true,
       status_periode: true,
-      diproses_pada: true,
-      difinalkan_pada: true,
-      deleted_at: true,
+      tahun: true,
+      bulan: true,
     },
   });
 }
@@ -350,6 +488,7 @@ export async function ensureUserExists(id_user) {
       id_user: true,
       nama_pengguna: true,
       email: true,
+      role: true,
       nomor_induk_karyawan: true,
       nomor_rekening: true,
       jenis_bank: true,
@@ -424,5 +563,60 @@ export async function ensurePayrollExists(id_payroll_karyawan) {
   return db.payrollKaryawan.findUnique({
     where: { id_payroll_karyawan },
     select: buildSelect(),
+  });
+}
+
+export async function resolveApprovalSteps(rawSteps) {
+  if (!Array.isArray(rawSteps)) {
+    throw new Error("Field 'approval_steps' wajib berupa array.");
+  }
+
+  if (rawSteps.length === 0) {
+    throw new Error('Minimal satu approval karyawan wajib dipilih.');
+  }
+
+  const approverIds = rawSteps.map((step, index) => normalizeRequiredId(step?.approver_user_id, `approval_steps[${index + 1}].approver_user_id`));
+
+  if (new Set(approverIds).size !== approverIds.length) {
+    throw new Error('User approval tidak boleh duplikat pada payroll yang sama.');
+  }
+
+  const approverUsers = await Promise.all(approverIds.map((approverId) => ensureUserExists(approverId)));
+
+  return approverUsers.map((user, index) => {
+    if (!user) {
+      throw new Error(`User approval level ${index + 1} tidak ditemukan atau sudah dihapus.`);
+    }
+
+    return {
+      level: index + 1,
+      approver_user_id: user.id_user,
+      approver_role: normRole(user.role) || null,
+      approver_nama_snapshot: normalizeNullableString(user.nama_pengguna, 'approver_nama_snapshot', 255) || null,
+      decision: 'pending',
+      decided_at: null,
+      note: null,
+      ttd_approval_url: null,
+      deleted_at: null,
+    };
+  });
+}
+
+export async function replaceApprovalSteps(tx, id_payroll_karyawan, approvalSteps = []) {
+  await tx.approvalPayrollKaryawan.deleteMany({
+    where: {
+      id_payroll_karyawan,
+    },
+  });
+
+  if (!approvalSteps.length) {
+    return;
+  }
+
+  await tx.approvalPayrollKaryawan.createMany({
+    data: approvalSteps.map((step) => ({
+      ...step,
+      id_payroll_karyawan,
+    })),
   });
 }

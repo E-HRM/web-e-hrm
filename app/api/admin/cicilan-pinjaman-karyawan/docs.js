@@ -111,6 +111,7 @@
  *     summary: Buat cicilan pinjaman karyawan
  *     description: |
  *       Membuat cicilan pinjaman karyawan baru. Logic bisnis yang diterapkan:
+ *       - pinjaman induk harus berstatus `AKTIF`; pinjaman `DRAFT`, `DIBATALKAN`, atau `LUNAS` tidak dapat menerima cicilan baru.
  *       - `jatuh_tempo` wajib berada di dalam periode pinjaman.
  *       - hanya boleh ada satu cicilan aktif untuk kombinasi pinjaman + jatuh tempo.
  *       - total `nominal_tagihan` cicilan aktif tidak boleh melebihi `nominal_pinjaman`.

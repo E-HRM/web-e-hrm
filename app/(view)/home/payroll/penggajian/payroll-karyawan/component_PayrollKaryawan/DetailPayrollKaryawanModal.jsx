@@ -224,6 +224,38 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                 </AppTag>
               </div>
 
+              <div>
+                <AppTypography.Text
+                  size={12}
+                  className='block text-gray-600 mb-1'
+                >
+                  Status Approval
+                </AppTypography.Text>
+
+                <AppTag
+                  tone={vm.formatStatusApproval(vm.selectedPayroll.status_approval).tone}
+                  variant='soft'
+                  size='sm'
+                  className='!font-medium'
+                >
+                  {vm.formatStatusApproval(vm.selectedPayroll.status_approval).label}
+                </AppTag>
+
+                <AppTypography.Text
+                  size={12}
+                  className='block text-gray-500 mt-2'
+                >
+                  {vm.selectedPayroll.approval_progress_label}
+                </AppTypography.Text>
+
+                <AppTypography.Text
+                  size={12}
+                  className='block text-gray-500 mt-1'
+                >
+                  {vm.selectedPayroll.current_approval_label}
+                </AppTypography.Text>
+              </div>
+
               {vm.selectedPayroll.dibayar_pada ? (
                 <DetailField
                   label='Tanggal Dibayar'
@@ -243,6 +275,62 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={400}
                 />
               ) : null}
+            </div>
+          </div>
+
+          <div>
+            <AppTypography.Text
+              size={18}
+              weight={700}
+              className='block text-gray-900 mb-4'
+            >
+              Approval Berjenjang
+            </AppTypography.Text>
+
+            <div className='space-y-3'>
+              {Array.isArray(vm.selectedPayroll.approval_steps) && vm.selectedPayroll.approval_steps.length > 0 ? (
+                vm.selectedPayroll.approval_steps.map((step) => (
+                  <div
+                    key={step.id_approval_payroll_karyawan || `${step.level}-${step.approver_user_id || step.approver_display_name}`}
+                    className='rounded-2xl border border-gray-200 p-4'
+                  >
+                    <div className='flex flex-col gap-2 md:flex-row md:items-start md:justify-between'>
+                      <div>
+                        <AppTypography.Text
+                          size={14}
+                          weight={700}
+                          className='block text-gray-900'
+                        >
+                          Level {step.level} - {step.approver_display_name}
+                        </AppTypography.Text>
+
+                        <AppTypography.Text
+                          size={12}
+                          className='mt-1 block text-gray-500'
+                        >
+                          {step.approver_role_label}
+                        </AppTypography.Text>
+                      </div>
+
+                      <AppTag
+                        tone={step.decision_meta.tone}
+                        variant='soft'
+                        size='sm'
+                        className='!font-medium'
+                      >
+                        {step.decision_meta.label}
+                      </AppTag>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <AppTypography.Text
+                  size={13}
+                  className='block text-gray-500'
+                >
+                  Belum ada approval yang terpasang pada payroll ini.
+                </AppTypography.Text>
+              )}
             </div>
           </div>
 

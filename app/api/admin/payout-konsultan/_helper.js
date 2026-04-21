@@ -364,9 +364,6 @@ export function buildSelect({ includeDetails = false } = {}) {
         tanggal_mulai: true,
         tanggal_selesai: true,
         status_periode: true,
-        diproses_pada: true,
-        difinalkan_pada: true,
-        deleted_at: true,
       },
     },
     user: {
@@ -500,7 +497,7 @@ export function enrichPayout(data) {
       periode_terkunci: periodeTerkunci,
       payout_deleted: Boolean(data.deleted_at),
       payroll_attached: Boolean(data.id_periode_payroll),
-      payroll_deleted: Boolean(data.periode_payroll?.deleted_at),
+      payroll_deleted: Boolean(data.id_periode_payroll && !data.periode_payroll),
       payroll_immutable: payrollImmutable,
       payout_posted: posted,
       payout_disetujui: data.status_payout === "DISETUJUI",
@@ -637,10 +634,6 @@ function validateUser(user) {
 function validatePeriodePayroll(periode) {
   if (!periode) {
     throw new Error("Periode payroll tidak ditemukan.");
-  }
-
-  if (periode.deleted_at) {
-    throw new Error("Periode payroll yang dipilih sudah dihapus.");
   }
 }
 
@@ -883,9 +876,6 @@ export async function resolvePayoutPayload(
             tanggal_mulai: true,
             tanggal_selesai: true,
             status_periode: true,
-            diproses_pada: true,
-            difinalkan_pada: true,
-            deleted_at: true,
           },
         })
       : Promise.resolve(null),
@@ -1081,8 +1071,6 @@ async function ensurePayrollPostingTarget(tx, { id_periode_payroll, id_user }) {
         select: {
           id_periode_payroll: true,
           status_periode: true,
-          difinalkan_pada: true,
-          deleted_at: true,
         },
       },
     },
@@ -1094,7 +1082,7 @@ async function ensurePayrollPostingTarget(tx, { id_periode_payroll, id_user }) {
     );
   }
 
-  if (payroll.deleted_at || payroll.periode?.deleted_at) {
+  if (payroll.deleted_at) {
     throw new Error("Payroll tujuan untuk posting payout sudah dihapus.");
   }
 

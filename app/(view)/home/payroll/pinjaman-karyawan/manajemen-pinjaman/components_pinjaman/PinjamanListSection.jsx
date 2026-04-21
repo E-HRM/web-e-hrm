@@ -63,6 +63,7 @@ export default function PinjamanListSection({ vm }) {
       {vm.pinjamanList.map((pinjaman) => {
         const progress = vm.calculateProgress(pinjaman);
         const user = pinjaman.user;
+        const canDelete = vm.canDeletePinjaman(pinjaman);
 
         return (
           <AppCard
@@ -220,7 +221,9 @@ export default function PinjamanListSection({ vm }) {
                   shape='circle'
                   size='middle'
                   aria-label='Hapus'
-                  className='!text-red-600 hover:!bg-red-50'
+                  title={canDelete ? 'Hapus pinjaman' : 'Hanya pinjaman DRAFT atau DIBATALKAN yang bisa dihapus'}
+                  disabled={!canDelete}
+                  className={canDelete ? '!text-red-600 hover:!bg-red-50' : '!text-gray-300'}
                   icon={<DeleteOutlined />}
                   onClick={() => vm.openDeleteDialog(pinjaman)}
                 />

@@ -12,14 +12,11 @@ import {
   BULAN_OPTIONS,
   createInitialPeriodePayrollForm,
   formatDate,
-  formatDateTime,
   formatPeriodePayrollLabel,
   formatStatusPeriodePayroll,
-  getNowDateTimeLocalValue,
   serializePeriodePayrollPayload,
   STATUS_PERIODE_PAYROLL_OPTIONS,
   toDateInputValue,
-  toDateTimeLocalValue,
 } from './utils/periodePayrollUtils';
 
 const FETCH_PAGE_SIZE = 100;
@@ -66,14 +63,6 @@ async function fetchAllPeriodePayroll() {
       }),
     ),
   );
-}
-
-function requiresDiproses(status) {
-  return ['DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI'].includes(String(status || '').toUpperCase());
-}
-
-function requiresDifinalkan(status) {
-  return ['FINAL', 'TERKUNCI'].includes(String(status || '').toUpperCase());
 }
 
 export default function usePeriodePayrollViewModel() {
@@ -132,22 +121,6 @@ export default function usePeriodePayrollViewModel() {
         next.tanggal_selesai = range.tanggal_selesai;
       }
 
-      if (field === 'status_periode') {
-        const normalizedStatus = String(value || '').toUpperCase();
-
-        if (!requiresDiproses(normalizedStatus)) {
-          next.diproses_pada = '';
-        } else if (!next.diproses_pada) {
-          next.diproses_pada = getNowDateTimeLocalValue();
-        }
-
-        if (!requiresDifinalkan(normalizedStatus)) {
-          next.difinalkan_pada = '';
-        } else if (!next.difinalkan_pada) {
-          next.difinalkan_pada = next.diproses_pada || getNowDateTimeLocalValue();
-        }
-      }
-
       return next;
     });
   }, []);
@@ -179,8 +152,6 @@ export default function usePeriodePayrollViewModel() {
       tanggal_mulai: toDateInputValue(periode.tanggal_mulai),
       tanggal_selesai: toDateInputValue(periode.tanggal_selesai),
       status_periode: periode.status_periode || 'DRAFT',
-      diproses_pada: toDateTimeLocalValue(periode.diproses_pada),
-      difinalkan_pada: toDateTimeLocalValue(periode.difinalkan_pada),
       catatan: periode.catatan || '',
     });
     setIsEditModalOpen(true);
@@ -230,21 +201,6 @@ export default function usePeriodePayrollViewModel() {
 
     if (new Date(payload.tanggal_selesai) < new Date(payload.tanggal_mulai)) {
       AppMessage.warning('Tanggal selesai tidak boleh lebih kecil dari tanggal mulai.');
-      return false;
-    }
-
-    if (requiresDiproses(payload.status_periode) && !payload.diproses_pada) {
-      AppMessage.warning(`Status ${formatStatusPeriodePayroll(payload.status_periode)} membutuhkan waktu diproses.`);
-      return false;
-    }
-
-    if (requiresDifinalkan(payload.status_periode) && !payload.difinalkan_pada) {
-      AppMessage.warning(`Status ${formatStatusPeriodePayroll(payload.status_periode)} membutuhkan waktu final.`);
-      return false;
-    }
-
-    if (payload.diproses_pada && payload.difinalkan_pada && new Date(payload.difinalkan_pada) < new Date(payload.diproses_pada)) {
-      AppMessage.warning('Waktu final tidak boleh lebih awal dari waktu diproses.');
       return false;
     }
 
@@ -309,12 +265,12 @@ export default function usePeriodePayrollViewModel() {
       setActionLoadingId(periode.id_periode_payroll);
       try {
         const response = await crudServiceAuth.delete(ApiEndpoints.DeletePeriodePayroll(periode.id_periode_payroll));
-        const payrollAffected = response?.cascade_summary?.payroll_karyawan_soft_deleted ?? 0;
-        const persetujuanAffected = response?.cascade_summary?.persetujuan_periode_soft_deleted ?? 0;
+        const payrollAffected = response?.relation_summary?.payroll_karyawan_terhapus_mengikuti_cascade ?? 0;
+        const payoutAffected = response?.relation_summary?.payout_konsultan_yang_id_periode_payroll_menjadi_null ?? 0;
 
         AppMessage.success(
-          payrollAffected || persetujuanAffected
-            ? `Periode payroll berhasil dihapus. ${payrollAffected} payroll karyawan dan ${persetujuanAffected} approval ikut di-soft delete.`
+          payrollAffected || payoutAffected
+            ? `Periode payroll berhasil dihapus permanen. ${payrollAffected} payroll karyawan terhapus mengikuti cascade dan ${payoutAffected} payout dilepas dari periode.`
             : response?.message || 'Periode payroll berhasil dihapus.',
         );
 
@@ -353,8 +309,7 @@ export default function usePeriodePayrollViewModel() {
           item?.tanggal_mulai,
           item?.tanggal_selesai,
           `${item?._count?.payroll_karyawan || 0}`,
-          `${item?._count?.persetujuan_periode || 0}`,
-          `${item?._count?.payout_konsultan || 0}`,
+          `${item?._count?.payout_konsultan ?? item?._count?.payoutKonsultans ?? 0}`,
         ].join(' '),
       );
 
@@ -371,14 +326,14 @@ export default function usePeriodePayrollViewModel() {
     const totalDraft = periodeList.filter((item) => item?.status_periode === 'DRAFT').length;
     const totalFinal = periodeList.filter((item) => ['FINAL', 'TERKUNCI'].includes(String(item?.status_periode || '').toUpperCase())).length;
     const totalPayrollKaryawan = periodeList.reduce((sum, item) => sum + toNumber(item?._count?.payroll_karyawan), 0);
-    const totalPersetujuan = periodeList.reduce((sum, item) => sum + toNumber(item?._count?.persetujuan_periode), 0);
+    const totalPayoutKonsultan = periodeList.reduce((sum, item) => sum + toNumber(item?._count?.payout_konsultan ?? item?._count?.payoutKonsultans), 0);
 
     return {
       totalPeriode,
       totalDraft,
       totalFinal,
       totalPayrollKaryawan,
-      totalPersetujuan,
+      totalPayoutKonsultan,
     };
   }, [periodeList]);
 
@@ -447,7 +402,6 @@ export default function usePeriodePayrollViewModel() {
     reloadData,
 
     formatDate,
-    formatDateTime,
     formatPeriodeLabel: formatPeriodePayrollLabel,
     formatStatusPeriode: formatStatusPeriodePayroll,
   };

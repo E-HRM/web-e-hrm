@@ -6,6 +6,7 @@ import AppInput from '@/app/(view)/component_shared/AppInput';
 import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppSelect from '@/app/(view)/component_shared/AppSelect';
 
+import ApprovalStepsSection from './ApprovalStepsSection';
 import { STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
 
 function EditPayrollForm({ vm }) {
@@ -58,6 +59,26 @@ function EditPayrollForm({ vm }) {
           inputClassName='!rounded-lg'
         />
       </div>
+
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+        <AppInput
+          label='Bank'
+          value={vm.formData.nama_bank_snapshot}
+          placeholder='Diambil dari data user'
+          disabled
+          inputClassName='!rounded-lg'
+        />
+
+        <AppInput
+          label='No. Rekening'
+          value={vm.formData.nomor_rekening_snapshot}
+          placeholder='Diambil dari data user'
+          disabled
+          inputClassName='!rounded-lg'
+        />
+      </div>
+
+      <ApprovalStepsSection vm={vm} />
 
       <AppSelect
         label='Status Payroll'

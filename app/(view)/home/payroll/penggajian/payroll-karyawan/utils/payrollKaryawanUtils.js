@@ -7,12 +7,29 @@ export const STATUS_PAYROLL_OPTIONS = [
   { value: 'DIBAYAR', label: 'Dibayar' },
 ];
 
+export const STATUS_APPROVAL_OPTIONS = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'disetujui', label: 'Disetujui' },
+  { value: 'ditolak', label: 'Ditolak' },
+];
+
 export const JENIS_HUBUNGAN_OPTIONS = [
   { value: 'PKWTT', label: 'PKWTT' },
   { value: 'PKWT', label: 'PKWT' },
   { value: 'FREELANCE', label: 'Freelance' },
   { value: 'INTERNSHIP', label: 'Internship' },
 ];
+
+function createApprovalStepKey() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createEmptyApprovalStep() {
+  return {
+    client_key: createApprovalStepKey(),
+    approver_user_id: '',
+  };
+}
 
 export function createInitialPayrollKaryawanForm(defaultPeriode = '') {
   return {
@@ -39,6 +56,9 @@ export function createInitialPayrollKaryawanForm(defaultPeriode = '') {
     total_potongan_lain: 0,
     total_dibayarkan: 0,
     status_payroll: 'DRAFT',
+    status_approval: 'pending',
+    current_level_approval: 1,
+    approval_steps: [createEmptyApprovalStep()],
     dibayar_pada: null,
     catatan: '',
   };
@@ -157,9 +177,61 @@ export function formatStatusPayroll(status) {
   );
 }
 
+export function formatStatusApproval(status) {
+  const map = {
+    pending: {
+      label: 'Pending',
+      tone: 'warning',
+    },
+    disetujui: {
+      label: 'Disetujui',
+      tone: 'success',
+    },
+    ditolak: {
+      label: 'Ditolak',
+      tone: 'danger',
+    },
+  };
+
+  return (
+    map[String(status || '').trim().toLowerCase()] || {
+      label: status || '-',
+      tone: 'neutral',
+    }
+  );
+}
+
+export function formatApproverRole(role) {
+  const map = {
+    KARYAWAN: 'Karyawan',
+    HR: 'HR',
+    OPERASIONAL: 'Operasional',
+    DIREKTUR: 'Direktur',
+    SUPERADMIN: 'Superadmin',
+    SUBADMIN: 'Subadmin',
+    SUPERVISI: 'Supervisi',
+  };
+
+  return map[String(role || '').trim().toUpperCase()] || role || '-';
+}
+
 export function formatPeriodeLabel(periode) {
   if (!periode) return '-';
   return `${formatBulan(periode.bulan)} ${periode.tahun || '-'}`;
+}
+
+function normalizeApprovalStep(step) {
+  if (!step) return null;
+
+  const approverName = step?.approver_nama_snapshot || step?.approver?.nama_pengguna || '-';
+  const decision = String(step?.decision || 'pending').trim().toLowerCase();
+
+  return {
+    ...step,
+    approver_display_name: approverName,
+    approver_role_label: formatApproverRole(step?.approver_role || step?.approver?.role),
+    decision_meta: formatStatusApproval(decision),
+  };
 }
 
 export function normalizePayrollKaryawanItem(item) {
@@ -170,6 +242,16 @@ export function normalizePayrollKaryawanItem(item) {
   const pph21Nominal = toNumber(item.pph21_nominal);
   const totalPotonganLain = Math.max(totalPotongan - pph21Nominal, 0);
   const periodeLabel = item?.periode ? formatPeriodeLabel(item.periode) : '-';
+  const approvalSteps = Array.isArray(item.approvals) ? item.approvals.map(normalizeApprovalStep).filter(Boolean) : [];
+  const approvalStatus = String(item?.status_approval || 'pending').trim().toLowerCase();
+  const currentApprovalLevel = Number(item?.current_level_approval || 0) || null;
+  const currentApprovalStep =
+    approvalSteps.find((step) => step.level === currentApprovalLevel) ||
+    approvalSteps.find((step) => String(step?.decision || '').trim().toLowerCase() === 'pending') ||
+    approvalSteps.at(-1) ||
+    null;
+  const approvedApprovalCount = approvalSteps.filter((step) => String(step?.decision || '').trim().toLowerCase() === 'disetujui').length;
+  const approvalProgressLabel = approvalSteps.length > 0 ? `${approvedApprovalCount}/${approvalSteps.length} level selesai` : 'Belum ada approver';
 
   return {
     ...item,
@@ -189,6 +271,12 @@ export function normalizePayrollKaryawanItem(item) {
     periode_label: periodeLabel,
     periode_status: item?.periode?.status_periode || '',
     item_komponen_count: Number(item?._count?.item_komponen || 0),
+    approval_steps: approvalSteps,
+    approval_count: Number(item?._count?.approvals || approvalSteps.length || 0),
+    status_approval: approvalStatus,
+    current_level_approval: currentApprovalLevel,
+    approval_progress_label: approvalProgressLabel,
+    current_approval_label: currentApprovalStep ? `Level ${currentApprovalStep.level} - ${currentApprovalStep.approver_display_name}` : 'Belum ada approver',
   };
 }
 
@@ -218,6 +306,12 @@ export function buildPayrollKaryawanPayload(formData) {
     status_payroll: String(formData.status_payroll || 'DRAFT')
       .trim()
       .toUpperCase(),
+    approval_steps: Array.isArray(formData.approval_steps)
+      ? formData.approval_steps.map((step, index) => ({
+          level: index + 1,
+          approver_user_id: String(step?.approver_user_id || '').trim(),
+        }))
+      : [],
     dibayar_pada:
       String(formData.status_payroll || '').trim().toUpperCase() === 'DIBAYAR' ? formData.dibayar_pada || new Date().toISOString() : null,
     catatan: String(formData.catatan || '').trim() || null,

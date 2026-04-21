@@ -7,6 +7,7 @@ import {
   DELETE_ROLES,
   VIEW_ROLES,
   buildSelect,
+  deriveApprovalState,
   ensureAuth,
   ensurePayrollExists,
   ensurePeriodeExists,
@@ -21,6 +22,8 @@ import {
   normalizeNullableString,
   parseDateTime,
   parseNonNegativeDecimal,
+  replaceApprovalSteps,
+  resolveApprovalSteps,
   STATUS_PAYROLL_VALUES,
   addDecimalStrings,
   subtractDecimalStrings,
@@ -74,14 +77,14 @@ async function resolveUpdatePayload(existing, body = {}) {
   const [periode, user] = await Promise.all([ensurePeriodeExists(nextPeriodeId), ensureUserExists(nextUserId)]);
 
   if (!periode) {
-    return { error: NextResponse.json({ message: 'Periode payroll tidak ditemukan atau sudah dihapus.' }, { status: 404 }) };
+    return { error: NextResponse.json({ message: 'Periode payroll tidak ditemukan.' }, { status: 404 }) };
   }
 
   if (!user) {
     return { error: NextResponse.json({ message: 'User tidak ditemukan atau sudah dihapus.' }, { status: 404 }) };
   }
 
-  if (IMMUTABLE_PERIODE_STATUS.has(String(periode.status_periode || '').toUpperCase()) || periode.difinalkan_pada) {
+  if (IMMUTABLE_PERIODE_STATUS.has(String(periode.status_periode || '').toUpperCase())) {
     return { error: NextResponse.json({ message: 'Periode payroll tujuan sudah final/terkunci.' }, { status: 409 }) };
   }
 
@@ -92,6 +95,7 @@ async function resolveUpdatePayload(existing, body = {}) {
     hasOwn(body, 'id_user') || hasOwn(body, 'id_tarif_pajak_ter') || hasOwn(body, 'jenis_hubungan_kerja') || !existing.id_tarif_pajak_ter;
 
   let tarifPajakTer = null;
+  let id_profil_payroll = existing.id_profil_payroll;
   let jenis_hubungan_kerja = existing.jenis_hubungan_kerja;
   let id_tarif_pajak_ter = existing.id_tarif_pajak_ter;
   let kode_kategori_pajak_snapshot = existing.kode_kategori_pajak_snapshot;
@@ -114,6 +118,7 @@ async function resolveUpdatePayload(existing, body = {}) {
       return { error: NextResponse.json({ message: 'Tarif pajak TER untuk user ini belum tersedia.' }, { status: 404 }) };
     }
 
+    id_profil_payroll = profilPayroll?.id_profil_payroll || existing.id_profil_payroll;
     jenis_hubungan_kerja = requestedJenisHubungan || String(profilPayroll?.jenis_hubungan_kerja || existing.jenis_hubungan_kerja || '').trim().toUpperCase();
 
     if (!jenis_hubungan_kerja || !JENIS_HUBUNGAN_KERJA_VALUES.has(jenis_hubungan_kerja)) {
@@ -144,6 +149,7 @@ async function resolveUpdatePayload(existing, body = {}) {
     payload: {
       id_periode_payroll: nextPeriodeId,
       id_user: nextUserId,
+      id_profil_payroll,
       id_tarif_pajak_ter,
       nama_karyawan:
         normalizeNullableString(body?.nama_karyawan, 'nama_karyawan', 255) ||
@@ -225,6 +231,10 @@ export async function PUT(req, { params }) {
     const resolved = await resolveUpdatePayload(existing, body);
     if (resolved.error) return resolved.error;
 
+    const shouldReplaceApprovals = Object.prototype.hasOwnProperty.call(body || {}, 'approval_steps');
+    const approvalSteps = shouldReplaceApprovals ? await resolveApprovalSteps(body.approval_steps) : null;
+    const approvalState = approvalSteps ? deriveApprovalState(approvalSteps) : null;
+
     if (resolved.payload.id_periode_payroll !== existing.id_periode_payroll || resolved.payload.id_user !== existing.id_user) {
       const duplicate = await db.payrollKaryawan.findFirst({
         where: {
@@ -257,7 +267,24 @@ export async function PUT(req, { params }) {
     const result = await db.$transaction(async (tx) => {
       const updated = await tx.payrollKaryawan.update({
         where: { id_payroll_karyawan: existing.id_payroll_karyawan },
-        data: resolved.payload,
+        data: {
+          ...resolved.payload,
+          ...(approvalState
+            ? {
+                status_approval: approvalState.status_approval,
+                current_level_approval: approvalState.current_level_approval,
+              }
+            : {}),
+        },
+        select: buildSelect(),
+      });
+
+      if (approvalSteps) {
+        await replaceApprovalSteps(tx, existing.id_payroll_karyawan, approvalSteps);
+      }
+
+      const refreshed = await tx.payrollKaryawan.findUnique({
+        where: { id_payroll_karyawan: existing.id_payroll_karyawan },
         select: buildSelect(),
       });
 
@@ -271,7 +298,7 @@ export async function PUT(req, { params }) {
       }
 
       return {
-        updated,
+        updated: refreshed || updated,
         cicilanSyncSummary,
       };
     });
@@ -328,7 +355,7 @@ export async function DELETE(req, { params }) {
 
       const deletedAt = new Date();
 
-      const [deleted, affectedItems, affectedCicilan] = await db.$transaction([
+      const [deleted, affectedItems, affectedCicilan, affectedApprovals] = await db.$transaction([
         db.payrollKaryawan.update({
           where: { id_payroll_karyawan: id },
           data: {
@@ -357,6 +384,15 @@ export async function DELETE(req, { params }) {
             diposting_pada: null,
           },
         }),
+        db.approvalPayrollKaryawan.updateMany({
+          where: {
+            id_payroll_karyawan: id,
+            deleted_at: null,
+          },
+          data: {
+            deleted_at: deletedAt,
+          },
+        }),
       ]);
 
       return NextResponse.json({
@@ -366,6 +402,7 @@ export async function DELETE(req, { params }) {
         cascade_summary: {
           item_komponen_soft_deleted: affectedItems.count,
           cicilan_pinjaman_dilepas_dari_payroll: affectedCicilan.count,
+          approval_karyawan_soft_deleted: affectedApprovals.count,
         },
       });
     }
@@ -401,6 +438,7 @@ export async function DELETE(req, { params }) {
       relation_summary: {
         item_komponen_terhapus_mengikuti_cascade: existing?._count?.item_komponen || 0,
         cicilan_pinjaman_dilepas_dari_payroll: detachedCicilan,
+        approval_karyawan_terhapus_mengikuti_cascade: existing?._count?.approvals || 0,
       },
     });
   } catch (err) {

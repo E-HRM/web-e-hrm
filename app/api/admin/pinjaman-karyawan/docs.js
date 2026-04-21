@@ -40,7 +40,7 @@
  *         name: status_pinjaman
  *         schema:
  *           type: string
- *           enum: [AKTIF, LUNAS, DIBATALKAN]
+ *           enum: [DRAFT, AKTIF, LUNAS, DIBATALKAN]
  *         description: Filter berdasarkan status pinjaman.
  *       - in: query
  *         name: tanggalMulaiFrom
@@ -134,12 +134,12 @@
  *   post:
  *     summary: Buat pinjaman karyawan
  *     description: |
- *       Membuat data pinjaman karyawan baru beserta jadwal cicilan otomatis. Logic bisnis yang diterapkan:
- *       - `sisa_saldo` wajib sama dengan `nominal_pinjaman` saat create awal.
- *       - `status_pinjaman` harus `AKTIF`.
- *       - sistem akan membentuk cicilan bulanan mulai dari `tanggal_mulai`.
+ *       Membuat data pinjaman karyawan baru dengan status pengajuan yang dapat dipilih. Logic bisnis yang diterapkan:
+ *       - status `DRAFT` dan `DIBATALKAN` disimpan tanpa generate cicilan.
+ *       - status `AKTIF` akan langsung membentuk cicilan bulanan mulai dari `tanggal_mulai`.
  *       - nominal cicilan terakhir akan disesuaikan agar total tagihan sama persis dengan `nominal_pinjaman`.
- *       - `tanggal_selesai` akan mengikuti jatuh tempo cicilan terakhir yang dihasilkan.
+ *       - `tanggal_selesai` akan mengikuti jatuh tempo cicilan terakhir hanya saat status `AKTIF`.
+ *       - status `LUNAS` tidak diterima pada saat create.
  *     tags: [Admin - Pinjaman Karyawan]
  *     security:
  *       - BearerAuth: []
@@ -167,28 +167,19 @@
  *               nominal_cicilan:
  *                 type: string
  *                 example: '1000000.00'
- *               sisa_saldo:
- *                 type: string
- *                 example: '10000000.00'
- *                 description: Default mengikuti `nominal_pinjaman` jika tidak dikirim.
  *               tanggal_mulai:
  *                 type: string
  *                 format: date
- *               tanggal_selesai:
- *                 type: string
- *                 format: date
- *                 nullable: true
- *                 description: Jika dikirim, nilainya harus sama dengan jatuh tempo cicilan terakhir hasil generate.
  *               status_pinjaman:
  *                 type: string
- *                 enum: [AKTIF, LUNAS, DIBATALKAN]
- *                 description: Saat create baru hanya menerima `AKTIF`.
+ *                 enum: [DRAFT, AKTIF, DIBATALKAN]
+ *                 description: Default `DRAFT` jika tidak dikirim. Cicilan hanya digenerate saat status `AKTIF`.
  *               catatan:
  *                 type: string
  *                 nullable: true
  *     responses:
  *       '201':
- *         description: Pinjaman karyawan berhasil dibuat beserta jadwal cicilan.
+ *         description: Pinjaman karyawan berhasil dibuat.
  *         content:
  *           application/json:
  *             schema:
@@ -282,7 +273,7 @@
  *           nullable: true
  *         status_pinjaman:
  *           type: string
- *           enum: [AKTIF, LUNAS, DIBATALKAN]
+ *           enum: [DRAFT, AKTIF, LUNAS, DIBATALKAN]
  *         catatan:
  *           type: string
  *           nullable: true

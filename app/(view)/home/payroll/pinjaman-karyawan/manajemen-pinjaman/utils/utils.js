@@ -1,8 +1,24 @@
 export const STATUS_PINJAMAN = {
+  DRAFT: 'DRAFT',
   AKTIF: 'AKTIF',
   LUNAS: 'LUNAS',
   DIBATALKAN: 'DIBATALKAN',
 };
+
+export const PINJAMAN_FORM_STATUS_OPTIONS = [
+  {
+    value: STATUS_PINJAMAN.DRAFT,
+    label: 'DRAFT',
+  },
+  {
+    value: STATUS_PINJAMAN.AKTIF,
+    label: 'AKTIF',
+  },
+  {
+    value: STATUS_PINJAMAN.DIBATALKAN,
+    label: 'DIBATALKAN',
+  },
+];
 
 export function createInitialPinjamanForm() {
   return {
@@ -11,6 +27,7 @@ export function createInitialPinjamanForm() {
     nominal_pinjaman: 0,
     nominal_cicilan: 0,
     tanggal_mulai: '',
+    status_pinjaman: STATUS_PINJAMAN.DRAFT,
     catatan: '',
   };
 }

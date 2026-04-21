@@ -6,10 +6,10 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
-  FileDoneOutlined,
   FileTextOutlined,
   PlusOutlined,
   ReloadOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
@@ -125,7 +125,7 @@ function PeriodeFormFields({ vm }) {
           size={12}
           className='mt-1 block leading-5 text-blue-700'
         >
-          Sistem membentuk periode dari bulan, tahun, tanggal aktif, status proses, dan timestamp operasional sesuai validasi API.
+          Sistem membentuk periode dari bulan, tahun, rentang tanggal aktif, status proses, dan catatan operasional sesuai schema terbaru.
         </AppTypography.Text>
       </div>
 
@@ -172,7 +172,7 @@ function PeriodeFormFields({ vm }) {
         />
       </div>
 
-      <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
+      <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
         <AppSelect
           label='Status Periode'
           required
@@ -181,22 +181,6 @@ function PeriodeFormFields({ vm }) {
           options={vm.statusOptions.filter((item) => item.value)}
           showSearch={false}
           selectClassName='!rounded-lg'
-        />
-
-        <AppInput
-          label='Diproses Pada'
-          type='datetime-local'
-          value={vm.formData.diproses_pada}
-          onChange={(event) => vm.setFormValue('diproses_pada', event.target.value)}
-          inputClassName='!rounded-lg'
-        />
-
-        <AppInput
-          label='Difinalkan Pada'
-          type='datetime-local'
-          value={vm.formData.difinalkan_pada}
-          onChange={(event) => vm.setFormValue('difinalkan_pada', event.target.value)}
-          inputClassName='!rounded-lg'
         />
       </div>
 
@@ -356,7 +340,7 @@ function DetailPeriodeModal({ vm }) {
                 size={12}
                 className='mb-2 block text-gray-500'
               >
-                Persetujuan Periode
+                Payout Konsultan
               </AppTypography.Text>
 
               <AppTypography.Text
@@ -364,14 +348,14 @@ function DetailPeriodeModal({ vm }) {
                 weight={800}
                 className='block text-gray-900'
               >
-                {periode?._count?.persetujuan_periode || 0}
+                {periode?._count?.payout_konsultan ?? periode?._count?.payoutKonsultans ?? 0}
               </AppTypography.Text>
 
               <AppTypography.Text
                 size={12}
                 className='mt-3 block leading-5 text-gray-500'
               >
-                Approval berjenjang yang tercatat pada periode payroll ini.
+                Total payout konsultan yang saat ini terhubung ke periode payroll.
               </AppTypography.Text>
             </AppCard>
           </div>
@@ -402,14 +386,6 @@ function DetailPeriodeModal({ vm }) {
                 label='Tanggal Selesai'
                 value={vm.formatDate(periode.tanggal_selesai)}
               />
-              <DetailField
-                label='Diproses Pada'
-                value={vm.formatDateTime(periode.diproses_pada)}
-              />
-              <DetailField
-                label='Difinalkan Pada'
-                value={vm.formatDateTime(periode.difinalkan_pada)}
-              />
             </div>
           </div>
 
@@ -436,15 +412,7 @@ function DetailPeriodeModal({ vm }) {
               href={buildDetailProsesHref(periode, vm)}
               className='!rounded-lg !h-10'
             >
-              Detail Proses
-            </AppButton>
-
-            <AppButton
-              variant='outline'
-              href={`/home/payroll/penggajian/persetujuan-payroll?id_periode_payroll=${periode.id_periode_payroll}`}
-              className='!rounded-lg !h-10'
-            >
-              Buka Persetujuan
+              Buka Payroll Karyawan
             </AppButton>
 
             <AppButton
@@ -539,7 +507,7 @@ export default function PeriodePayrollContent() {
             size={12}
             className='mt-0.5 block text-gray-500'
           >
-            {record?._count?.persetujuan_periode || 0} approval, {record?._count?.payout_konsultan || 0} payout
+            {record?._count?.payout_konsultan ?? record?._count?.payoutKonsultans ?? 0} payout tertaut
           </AppTypography.Text>
         </div>
       ),
@@ -614,7 +582,7 @@ export default function PeriodePayrollContent() {
             loading={vm.actionLoadingId === record.id_periode_payroll}
             confirm={{
               title: 'Hapus periode payroll',
-              content: `Periode ${vm.formatPeriodeLabel(record)} akan di-soft delete. ${record?._count?.payroll_karyawan || 0} payroll karyawan dan ${record?._count?.persetujuan_periode || 0} approval ikut terdampak. Lanjutkan?`,
+              content: `Periode ${vm.formatPeriodeLabel(record)} akan dihapus permanen. ${record?._count?.payroll_karyawan || 0} payroll karyawan akan ikut terhapus dan ${(record?._count?.payout_konsultan ?? record?._count?.payoutKonsultans ?? 0)} payout akan dilepas dari periode. Lanjutkan?`,
               okText: 'Hapus',
               cancelText: 'Batal',
               okType: 'danger',
@@ -655,7 +623,7 @@ export default function PeriodePayrollContent() {
             Periode Payroll
           </AppTypography.Title>
 
-          <AppTypography.Text className='text-gray-600'>Kelola periode payroll sebagai acuan proses payroll karyawan, approval berjenjang, dan locking data periode.</AppTypography.Text>
+          <AppTypography.Text className='text-gray-600'>Kelola periode payroll sebagai acuan payroll karyawan dan keterhubungan payout konsultan tanpa approval level periode.</AppTypography.Text>
         </div>
 
         <div className='flex items-center gap-3'>
@@ -702,10 +670,10 @@ export default function PeriodePayrollContent() {
           iconClassName='text-green-500 text-xl'
         />
         <SummaryCard
-          title='Approval Tercatat'
+          title='Payout Tertaut'
           subtitle={`${vm.summary.totalPayrollKaryawan} payroll tertaut`}
-          value={vm.summary.totalPersetujuan}
-          icon={<FileDoneOutlined />}
+          value={vm.summary.totalPayoutKonsultan}
+          icon={<WalletOutlined />}
           iconClassName='text-indigo-500 text-xl'
         />
       </div>
@@ -771,7 +739,7 @@ export default function PeriodePayrollContent() {
 
       <AppTable
         title='Daftar Periode Payroll'
-        subtitle='Pantau rentang periode, status proses, keterkaitan payroll karyawan, dan approval berjenjang dalam satu tampilan.'
+        subtitle='Pantau rentang periode, status proses, keterkaitan payroll karyawan, dan payout konsultan dalam satu tampilan.'
         columns={columns}
         dataSource={vm.dataSource}
         loading={vm.loading}

@@ -57,17 +57,17 @@ export default function PayrollKaryawanSummarySection({ vm }) {
       />
 
       <SummaryCard
-        title='Sudah Dibayar'
-        subtitle={`Dari ${vm.statistics.totalPayroll} karyawan`}
-        value={vm.statistics.totalDibayar}
+        title='Approval Pending'
+        subtitle='Masih menunggu proses approval'
+        value={vm.statistics.totalApprovalPending}
         icon={<FileTextOutlined />}
-        iconClassName='text-green-500 text-xl'
+        iconClassName='text-amber-500 text-xl'
       />
 
       <SummaryCard
-        title='Total Pendapatan'
-        subtitle='Bruto sebelum potongan'
-        value={vm.formatCurrency(vm.statistics.totalPendapatan)}
+        title='Sudah Dibayar'
+        subtitle={`Dari ${vm.statistics.totalPayroll} karyawan`}
+        value={vm.statistics.totalDibayar}
         icon={<RiseOutlined />}
         iconClassName='text-blue-500 text-xl'
       />

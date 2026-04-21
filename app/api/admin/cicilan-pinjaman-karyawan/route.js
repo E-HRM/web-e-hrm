@@ -8,7 +8,7 @@ const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const STATUS_CICILAN_VALUES = new Set(['MENUNGGU', 'DIPOSTING', 'DIBAYAR', 'DILEWATI']);
-const STATUS_PINJAMAN_VALUES = new Set(['AKTIF', 'LUNAS', 'DIBATALKAN']);
+const STATUS_PINJAMAN_VALUES = new Set(['DRAFT', 'AKTIF', 'LUNAS', 'DIBATALKAN']);
 
 const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'jatuh_tempo', 'nominal_tagihan', 'nominal_terbayar', 'status_cicilan', 'diposting_pada', 'dibayar_pada']);
 
@@ -514,6 +514,10 @@ async function resolveBusinessState(tx, input, existing = null) {
 
   if (!STATUS_PINJAMAN_VALUES.has(String(pinjaman.status_pinjaman))) {
     throw new Error('Status pinjaman pada data induk tidak valid.');
+  }
+
+  if (pinjaman.status_pinjaman === 'DRAFT') {
+    throw new Error('Pinjaman karyawan yang dipilih masih berstatus draft dan belum dapat memiliki cicilan.');
   }
 
   if (pinjaman.status_pinjaman === 'DIBATALKAN') {

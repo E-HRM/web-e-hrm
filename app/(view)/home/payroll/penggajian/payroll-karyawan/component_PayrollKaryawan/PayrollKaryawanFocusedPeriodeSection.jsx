@@ -25,7 +25,7 @@ export default function PayrollKaryawanFocusedPeriodeSection({ vm }) {
         size={13}
         className='block text-blue-700 mt-1'
       >
-        Gunakan daftar ini untuk membuka payroll per karyawan dan lanjut ke item komponen payroll.
+        Gunakan daftar ini untuk menambah payroll per karyawan, mengatur approval payroll, lalu lanjut ke item komponen payroll.
       </AppTypography.Text>
     </AppCard>
   );

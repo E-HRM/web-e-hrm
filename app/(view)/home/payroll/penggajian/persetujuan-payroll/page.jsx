@@ -1,26 +1,21 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { Suspense, lazy } from 'react';
+export default function Page({ searchParams }) {
+  const query = new URLSearchParams();
 
-import LoadingSplash from '@/app/(view)/component_shared/LoadingSplash';
+  Object.entries(searchParams || {}).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) query.append(key, item);
+      });
+      return;
+    }
 
-const PersetujuanPayrollContent = lazy(() => import('./PersetujuanPayrollContent'));
+    if (value) {
+      query.set(key, value);
+    }
+  });
 
-export default function Page() {
-  return (
-    <Suspense
-      fallback={
-        <div className='grid min-h-[calc(100dvh-64px-56px)] place-items-center'>
-          <LoadingSplash
-            label='Menyiapkan persetujuan payroll...'
-            brand='#003A6F'
-            size={124}
-            fullscreen={false}
-          />
-        </div>
-      }
-    >
-      <PersetujuanPayrollContent />
-    </Suspense>
-  );
+  const href = query.toString() ? `/home/payroll/penggajian/payroll-karyawan?${query.toString()}` : '/home/payroll/penggajian/payroll-karyawan';
+  redirect(href);
 }

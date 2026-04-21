@@ -24,7 +24,7 @@ export default function PayrollKaryawanFilterSection({ vm }) {
           <AppInput
             value={vm.searchQuery}
             onChange={(event) => vm.setSearchQuery(event.target.value)}
-            placeholder='Cari nama karyawan, departemen, jabatan...'
+            placeholder='Cari nama karyawan, departemen, jabatan, atau approver...'
             prefixIcon={<SearchOutlined className='text-gray-400' />}
             className='flex-1'
             inputClassName='!rounded-lg'
