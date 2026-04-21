@@ -1,0 +1,700 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import useSWR from 'swr';
+
+import AppMessage from '@/app/(view)/component_shared/AppMessage';
+import { crudServiceAuth } from '@/app/utils/services/crudServiceAuth';
+import { ApiEndpoints } from '@/constrainst/endpoints';
+
+import {
+  buildPayrollKaryawanPayload,
+  createInitialPayrollKaryawanForm,
+  formatBulan,
+  formatCurrency,
+  formatDate,
+  formatJenisHubungan,
+  formatPeriodeLabel,
+  formatStatusPayroll,
+  formatTarifPajakSnapshot,
+  normalizePayrollKaryawanItem,
+  normalizeText,
+  STATUS_PAYROLL_OPTIONS,
+  toNumber,
+} from './utils/payrollKaryawanUtils';
+
+const FETCH_PAGE_SIZE = 100;
+const PAYROLL_KARYAWAN_SWR_KEY = 'payroll:payroll-karyawan:list';
+const PERIODE_PAYROLL_SWR_KEY = 'payroll:payroll-karyawan:periode';
+const PROFIL_PAYROLL_SWR_KEY = 'payroll:payroll-karyawan:profil-payroll';
+
+async function fetchAllPages(fetcher) {
+  const merged = [];
+  let page = 1;
+  let totalPages = 1;
+
+  while (page <= totalPages) {
+    const response = await fetcher(page);
+    const rows = Array.isArray(response?.data) ? response.data : [];
+
+    merged.push(...rows);
+
+    const nextTotalPages = Number(response?.pagination?.totalPages);
+    totalPages = Number.isFinite(nextTotalPages) && nextTotalPages > 0 ? nextTotalPages : 1;
+    page += 1;
+  }
+
+  return merged;
+}
+
+async function fetchAllPayrollKaryawan() {
+  return fetchAllPages((page) =>
+    crudServiceAuth.get(
+      ApiEndpoints.GetPayrollKaryawan({
+        page,
+        pageSize: FETCH_PAGE_SIZE,
+        orderBy: 'created_at',
+        sort: 'desc',
+      }),
+    ),
+  );
+}
+
+async function fetchAllPeriodePayroll() {
+  return fetchAllPages((page) =>
+    crudServiceAuth.get(
+      ApiEndpoints.GetPeriodePayroll({
+        page,
+        pageSize: FETCH_PAGE_SIZE,
+        orderBy: 'tanggal_mulai',
+        sort: 'desc',
+      }),
+    ),
+  );
+}
+
+async function fetchAllProfilPayroll() {
+  return fetchAllPages((page) =>
+    crudServiceAuth.get(
+      ApiEndpoints.GetProfilPayroll({
+        page,
+        pageSize: FETCH_PAGE_SIZE,
+        payroll_aktif: 'true',
+        orderBy: 'created_at',
+        sort: 'desc',
+      }),
+    ),
+  );
+}
+
+function buildDefaultForm(filterPeriode) {
+  return createInitialPayrollKaryawanForm(filterPeriode && filterPeriode !== 'ALL' ? filterPeriode : '');
+}
+
+function getProfilPayrollEmployeeName(profile) {
+  return String(profile?.user?.nama_pengguna || '').trim();
+}
+
+function getProfilPayrollEmployeeIdentity(profile) {
+  return String(profile?.user?.nomor_induk_karyawan || '').trim();
+}
+
+function getProfilPayrollEmployeeDepartment(profile) {
+  return String(profile?.user?.departement?.nama_departement || '').trim();
+}
+
+function getProfilPayrollEmployeeJob(profile) {
+  return String(profile?.user?.jabatan?.nama_jabatan || '').trim();
+}
+
+function buildEmployeeOption(profile) {
+  const employeeName = getProfilPayrollEmployeeName(profile);
+  const employeeIdentity = getProfilPayrollEmployeeIdentity(profile);
+  const employeeDepartment = getProfilPayrollEmployeeDepartment(profile);
+  const employeeJob = getProfilPayrollEmployeeJob(profile);
+  const metadata = [employeeIdentity, employeeDepartment, employeeJob].filter(Boolean).join(' | ');
+
+  return {
+    value: profile.id_user,
+    label: metadata ? `${employeeName} (${metadata})` : employeeName,
+    plainLabel: employeeName,
+    title: employeeName,
+    searchText: [employeeName, employeeIdentity, profile?.user?.email, employeeDepartment, employeeJob, profile?.id_user].filter(Boolean).join(' '),
+  };
+}
+
+function filterEmployeeOption(input, option) {
+  return String(option?.searchText || '')
+    .toLowerCase()
+    .includes(String(input || '').toLowerCase());
+}
+
+function clearSelectedEmployeeSnapshot(previousForm) {
+  return {
+    ...previousForm,
+    id_user: '',
+    nama_karyawan_snapshot: '',
+    jenis_hubungan_snapshot: 'PKWTT',
+    id_tarif_pajak_ter: '',
+    kode_kategori_pajak_snapshot: '',
+    persen_tarif_snapshot: 0,
+    penghasilan_dari_snapshot: 0,
+    penghasilan_sampai_snapshot: null,
+    berlaku_mulai_tarif_snapshot: '',
+    berlaku_sampai_tarif_snapshot: null,
+    nama_departement_snapshot: '',
+    nama_jabatan_snapshot: '',
+    nama_bank_snapshot: '',
+    nomor_rekening_snapshot: '',
+  };
+}
+
+function applyProfilPayrollToForm(previousForm, profile) {
+  if (!profile) return clearSelectedEmployeeSnapshot(previousForm);
+
+  const tarif = profile?.tarif_pajak_ter;
+  const gajiPokok = toNumber(profile?.gaji_pokok);
+
+  return {
+    ...previousForm,
+    id_user: String(profile.id_user || '').trim(),
+    nama_karyawan_snapshot: getProfilPayrollEmployeeName(profile),
+    jenis_hubungan_snapshot: String(profile?.jenis_hubungan_kerja || 'PKWTT')
+      .trim()
+      .toUpperCase(),
+    id_tarif_pajak_ter: String(profile?.id_tarif_pajak_ter || '').trim(),
+    kode_kategori_pajak_snapshot: String(tarif?.kode_kategori_pajak || '').trim(),
+    persen_tarif_snapshot: toNumber(tarif?.persen_tarif),
+    penghasilan_dari_snapshot: toNumber(tarif?.penghasilan_dari),
+    penghasilan_sampai_snapshot: tarif?.penghasilan_sampai == null ? null : toNumber(tarif?.penghasilan_sampai),
+    berlaku_mulai_tarif_snapshot: tarif?.berlaku_mulai || '',
+    berlaku_sampai_tarif_snapshot: tarif?.berlaku_sampai || null,
+    nama_departement_snapshot: getProfilPayrollEmployeeDepartment(profile),
+    nama_jabatan_snapshot: getProfilPayrollEmployeeJob(profile),
+    nama_bank_snapshot: '',
+    nomor_rekening_snapshot: '',
+    total_pendapatan_tetap: gajiPokok,
+    total_pendapatan_variabel: 0,
+    total_bruto_kena_pajak: gajiPokok,
+    total_pajak: 0,
+    total_potongan_lain: 0,
+    total_dibayarkan: gajiPokok,
+  };
+}
+
+export default function usePayrollKaryawanViewModel() {
+  const searchParams = useSearchParams();
+  const periodeFilterFromQuery = useMemo(() => String(searchParams?.get('id_periode_payroll') || '').trim(), [searchParams]);
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedPayroll, setSelectedPayroll] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterPeriode, setFilterPeriode] = useState(periodeFilterFromQuery || 'ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [formData, setFormData] = useState(buildDefaultForm(periodeFilterFromQuery || 'ALL'));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!periodeFilterFromQuery) return;
+
+    setFilterPeriode((prev) => (prev === 'ALL' ? periodeFilterFromQuery : prev));
+  }, [periodeFilterFromQuery]);
+
+  const {
+    data: payrollResponse,
+    error: payrollError,
+    isLoading: isPayrollLoading,
+    isValidating: isPayrollValidating,
+    mutate: mutatePayroll,
+  } = useSWR(PAYROLL_KARYAWAN_SWR_KEY, fetchAllPayrollKaryawan, {
+    revalidateOnFocus: false,
+  });
+
+  const {
+    data: periodeResponse,
+    error: periodeError,
+    isLoading: isPeriodeLoading,
+    isValidating: isPeriodeValidating,
+    mutate: mutatePeriode,
+  } = useSWR(PERIODE_PAYROLL_SWR_KEY, fetchAllPeriodePayroll, {
+    revalidateOnFocus: false,
+  });
+
+  const {
+    data: profilPayrollResponse,
+    error: profilPayrollError,
+    isLoading: isProfilPayrollLoading,
+    isValidating: isProfilPayrollValidating,
+    mutate: mutateProfilPayroll,
+  } = useSWR(PROFIL_PAYROLL_SWR_KEY, fetchAllProfilPayroll, {
+    revalidateOnFocus: false,
+  });
+
+  useEffect(() => {
+    if (!payrollError) return;
+
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'payroll-karyawan-fetch-error',
+      content: payrollError?.message || 'Gagal memuat data payroll karyawan.',
+    });
+  }, [payrollError]);
+
+  useEffect(() => {
+    if (!periodeError) return;
+
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'payroll-karyawan-periode-fetch-error',
+      content: periodeError?.message || 'Gagal memuat referensi periode payroll.',
+    });
+  }, [periodeError]);
+
+  useEffect(() => {
+    if (!profilPayrollError) return;
+
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'payroll-karyawan-profil-payroll-fetch-error',
+      content: profilPayrollError?.message || 'Gagal memuat kandidat karyawan payroll.',
+    });
+  }, [profilPayrollError]);
+
+  const periodeList = useMemo(() => (Array.isArray(periodeResponse) ? periodeResponse : []), [periodeResponse]);
+  const profilPayrollList = useMemo(() => (Array.isArray(profilPayrollResponse) ? profilPayrollResponse : []), [profilPayrollResponse]);
+  const payrollData = useMemo(() => {
+    const rawList = Array.isArray(payrollResponse) ? payrollResponse : [];
+    return rawList.map(normalizePayrollKaryawanItem).filter(Boolean);
+  }, [payrollResponse]);
+  const activeProfilPayrollList = useMemo(() => {
+    return profilPayrollList.filter((profile) => {
+      return !profile?.deleted_at && Boolean(profile?.payroll_aktif) && !profile?.user?.deleted_at && !profile?.tarif_pajak_ter?.deleted_at && String(profile?.id_user || '').trim();
+    });
+  }, [profilPayrollList]);
+  const profilPayrollMap = useMemo(() => new Map(activeProfilPayrollList.map((profile) => [String(profile.id_user), profile])), [activeProfilPayrollList]);
+  const payrollUserIdsByPeriode = useMemo(() => {
+    const usageMap = new Map();
+
+    payrollData.forEach((item) => {
+      const periodeId = String(item?.id_periode_payroll || '').trim();
+      const userId = String(item?.id_user || '').trim();
+
+      if (!periodeId || !userId) return;
+
+      if (!usageMap.has(periodeId)) {
+        usageMap.set(periodeId, new Set());
+      }
+
+      usageMap.get(periodeId).add(userId);
+    });
+
+    return usageMap;
+  }, [payrollData]);
+
+  const periodeMap = useMemo(() => new Map(periodeList.map((item) => [String(item.id_periode_payroll), item])), [periodeList]);
+
+  const resolvedSelectedPayroll = useMemo(() => {
+    if (!selectedPayroll) return null;
+
+    return payrollData.find((item) => item.id_payroll_karyawan === selectedPayroll.id_payroll_karyawan) || selectedPayroll;
+  }, [payrollData, selectedPayroll]);
+
+  const setFormValue = useCallback((field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }, []);
+
+  const handleEmployeeChange = useCallback(
+    (value) => {
+      const nextUserId = String(value || '').trim();
+
+      if (!nextUserId) {
+        setFormData((prev) => clearSelectedEmployeeSnapshot(prev));
+        return;
+      }
+
+      const profile = profilPayrollMap.get(nextUserId);
+
+      if (!profile) {
+        AppMessage.warning('Profil payroll karyawan tidak ditemukan.');
+        setFormData((prev) => clearSelectedEmployeeSnapshot(prev));
+        return;
+      }
+
+      setFormData((prev) => applyProfilPayrollToForm(prev, profile));
+    },
+    [profilPayrollMap],
+  );
+
+  const resetForm = useCallback(() => {
+    setFormData(buildDefaultForm(filterPeriode));
+  }, [filterPeriode]);
+
+  useEffect(() => {
+    if (!isCreateModalOpen) return;
+
+    const selectedPeriodeId = String(formData.id_periode_payroll || '').trim();
+    const selectedUserId = String(formData.id_user || '').trim();
+
+    if (!selectedPeriodeId || !selectedUserId) return;
+
+    const usedUserIds = payrollUserIdsByPeriode.get(selectedPeriodeId);
+
+    if (!usedUserIds?.has(selectedUserId)) return;
+
+    setFormData((prev) => clearSelectedEmployeeSnapshot(prev));
+    AppMessage.warning('Karyawan yang dipilih sudah memiliki payroll pada periode tersebut.');
+  }, [formData.id_periode_payroll, formData.id_user, isCreateModalOpen, payrollUserIdsByPeriode]);
+
+  const validateForm = useCallback(() => {
+    if (!String(formData.id_periode_payroll || '').trim()) {
+      AppMessage.warning('Periode payroll wajib dipilih.');
+      return false;
+    }
+
+    if (!String(formData.id_user || '').trim()) {
+      AppMessage.warning('ID user wajib diisi.');
+      return false;
+    }
+
+    if (!String(formData.nama_karyawan_snapshot || '').trim()) {
+      AppMessage.warning('Nama karyawan wajib diisi.');
+      return false;
+    }
+
+    return true;
+  }, [formData.id_periode_payroll, formData.id_user, formData.nama_karyawan_snapshot]);
+
+  const openCreateModal = useCallback(() => {
+    setSelectedPayroll(null);
+    resetForm();
+    setIsCreateModalOpen(true);
+  }, [resetForm]);
+
+  const closeCreateModal = useCallback(() => {
+    if (isSubmitting) return;
+
+    setIsCreateModalOpen(false);
+    resetForm();
+  }, [isSubmitting, resetForm]);
+
+  const openEditModal = useCallback((payroll) => {
+    if (!payroll) return;
+
+    setSelectedPayroll(payroll);
+    setFormData({
+      id_periode_payroll: payroll.id_periode_payroll || '',
+      id_user: payroll.id_user || '',
+      nama_karyawan_snapshot: payroll.nama_karyawan_snapshot || '',
+      jenis_hubungan_snapshot: payroll.jenis_hubungan_snapshot || 'PKWTT',
+      id_tarif_pajak_ter: payroll.id_tarif_pajak_ter || '',
+      kode_kategori_pajak_snapshot: payroll.kode_kategori_pajak_snapshot || '',
+      persen_tarif_snapshot: toNumber(payroll.persen_tarif_snapshot),
+      penghasilan_dari_snapshot: toNumber(payroll.penghasilan_dari_snapshot),
+      penghasilan_sampai_snapshot: payroll.penghasilan_sampai_snapshot == null ? null : toNumber(payroll.penghasilan_sampai_snapshot),
+      berlaku_mulai_tarif_snapshot: payroll.berlaku_mulai_tarif_snapshot || '',
+      berlaku_sampai_tarif_snapshot: payroll.berlaku_sampai_tarif_snapshot || null,
+      nama_departement_snapshot: payroll.nama_departement_snapshot || '',
+      nama_jabatan_snapshot: payroll.nama_jabatan_snapshot || '',
+      nama_bank_snapshot: payroll.nama_bank_snapshot || '',
+      nomor_rekening_snapshot: payroll.nomor_rekening_snapshot || '',
+      total_pendapatan_tetap: toNumber(payroll.total_pendapatan_tetap),
+      total_pendapatan_variabel: toNumber(payroll.total_pendapatan_variabel),
+      total_bruto_kena_pajak: toNumber(payroll.total_bruto_kena_pajak),
+      persen_pajak: toNumber(payroll.persen_pajak),
+      total_pajak: toNumber(payroll.total_pajak),
+      total_potongan_lain: toNumber(payroll.total_potongan_lain),
+      total_dibayarkan: toNumber(payroll.total_dibayarkan),
+      status_payroll: payroll.status_payroll || 'DRAFT',
+      dibayar_pada: payroll.dibayar_pada || null,
+      catatan: payroll.catatan || '',
+    });
+    setIsEditModalOpen(true);
+  }, []);
+
+  const closeEditModal = useCallback(() => {
+    if (isSubmitting) return;
+
+    setIsEditModalOpen(false);
+    setSelectedPayroll(null);
+    resetForm();
+  }, [isSubmitting, resetForm]);
+
+  const openDetailModal = useCallback((payroll) => {
+    if (!payroll) return;
+    setSelectedPayroll(payroll);
+    setIsDetailModalOpen(true);
+  }, []);
+
+  const closeDetailModal = useCallback(() => {
+    setIsDetailModalOpen(false);
+    setSelectedPayroll(null);
+  }, []);
+
+  const openDeleteDialog = useCallback((payroll) => {
+    if (!payroll) return;
+    setSelectedPayroll(payroll);
+    setIsDeleteDialogOpen(true);
+  }, []);
+
+  const closeDeleteDialog = useCallback(() => {
+    if (isSubmitting) return;
+
+    setIsDeleteDialogOpen(false);
+    setSelectedPayroll(null);
+  }, [isSubmitting]);
+
+  const handleCreate = useCallback(async () => {
+    if (isSubmitting) return false;
+    if (!validateForm()) return false;
+
+    setIsSubmitting(true);
+    try {
+      const response = await crudServiceAuth.post(ApiEndpoints.CreatePayrollKaryawan(), buildPayrollKaryawanPayload(formData));
+
+      AppMessage.success(response?.message || 'Payroll karyawan berhasil ditambahkan.');
+      setIsCreateModalOpen(false);
+      resetForm();
+      await mutatePayroll();
+      return true;
+    } catch (err) {
+      AppMessage.error(err?.message || 'Gagal menambahkan payroll karyawan.');
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [formData, isSubmitting, mutatePayroll, resetForm, validateForm]);
+
+  const handleEdit = useCallback(async () => {
+    if (isSubmitting) return false;
+
+    if (!resolvedSelectedPayroll?.id_payroll_karyawan) {
+      AppMessage.warning('Data payroll tidak ditemukan.');
+      return false;
+    }
+
+    if (!validateForm()) return false;
+
+    setIsSubmitting(true);
+    try {
+      const response = await crudServiceAuth.put(ApiEndpoints.UpdatePayrollKaryawan(resolvedSelectedPayroll.id_payroll_karyawan), buildPayrollKaryawanPayload(formData));
+
+      AppMessage.success(response?.message || 'Payroll karyawan berhasil diperbarui.');
+      setIsEditModalOpen(false);
+      setSelectedPayroll(null);
+      resetForm();
+      await mutatePayroll();
+      return true;
+    } catch (err) {
+      AppMessage.error(err?.message || 'Gagal memperbarui payroll karyawan.');
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [formData, isSubmitting, mutatePayroll, resetForm, resolvedSelectedPayroll, validateForm]);
+
+  const handleDelete = useCallback(async () => {
+    if (isSubmitting) return false;
+
+    if (!resolvedSelectedPayroll?.id_payroll_karyawan) {
+      AppMessage.warning('Data payroll tidak ditemukan.');
+      return false;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await crudServiceAuth.delete(ApiEndpoints.DeletePayrollKaryawan(resolvedSelectedPayroll.id_payroll_karyawan));
+
+      AppMessage.success(response?.message || 'Payroll karyawan berhasil dihapus.');
+      setIsDeleteDialogOpen(false);
+      setIsDetailModalOpen(false);
+      setSelectedPayroll(null);
+      await mutatePayroll();
+      return true;
+    } catch (err) {
+      AppMessage.error(err?.message || 'Gagal menghapus payroll karyawan.');
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [isSubmitting, mutatePayroll, resolvedSelectedPayroll]);
+
+  const filteredData = useMemo(() => {
+    return payrollData.filter((payroll) => {
+      const matchStatus = filterStatus === 'ALL' ? true : payroll.status_payroll === filterStatus;
+      const matchPeriode = filterPeriode === 'ALL' ? true : payroll.id_periode_payroll === filterPeriode;
+      const search = normalizeText(searchQuery);
+      const matchSearch =
+        !search ||
+        normalizeText(payroll.nama_karyawan_snapshot).includes(search) ||
+        normalizeText(payroll.nama_departement_snapshot).includes(search) ||
+        normalizeText(payroll.nama_jabatan_snapshot).includes(search) ||
+        normalizeText(payroll.kode_kategori_pajak_snapshot).includes(search) ||
+        normalizeText(payroll.periode_label).includes(search);
+
+      return matchStatus && matchPeriode && matchSearch;
+    });
+  }, [filterPeriode, filterStatus, payrollData, searchQuery]);
+
+  const sortedData = useMemo(() => {
+    return [...filteredData].sort((a, b) => {
+      const periodeA = periodeMap.get(a.id_periode_payroll);
+      const periodeB = periodeMap.get(b.id_periode_payroll);
+      const dateA = new Date(periodeA?.tanggal_mulai || 0).getTime();
+      const dateB = new Date(periodeB?.tanggal_mulai || 0).getTime();
+
+      if (dateA !== dateB) {
+        return dateB - dateA;
+      }
+
+      return String(a.nama_karyawan_snapshot || '').localeCompare(String(b.nama_karyawan_snapshot || ''));
+    });
+  }, [filteredData, periodeMap]);
+
+  const statistics = useMemo(() => {
+    return {
+      totalPayroll: payrollData.length,
+      totalDibayar: payrollData.filter((item) => item.status_payroll === 'DIBAYAR').length,
+      totalPendapatan: payrollData.reduce((sum, item) => sum + toNumber(item.total_bruto_kena_pajak), 0),
+      totalDibayarkan: payrollData.reduce((sum, item) => sum + toNumber(item.total_dibayarkan), 0),
+    };
+  }, [payrollData]);
+
+  const periodeOptions = useMemo(() => {
+    return periodeList
+      .filter((periode) => !periode?.deleted_at)
+      .map((periode) => ({
+        value: periode.id_periode_payroll,
+        label: formatPeriodeLabel(periode),
+      }));
+  }, [periodeList]);
+  const availableEmployeeProfiles = useMemo(() => {
+    const selectedPeriodeId = String(formData.id_periode_payroll || '').trim();
+    const selectedUserId = String(formData.id_user || '').trim();
+    const usedUserIds = selectedPeriodeId ? payrollUserIdsByPeriode.get(selectedPeriodeId) : null;
+
+    return activeProfilPayrollList.filter((profile) => {
+      const userId = String(profile?.id_user || '').trim();
+
+      if (!userId) return false;
+      if (selectedUserId && userId === selectedUserId) return true;
+      if (!usedUserIds) return true;
+
+      return !usedUserIds.has(userId);
+    });
+  }, [activeProfilPayrollList, formData.id_periode_payroll, formData.id_user, payrollUserIdsByPeriode]);
+  const employeeOptions = useMemo(() => availableEmployeeProfiles.map(buildEmployeeOption), [availableEmployeeProfiles]);
+  const selectedEmployeeProfile = useMemo(() => {
+    const selectedUserId = String(formData.id_user || '').trim();
+    if (!selectedUserId) return null;
+
+    return profilPayrollMap.get(selectedUserId) || null;
+  }, [formData.id_user, profilPayrollMap]);
+  const selectedEmployeeTarifLabel = useMemo(() => formatTarifPajakSnapshot(formData.kode_kategori_pajak_snapshot, formData.persen_tarif_snapshot), [formData.kode_kategori_pajak_snapshot, formData.persen_tarif_snapshot]);
+  const employeeSelectionHint = useMemo(() => {
+    if (isProfilPayrollLoading) {
+      return 'Memuat kandidat karyawan payroll...';
+    }
+
+    if (activeProfilPayrollList.length === 0) {
+      return 'Belum ada profil payroll aktif yang bisa dipakai. Lengkapi profil payroll terlebih dahulu.';
+    }
+
+    if (!String(formData.id_periode_payroll || '').trim()) {
+      return 'Pilih periode payroll terlebih dahulu agar kandidat karyawan bisa difilter per periode.';
+    }
+
+    if (employeeOptions.length === 0) {
+      return 'Semua karyawan dengan profil payroll aktif sudah memiliki payroll pada periode ini.';
+    }
+
+    return 'Cari berdasarkan nama, NIK, email, departemen, atau jabatan.';
+  }, [activeProfilPayrollList.length, employeeOptions.length, formData.id_periode_payroll, isProfilPayrollLoading]);
+
+  const getPeriodeInfo = useCallback(
+    (id) => {
+      const periode = periodeMap.get(String(id || ''));
+      if (!periode) return 'Unknown';
+
+      return formatPeriodeLabel(periode);
+    },
+    [periodeMap],
+  );
+
+  const reloadData = useCallback(async () => {
+    await Promise.all([mutatePayroll(), mutatePeriode(), mutateProfilPayroll()]);
+  }, [mutatePayroll, mutatePeriode, mutateProfilPayroll]);
+
+  const focusedPeriode = useMemo(() => {
+    if (!filterPeriode || filterPeriode === 'ALL') return null;
+    return periodeMap.get(filterPeriode) || null;
+  }, [filterPeriode, periodeMap]);
+
+  return {
+    payrollData,
+    selectedPayroll: resolvedSelectedPayroll,
+    sortedData,
+    statistics,
+    periodeOptions,
+    focusedPeriode,
+    employeeOptions,
+    selectedEmployeeProfile,
+    selectedEmployeeTarifLabel,
+    employeeSelectionHint,
+
+    formData,
+    filterStatus,
+    filterPeriode,
+    searchQuery,
+
+    isCreateModalOpen,
+    isEditModalOpen,
+    isDeleteDialogOpen,
+    isDetailModalOpen,
+
+    loading: isPayrollLoading || isPeriodeLoading || isProfilPayrollLoading,
+    validating: isPayrollValidating || isPeriodeValidating || isProfilPayrollValidating,
+    isSubmitting,
+    error: payrollError || periodeError || profilPayrollError,
+
+    formatCurrency,
+    formatDate,
+    formatStatusPayroll,
+    formatJenisHubungan,
+    formatTarifPajakSnapshot,
+    formatBulan,
+    getPeriodeInfo,
+    reloadData,
+
+    setFormValue,
+    handleEmployeeChange,
+    resetForm,
+    setFilterStatus,
+    setFilterPeriode,
+    setSearchQuery,
+
+    openCreateModal,
+    closeCreateModal,
+    handleCreate,
+
+    openEditModal,
+    closeEditModal,
+    handleEdit,
+
+    openDetailModal,
+    closeDetailModal,
+
+    openDeleteDialog,
+    closeDeleteDialog,
+    handleDelete,
+
+    statusOptions: STATUS_PAYROLL_OPTIONS,
+    filterEmployeeOption,
+  };
+}

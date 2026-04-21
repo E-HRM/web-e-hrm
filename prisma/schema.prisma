@@ -116,6 +116,60 @@ enum NotificationStatus {
   archived
 }
 
+enum JenisHubunganKerja {
+  FREELANCE
+  INTERNSHIP
+  PKWT
+  PKWTT
+}
+
+enum StatusPeriodePayroll {
+  DRAFT
+  DIPROSES
+  DIREVIEW
+  FINAL
+  TERKUNCI
+}
+
+enum StatusPayrollKaryawan {
+  DRAFT
+  TERSIMPAN
+  DISETUJUI
+  DIBAYAR
+}
+
+enum ArahKomponenPayroll {
+  PEMASUKAN
+  POTONGAN
+}
+
+enum StatusPinjaman {
+  AKTIF
+  LUNAS
+  DIBATALKAN
+}
+
+enum StatusCicilanPinjaman {
+  MENUNGGU
+  DIPOSTING
+  DIBAYAR
+  DILEWATI
+}
+
+enum StatusPeriodeKonsultan {
+  DRAFT
+  DIREVIEW
+  DISETUJUI
+  TERKUNCI
+}
+
+enum StatusPayoutKonsultan {
+  DRAFT
+  DISETUJUI
+  DIPOSTING_KE_PAYROLL
+  DITAHAN
+}
+
 enum KPIValueType {
   number
   currency
@@ -450,6 +504,14 @@ model User {
   pocketMonies PocketMoney[]
   payments     Payment[]
   pinnedSops   PinnedSop[]
+
+  profil_payroll               ProfilPayroll?
+  payroll_karyawan             PayrollKaryawan[]
+  item_komponen_payroll_dibuat ItemKomponenPayroll[]       @relation("ItemKomponenPayroll_pembuat")
+  persetujuan_periode_payroll  PersetujuanPeriodePayroll[] @relation("PersetujuanPeriodePayroll_penyetuju")
+  pinjaman_karyawan            PinjamanKaryawan[]
+  transaksi_konsultan          TransaksiKonsultan[]        @relation("TransaksiKonsultan_konsultan")
+  payout_konsultan             PayoutKonsultan[]
   kpi_plans    KPIPlan[]
   freelance    Freelance[]   @relation("SupervisorForFreelance")
 
@@ -1440,6 +1502,426 @@ model PinnedSop {
   @@index([id_sop])
   @@map("pinned_sops")
 }
+
+model MasterTemplate {
+  id_master_template String @id @default(uuid()) @db.Char(36)
+  nama_template      String @db.VarChar(255)
+  file_template_url  String @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  @@map("master_template")
+}
+
+model ProfilPayroll {
+  id_profil_payroll     String             @id @default(uuid()) @db.Char(36)
+  id_user               String             @db.Char(36)
+  id_tarif_pajak_ter    String             @db.Char(36)
+  jenis_hubungan_kerja  JenisHubunganKerja
+  gaji_pokok            Decimal            @default(0) @db.Decimal(15, 2)
+  payroll_aktif         Boolean            @default(true)
+  tanggal_mulai_payroll DateTime?          @db.Date
+  catatan               String?            @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user             User              @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  tarif_pajak_ter  TarifPajakTER     @relation(fields: [id_tarif_pajak_ter], references: [id_tarif_pajak_ter], onDelete: Restrict, onUpdate: Cascade)
+  payroll_karyawan PayrollKaryawan[]
+
+  @@unique([id_user], name: "uniq_profil_payroll_user")
+  @@index([jenis_hubungan_kerja])
+  @@index([id_tarif_pajak_ter])
+  @@index([deleted_at])
+  @@map("profil_payroll")
+}
+
+model TarifPajakTER {
+  id_tarif_pajak_ter  String    @id @default(uuid()) @db.Char(36)
+  kode_kategori_pajak String    @db.VarChar(255)
+  penghasilan_dari    Decimal   @db.Decimal(15, 2)
+  penghasilan_sampai  Decimal?  @db.Decimal(15, 2)
+  persen_tarif        Decimal   @db.Decimal(7, 4)
+  berlaku_mulai       DateTime  @db.Date
+  berlaku_sampai      DateTime? @db.Date
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  profil_payroll   ProfilPayroll[]
+  payroll_karyawan PayrollKaryawan[]
+
+  @@index([kode_kategori_pajak, penghasilan_dari])
+  @@index([kode_kategori_pajak, berlaku_mulai, berlaku_sampai])
+  @@index([deleted_at])
+  @@map("tarif_pajak_ter")
+}
+
+model TipeKomponenPayroll {
+  id_tipe_komponen_payroll String @id @default(uuid()) @db.Char(36)
+  nama_tipe_komponen       String @db.VarChar(100)
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  definisi_komponen DefinisiKomponenPayroll[]
+
+  @@unique([nama_tipe_komponen], name: "uniq_nama_tipe_komponen_payroll")
+  @@index([deleted_at])
+  @@map("tipe_komponen_payroll")
+}
+
+model DefinisiKomponenPayroll {
+  id_definisi_komponen_payroll String              @id @default(uuid()) @db.Char(36)
+  id_tipe_komponen_payroll     String              @db.Char(36)
+  nama_komponen                String              @db.VarChar(255)
+  arah_komponen                ArahKomponenPayroll
+  kena_pajak_default           Boolean             @default(false)
+  berulang_default             Boolean             @default(false)
+  aktif                        Boolean             @default(true)
+  catatan                      String?             @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  tipe_komponen TipeKomponenPayroll   @relation(fields: [id_tipe_komponen_payroll], references: [id_tipe_komponen_payroll], onDelete: Restrict, onUpdate: Cascade)
+  item_payroll  ItemKomponenPayroll[]
+
+  @@unique([id_tipe_komponen_payroll, nama_komponen, arah_komponen], name: "uniq_definisi_komponen_payroll")
+  @@index([id_tipe_komponen_payroll, arah_komponen])
+  @@index([deleted_at])
+  @@map("definisi_komponen_payroll")
+}
+
+model PeriodePayroll {
+  id_periode_payroll String               @id @default(uuid()) @db.Char(36)
+  tahun              Int
+  bulan              Bulan
+  tanggal_mulai      DateTime             @db.Date
+  tanggal_selesai    DateTime             @db.Date
+  status_periode     StatusPeriodePayroll @default(DRAFT)
+  diproses_pada      DateTime?            @db.DateTime(0)
+  difinalkan_pada    DateTime?            @db.DateTime(0)
+  catatan            String?              @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  payroll_karyawan    PayrollKaryawan[]
+  persetujuan_periode PersetujuanPeriodePayroll[]
+  payout_konsultan    PayoutKonsultan[]
+
+  @@unique([tahun, bulan], name: "uniq_periode_payroll")
+  @@index([status_periode])
+  @@index([deleted_at])
+  @@map("periode_payroll")
+}
+
+model PayrollKaryawan {
+  id_payroll_karyawan String  @id @default(uuid()) @db.Char(36)
+  id_periode_payroll  String  @db.Char(36)
+  id_user             String  @db.Char(36)
+  id_profil_payroll   String? @db.Char(36)
+  id_tarif_pajak_ter  String? @db.Char(36)
+
+  nama_karyawan        String             @db.VarChar(255)
+  jenis_hubungan_kerja JenisHubunganKerja
+
+  kode_kategori_pajak_snapshot  String    @db.VarChar(255)
+  persen_tarif_snapshot         Decimal   @db.Decimal(7, 4)
+  penghasilan_dari_snapshot     Decimal   @db.Decimal(15, 2)
+  penghasilan_sampai_snapshot   Decimal?  @db.Decimal(15, 2)
+  berlaku_mulai_tarif_snapshot  DateTime  @db.Date
+  berlaku_sampai_tarif_snapshot DateTime? @db.Date
+
+  gaji_pokok_snapshot    Decimal @default(0) @db.Decimal(15, 2)
+  total_pendapatan_bruto Decimal @default(0) @db.Decimal(15, 2)
+  total_potongan         Decimal @default(0) @db.Decimal(15, 2)
+  pph21_nominal          Decimal @default(0) @db.Decimal(15, 2)
+  pendapatan_bersih      Decimal @default(0) @db.Decimal(15, 2)
+
+  bank_name    String? @db.VarChar(50)
+  bank_account String? @db.VarChar(50)
+
+  status_payroll StatusPayrollKaryawan @default(DRAFT)
+  dibayar_pada   DateTime?             @db.DateTime(0)
+  finalized_at   DateTime?             @db.DateTime(0)
+  locked_at      DateTime?             @db.DateTime(0)
+  catatan        String?               @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  periode          PeriodePayroll            @relation(fields: [id_periode_payroll], references: [id_periode_payroll], onDelete: Cascade, onUpdate: Cascade)
+  user             User                      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  profil_payroll   ProfilPayroll?            @relation(fields: [id_profil_payroll], references: [id_profil_payroll], onDelete: SetNull, onUpdate: Cascade)
+  tarif_pajak_ter  TarifPajakTER?            @relation(fields: [id_tarif_pajak_ter], references: [id_tarif_pajak_ter], onDelete: SetNull, onUpdate: Cascade)
+  item_komponen    ItemKomponenPayroll[]
+  cicilan_pinjaman CicilanPinjamanKaryawan[]
+
+  @@unique([id_periode_payroll, id_user], name: "uniq_payroll_karyawan_per_periode")
+  @@index([id_user])
+  @@index([id_profil_payroll])
+  @@index([id_tarif_pajak_ter])
+  @@index([status_payroll])
+  @@index([id_periode_payroll, status_payroll])
+  @@index([deleted_at])
+  @@map("payroll_karyawan")
+}
+
+model ItemKomponenPayroll {
+  id_item_komponen_payroll     String  @id @default(uuid()) @db.Char(36)
+  id_payroll_karyawan          String  @db.Char(36)
+  id_definisi_komponen_payroll String? @db.Char(36)
+  id_user_pembuat              String? @db.Char(36)
+
+  kunci_idempoten String @db.VarChar(191)
+
+  tipe_komponen String              @db.VarChar(100)
+  arah_komponen ArahKomponenPayroll
+  nama_komponen String              @db.VarChar(255)
+  nominal       Decimal             @db.Decimal(15, 2)
+  kena_pajak    Boolean             @default(false)
+
+  urutan_tampil Int?    @default(0)
+  catatan       String? @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  payroll_karyawan  PayrollKaryawan          @relation(fields: [id_payroll_karyawan], references: [id_payroll_karyawan], onDelete: Cascade, onUpdate: Cascade)
+  definisi_komponen DefinisiKomponenPayroll? @relation(fields: [id_definisi_komponen_payroll], references: [id_definisi_komponen_payroll], onDelete: SetNull, onUpdate: Cascade)
+  pembuat           User?                    @relation("ItemKomponenPayroll_pembuat", fields: [id_user_pembuat], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([kunci_idempoten], name: "uniq_item_komponen_idempoten")
+  @@index([id_payroll_karyawan])
+  @@index([id_definisi_komponen_payroll])
+  @@index([id_user_pembuat])
+  @@index([tipe_komponen, arah_komponen])
+  @@index([deleted_at])
+  @@map("item_komponen_payroll")
+}
+
+model PersetujuanPeriodePayroll {
+  id_persetujuan_periode_payroll String        @id @default(uuid()) @db.Char(36)
+  id_periode_payroll             String        @db.Char(36)
+  level                          Int
+  id_user_penyetuju              String?       @db.Char(36)
+  role_penyetuju                 Role?
+  keputusan                      ApproveStatus @default(pending)
+  diputuskan_pada                DateTime?     @db.DateTime(0)
+  catatan                        String?       @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  periode_payroll PeriodePayroll @relation(fields: [id_periode_payroll], references: [id_periode_payroll], onDelete: Cascade, onUpdate: Cascade)
+  penyetuju       User?          @relation("PersetujuanPeriodePayroll_penyetuju", fields: [id_user_penyetuju], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([id_periode_payroll, level], name: "uniq_persetujuan_level_per_periode")
+  @@index([id_user_penyetuju])
+  @@index([deleted_at])
+  @@map("persetujuan_periode_payroll")
+}
+
+model PinjamanKaryawan {
+  id_pinjaman_karyawan String         @id @default(uuid()) @db.Char(36)
+  id_user              String         @db.Char(36)
+  nama_pinjaman        String         @db.VarChar(255)
+  nominal_pinjaman     Decimal        @db.Decimal(15, 2)
+  nominal_cicilan      Decimal        @db.Decimal(15, 2)
+  sisa_saldo           Decimal        @db.Decimal(15, 2)
+  tanggal_mulai        DateTime       @db.Date
+  tanggal_selesai      DateTime?      @db.Date
+  status_pinjaman      StatusPinjaman @default(AKTIF)
+  catatan              String?        @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  user    User                      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  cicilan CicilanPinjamanKaryawan[]
+
+  @@index([id_user, status_pinjaman])
+  @@index([deleted_at])
+  @@map("pinjaman_karyawan")
+}
+
+model CicilanPinjamanKaryawan {
+  id_cicilan_pinjaman_karyawan String  @id @default(uuid()) @db.Char(36)
+  id_pinjaman_karyawan         String  @db.Char(36)
+  id_payroll_karyawan          String? @db.Char(36)
+
+  jatuh_tempo      DateTime              @db.Date
+  nominal_tagihan  Decimal               @db.Decimal(15, 2)
+  nominal_terbayar Decimal               @default(0) @db.Decimal(15, 2)
+  status_cicilan   StatusCicilanPinjaman @default(MENUNGGU)
+
+  diposting_pada DateTime? @db.DateTime(0)
+  dibayar_pada   DateTime? @db.DateTime(0)
+  catatan        String?   @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  pinjaman_karyawan PinjamanKaryawan @relation(fields: [id_pinjaman_karyawan], references: [id_pinjaman_karyawan], onDelete: Cascade, onUpdate: Cascade)
+  payroll_karyawan  PayrollKaryawan? @relation(fields: [id_payroll_karyawan], references: [id_payroll_karyawan], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([id_pinjaman_karyawan, jatuh_tempo])
+  @@index([id_payroll_karyawan])
+  @@index([status_cicilan])
+  @@index([deleted_at])
+  @@map("cicilan_pinjaman_karyawan")
+}
+
+model PeriodeKonsultan {
+  id_periode_konsultan String                 @id @default(uuid()) @db.Char(36)
+  tahun                Int
+  bulan                Bulan
+  tanggal_mulai        DateTime               @db.Date
+  tanggal_selesai      DateTime               @db.Date
+  status_periode       StatusPeriodeKonsultan @default(DRAFT)
+  catatan              String?                @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  transaksi_konsultan TransaksiKonsultan[]
+  payout_konsultan    PayoutKonsultan[]
+
+  @@unique([tahun, bulan], name: "uniq_periode_konsultan")
+  @@index([status_periode])
+  @@index([deleted_at])
+  @@map("periode_konsultan")
+}
+
+model JenisProdukKonsultan {
+  id_jenis_produk_konsultan String   @id @default(uuid()) @db.Char(36)
+  nama_produk               String   @db.VarChar(255)
+  persen_share_default      Decimal? @db.Decimal(7, 4)
+  aktif                     Boolean  @default(true)
+  catatan                   String?  @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  transaksi_konsultan TransaksiKonsultan[]
+
+  @@unique([nama_produk], name: "uniq_nama_produk_konsultan")
+  @@index([aktif])
+  @@index([deleted_at])
+  @@map("jenis_produk_konsultan")
+}
+
+model TransaksiKonsultan {
+  id_transaksi_konsultan    String  @id @default(uuid()) @db.Char(36)
+  id_periode_konsultan      String  @db.Char(36)
+  id_user_konsultan         String? @db.Char(36)
+  id_jenis_produk_konsultan String? @db.Char(36)
+
+  tanggal_transaksi DateTime @db.Date
+  nama_klien        String?  @db.VarChar(255)
+  deskripsi         String?  @db.LongText
+
+  nominal_debit  Decimal @default(0) @db.Decimal(15, 2)
+  nominal_kredit Decimal @default(0) @db.Decimal(15, 2)
+  total_income   Decimal @default(0) @db.Decimal(15, 2)
+
+  persen_share_default  Decimal? @db.Decimal(7, 4)
+  persen_share_override Decimal? @db.Decimal(7, 4)
+  nominal_share         Decimal  @default(0) @db.Decimal(15, 2)
+  nominal_oss           Decimal  @default(0) @db.Decimal(15, 2)
+
+  override_manual       Boolean @default(false)
+  sudah_posting_payroll Boolean @default(false)
+  catatan               String? @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  periode_konsultan PeriodeKonsultan        @relation(fields: [id_periode_konsultan], references: [id_periode_konsultan], onDelete: Cascade, onUpdate: Cascade)
+  konsultan         User?                   @relation("TransaksiKonsultan_konsultan", fields: [id_user_konsultan], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
+  jenis_produk      JenisProdukKonsultan?   @relation(fields: [id_jenis_produk_konsultan], references: [id_jenis_produk_konsultan], onDelete: SetNull, onUpdate: Cascade)
+  payout_detail     PayoutKonsultanDetail[]
+
+  @@index([id_periode_konsultan, tanggal_transaksi])
+  @@index([id_user_konsultan, tanggal_transaksi])
+  @@index([id_jenis_produk_konsultan])
+  @@index([deleted_at])
+  @@map("transaksi_konsultan")
+}
+
+model PayoutKonsultan {
+  id_payout_konsultan  String  @id @default(uuid()) @db.Char(36)
+  id_periode_konsultan String  @db.Char(36)
+  id_user              String  @db.Char(36)
+  id_periode_payroll   String? @db.Char(36)
+
+  total_share         Decimal @db.Decimal(15, 2)
+  nominal_ditahan     Decimal @default(0) @db.Decimal(15, 2)
+  nominal_penyesuaian Decimal @default(0) @db.Decimal(15, 2)
+  nominal_dibayarkan  Decimal @db.Decimal(15, 2)
+
+  status_payout  StatusPayoutKonsultan @default(DRAFT)
+  disetujui_pada DateTime?             @db.DateTime(0)
+  diposting_pada DateTime?             @db.DateTime(0)
+  catatan        String?               @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  periode_konsultan PeriodeKonsultan        @relation(fields: [id_periode_konsultan], references: [id_periode_konsultan], onDelete: Cascade, onUpdate: Cascade)
+  periode_payroll   PeriodePayroll?         @relation(fields: [id_periode_payroll], references: [id_periode_payroll], onDelete: SetNull, onUpdate: Cascade)
+  user              User                    @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  payout_detail     PayoutKonsultanDetail[]
+
+  @@unique([id_periode_konsultan, id_user], name: "uniq_payout_konsultan_per_periode")
+  @@index([id_periode_payroll])
+  @@index([status_payout])
+  @@index([deleted_at])
+  @@map("payout_konsultan")
+}
+
+model PayoutKonsultanDetail {
+  id_payout_konsultan_detail String @id @default(uuid()) @db.Char(36)
+  id_payout_konsultan        String @db.Char(36)
+  id_transaksi_konsultan     String @db.Char(36)
+
+  nominal_share Decimal @default(0) @db.Decimal(15, 2)
+  nominal_oss   Decimal @default(0) @db.Decimal(15, 2)
+  ditahan       Boolean @default(false)
+  catatan       String? @db.LongText
+
+  created_at DateTime  @default(now()) @db.DateTime(0)
+  updated_at DateTime  @updatedAt @db.DateTime(0)
+  deleted_at DateTime? @db.DateTime(0)
+
+  payout    PayoutKonsultan    @relation(fields: [id_payout_konsultan], references: [id_payout_konsultan], onDelete: Cascade, onUpdate: Cascade)
+  transaksi TransaksiKonsultan @relation(fields: [id_transaksi_konsultan], references: [id_transaksi_konsultan], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([id_payout_konsultan, id_transaksi_konsultan], name: "uniq_payout_transaksi")
+  @@index([id_transaksi_konsultan])
+  @@index([deleted_at])
+  @@map("payout_konsultan_detail")
+}
+
 
 model KPI {
   id_kpi         String       @id @default(uuid()) @db.Char(36)

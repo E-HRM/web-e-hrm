@@ -171,9 +171,51 @@ const MENU = [
     icon: ShoppingOutlined,
   },
   {
-    href: "/home/sop",
-    match: ["/home/sop"],
-    label: "SOP",
+    key: 'payroll',
+    href: '/home/payroll',
+    match: ['/home/payroll'],
+    label: 'Payroll',
+    icon: MoneyCollectOutlined,
+    navigateOnClick: true,
+    hasCaret: true,
+    children: [
+      {
+        href: '/home/payroll',
+        match: ['/home/payroll'],
+        label: 'Dashboard',
+        exact: true,
+      },
+      {
+        href: '/home/payroll/master-data',
+        match: ['/home/payroll/master-data'],
+        label: 'Master Data (Pengaturan)',
+      },
+      {
+        href: '/home/payroll/manajemen-karyawan',
+        match: ['/home/payroll/manajemen-karyawan'],
+        label: 'Manajemen Karyawan',
+      },
+      {
+        href: '/home/payroll/penggajian',
+        match: ['/home/payroll/penggajian'],
+        label: 'Penggajian (Payroll)',
+      },
+      {
+        href: '/home/payroll/pinjaman-karyawan',
+        match: ['/home/payroll/pinjaman-karyawan'],
+        label: 'Pinjaman Karyawan',
+      },
+      {
+        href: '/home/payroll/manajemen-konsultan',
+        match: ['/home/payroll/manajemen-konsultan'],
+        label: 'Manajemen Konsultan',
+      },
+    ],
+  },
+  {
+    href: '/home/sop',
+    match: ['/home/sop'],
+    label: 'SOP',
     icon: FilePdfOutlined,
   },
   {
@@ -246,6 +288,7 @@ const LS_SCROLL_TOP = "oss.sidebar.scrollTop";
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const scrollRef = useRef(null);
   const { data } = useSession();
 
@@ -262,9 +305,12 @@ export default function Sidebar() {
 
   const isActive = (item) => {
     const prefixes = item.match?.length ? item.match : [item.href];
-    return prefixes.some(
-      (p) => pathname === p || (pathname && pathname.startsWith(`${p}/`)),
-    );
+
+    if (item.exact) {
+      return prefixes.some((p) => pathname === p);
+    }
+
+    return prefixes.some((p) => pathname === p || (pathname && pathname.startsWith(`${p}/`)));
   };
 
   const isExactActive = (item) => {
@@ -340,6 +386,15 @@ export default function Sidebar() {
   const toggleGroup = (key) =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
 
+  const handleGroupClick = (item, key) => {
+    if (item.navigateOnClick && pathname !== item.href) {
+      router.push(item.href);
+      return;
+    }
+
+    toggleGroup(key);
+  };
+
   return (
     <aside className="flex flex-col h-full bg-[#003A6F] text-white text-xs sm:text-sm md:text-[13px]">
       <nav
@@ -366,12 +421,9 @@ export default function Sidebar() {
               return (
                 <li key={m.href}>
                   <button
-                    type="button"
-                    onClick={() => toggleGroup(key)}
-                    className={[
-                      baseItem,
-                      highlightParent ? activeItem : "",
-                    ].join(" ")}
+                    type='button'
+                    onClick={() => handleGroupClick(m, key)}
+                    className={[baseItem, highlightParent ? activeItem : ''].join(' ')}
                     aria-expanded={displayOpen}
                     aria-controls={`submenu-${key}`}
                   >

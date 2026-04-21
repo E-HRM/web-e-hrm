@@ -1,0 +1,149 @@
+// app/(view)/home/payroll/payroll-karyawan/item-komponen/component_ItemKomponenPayroll/ItemKomponenPayrollFormModal.jsx
+"use client";
+
+import AppInput from "@/app/(view)/component_shared/AppInput";
+import AppModal from "@/app/(view)/component_shared/AppModal";
+import AppSelect from "@/app/(view)/component_shared/AppSelect";
+import AppSwitch from "@/app/(view)/component_shared/AppSwitch";
+import AppTypography from "@/app/(view)/component_shared/AppTypography";
+
+function ItemKomponenForm({ vm }) {
+  const manualDisabled = vm.isUsingDefinition;
+
+  return (
+    <div className="space-y-4">
+      <AppSelect
+        label="Definisi Komponen"
+        value={vm.formData.id_definisi_komponen_payroll || undefined}
+        onChange={(value) => vm.handleDefinitionChange(value ?? null)}
+        options={vm.definitionsOptions}
+        placeholder="Pilih definisi komponen (opsional)"
+        allowClear
+        loading={vm.isDefinisiLoading}
+        selectClassName="!rounded-lg"
+      />
+
+      {vm.isUsingDefinition ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+          <AppTypography.Text
+            size={12}
+            weight={600}
+            className="block text-blue-700"
+          >
+            Snapshot komponen mengikuti definisi terpilih
+          </AppTypography.Text>
+
+          <AppTypography.Text size={12} className="block text-blue-600 mt-1">
+            Nama, tipe, arah, dan status kena pajak akan mengikuti definisi
+            komponen payroll aktif.
+          </AppTypography.Text>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <AppInput
+          label="Nama Komponen"
+          required={!vm.isUsingDefinition}
+          value={vm.formData.nama_komponen}
+          onChange={(event) =>
+            vm.setFormValue("nama_komponen", event.target.value)
+          }
+          placeholder="Contoh: Bonus Kehadiran"
+          disabled={manualDisabled}
+          inputClassName="!rounded-lg"
+        />
+
+        <AppInput.Number
+          label="Nominal"
+          required
+          min={0}
+          precision={2}
+          value={vm.formData.nominal}
+          onChange={(value) => vm.setFormValue("nominal", value ?? 0)}
+          placeholder="0"
+          inputClassName="!rounded-lg"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <AppSelect
+          label="Tipe Komponen"
+          required={!vm.isUsingDefinition}
+          value={vm.formData.tipe_komponen || undefined}
+          onChange={(value) => vm.setFormValue("tipe_komponen", value)}
+          options={vm.tipeKomponenOptions}
+          placeholder="Pilih tipe komponen"
+          disabled={manualDisabled}
+          loading={vm.isTipeKomponenLoading}
+          showSearch
+          selectClassName="!rounded-lg"
+        />
+
+        <AppSelect
+          label="Arah Komponen"
+          required={!vm.isUsingDefinition}
+          value={vm.formData.arah_komponen}
+          onChange={(value) => vm.setFormValue("arah_komponen", value)}
+          options={vm.arahKomponenOptions}
+          placeholder="Pilih arah komponen"
+          disabled={manualDisabled}
+          showSearch={false}
+          selectClassName="!rounded-lg"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <AppSwitch
+          label="Kena Pajak"
+          checked={Boolean(vm.formData.kena_pajak)}
+          onChange={(checked) => vm.setFormValue("kena_pajak", checked)}
+          checkedLabel="Ya"
+          uncheckedLabel="Tidak"
+          disabled={manualDisabled}
+        />
+
+        <AppInput.Number
+          label="Urutan Tampil"
+          min={0}
+          precision={0}
+          value={vm.formData.urutan_tampil}
+          onChange={(value) => vm.setFormValue("urutan_tampil", value ?? 0)}
+          placeholder="0"
+          inputClassName="!rounded-lg"
+        />
+      </div>
+
+      <AppInput.TextArea
+        label="Catatan"
+        value={vm.formData.catatan}
+        onChange={(event) => vm.setFormValue("catatan", event.target.value)}
+        autoSize={{ minRows: 3, maxRows: 5 }}
+        placeholder="Catatan tambahan (opsional)"
+        inputClassName="!rounded-lg"
+      />
+    </div>
+  );
+}
+
+export default function ItemKomponenPayrollFormModal({ vm }) {
+  return (
+    <AppModal
+      open={vm.isFormModalOpen}
+      onClose={vm.closeFormModal}
+      title={
+        vm.isEditMode
+          ? "Edit Item Komponen Payroll"
+          : "Tambah Item Komponen Payroll"
+      }
+      subtitle="Perubahan pada item komponen akan memengaruhi ringkasan payroll karyawan."
+      okText={vm.isEditMode ? "Update" : "Simpan"}
+      onOk={vm.handleSubmit}
+      closeOnOk={false}
+      okLoading={vm.isSubmitting}
+      okDisabled={vm.isReadonly}
+      width={760}
+    >
+      <ItemKomponenForm vm={vm} />
+    </AppModal>
+  );
+}

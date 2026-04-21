@@ -1,0 +1,47 @@
+import AppButton from '@/app/(view)/component_shared/AppButton';
+import AppModal from '@/app/(view)/component_shared/AppModal';
+
+import ProfilFormFields from './ProfilFormFields';
+
+export default function CreateModalSection({ vm }) {
+  return (
+    <AppModal
+      open={vm.isCreateModalOpen}
+      onClose={vm.closeCreateModal}
+      title='Tambah Profil Payroll Baru'
+      footer={null}
+      width={680}
+    >
+      <ProfilFormFields
+        vm={vm}
+        formData={vm.formData}
+        setFormValue={vm.setFormValue}
+        jenisHubunganOptions={vm.jenisHubunganOptions}
+        tarifPajakOptions={vm.tarifPajakOptions}
+        mode='create'
+        disabled={vm.isSubmitting}
+        loadingUsers={vm.loadingUsers}
+        loadingTarifPajak={vm.loadingTarifPajak}
+      />
+
+      <div className='flex gap-3 pt-4'>
+        <AppButton
+          onClick={vm.handleCreate}
+          loading={vm.isSubmitting}
+          className='!flex-1 !rounded-lg !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
+        >
+          Simpan
+        </AppButton>
+
+        <AppButton
+          onClick={vm.closeCreateModal}
+          variant='secondary'
+          disabled={vm.isSubmitting}
+          className='!flex-1 !rounded-lg !h-10 !bg-gray-100 hover:!bg-gray-200 !border-gray-100 hover:!border-gray-200 !text-gray-700'
+        >
+          Batal
+        </AppButton>
+      </div>
+    </AppModal>
+  );
+}

@@ -21,6 +21,7 @@
     "@fullcalendar/react": "^6.1.19",
     "@fullcalendar/timegrid": "^6.1.19",
     "@prisma/client": "^6.10.1",
+    "@react-pdf/renderer": "^4.3.2",
     "@supabase/supabase-js": "^2.56.0",
     "antd": "^5.27.1",
     "axios": "^1.12.2",
