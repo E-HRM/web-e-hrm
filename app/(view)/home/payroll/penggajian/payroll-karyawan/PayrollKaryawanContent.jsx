@@ -4,6 +4,7 @@
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppEmpty from '@/app/(view)/component_shared/AppEmpty';
 
+import ApprovePayrollKaryawanModal from './component_PayrollKaryawan/ApprovePayrollKaryawanModal';
 import CreatePayrollKaryawanModal from './component_PayrollKaryawan/CreatePayrollKaryawanModal';
 import DeletePayrollKaryawanDialog from './component_PayrollKaryawan/DeletePayrollKaryawanDialog';
 import DetailPayrollKaryawanModal from './component_PayrollKaryawan/DetailPayrollKaryawanModal';
@@ -82,6 +83,14 @@ export default function PayrollKaryawanContent() {
         buildPayslipHref={buildPayslipHref}
       />
 
+      <ApprovePayrollKaryawanModal
+        open={vm.isApproveModalOpen}
+        onClose={vm.closeApproveModal}
+        onSubmit={vm.handleApprove}
+        payroll={vm.approvalTargetPayroll}
+        getApprovalStep={vm.getActionableApprovalStep}
+        submitting={vm.isSubmitting}
+      />
       <CreatePayrollKaryawanModal vm={vm} />
       <EditPayrollKaryawanModal vm={vm} />
       <DetailPayrollKaryawanModal

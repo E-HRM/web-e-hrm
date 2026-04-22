@@ -284,6 +284,7 @@ export function normalizePayrollKaryawanItem(item) {
     periode_status: item?.periode?.status_periode || '',
     item_komponen_count: Number(item?._count?.item_komponen || 0),
     approval_steps: approvalSteps,
+    current_approval_step: currentApprovalStep,
     approval_count: Number(item?._count?.approvals || approvalSteps.length || 0),
     status_approval: approvalStatus,
     current_level_approval: currentApprovalLevel,

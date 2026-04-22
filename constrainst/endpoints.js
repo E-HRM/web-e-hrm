@@ -400,6 +400,7 @@ export const ApiEndpoints = {
   GetPayrollSlipKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip`,
   UpdatePayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   DeletePayrollKaryawan: (id, qsObj = {}) => `${API_PAYROLL_KARYAWAN}/${id}${buildQS(qsObj)}`,
+  ApprovePayrollKaryawan: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}`,
 
   GetPersetujuanPeriodePayroll: (qsObj = {}) => `${API_PERSETUJUAN_PERIODE_PAYROLL}${buildQS(qsObj)}`,
   CreatePersetujuanPeriodePayroll: () => API_PERSETUJUAN_PERIODE_PAYROLL,

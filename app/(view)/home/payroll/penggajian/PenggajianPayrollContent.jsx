@@ -30,9 +30,9 @@ const PENGGAJIAN_ITEMS = [
   {
     key: 'slip-gaji',
     title: 'Slip Gaji',
-    description: 'Tahap 1 sementara diarahkan ke builder payslip existing sambil menunggu halaman rekap SlipGajiPayroll dan item slip yang terpisah.',
-    helperText: 'Mapping sementara ke halaman payslip existing agar alur slip gaji tetap bisa diakses dari struktur baru.',
-    href: '/home/payroll/payslip',
+    description: 'Tahap 1 sementara diarahkan ke halaman master template untuk pengelolaan template payslip sambil menunggu halaman rekap SlipGajiPayroll dan item slip yang terpisah.',
+    helperText: 'Mapping sementara ke manajemen template payslip agar alur slip gaji tetap bisa diakses dari struktur baru.',
+    href: '/home/payroll/manajemen-template',
     status: 'temporary',
     icon: FileTextOutlined,
     iconWrapClassName: 'bg-blue-100',
@@ -44,7 +44,7 @@ export default function PenggajianPayrollContent() {
   return (
     <PayrollHubContent
       title='Penggajian Payroll'
-      description='Kelompok navigasi untuk proses penggajian inti: periode payroll, payroll per karyawan, approval karyawan dinamis, dan akses sementara ke builder payslip existing.'
+      description='Kelompok navigasi untuk proses penggajian inti: periode payroll, payroll per karyawan, approval karyawan dinamis, dan akses sementara ke pengelolaan template payslip.'
       items={PENGGAJIAN_ITEMS}
     />
   );

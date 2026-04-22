@@ -281,7 +281,9 @@ export default function usePayrollKaryawanViewModel() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [selectedPayroll, setSelectedPayroll] = useState(null);
+  const [approvalTargetPayroll, setApprovalTargetPayroll] = useState(null);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterPeriode, setFilterPeriode] = useState(periodeFilterFromQuery || 'ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -421,6 +423,38 @@ export default function usePayrollKaryawanViewModel() {
 
     return payrollData.find((item) => item.id_payroll_karyawan === selectedPayroll.id_payroll_karyawan) || selectedPayroll;
   }, [payrollData, selectedPayroll]);
+
+  const resolvedApprovalTargetPayroll = useMemo(() => {
+    if (!approvalTargetPayroll) return null;
+
+    return payrollData.find((item) => item.id_payroll_karyawan === approvalTargetPayroll.id_payroll_karyawan) || approvalTargetPayroll;
+  }, [approvalTargetPayroll, payrollData]);
+
+  const getActionableApprovalStep = useCallback((payroll) => {
+    if (!payroll) return null;
+
+    const approvalSteps = Array.isArray(payroll?.approval_steps) ? payroll.approval_steps : [];
+    const currentApprovalLevel = Number(payroll?.current_level_approval || 0) || null;
+    const currentPendingStep =
+      approvalSteps.find(
+        (step) =>
+          Number(step?.level || 0) === currentApprovalLevel &&
+          String(step?.decision || '')
+            .trim()
+            .toLowerCase() === 'pending',
+      ) || null;
+
+    return (
+      currentPendingStep ||
+      approvalSteps.find(
+        (step) =>
+          String(step?.decision || '')
+            .trim()
+            .toLowerCase() === 'pending',
+      ) ||
+      null
+    );
+  }, []);
 
   const setFormValue = useCallback((field, value) => {
     setFormData((prev) => ({
@@ -611,6 +645,29 @@ export default function usePayrollKaryawanViewModel() {
     setSelectedPayroll(null);
   }, []);
 
+  const openApproveModal = useCallback(
+    (payroll) => {
+      if (!payroll) return;
+
+      const approvalStep = getActionableApprovalStep(payroll);
+      if (!approvalStep?.id_approval_payroll_karyawan) {
+        AppMessage.warning('Payroll ini tidak memiliki approval aktif yang bisa diproses.');
+        return;
+      }
+
+      setApprovalTargetPayroll(payroll);
+      setIsApproveModalOpen(true);
+    },
+    [getActionableApprovalStep],
+  );
+
+  const closeApproveModal = useCallback(() => {
+    if (isSubmitting) return;
+
+    setIsApproveModalOpen(false);
+    setApprovalTargetPayroll(null);
+  }, [isSubmitting]);
+
   const openDeleteDialog = useCallback((payroll) => {
     if (!payroll) return;
     setSelectedPayroll(payroll);
@@ -698,6 +755,61 @@ export default function usePayrollKaryawanViewModel() {
       setIsSubmitting(false);
     }
   }, [isSubmitting, mutatePayroll, resolvedSelectedPayroll]);
+
+  const handleApprove = useCallback(
+    async ({ ttdFiles = [], note = '' } = {}) => {
+      if (isSubmitting) return false;
+
+      const payroll = resolvedApprovalTargetPayroll;
+      if (!payroll?.id_payroll_karyawan) {
+        AppMessage.warning('Data payroll approval tidak ditemukan.');
+        return false;
+      }
+
+      const approvalStep = getActionableApprovalStep(payroll);
+      if (!approvalStep?.id_approval_payroll_karyawan) {
+        AppMessage.warning('Approval aktif payroll tidak ditemukan.');
+        return false;
+      }
+
+      const fileObj = ttdFiles?.[0]?.originFileObj;
+      const normalizedNote = String(note || '').trim();
+
+      if (!fileObj) {
+        AppMessage.warning('TTD approval wajib diisi.');
+        return false;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const formData = new FormData();
+        formData.append('decision', 'disetujui');
+
+        formData.append('ttd_approval', fileObj);
+
+        if (normalizedNote) {
+          formData.append('note', normalizedNote);
+        }
+
+        const response = await crudServiceAuth.patchForm(
+          ApiEndpoints.ApprovePayrollKaryawan(approvalStep.id_approval_payroll_karyawan),
+          formData,
+        );
+
+        AppMessage.success(response?.message || 'Approval payroll karyawan berhasil disimpan.');
+        setIsApproveModalOpen(false);
+        setApprovalTargetPayroll(null);
+        await mutatePayroll();
+        return true;
+      } catch (err) {
+        AppMessage.error(err?.message || 'Gagal menyimpan approval payroll karyawan.');
+        return false;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [getActionableApprovalStep, isSubmitting, mutatePayroll, resolvedApprovalTargetPayroll],
+  );
 
   const filteredData = useMemo(() => {
     return payrollData.filter((payroll) => {
@@ -851,6 +963,7 @@ export default function usePayrollKaryawanViewModel() {
     isEditModalOpen,
     isDeleteDialogOpen,
     isDetailModalOpen,
+    isApproveModalOpen,
 
     loading: isPayrollLoading || isPeriodeLoading || isProfilPayrollLoading || isUsersLoading,
     validating: isPayrollValidating || isPeriodeValidating || isProfilPayrollValidating || isUsersValidating,
@@ -888,6 +1001,12 @@ export default function usePayrollKaryawanViewModel() {
 
     openDetailModal,
     closeDetailModal,
+
+    approvalTargetPayroll: resolvedApprovalTargetPayroll,
+    openApproveModal,
+    closeApproveModal,
+    handleApprove,
+    getActionableApprovalStep,
 
     openDeleteDialog,
     closeDeleteDialog,

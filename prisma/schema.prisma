@@ -1515,6 +1515,8 @@ model MasterTemplate {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
+  periode_payrolls PeriodePayroll[]
+
   @@map("master_template")
 }
 
@@ -1611,13 +1613,17 @@ model PeriodePayroll {
   tanggal_selesai    DateTime             @db.Date
   status_periode     StatusPeriodePayroll @default(DRAFT)
   catatan            String?              @db.LongText
+  id_master_template String?              @db.Char(36)
   created_at         DateTime             @default(now()) @db.DateTime(0)
   updated_at         DateTime             @updatedAt @db.DateTime(0)
+
+  master_template MasterTemplate? @relation(fields: [id_master_template], references: [id_master_template], onDelete: SetNull, onUpdate: Cascade)
 
   payroll_karyawan PayrollKaryawan[]
   payoutKonsultans PayoutKonsultan[]
 
   @@unique([tahun, bulan], name: "uniq_periode_payroll")
+  @@index([id_master_template])
   @@map("periode_payroll")
 }
 

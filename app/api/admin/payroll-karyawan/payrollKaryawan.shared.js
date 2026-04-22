@@ -556,8 +556,6 @@ export function buildSlipPayload(payroll) {
 
   const approvalSteps = Array.isArray(enrichedPayroll?.approvals) ? enrichedPayroll.approvals : [];
   const approvedSteps = approvalSteps.filter((step) => step?.decision === 'disetujui');
-  const firstApprovalStep = approvedSteps[0] || approvalSteps[0] || null;
-  const lastApprovalStep = approvedSteps.at(-1) || approvalSteps.at(-1) || null;
 
   return {
     payroll: enrichedPayroll,
@@ -590,9 +588,8 @@ export function buildSlipPayload(payroll) {
     approval: {
       status_approval: enrichedPayroll.status_approval,
       current_level_approval: enrichedPayroll.current_level_approval,
-      issue_by: firstApprovalStep,
-      approve_by: lastApprovalStep,
       steps: approvalSteps,
+      approved_steps: approvedSteps,
     },
   };
 }

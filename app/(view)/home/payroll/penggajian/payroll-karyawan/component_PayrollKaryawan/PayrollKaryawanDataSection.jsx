@@ -1,7 +1,7 @@
 // app/(view)/home/payroll/payroll-karyawan/component_PayrollKaryawan/PayrollKaryawanDataSection.jsx
 'use client';
 
-import { DeleteOutlined, DollarOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, FileDoneOutlined, FilePdfOutlined } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppEmpty from '@/app/(view)/component_shared/AppEmpty';
@@ -204,52 +204,67 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
     {
       title: 'Aksi',
       key: 'action',
-      width: 140,
-      render: (_, payroll) => (
-        <div className='flex items-center gap-2'>
-          <AppButton
-            variant='text'
-            shape='circle'
-            size='middle'
-            aria-label='Detail'
-            className='!text-blue-600 hover:!bg-blue-50'
-            icon={<EyeOutlined />}
-            onClick={() => vm.openDetailModal(payroll)}
-          />
+      width: 220,
+      render: (_, payroll) => {
+        const approvalStep = vm.getActionableApprovalStep(payroll);
 
-          <AppButton
-            variant='text'
-            shape='circle'
-            size='middle'
-            aria-label='Buka payslip'
-            className='!text-emerald-600 hover:!bg-emerald-50'
-            icon={<DollarOutlined />}
-            href={buildPayslipHref(payroll)}
-          />
+        return (
+          <div className='flex items-center gap-2'>
+            <AppButton
+              variant='text'
+              shape='circle'
+              size='middle'
+              aria-label='Approval'
+              className='!text-cyan-700 hover:!bg-cyan-50'
+              icon={<FileDoneOutlined />}
+              disabled={!approvalStep || vm.isSubmitting}
+              onClick={() => vm.openApproveModal(payroll)}
+            />
 
-          <AppButton
-            variant='text'
-            shape='circle'
-            size='middle'
-            aria-label='Edit'
-            className='!text-yellow-600 hover:!bg-yellow-50'
-            icon={<EditOutlined />}
-            disabled={payroll.business_state && !payroll.business_state.bisa_diubah}
-            onClick={() => vm.openEditModal(payroll)}
-          />
+            <AppButton
+              variant='text'
+              shape='circle'
+              size='middle'
+              aria-label='Detail'
+              className='!text-blue-600 hover:!bg-blue-50'
+              icon={<EyeOutlined />}
+              onClick={() => vm.openDetailModal(payroll)}
+            />
 
-          <AppButton
-            variant='text'
-            shape='circle'
-            size='middle'
-            aria-label='Hapus'
-            className='!text-red-600 hover:!bg-red-50'
-            icon={<DeleteOutlined />}
-            disabled={payroll.business_state && !payroll.business_state.bisa_dihapus}
-            onClick={() => vm.openDeleteDialog(payroll)}
-          />
-        </div>
-      ),
+            <AppButton
+              variant='text'
+              shape='circle'
+              size='middle'
+              aria-label='Buka payslip'
+              className='!text-emerald-600 hover:!bg-emerald-50'
+              icon={<FilePdfOutlined />}
+              href={buildPayslipHref(payroll)}
+            />
+
+            <AppButton
+              variant='text'
+              shape='circle'
+              size='middle'
+              aria-label='Edit'
+              className='!text-yellow-600 hover:!bg-yellow-50'
+              icon={<EditOutlined />}
+              disabled={payroll.business_state && !payroll.business_state.bisa_diubah}
+              onClick={() => vm.openEditModal(payroll)}
+            />
+
+            <AppButton
+              variant='text'
+              shape='circle'
+              size='middle'
+              aria-label='Hapus'
+              className='!text-red-600 hover:!bg-red-50'
+              icon={<DeleteOutlined />}
+              disabled={payroll.business_state && !payroll.business_state.bisa_dihapus}
+              onClick={() => vm.openDeleteDialog(payroll)}
+            />
+          </div>
+        );
+      },
     },
   ];
 

@@ -214,24 +214,38 @@ function isSnapshotBackedDetail(item, snapshotKey) {
 }
 
 function ApprovalTable({ slip, vm }) {
-  const issueBy = slip?.approval?.issue_by || null;
-  const approveBy = slip?.approval?.approve_by || null;
+  const allSteps = Array.isArray(slip?.approval?.steps) ? slip.approval.steps : [];
+  const approvedSteps = Array.isArray(slip?.approval?.approved_steps) ? slip.approval.approved_steps : [];
+  const stepsToDisplay = (approvedSteps.length > 0 ? approvedSteps : allSteps).filter(Boolean);
+  const columns = Array.from(
+    new Map(
+      stepsToDisplay.map((step) => [
+        String(step?.id_approval_payroll_karyawan || step?.level || step?.approver_user_id || ''),
+        step,
+      ]),
+    ).values(),
+  );
 
-  const columns = [
-    {
-      title: 'Issue By HRD',
-      step: issueBy,
-    },
-    {
-      title: 'Approve By Director',
-      step: approveBy,
-    },
-  ];
+  const normalizedColumns =
+    columns.length > 0
+      ? columns.map((step) => ({
+          title: step?.approver_role ? `Approve By ${vm.formatApproverRole(step.approver_role)}` : `Approval Level ${step?.level || '-'}`,
+          step,
+        }))
+      : [
+          {
+            title: 'Approval',
+            step: null,
+          },
+        ];
 
   return (
     <div className='overflow-hidden rounded-[4px] border border-slate-300 payslip-section-block'>
-      <div className='grid grid-cols-2 border-b border-slate-300'>
-        {columns.map((column) => (
+      <div
+        className='grid border-b border-slate-300'
+        style={{ gridTemplateColumns: `repeat(${normalizedColumns.length}, minmax(0, 1fr))` }}
+      >
+        {normalizedColumns.map((column) => (
           <div
             key={column.title}
             className='border-r border-slate-300 px-4 py-3 last:border-r-0'
@@ -247,8 +261,11 @@ function ApprovalTable({ slip, vm }) {
         ))}
       </div>
 
-      <div className='grid grid-cols-2'>
-        {columns.map((column) => {
+      <div
+        className='grid'
+        style={{ gridTemplateColumns: `repeat(${normalizedColumns.length}, minmax(0, 1fr))` }}
+      >
+        {normalizedColumns.map((column) => {
           const approverName = column.step?.approver_nama_snapshot || column.step?.approver?.nama_pengguna || '-';
 
           return (
@@ -279,15 +296,6 @@ function ApprovalTable({ slip, vm }) {
               >
                 {approverName}
               </AppTypography.Text>
-
-              {column.step?.decided_at ? (
-                <AppTypography.Text
-                  size={12}
-                  className='mt-1 block text-center text-slate-400'
-                >
-                  {vm.formatDateTime(column.step.decided_at)}
-                </AppTypography.Text>
-              ) : null}
             </div>
           );
         })}
