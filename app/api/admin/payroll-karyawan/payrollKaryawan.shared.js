@@ -253,6 +253,9 @@ export function buildSelect() {
     finalized_at: true,
     locked_at: true,
     catatan: true,
+    issue_number: true,
+    issued_at: true,
+    company_name_snapshot: true,
     created_at: true,
     updated_at: true,
     deleted_at: true,
@@ -357,6 +360,50 @@ export function buildSelect() {
   };
 }
 
+function buildSlipItemSelect() {
+  return {
+    id_item_komponen_payroll: true,
+    id_definisi_komponen_payroll: true,
+    tipe_komponen: true,
+    arah_komponen: true,
+    nama_komponen: true,
+    nominal: true,
+    kena_pajak: true,
+    urutan_tampil: true,
+    catatan: true,
+    created_at: true,
+    updated_at: true,
+    deleted_at: true,
+    definisi_komponen: {
+      select: {
+        id_definisi_komponen_payroll: true,
+        nama_komponen: true,
+        arah_komponen: true,
+        kena_pajak_default: true,
+        tipe_komponen: {
+          select: {
+            id_tipe_komponen_payroll: true,
+            nama_tipe_komponen: true,
+          },
+        },
+      },
+    },
+  };
+}
+
+export function buildSlipSelect() {
+  return {
+    ...buildSelect(),
+    item_komponen: {
+      where: {
+        deleted_at: null,
+      },
+      orderBy: [{ urutan_tampil: 'asc' }, { created_at: 'asc' }],
+      select: buildSlipItemSelect(),
+    },
+  };
+}
+
 export function deriveApprovalState(approvalSteps = []) {
   const orderedSteps = Array.isArray(approvalSteps)
     ? approvalSteps
@@ -431,6 +478,186 @@ export function enrichPayroll(item) {
       periode_immutable: periodeImmutable,
       bisa_diubah: !Boolean(item.deleted_at) && !approvalImmutable && !payrollImmutable && !periodeImmutable,
       bisa_dihapus: !Boolean(item.deleted_at) && !approvalImmutable && !payrollImmutable && !periodeImmutable,
+    },
+  };
+}
+
+function toDecimalNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sortSlipItems(items = []) {
+  return [...items].sort((left, right) => {
+    const leftOrder = Number.isFinite(Number(left?.urutan_tampil)) ? Number(left.urutan_tampil) : Number.MAX_SAFE_INTEGER;
+    const rightOrder = Number.isFinite(Number(right?.urutan_tampil)) ? Number(right.urutan_tampil) : Number.MAX_SAFE_INTEGER;
+
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    const leftCreatedAt = new Date(left?.created_at || 0).getTime();
+    const rightCreatedAt = new Date(right?.created_at || 0).getTime();
+
+    if (leftCreatedAt !== rightCreatedAt) {
+      return leftCreatedAt - rightCreatedAt;
+    }
+
+    return String(left?.nama_komponen || '').localeCompare(String(right?.nama_komponen || ''));
+  });
+}
+
+function normalizeSlipItem(item) {
+  if (!item) return null;
+
+  const tipeKomponenLabel = String(item?.definisi_komponen?.tipe_komponen?.nama_tipe_komponen || item?.tipe_komponen || '')
+    .trim()
+    .toUpperCase();
+
+  return {
+    ...item,
+    nominal_number: toDecimalNumber(item?.nominal),
+    tipe_komponen_label: tipeKomponenLabel,
+  };
+}
+
+function createSyntheticSlipItem({
+  syntheticKey,
+  nama_komponen,
+  arah_komponen,
+  tipe_komponen = '',
+  nominal = 0,
+  urutan_tampil = 0,
+  catatan = null,
+}) {
+  return normalizeSlipItem({
+    id_item_komponen_payroll: `synthetic:${syntheticKey}`,
+    id_definisi_komponen_payroll: null,
+    tipe_komponen,
+    arah_komponen,
+    nama_komponen,
+    nominal,
+    kena_pajak: false,
+    urutan_tampil,
+    catatan,
+    created_at: null,
+    updated_at: null,
+    deleted_at: null,
+    definisi_komponen: null,
+    synthetic: true,
+  });
+}
+
+function hasSlipItem(items = [], matcher) {
+  return items.some((item) => {
+    const itemName = String(item?.nama_komponen || '').trim().toLowerCase();
+    const itemType = String(item?.tipe_komponen_label || item?.tipe_komponen || '')
+      .trim()
+      .toUpperCase();
+
+    return matcher({ itemName, itemType, item });
+  });
+}
+
+export function buildSlipPayload(payroll) {
+  if (!payroll) return null;
+
+  const enrichedPayroll = enrichPayroll(payroll);
+  const normalizedItems = Array.isArray(enrichedPayroll?.item_komponen)
+    ? enrichedPayroll.item_komponen.map(normalizeSlipItem).filter(Boolean)
+    : [];
+
+  const pemasukanItems = normalizedItems.filter((item) => item.arah_komponen === 'PEMASUKAN');
+  const potonganItems = normalizedItems.filter((item) => item.arah_komponen === 'POTONGAN');
+
+  const gajiPokokSnapshot = toDecimalNumber(enrichedPayroll?.gaji_pokok_snapshot);
+  if (
+    gajiPokokSnapshot > 0 &&
+    !hasSlipItem(pemasukanItems, ({ itemName }) => itemName.includes('gaji pokok'))
+  ) {
+    pemasukanItems.unshift(
+      createSyntheticSlipItem({
+        syntheticKey: 'gaji-pokok',
+        nama_komponen: 'Gaji Pokok',
+        arah_komponen: 'PEMASUKAN',
+        tipe_komponen: 'GAJI_POKOK',
+        nominal: gajiPokokSnapshot,
+        urutan_tampil: -1000,
+        catatan: 'Snapshot gaji pokok dari payroll karyawan.',
+      }),
+    );
+  }
+
+  const pph21Nominal = toDecimalNumber(enrichedPayroll?.pph21_nominal);
+  if (
+    pph21Nominal > 0 &&
+    !hasSlipItem(potonganItems, ({ itemName, itemType }) => itemType === 'PAJAK' || itemName.includes('pajak'))
+  ) {
+    potonganItems.push(
+      createSyntheticSlipItem({
+        syntheticKey: 'pph21',
+        nama_komponen: 'PPh 21',
+        arah_komponen: 'POTONGAN',
+        tipe_komponen: 'PAJAK',
+        nominal: pph21Nominal,
+        urutan_tampil: 9000,
+        catatan: 'Fallback pajak dari snapshot payroll karyawan.',
+      }),
+    );
+  }
+
+  const groupedItems = [
+    {
+      key: 'PEMASUKAN',
+      label: 'Pendapatan',
+      items: sortSlipItems(pemasukanItems),
+    },
+    {
+      key: 'POTONGAN',
+      label: 'Potongan',
+      items: sortSlipItems(potonganItems),
+    },
+  ];
+
+  const approvalSteps = Array.isArray(enrichedPayroll?.approvals) ? enrichedPayroll.approvals : [];
+  const approvedSteps = approvalSteps.filter((step) => step?.decision === 'disetujui');
+  const firstApprovalStep = approvedSteps[0] || approvalSteps[0] || null;
+  const lastApprovalStep = approvedSteps.at(-1) || approvalSteps.at(-1) || null;
+
+  return {
+    payroll: enrichedPayroll,
+    document: {
+      issue_number: enrichedPayroll.issue_number || null,
+      issued_at: enrichedPayroll.issued_at || null,
+      company_name_snapshot: enrichedPayroll.company_name_snapshot || null,
+    },
+    employee: {
+      nama_karyawan: enrichedPayroll.nama_karyawan || enrichedPayroll?.user?.nama_pengguna || null,
+      nama_jabatan: enrichedPayroll?.user?.jabatan?.nama_jabatan || null,
+      nama_departement: enrichedPayroll?.user?.departement?.nama_departement || null,
+      jenis_hubungan_kerja: enrichedPayroll.jenis_hubungan_kerja || null,
+    },
+    period: {
+      id_periode_payroll: enrichedPayroll?.periode?.id_periode_payroll || enrichedPayroll.id_periode_payroll,
+      bulan: enrichedPayroll?.periode?.bulan || null,
+      tahun: enrichedPayroll?.periode?.tahun || null,
+      tanggal_mulai: enrichedPayroll?.periode?.tanggal_mulai || null,
+      tanggal_selesai: enrichedPayroll?.periode?.tanggal_selesai || null,
+      status_periode: enrichedPayroll?.periode?.status_periode || null,
+    },
+    groups: groupedItems,
+    summary: {
+      total_pendapatan_bruto: toDecimalNumber(enrichedPayroll?.total_pendapatan_bruto),
+      total_potongan: toDecimalNumber(enrichedPayroll?.total_potongan),
+      pph21_nominal: pph21Nominal,
+      pendapatan_bersih: toDecimalNumber(enrichedPayroll?.pendapatan_bersih),
+    },
+    approval: {
+      status_approval: enrichedPayroll.status_approval,
+      current_level_approval: enrichedPayroll.current_level_approval,
+      issue_by: firstApprovalStep,
+      approve_by: lastApprovalStep,
+      steps: approvalSteps,
     },
   };
 }

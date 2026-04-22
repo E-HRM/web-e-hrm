@@ -9,7 +9,7 @@ import AppTable from '@/app/(view)/component_shared/AppTable';
 import AppTag from '@/app/(view)/component_shared/AppTag';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
-export default function PayrollKaryawanDataSection({ vm, buildItemKomponenHref }) {
+export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
   const columns = [
     {
       title: 'Karyawan',
@@ -221,10 +221,10 @@ export default function PayrollKaryawanDataSection({ vm, buildItemKomponenHref }
             variant='text'
             shape='circle'
             size='middle'
-            aria-label='Kelola Komponen'
+            aria-label='Buka payslip'
             className='!text-emerald-600 hover:!bg-emerald-50'
             icon={<DollarOutlined />}
-            href={buildItemKomponenHref(payroll)}
+            href={buildPayslipHref(payroll)}
           />
 
           <AppButton

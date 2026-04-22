@@ -397,6 +397,7 @@ export const ApiEndpoints = {
   GetPayrollKaryawan: (qsObj = {}) => `${API_PAYROLL_KARYAWAN}${buildQS(qsObj)}`,
   CreatePayrollKaryawan: () => API_PAYROLL_KARYAWAN,
   GetPayrollKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
+  GetPayrollSlipKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip`,
   UpdatePayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   DeletePayrollKaryawan: (id, qsObj = {}) => `${API_PAYROLL_KARYAWAN}/${id}${buildQS(qsObj)}`,
 

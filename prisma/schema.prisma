@@ -1662,12 +1662,15 @@ model PayrollKaryawan {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  periode          PeriodePayroll            @relation(fields: [id_periode_payroll], references: [id_periode_payroll], onDelete: Cascade, onUpdate: Cascade)
-  user             User                      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  profil_payroll   ProfilPayroll?            @relation(fields: [id_profil_payroll], references: [id_profil_payroll], onDelete: SetNull, onUpdate: Cascade)
-  tarif_pajak_ter  TarifPajakTER?            @relation(fields: [id_tarif_pajak_ter], references: [id_tarif_pajak_ter], onDelete: SetNull, onUpdate: Cascade)
-  item_komponen    ItemKomponenPayroll[]
-  cicilan_pinjaman CicilanPinjamanKaryawan[]
+  periode               PeriodePayroll            @relation(fields: [id_periode_payroll], references: [id_periode_payroll], onDelete: Cascade, onUpdate: Cascade)
+  user                  User                      @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  profil_payroll        ProfilPayroll?            @relation(fields: [id_profil_payroll], references: [id_profil_payroll], onDelete: SetNull, onUpdate: Cascade)
+  tarif_pajak_ter       TarifPajakTER?            @relation(fields: [id_tarif_pajak_ter], references: [id_tarif_pajak_ter], onDelete: SetNull, onUpdate: Cascade)
+  item_komponen         ItemKomponenPayroll[]
+  cicilan_pinjaman      CicilanPinjamanKaryawan[]
+  issue_number          String?                   @db.VarChar(100)
+  issued_at             DateTime?                 @db.DateTime(0)
+  company_name_snapshot String?                   @db.VarChar(255)
 
   // BARU
   approvals ApprovalPayrollKaryawan[]

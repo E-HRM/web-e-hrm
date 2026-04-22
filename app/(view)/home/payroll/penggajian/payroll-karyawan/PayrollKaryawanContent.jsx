@@ -18,6 +18,15 @@ import usePayrollKaryawanViewModel from './usePayrollKaryawanViewModel';
 export default function PayrollKaryawanContent() {
   const vm = usePayrollKaryawanViewModel();
 
+  const buildPayslipHref = (payroll) => {
+    const query = new URLSearchParams({
+      payroll: payroll.id_payroll_karyawan || '',
+      id_periode_payroll: payroll.id_periode_payroll || '',
+    });
+
+    return `/home/payroll/payslip?${query.toString()}`;
+  };
+
   const buildItemKomponenHref = (payroll) => {
     const query = new URLSearchParams({
       id_payroll_karyawan: payroll.id_payroll_karyawan || '',
@@ -70,7 +79,7 @@ export default function PayrollKaryawanContent() {
       <PayrollKaryawanFilterSection vm={vm} />
       <PayrollKaryawanDataSection
         vm={vm}
-        buildItemKomponenHref={buildItemKomponenHref}
+        buildPayslipHref={buildPayslipHref}
       />
 
       <CreatePayrollKaryawanModal vm={vm} />
