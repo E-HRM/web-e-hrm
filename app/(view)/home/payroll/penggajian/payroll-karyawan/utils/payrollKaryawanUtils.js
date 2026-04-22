@@ -69,6 +69,15 @@ export function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+export function calculatePayrollPph21Nominal(totalPendapatanBruto, persenTarifSnapshot) {
+  const bruto = toNumber(totalPendapatanBruto);
+  const persenTarif = toNumber(persenTarifSnapshot);
+
+  if (bruto <= 0 || persenTarif <= 0) return 0;
+
+  return Number(((bruto * persenTarif) / 100).toFixed(2));
+}
+
 export function normalizeText(value) {
   return String(value || '')
     .trim()
@@ -237,10 +246,13 @@ function normalizeApprovalStep(step) {
 export function normalizePayrollKaryawanItem(item) {
   if (!item) return null;
 
+  const gajiPokokSnapshot = toNumber(item.gaji_pokok_snapshot);
   const totalPendapatanBruto = toNumber(item.total_pendapatan_bruto);
   const totalPotongan = toNumber(item.total_potongan);
   const pph21Nominal = toNumber(item.pph21_nominal);
   const totalPotonganLain = Math.max(totalPotongan - pph21Nominal, 0);
+  const totalPendapatanTetap = gajiPokokSnapshot > 0 ? gajiPokokSnapshot : totalPendapatanBruto;
+  const totalPendapatanVariabel = Math.max(totalPendapatanBruto - totalPendapatanTetap, 0);
   const periodeLabel = item?.periode ? formatPeriodeLabel(item.periode) : '-';
   const approvalSteps = Array.isArray(item.approvals) ? item.approvals.map(normalizeApprovalStep).filter(Boolean) : [];
   const approvalStatus = String(item?.status_approval || 'pending').trim().toLowerCase();
@@ -261,8 +273,8 @@ export function normalizePayrollKaryawanItem(item) {
     nama_jabatan_snapshot: item?.user?.jabatan?.nama_jabatan || '',
     nama_bank_snapshot: item.bank_name || item?.user?.jenis_bank || '',
     nomor_rekening_snapshot: item.bank_account || item?.user?.nomor_rekening || '',
-    total_pendapatan_tetap: totalPendapatanBruto,
-    total_pendapatan_variabel: 0,
+    total_pendapatan_tetap: totalPendapatanTetap,
+    total_pendapatan_variabel: totalPendapatanVariabel,
     total_bruto_kena_pajak: totalPendapatanBruto,
     persen_pajak: toNumber(item.persen_tarif_snapshot),
     total_pajak: pph21Nominal,
@@ -284,10 +296,10 @@ export function buildPayrollKaryawanPayload(formData) {
   const totalPendapatanTetap = toNumber(formData.total_pendapatan_tetap);
   const totalPendapatanVariabel = toNumber(formData.total_pendapatan_variabel);
   const totalPendapatanBruto = toNumber(formData.total_bruto_kena_pajak) || totalPendapatanTetap + totalPendapatanVariabel;
-  const totalPajak = toNumber(formData.total_pajak);
+  const totalPajak = calculatePayrollPph21Nominal(totalPendapatanBruto, formData.persen_tarif_snapshot);
   const totalPotonganLain = toNumber(formData.total_potongan_lain);
   const totalPotongan = totalPajak + totalPotonganLain;
-  const pendapatanBersih = toNumber(formData.total_dibayarkan) || Math.max(totalPendapatanBruto - totalPotongan, 0);
+  const pendapatanBersih = Math.max(totalPendapatanBruto - totalPotongan, 0);
 
   return {
     id_periode_payroll: String(formData.id_periode_payroll || '').trim(),

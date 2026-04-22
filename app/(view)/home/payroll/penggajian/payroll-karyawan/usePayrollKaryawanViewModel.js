@@ -10,6 +10,7 @@ import { ApiEndpoints } from '@/constrainst/endpoints';
 
 import {
   buildPayrollKaryawanPayload,
+  calculatePayrollPph21Nominal,
   createEmptyApprovalStep,
   createInitialPayrollKaryawanForm,
   formatApproverRole,
@@ -208,6 +209,13 @@ function clearSelectedEmployeeSnapshot(previousForm) {
     nama_jabatan_snapshot: '',
     nama_bank_snapshot: '',
     nomor_rekening_snapshot: '',
+    total_pendapatan_tetap: 0,
+    total_pendapatan_variabel: 0,
+    total_bruto_kena_pajak: 0,
+    persen_pajak: 0,
+    total_pajak: 0,
+    total_potongan_lain: 0,
+    total_dibayarkan: 0,
   };
 }
 
@@ -216,6 +224,9 @@ function applyProfilPayrollToForm(previousForm, profile) {
 
   const tarif = profile?.tarif_pajak_ter;
   const gajiPokok = toNumber(profile?.gaji_pokok);
+  const persenTarifSnapshot = toNumber(tarif?.persen_tarif);
+  const totalPajak = calculatePayrollPph21Nominal(gajiPokok, persenTarifSnapshot);
+  const totalDibayarkan = Math.max(gajiPokok - totalPajak, 0);
 
   return {
     ...previousForm,
@@ -226,11 +237,12 @@ function applyProfilPayrollToForm(previousForm, profile) {
       .toUpperCase(),
     id_tarif_pajak_ter: String(profile?.id_tarif_pajak_ter || '').trim(),
     kode_kategori_pajak_snapshot: String(tarif?.kode_kategori_pajak || '').trim(),
-    persen_tarif_snapshot: toNumber(tarif?.persen_tarif),
+    persen_tarif_snapshot: persenTarifSnapshot,
     penghasilan_dari_snapshot: toNumber(tarif?.penghasilan_dari),
     penghasilan_sampai_snapshot: tarif?.penghasilan_sampai == null ? null : toNumber(tarif?.penghasilan_sampai),
     berlaku_mulai_tarif_snapshot: tarif?.berlaku_mulai || '',
     berlaku_sampai_tarif_snapshot: tarif?.berlaku_sampai || null,
+    persen_pajak: persenTarifSnapshot,
     nama_departement_snapshot: getProfilPayrollEmployeeDepartment(profile),
     nama_jabatan_snapshot: getProfilPayrollEmployeeJob(profile),
     nama_bank_snapshot: String(profile?.user?.jenis_bank || '').trim(),
@@ -238,9 +250,9 @@ function applyProfilPayrollToForm(previousForm, profile) {
     total_pendapatan_tetap: gajiPokok,
     total_pendapatan_variabel: 0,
     total_bruto_kena_pajak: gajiPokok,
-    total_pajak: 0,
+    total_pajak: totalPajak,
     total_potongan_lain: 0,
-    total_dibayarkan: gajiPokok,
+    total_dibayarkan: totalDibayarkan,
   };
 }
 

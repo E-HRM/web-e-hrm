@@ -185,6 +185,21 @@ export function subtractDecimalStrings(minuend, subtrahend, fieldName = 'pendapa
   return result.toFixed(2);
 }
 
+export function computePph21NominalFromSnapshot(totalPendapatanBruto, persenTarifSnapshot, scale = 2) {
+  const bruto = Number(totalPendapatanBruto || 0);
+  const persenTarif = Number(persenTarifSnapshot || 0);
+
+  if (!Number.isFinite(bruto) || bruto <= 0) {
+    return (0).toFixed(scale);
+  }
+
+  if (!Number.isFinite(persenTarif) || persenTarif <= 0) {
+    return (0).toFixed(scale);
+  }
+
+  return ((bruto * persenTarif) / 100).toFixed(scale);
+}
+
 export async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
 
@@ -405,11 +420,7 @@ export function buildSlipSelect() {
 }
 
 export function deriveApprovalState(approvalSteps = []) {
-  const orderedSteps = Array.isArray(approvalSteps)
-    ? approvalSteps
-        .filter((step) => !step?.deleted_at)
-        .sort((a, b) => Number(a?.level || 0) - Number(b?.level || 0))
-    : [];
+  const orderedSteps = Array.isArray(approvalSteps) ? approvalSteps.filter((step) => !step?.deleted_at).sort((a, b) => Number(a?.level || 0) - Number(b?.level || 0)) : [];
 
   const total_steps = orderedSteps.length;
   const approved_steps = orderedSteps.filter((step) => step?.decision === 'disetujui').length;
@@ -455,10 +466,8 @@ export function enrichPayroll(item) {
   const payrollStatus = String(item.status_payroll || '').toUpperCase();
   const periodeStatus = String(item?.periode?.status_periode || '').toUpperCase();
   const approvalState = deriveApprovalState(item.approvals);
-  const resolvedStatusApproval =
-    approvalState.total_steps > 0 ? approvalState.status_approval : normalizeApprovalStatus(item.status_approval || 'pending');
-  const resolvedCurrentLevelApproval =
-    approvalState.total_steps > 0 ? approvalState.current_level_approval : item.current_level_approval ?? null;
+  const resolvedStatusApproval = approvalState.total_steps > 0 ? approvalState.status_approval : normalizeApprovalStatus(item.status_approval || 'pending');
+  const resolvedCurrentLevelApproval = approvalState.total_steps > 0 ? approvalState.current_level_approval : (item.current_level_approval ?? null);
   const approvalImmutable = resolvedStatusApproval === 'disetujui';
   const payrollImmutable = IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) || Boolean(item.finalized_at) || Boolean(item.locked_at);
   const periodeImmutable = IMMUTABLE_PERIODE_STATUS.has(periodeStatus);
@@ -521,90 +530,16 @@ function normalizeSlipItem(item) {
   };
 }
 
-function createSyntheticSlipItem({
-  syntheticKey,
-  nama_komponen,
-  arah_komponen,
-  tipe_komponen = '',
-  nominal = 0,
-  urutan_tampil = 0,
-  catatan = null,
-}) {
-  return normalizeSlipItem({
-    id_item_komponen_payroll: `synthetic:${syntheticKey}`,
-    id_definisi_komponen_payroll: null,
-    tipe_komponen,
-    arah_komponen,
-    nama_komponen,
-    nominal,
-    kena_pajak: false,
-    urutan_tampil,
-    catatan,
-    created_at: null,
-    updated_at: null,
-    deleted_at: null,
-    definisi_komponen: null,
-    synthetic: true,
-  });
-}
-
-function hasSlipItem(items = [], matcher) {
-  return items.some((item) => {
-    const itemName = String(item?.nama_komponen || '').trim().toLowerCase();
-    const itemType = String(item?.tipe_komponen_label || item?.tipe_komponen || '')
-      .trim()
-      .toUpperCase();
-
-    return matcher({ itemName, itemType, item });
-  });
-}
-
 export function buildSlipPayload(payroll) {
   if (!payroll) return null;
 
   const enrichedPayroll = enrichPayroll(payroll);
-  const normalizedItems = Array.isArray(enrichedPayroll?.item_komponen)
-    ? enrichedPayroll.item_komponen.map(normalizeSlipItem).filter(Boolean)
-    : [];
+  const normalizedItems = Array.isArray(enrichedPayroll?.item_komponen) ? enrichedPayroll.item_komponen.map(normalizeSlipItem).filter(Boolean) : [];
 
   const pemasukanItems = normalizedItems.filter((item) => item.arah_komponen === 'PEMASUKAN');
   const potonganItems = normalizedItems.filter((item) => item.arah_komponen === 'POTONGAN');
 
-  const gajiPokokSnapshot = toDecimalNumber(enrichedPayroll?.gaji_pokok_snapshot);
-  if (
-    gajiPokokSnapshot > 0 &&
-    !hasSlipItem(pemasukanItems, ({ itemName }) => itemName.includes('gaji pokok'))
-  ) {
-    pemasukanItems.unshift(
-      createSyntheticSlipItem({
-        syntheticKey: 'gaji-pokok',
-        nama_komponen: 'Gaji Pokok',
-        arah_komponen: 'PEMASUKAN',
-        tipe_komponen: 'GAJI_POKOK',
-        nominal: gajiPokokSnapshot,
-        urutan_tampil: -1000,
-        catatan: 'Snapshot gaji pokok dari payroll karyawan.',
-      }),
-    );
-  }
-
   const pph21Nominal = toDecimalNumber(enrichedPayroll?.pph21_nominal);
-  if (
-    pph21Nominal > 0 &&
-    !hasSlipItem(potonganItems, ({ itemName, itemType }) => itemType === 'PAJAK' || itemName.includes('pajak'))
-  ) {
-    potonganItems.push(
-      createSyntheticSlipItem({
-        syntheticKey: 'pph21',
-        nama_komponen: 'PPh 21',
-        arah_komponen: 'POTONGAN',
-        tipe_komponen: 'PAJAK',
-        nominal: pph21Nominal,
-        urutan_tampil: 9000,
-        catatan: 'Fallback pajak dari snapshot payroll karyawan.',
-      }),
-    );
-  }
 
   const groupedItems = [
     {
@@ -680,11 +615,7 @@ export function buildSearchClauses(search) {
       approvals: {
         some: {
           deleted_at: null,
-          OR: [
-            { approver_nama_snapshot: { contains: search } },
-            { approver: { is: { nama_pengguna: { contains: search } } } },
-            { approver: { is: { email: { contains: search } } } },
-          ],
+          OR: [{ approver_nama_snapshot: { contains: search } }, { approver: { is: { nama_pengguna: { contains: search } } } }, { approver: { is: { email: { contains: search } } } }],
         },
       },
     },

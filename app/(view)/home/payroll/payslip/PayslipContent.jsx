@@ -88,6 +88,91 @@ function BlueLabelTable({ rows = [], labelWidth = '220px', valueAlign = 'left' }
   );
 }
 
+function DetailTable({ rows = [], typeWidth = '220px', labelWidth = '260px' }) {
+  const hasTypeColumn = rows.some((row) => row.type);
+  let lastMergedTypeId = null;
+  let lastMergedTypeIndex = -1;
+
+  const preparedRows = [];
+
+  rows.forEach((row) => {
+    const preparedRow = {
+      ...row,
+      shouldRenderTypeCell: false,
+      typeRowSpan: 1,
+      labelColSpan: hasTypeColumn && !row.type ? 2 : 1,
+    };
+
+    if (!hasTypeColumn || !row.type) {
+      lastMergedTypeId = null;
+      lastMergedTypeIndex = -1;
+      preparedRows.push(preparedRow);
+      return;
+    }
+
+    if (row.typeId && row.typeId === lastMergedTypeId && lastMergedTypeIndex >= 0) {
+      preparedRows[lastMergedTypeIndex].typeRowSpan += 1;
+      lastMergedTypeId = row.typeId;
+      preparedRows.push(preparedRow);
+      return;
+    }
+
+    preparedRow.shouldRenderTypeCell = true;
+    lastMergedTypeId = row.typeId || null;
+    lastMergedTypeIndex = preparedRows.length;
+    preparedRows.push(preparedRow);
+  });
+
+  return (
+    <div className='overflow-x-auto'>
+      <table className='w-full border-collapse border border-slate-700'>
+        <tbody>
+          {preparedRows.map((row, index) => (
+            <tr key={`${row.type || 'detail'}-${row.label}-${index}`}>
+              {row.shouldRenderTypeCell ? (
+                <td
+                  className='border border-slate-700 bg-[#c8d7ee] px-3 py-3 align-middle'
+                  style={{ width: typeWidth }}
+                  rowSpan={row.typeRowSpan}
+                >
+                  <AppTypography.Text
+                    size={14}
+                    className='text-slate-950'
+                  >
+                    {row.type}
+                  </AppTypography.Text>
+                </td>
+              ) : null}
+
+              <td
+                className='border border-slate-700 bg-[#c8d7ee] px-3 py-3 align-middle'
+                style={{ width: labelWidth }}
+                colSpan={row.labelColSpan}
+              >
+                <AppTypography.Text
+                  size={14}
+                  className='text-slate-950'
+                >
+                  {row.label || '-'}
+                </AppTypography.Text>
+              </td>
+
+              <td className='border border-slate-700 px-3 py-3 text-right align-middle'>
+                <AppTypography.Text
+                  size={14}
+                  className='text-slate-950'
+                >
+                  {row.value || '-'}
+                </AppTypography.Text>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function buildDetailItems(groups = []) {
   return groups.flatMap((group) =>
     (Array.isArray(group?.items) ? group.items : []).map((item) => ({
@@ -95,6 +180,37 @@ function buildDetailItems(groups = []) {
       sign: group?.key === 'POTONGAN' ? '-' : '',
     })),
   );
+}
+
+function resolveDetailTypeLabel(item) {
+  return item?.definisi_komponen?.tipe_komponen?.nama_tipe_komponen || item?.tipe_komponen_label || item?.tipe_komponen || '';
+}
+
+function resolveDetailTypeId(item) {
+  return item?.definisi_komponen?.tipe_komponen?.id_tipe_komponen_payroll || '';
+}
+
+function normalizeDetailIdentity(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+function isSnapshotBackedDetail(item, snapshotKey) {
+  const itemName = normalizeDetailIdentity(item?.nama_komponen);
+  const itemType = String(resolveDetailTypeLabel(item) || '')
+    .trim()
+    .toUpperCase();
+
+  if (snapshotKey === 'gaji_pokok') {
+    return itemType === 'GAJI_POKOK' || itemName.includes('gaji pokok');
+  }
+
+  if (snapshotKey === 'pph21') {
+    return itemName.includes('pph 21') || itemName.includes('pph21');
+  }
+
+  return false;
 }
 
 function ApprovalTable({ slip, vm }) {
@@ -182,13 +298,45 @@ function ApprovalTable({ slip, vm }) {
 
 function PayslipDocument({ slip, vm }) {
   const detailItems = buildDetailItems(slip?.groups);
+  const gajiPokokSnapshot = Number(slip?.payroll?.gaji_pokok_snapshot || 0);
+  const pph21Nominal = Number(slip?.summary?.pph21_nominal ?? slip?.payroll?.pph21_nominal ?? 0);
+
+  const snapshotRows = [
+    ...(gajiPokokSnapshot > 0
+      ? [
+          {
+            snapshotKey: 'gaji_pokok',
+            label: 'Gaji Pokok',
+            value: vm.formatCurrency(gajiPokokSnapshot),
+          },
+        ]
+      : []),
+    ...(pph21Nominal > 0
+      ? [
+          {
+            snapshotKey: 'pph21',
+            label: 'PPh 21',
+            value: `-${vm.formatCurrency(pph21Nominal)}`,
+          },
+        ]
+      : []),
+  ];
+
+  const filteredDetailItems = detailItems.filter(
+    (item) => !snapshotRows.some((row) => isSnapshotBackedDetail(item, row.snapshotKey)),
+  );
 
   const detailRows =
-    detailItems.length > 0
-      ? detailItems.map((item) => ({
-          label: item.nama_komponen || '-',
-          value: `${item.sign}${vm.formatCurrency(item.nominal_number)}`,
-        }))
+    snapshotRows.length > 0 || filteredDetailItems.length > 0
+      ? [
+          ...snapshotRows,
+          ...filteredDetailItems.map((item) => ({
+            typeId: resolveDetailTypeId(item),
+            type: resolveDetailTypeLabel(item),
+            label: item.nama_komponen || '-',
+            value: `${item.sign}${vm.formatCurrency(item.nominal_number)}`,
+          })),
+        ]
       : [
           {
             label: 'Detail Komponen',
@@ -290,22 +438,17 @@ function PayslipDocument({ slip, vm }) {
           />
         </div>
 
-        <div className='mb-8 border-t border-slate-300 payslip-section-block' />
-
         <div className='mb-8 space-y-4 payslip-section-block'>
-          <SectionTitle>Detail</SectionTitle>
+          <SectionTitle>Detail :</SectionTitle>
 
-          <BlueLabelTable
+          <DetailTable
             labelWidth='260px'
-            valueAlign='right'
             rows={detailRows}
           />
         </div>
 
-        <div className='mb-8 border-t border-slate-300 payslip-section-block' />
-
         <div className='mb-8 space-y-4 payslip-section-block'>
-          <SectionTitle>Summary</SectionTitle>
+          <SectionTitle>Summary :</SectionTitle>
 
           <BlueLabelTable
             labelWidth='260px'
@@ -314,10 +457,8 @@ function PayslipDocument({ slip, vm }) {
           />
         </div>
 
-        <div className='mb-8 border-t border-slate-300 payslip-section-block' />
-
         <div className='mb-8 space-y-4 payslip-section-block'>
-          <SectionTitle>TERM</SectionTitle>
+          <SectionTitle>TERM :</SectionTitle>
 
           <BlueLabelTable
             labelWidth='220px'
@@ -325,8 +466,6 @@ function PayslipDocument({ slip, vm }) {
             rows={termRows}
           />
         </div>
-
-        <div className='mb-8 border-t border-slate-300 payslip-section-block' />
 
         <div className='payslip-section-block'>
           <ApprovalTable

@@ -22,6 +22,7 @@ import {
   normalizeNullableString,
   parseDateTime,
   parseNonNegativeDecimal,
+  computePph21NominalFromSnapshot,
   replaceApprovalSteps,
   resolveApprovalSteps,
   STATUS_PAYROLL_VALUES,
@@ -31,13 +32,14 @@ import {
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 
-function resolveDraftDecimalStrings(body = {}, existing = null) {
+function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
   const existingPph21 = Number(existing?.pph21_nominal || 0);
   const existingTotalPotongan = Number(existing?.total_potongan || 0);
   const existingOtherPotongan = Math.max(existingTotalPotongan - existingPph21, 0);
 
   const totalPendapatanBruto = parseNonNegativeDecimal(body?.total_pendapatan_bruto ?? body?.total_bruto_kena_pajak ?? existing?.total_pendapatan_bruto ?? '0', 'total_pendapatan_bruto');
-  const pph21Nominal = parseNonNegativeDecimal(body?.pph21_nominal ?? body?.total_pajak ?? existing?.pph21_nominal ?? '0', 'pph21_nominal');
+  const persenTarifSnapshot = options?.persenTarifSnapshot ?? existing?.persen_tarif_snapshot ?? body?.persen_tarif_snapshot ?? '0';
+  const pph21Nominal = parseNonNegativeDecimal(computePph21NominalFromSnapshot(totalPendapatanBruto, persenTarifSnapshot), 'pph21_nominal');
   const totalPotonganLain = parseNonNegativeDecimal(body?.total_potongan_lain ?? existingOtherPotongan, 'total_potongan_lain');
   const totalPotongan = parseNonNegativeDecimal(body?.total_potongan ?? addDecimalStrings(pph21Nominal, totalPotonganLain), 'total_potongan');
   const pendapatanBersih = parseNonNegativeDecimal(
@@ -104,6 +106,7 @@ async function resolveUpdatePayload(existing, body = {}) {
   let penghasilan_sampai_snapshot = existing.penghasilan_sampai_snapshot;
   let berlaku_mulai_tarif_snapshot = existing.berlaku_mulai_tarif_snapshot;
   let berlaku_sampai_tarif_snapshot = existing.berlaku_sampai_tarif_snapshot;
+  let gaji_pokok_snapshot = existing.gaji_pokok_snapshot;
 
   if (shouldRefreshSnapshot) {
     const profilPayroll = await ensureProfilPayrollExists(nextUserId);
@@ -140,9 +143,12 @@ async function resolveUpdatePayload(existing, body = {}) {
       tarifPajakTer.penghasilan_sampai == null ? null : parseNonNegativeDecimal(tarifPajakTer.penghasilan_sampai, 'penghasilan_sampai_snapshot', { allowNull: true });
     berlaku_mulai_tarif_snapshot = tarifPajakTer.berlaku_mulai;
     berlaku_sampai_tarif_snapshot = tarifPajakTer.berlaku_sampai;
+    gaji_pokok_snapshot = parseNonNegativeDecimal(profilPayroll?.gaji_pokok ?? existing.gaji_pokok_snapshot ?? '0', 'gaji_pokok_snapshot');
   }
 
-  const totals = resolveDraftDecimalStrings(body, existing);
+  const totals = resolveDraftDecimalStrings(body, existing, {
+    persenTarifSnapshot: persen_tarif_snapshot,
+  });
   const statusFields = normalizeStatusRelatedFields(body, existing);
 
   return {
@@ -163,6 +169,7 @@ async function resolveUpdatePayload(existing, body = {}) {
       penghasilan_sampai_snapshot,
       berlaku_mulai_tarif_snapshot,
       berlaku_sampai_tarif_snapshot,
+      gaji_pokok_snapshot,
       bank_name:
         normalizeNullableString(body?.bank_name, 'bank_name', 50) ||
         normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) ||

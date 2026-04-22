@@ -20,6 +20,7 @@ import {
   normalizeRequiredId,
   parseDateTime,
   parseNonNegativeDecimal,
+  computePph21NominalFromSnapshot,
   replaceApprovalSteps,
   resolveApprovalSteps,
   STATUS_APPROVAL_VALUES,
@@ -60,14 +61,14 @@ async function ensureProfilPayrollAktifExists(id_user) {
   });
 }
 
-function resolveDraftDecimalStrings(body = {}, existing = null) {
+function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
   const existingPph21 = Number(existing?.pph21_nominal || 0);
   const existingTotalPotongan = Number(existing?.total_potongan || 0);
   const existingOtherPotongan = Math.max(existingTotalPotongan - existingPph21, 0);
 
   const totalPendapatanBruto = parseNonNegativeDecimal(body?.total_pendapatan_bruto ?? body?.total_bruto_kena_pajak ?? existing?.total_pendapatan_bruto ?? '0', 'total_pendapatan_bruto');
-
-  const pph21Nominal = parseNonNegativeDecimal(body?.pph21_nominal ?? body?.total_pajak ?? existing?.pph21_nominal ?? '0', 'pph21_nominal');
+  const persenTarifSnapshot = options?.persenTarifSnapshot ?? existing?.persen_tarif_snapshot ?? body?.persen_tarif_snapshot ?? '0';
+  const pph21Nominal = parseNonNegativeDecimal(computePph21NominalFromSnapshot(totalPendapatanBruto, persenTarifSnapshot), 'pph21_nominal');
 
   const totalPotonganLain = parseNonNegativeDecimal(body?.total_potongan_lain ?? existingOtherPotongan, 'total_potongan_lain');
 
@@ -162,10 +163,13 @@ async function resolveCreatePayload(body = {}) {
   }
 
   const gajiPokokSnapshot = parseNonNegativeDecimal(body?.gaji_pokok_snapshot ?? profilPayroll?.gaji_pokok ?? '0', 'gaji_pokok_snapshot');
+  const persenTarifSnapshot = parseNonNegativeDecimal(tarifPajakTer.persen_tarif, 'persen_tarif_snapshot', { scale: 4 });
 
   const totals = resolveDraftDecimalStrings({
     ...body,
     total_pendapatan_bruto: body?.total_pendapatan_bruto ?? body?.total_bruto_kena_pajak ?? gajiPokokSnapshot,
+  }, null, {
+    persenTarifSnapshot,
   });
 
   const statusFields = normalizeStatusRelatedFields(body);
@@ -179,7 +183,7 @@ async function resolveCreatePayload(body = {}) {
       nama_karyawan: normalizeNullableString(body?.nama_karyawan, 'nama_karyawan', 255) || normalizeNullableString(body?.nama_karyawan_snapshot, 'nama_karyawan_snapshot', 255) || user.nama_pengguna,
       jenis_hubungan_kerja,
       kode_kategori_pajak_snapshot: String(tarifPajakTer.kode_kategori_pajak || ''),
-      persen_tarif_snapshot: parseNonNegativeDecimal(tarifPajakTer.persen_tarif, 'persen_tarif_snapshot', { scale: 4 }),
+      persen_tarif_snapshot: persenTarifSnapshot,
       penghasilan_dari_snapshot: parseNonNegativeDecimal(tarifPajakTer.penghasilan_dari, 'penghasilan_dari_snapshot'),
       penghasilan_sampai_snapshot: tarifPajakTer.penghasilan_sampai == null ? null : parseNonNegativeDecimal(tarifPajakTer.penghasilan_sampai, 'penghasilan_sampai_snapshot', { allowNull: true }),
       berlaku_mulai_tarif_snapshot: tarifPajakTer.berlaku_mulai,
