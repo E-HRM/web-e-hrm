@@ -12,7 +12,7 @@ const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'tanggal_transaksi
 
 const MONEY_SCALE = 2;
 const SHARE_SCALE = 4;
-const STATUS_PAYOUT_DIPOSTING = 'DIPOSTING_KE_PAYROLL';
+const STATUS_PAYOUT_DRAFT = 'DRAFT';
 
 const normRole = (role) =>
   String(role || '')
@@ -310,7 +310,9 @@ function buildCarryForwardDitahanWhere(targetPeriode) {
         payout: {
           is: {
             deleted_at: null,
-            status_payout: STATUS_PAYOUT_DIPOSTING,
+            status_payout: {
+              not: STATUS_PAYOUT_DRAFT,
+            },
           },
         },
       },
@@ -497,10 +499,6 @@ async function resolveBusinessState(tx, input, existing = null) {
       nominal_oss = subtractDecimalStrings(total_income, nominal_share, MONEY_SCALE);
     }
   } else {
-    if (Object.prototype.hasOwnProperty.call(input, 'nominal_share') || Object.prototype.hasOwnProperty.call(input, 'nominal_oss')) {
-      throw new Error("Field 'nominal_share' dan 'nominal_oss' hanya boleh dikirim saat 'override_manual' bernilai true.");
-    }
-
     nominal_share = computeAmountByPercentage(total_income, effectivePersenShare);
     nominal_oss = subtractDecimalStrings(total_income, nominal_share, MONEY_SCALE);
   }

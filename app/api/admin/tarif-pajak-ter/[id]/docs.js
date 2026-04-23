@@ -34,7 +34,7 @@
  *         description: Terjadi kesalahan server.
  *   put:
  *     summary: Perbarui tarif pajak TER
- *     description: Memperbarui data tarif pajak TER. Sistem akan memvalidasi agar kode kategori pajak, periode berlaku, dan rentang penghasilan tidak bentrok dengan data aktif lain.
+ *     description: Memperbarui data tarif pajak TER. Overlap antar data diperbolehkan, tetapi sistem tetap menolak data yang identik pada kombinasi kode kategori pajak, periode berlaku, dan rentang penghasilan.
  *     tags: [Admin - Tarif Pajak TER]
  *     security:
  *       - BearerAuth: []

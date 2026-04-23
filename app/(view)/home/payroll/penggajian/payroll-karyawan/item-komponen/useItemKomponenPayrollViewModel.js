@@ -315,6 +315,13 @@ function validateItemForm({ payrollId, formData, usingDefinition }) {
     }
   }
 
+  if (normalizeUpperText(formData.tipe_komponen) === "PAJAK") {
+    AppMessage.warning(
+      "Komponen PAJAK dihitung otomatis dari payroll dan tidak dapat dikelola manual.",
+    );
+    return false;
+  }
+
   return true;
 }
 
@@ -464,7 +471,13 @@ export default function useItemKomponenPayrollViewModel() {
     const rawItems = Array.isArray(definisiResponse) ? definisiResponse : [];
     return rawItems
       .map(normalizeDefinition)
-      .filter((item) => item && !item.deleted_at && item.aktif);
+      .filter(
+        (item) =>
+          item &&
+          !item.deleted_at &&
+          item.aktif &&
+          item.tipe_komponen !== "PAJAK",
+      );
   }, [definisiResponse]);
 
   const tipeKomponenMaster = useMemo(() => {
@@ -473,7 +486,12 @@ export default function useItemKomponenPayrollViewModel() {
       : [];
     return rawItems
       .map(normalizeTipeKomponen)
-      .filter((item) => item && !item.deleted_at);
+      .filter(
+        (item) =>
+          item &&
+          !item.deleted_at &&
+          normalizeUpperText(item.nama_tipe_komponen) !== "PAJAK",
+      );
   }, [tipeKomponenResponse]);
 
   const tipeKomponenOptions = useMemo(() => {

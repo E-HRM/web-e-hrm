@@ -103,7 +103,7 @@
  *       - `tanggal_transaksi` wajib berada dalam rentang periode konsultan.
  *       - periode tidak boleh soft delete dan tidak boleh berstatus `TERKUNCI`.
  *       - `total_income` otomatis dihitung dari `nominal_debit - nominal_kredit`.
- *       - jika `override_manual=false`, maka `nominal_share` dan `nominal_oss` dihitung otomatis dari persen share efektif.
+ *       - jika `override_manual=false`, maka `nominal_share` dan `nominal_oss` dihitung otomatis dari persen share efektif; bila field manual ikut terkirim, nilainya diabaikan.
  *       - jika `override_manual=true`, maka `nominal_share` dan/atau `nominal_oss` boleh dikirim manual, tetapi totalnya tetap harus sama dengan `total_income`.
  *       - `sudah_posting_payroll` tidak bisa di-set manual saat create.
  *     tags: [Admin - Transaksi Konsultan]
@@ -156,11 +156,11 @@
  *               nominal_share:
  *                 type: number
  *                 format: decimal
- *                 description: Hanya boleh diisi saat `override_manual=true`.
+ *                 description: Dipakai saat `override_manual=true`; bila `override_manual=false`, server mengabaikan field ini.
  *               nominal_oss:
  *                 type: number
  *                 format: decimal
- *                 description: Hanya boleh diisi saat `override_manual=true`.
+ *                 description: Dipakai saat `override_manual=true`; bila `override_manual=false`, server mengabaikan field ini.
  *               catatan:
  *                 type: string
  *                 nullable: true

@@ -87,7 +87,8 @@
  *       - transaksi tidak boleh sudah diposting ke payroll.
  *       - transaksi tidak boleh sudah terhubung ke payout aktif lain.
  *       - jika kombinasi payout + transaksi pernah soft delete, record lama akan dipulihkan lalu diperbarui.
- *       - setelah create/restore, `total_share` dan `nominal_dibayarkan` pada payout induk dihitung ulang otomatis.
+ *       - setelah create/restore, `total_share` dan `nominal_ditahan` pada payout induk dihitung ulang otomatis.
+ *       - `nominal_dibayarkan` payout induk akan mengikuti `nominal_penyesuaian` yang tersimpan.
  *     tags: [Admin - Payout Konsultan Detail]
  *     security:
  *       - BearerAuth: []

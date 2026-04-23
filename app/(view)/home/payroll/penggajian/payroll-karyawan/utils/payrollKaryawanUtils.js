@@ -48,6 +48,9 @@ export function createInitialPayrollKaryawanForm(defaultPeriode = '') {
     nama_jabatan_snapshot: '',
     nama_bank_snapshot: '',
     nomor_rekening_snapshot: '',
+    issue_number: '',
+    issued_at: '',
+    company_name_snapshot: '',
     total_pendapatan_tetap: 0,
     total_pendapatan_variabel: 0,
     total_bruto_kena_pajak: 0,
@@ -103,6 +106,32 @@ export function formatDate(value) {
     month: 'long',
     year: 'numeric',
   }).format(date);
+}
+
+export function formatDateTime(value) {
+  if (!value) return '-';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat('id-ID', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+export function formatDateTimeLocalInput(value) {
+  if (!value) return '';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const pad = (segment) => String(segment).padStart(2, '0');
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export function formatBulan(value) {
@@ -312,6 +341,9 @@ export function buildPayrollKaryawanPayload(formData) {
       .toUpperCase(),
     bank_name: String(formData.nama_bank_snapshot || '').trim() || null,
     bank_account: String(formData.nomor_rekening_snapshot || '').trim() || null,
+    issue_number: String(formData.issue_number || '').trim() || null,
+    issued_at: String(formData.issued_at || '').trim() || null,
+    company_name_snapshot: String(formData.company_name_snapshot || '').trim() || null,
     total_pendapatan_bruto: totalPendapatanBruto,
     total_potongan: totalPotongan,
     pph21_nominal: totalPajak,

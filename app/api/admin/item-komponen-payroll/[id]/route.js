@@ -13,6 +13,7 @@ import {
   buildSelect,
   createHttpError,
   ensureAuth,
+  ensureNonDerivedTaxItem,
   ensurePayrollEditable,
   enrichItem,
   findDuplicateIdempotencyKey,
@@ -109,6 +110,8 @@ export async function PUT(req, { params }) {
         { status: 409 },
       );
     }
+
+    ensureNonDerivedTaxItem(existing, "diubah");
 
     const sanitizedInput = {
       ...(body?.id_payroll_karyawan !== undefined
@@ -265,6 +268,10 @@ export async function PUT(req, { params }) {
         payroll_snapshots[payrollId] = await recalculatePayrollTotals(
           tx,
           payrollId,
+          {
+            negativeNetMessage:
+              "Perubahan item komponen payroll membuat pendapatan_bersih bernilai negatif.",
+          },
         );
       }
 
@@ -328,6 +335,8 @@ export async function DELETE(req, { params }) {
         );
       }
 
+      ensureNonDerivedTaxItem(existing, "dihapus");
+
       const result = await db.$transaction(async (tx) => {
         await ensurePayrollEditable(tx, existing.id_payroll_karyawan);
 
@@ -344,6 +353,10 @@ export async function DELETE(req, { params }) {
         const payroll_snapshot = await recalculatePayrollTotals(
           tx,
           existing.id_payroll_karyawan,
+          {
+            negativeNetMessage:
+              "Perubahan item komponen payroll membuat pendapatan_bersih bernilai negatif.",
+          },
         );
 
         return {
@@ -360,6 +373,8 @@ export async function DELETE(req, { params }) {
     }
 
     if (existing.deleted_at) {
+      ensureNonDerivedTaxItem(existing, "dihapus");
+
       await db.itemKomponenPayroll.delete({
         where: {
           id_item_komponen_payroll: id,
@@ -371,6 +386,8 @@ export async function DELETE(req, { params }) {
         mode: "hard",
       });
     }
+
+    ensureNonDerivedTaxItem(existing, "dihapus");
 
     const result = await db.$transaction(async (tx) => {
       await ensurePayrollEditable(tx, existing.id_payroll_karyawan);
@@ -384,6 +401,10 @@ export async function DELETE(req, { params }) {
       const payroll_snapshot = await recalculatePayrollTotals(
         tx,
         existing.id_payroll_karyawan,
+        {
+          negativeNetMessage:
+            "Perubahan item komponen payroll membuat pendapatan_bersih bernilai negatif.",
+        },
       );
 
       return { payroll_snapshot };

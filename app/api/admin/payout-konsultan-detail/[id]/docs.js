@@ -88,7 +88,8 @@
  *     summary: Hapus payout konsultan detail
  *     description: |
  *       Soft delete secara default. Gunakan query `?hard=true` untuk hapus permanen.
- *       Setelah penghapusan, `total_share` dan `nominal_dibayarkan` payout induk dihitung ulang otomatis.
+ *       Setelah penghapusan, `total_share` dan `nominal_ditahan` payout induk dihitung ulang otomatis.
+ *       `nominal_dibayarkan` payout induk akan mengikuti `nominal_penyesuaian` yang tersimpan.
  *       Detail tidak dapat dihapus bila payout induk sudah `DIPOSTING_KE_PAYROLL` atau periode payout terkunci.
  *     tags: [Admin - Payout Konsultan Detail]
  *     security:

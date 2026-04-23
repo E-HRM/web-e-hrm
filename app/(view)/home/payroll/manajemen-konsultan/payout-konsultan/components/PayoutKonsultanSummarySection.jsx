@@ -38,7 +38,7 @@ function SummaryCard({ icon, iconWrapClassName, iconClassName, value, label }) {
 
 export default function PayoutKonsultanSummarySection({ summary, formatCurrency }) {
   return (
-    <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8'>
+    <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8'>
       <SummaryCard
         icon={<WalletOutlined />}
         iconWrapClassName='bg-blue-100'
@@ -53,14 +53,6 @@ export default function PayoutKonsultanSummarySection({ summary, formatCurrency 
         iconClassName='text-red-600 text-2xl'
         value={formatCurrency(summary.totalDitahan)}
         label='Total Ditahan'
-      />
-
-      <SummaryCard
-        icon={<WalletOutlined />}
-        iconWrapClassName='bg-purple-100'
-        iconClassName='text-purple-600 text-2xl'
-        value={formatCurrency(summary.totalPenyesuaian)}
-        label='Total Penyesuaian'
       />
 
       <SummaryCard

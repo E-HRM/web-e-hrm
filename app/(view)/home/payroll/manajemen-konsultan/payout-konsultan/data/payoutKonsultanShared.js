@@ -75,8 +75,8 @@ export function createInitialPostPayrollForm(defaults = {}) {
   };
 }
 
-export function calculateNominalDibayarkan({ total_share = 0, nominal_ditahan = 0, nominal_penyesuaian = 0 }) {
-  return toNumber(total_share) - toNumber(nominal_ditahan) + toNumber(nominal_penyesuaian);
+export function calculateNominalDibayarkan({ nominal_penyesuaian = 0 }) {
+  return toNumber(nominal_penyesuaian);
 }
 
 export function formatCurrency(value) {

@@ -397,6 +397,10 @@ export async function POST(req) {
       const payroll_snapshot = await recalculatePayrollTotals(
         tx,
         resolved.payload.id_payroll_karyawan,
+        {
+          negativeNetMessage:
+            "Perubahan item komponen payroll membuat pendapatan_bersih bernilai negatif.",
+        },
       );
 
       return {

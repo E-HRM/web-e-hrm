@@ -1,3 +1,5 @@
+import { recalculatePayrollTotals } from "@/app/api/admin/payroll-karyawan/payrollRecalculation.shared";
+
 const MONEY_SCALE = 2;
 
 export const IMMUTABLE_PAYROLL_STATUS = new Set(["DISETUJUI", "DIBAYAR"]);
@@ -157,81 +159,6 @@ async function getDefinitionForCicilanPosting(tx) {
       kena_pajak_default: true,
     },
   });
-}
-
-export async function recalculatePayrollTotals(tx, id_payroll_karyawan) {
-  const [payroll, items] = await Promise.all([
-    tx.payrollKaryawan.findUnique({
-      where: { id_payroll_karyawan },
-      select: {
-        id_payroll_karyawan: true,
-      },
-    }),
-    tx.itemKomponenPayroll.findMany({
-      where: {
-        id_payroll_karyawan,
-        deleted_at: null,
-      },
-      select: {
-        tipe_komponen: true,
-        arah_komponen: true,
-        nominal: true,
-      },
-    }),
-  ]);
-
-  if (!payroll) {
-    throw new Error("Payroll karyawan tidak ditemukan.");
-  }
-
-  let totalPendapatanBruto = 0n;
-  let totalPotongan = 0n;
-  let pph21Nominal = 0n;
-
-  for (const item of items) {
-    const nominal = decimalToScaledBigInt(String(item.nominal), MONEY_SCALE);
-
-    if (item.arah_komponen === "PEMASUKAN") {
-      totalPendapatanBruto += nominal;
-      continue;
-    }
-
-    if (item.arah_komponen === "POTONGAN") {
-      totalPotongan += nominal;
-
-      if (item.tipe_komponen === "PAJAK") {
-        pph21Nominal += nominal;
-      }
-    }
-  }
-
-  const pendapatanBersih = totalPendapatanBruto - totalPotongan;
-
-  if (pendapatanBersih < 0n) {
-    throw new Error(
-      "Perubahan posting cicilan membuat pendapatan_bersih payroll bernilai negatif.",
-    );
-  }
-
-  const payload = {
-    total_pendapatan_bruto: scaledBigIntToDecimalString(
-      totalPendapatanBruto,
-      MONEY_SCALE,
-    ),
-    total_potongan: scaledBigIntToDecimalString(totalPotongan, MONEY_SCALE),
-    pph21_nominal: scaledBigIntToDecimalString(pph21Nominal, MONEY_SCALE),
-    pendapatan_bersih: scaledBigIntToDecimalString(
-      pendapatanBersih,
-      MONEY_SCALE,
-    ),
-  };
-
-  await tx.payrollKaryawan.update({
-    where: { id_payroll_karyawan },
-    data: payload,
-  });
-
-  return payload;
 }
 
 export async function recalculateLoanSnapshot(tx, id_pinjaman_karyawan) {
@@ -443,7 +370,10 @@ export async function syncCicilanPayrollPosting(
   for (const payrollId of touchedPayrollIds) {
     if (!payrollId) continue;
 
-    const totals = await recalculatePayrollTotals(tx, payrollId);
+    const totals = await recalculatePayrollTotals(tx, payrollId, {
+      negativeNetMessage:
+        "Perubahan posting cicilan membuat pendapatan_bersih payroll bernilai negatif.",
+    });
     payrolls.push({
       id_payroll_karyawan: payrollId,
       totals,

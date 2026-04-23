@@ -84,9 +84,11 @@
  *               nominal_share:
  *                 type: number
  *                 format: decimal
+ *                 description: Dipakai saat `override_manual=true`; bila `override_manual=false`, server mengabaikan field ini.
  *               nominal_oss:
  *                 type: number
  *                 format: decimal
+ *                 description: Dipakai saat `override_manual=true`; bila `override_manual=false`, server mengabaikan field ini.
  *               catatan:
  *                 type: string
  *                 nullable: true

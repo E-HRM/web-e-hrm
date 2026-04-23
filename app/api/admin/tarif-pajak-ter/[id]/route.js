@@ -99,74 +99,30 @@ function buildSelect() {
   };
 }
 
-function periodsOverlap(startA, endA, startB, endB) {
-  const aStart = startA.getTime();
-  const bStart = startB.getTime();
-  const aEnd = endA ? endA.getTime() : Number.POSITIVE_INFINITY;
-  const bEnd = endB ? endB.getTime() : Number.POSITIVE_INFINITY;
-
-  return aStart <= bEnd && bStart <= aEnd;
-}
-
-function incomeRangesOverlap(fromA, untilA, fromB, untilB) {
-  const leftOk = untilA === null ? true : fromB <= untilA;
-  const rightOk = untilB === null ? true : fromA <= untilB;
-  return leftOk && rightOk;
-}
-
-function buildPeriodOverlapWhere(berlaku_mulai, berlaku_sampai, excludeId) {
-  return {
-    deleted_at: null,
-    ...(excludeId
-      ? {
-          NOT: {
-            id_tarif_pajak_ter: excludeId,
-          },
-        }
-      : {}),
-    ...(berlaku_sampai === null
-      ? {
-          OR: [{ berlaku_sampai: null }, { berlaku_sampai: { gte: berlaku_mulai } }],
-        }
-      : {
-          AND: [
-            { berlaku_mulai: { lte: berlaku_sampai } },
-            {
-              OR: [{ berlaku_sampai: null }, { berlaku_sampai: { gte: berlaku_mulai } }],
-            },
-          ],
-        }),
-  };
-}
-
-async function ensureNoConflict({ kode_kategori_pajak, penghasilan_dari, penghasilan_sampai, berlaku_mulai, berlaku_sampai, excludeId = null }) {
-  const candidates = await db.tarifPajakTER.findMany({
+async function ensureNoDuplicate({ kode_kategori_pajak, penghasilan_dari, penghasilan_sampai, berlaku_mulai, berlaku_sampai, excludeId = null }) {
+  const duplicate = await db.tarifPajakTER.findFirst({
     where: {
       kode_kategori_pajak,
-      ...buildPeriodOverlapWhere(berlaku_mulai, berlaku_sampai, excludeId),
+      penghasilan_dari,
+      penghasilan_sampai,
+      berlaku_mulai,
+      berlaku_sampai,
+      deleted_at: null,
+      ...(excludeId
+        ? {
+            NOT: {
+              id_tarif_pajak_ter: excludeId,
+            },
+          }
+        : {}),
     },
     select: {
       id_tarif_pajak_ter: true,
-      kode_kategori_pajak: true,
-      penghasilan_dari: true,
-      penghasilan_sampai: true,
-      berlaku_mulai: true,
-      berlaku_sampai: true,
     },
   });
 
-  const nextFrom = decimalToScaledBigInt(penghasilan_dari, INCOME_SCALE);
-  const nextUntil = penghasilan_sampai === null ? null : decimalToScaledBigInt(penghasilan_sampai, INCOME_SCALE);
-
-  const conflict = candidates.find((item) => {
-    const currentFrom = decimalToScaledBigInt(item.penghasilan_dari, INCOME_SCALE);
-    const currentUntil = item.penghasilan_sampai === null ? null : decimalToScaledBigInt(item.penghasilan_sampai, INCOME_SCALE);
-
-    return periodsOverlap(berlaku_mulai, berlaku_sampai, item.berlaku_mulai, item.berlaku_sampai) && incomeRangesOverlap(nextFrom, nextUntil, currentFrom, currentUntil);
-  });
-
-  if (conflict) {
-    throw new Error('Tarif pajak TER bentrok dengan data lain pada kode kategori pajak, periode berlaku, dan rentang penghasilan yang saling overlap.');
+  if (duplicate) {
+    throw new Error('Tarif pajak TER duplikat. Kombinasi kode kategori pajak, periode berlaku, dan rentang penghasilan yang sama sudah ada.');
   }
 }
 
@@ -311,7 +267,7 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ message: "Field 'berlaku_sampai' tidak boleh lebih kecil dari 'berlaku_mulai'." }, { status: 400 });
     }
 
-    await ensureNoConflict({
+    await ensureNoDuplicate({
       kode_kategori_pajak: nextKodeKategoriPajak,
       penghasilan_dari: nextPenghasilanDari,
       penghasilan_sampai: nextPenghasilanSampai,
@@ -332,7 +288,7 @@ export async function PUT(req, { params }) {
     });
   } catch (err) {
     if (err instanceof Error) {
-      if (err.message.startsWith('Field ') || err.message.includes('kode_kategori_pajak') || err.message.includes('bentrok')) {
+      if (err.message.startsWith('Field ') || err.message.includes('kode_kategori_pajak') || err.message.includes('duplikat')) {
         return NextResponse.json({ message: err.message }, { status: 400 });
       }
     }

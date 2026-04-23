@@ -130,13 +130,44 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
         <AppSwitch
           label='Override Manual'
           checked={Boolean(formData.override_manual)}
-          onChange={(checked) => setFormValue('override_manual', checked)}
-          description='Gunakan bila transaksi ini memerlukan penyesuaian manual lanjutan di backend.'
+          onChange={(checked) => {
+            setFormValue('override_manual', checked);
+
+            if (!checked) {
+              setFormValue('nominal_share', '');
+              setFormValue('nominal_oss', '');
+            }
+          }}
+          description='Aktifkan bila nominal share atau nominal OSS perlu disesuaikan manual.'
           showStateLabel={false}
           tone='primary'
           disabled={disabled}
         />
       </div>
+
+      {formData.override_manual ? (
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <AppInput
+            label='Nominal Share (Manual)'
+            type='number'
+            value={formData.nominal_share}
+            onChange={(e) => setFormValue('nominal_share', e.target.value)}
+            placeholder='Kosongkan jika ingin dihitung dari sisa total income'
+            inputClassName='!rounded-lg'
+            disabled={disabled}
+          />
+
+          <AppInput
+            label='Nominal OSS (Manual)'
+            type='number'
+            value={formData.nominal_oss}
+            onChange={(e) => setFormValue('nominal_oss', e.target.value)}
+            placeholder='Kosongkan jika ingin dihitung dari sisa total income'
+            inputClassName='!rounded-lg'
+            disabled={disabled}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -464,10 +464,6 @@ async function resolveBusinessState(tx, input, existing = null) {
       nominal_oss = subtractDecimalStrings(total_income, nominal_share, MONEY_SCALE);
     }
   } else {
-    if (Object.prototype.hasOwnProperty.call(input, 'nominal_share') || Object.prototype.hasOwnProperty.call(input, 'nominal_oss')) {
-      throw new Error("Field 'nominal_share' dan 'nominal_oss' hanya boleh dikirim saat 'override_manual' bernilai true.");
-    }
-
     nominal_share = computeAmountByPercentage(total_income, effectivePersenShare);
     nominal_oss = subtractDecimalStrings(total_income, nominal_share, MONEY_SCALE);
   }

@@ -1,6 +1,7 @@
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
+import db from '@/lib/prisma';
 import { parseRequestBody } from '@/app/api/_utils/requestBody';
 import {
   deleteSupabaseByPublicUrl,
@@ -183,12 +184,41 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ message: 'Master template sudah dihapus.' }, { status: 400 });
     }
 
-    const deleted = await masterTemplate.update({
-      where: { id_master_template: params.id },
-      data: { deleted_at: new Date() },
+    const result = await db.$transaction(async (tx) => {
+      const masterTemplateTx = tx?.master_template || tx?.masterTemplate || null;
+      if (!masterTemplateTx) {
+        const err = new Error('Prisma model master_template tidak ditemukan. Pastikan schema + prisma generate sudah benar.');
+        err.status = 500;
+        throw err;
+      }
+
+      const deleted = await masterTemplateTx.update({
+        where: { id_master_template: params.id },
+        data: { deleted_at: new Date() },
+      });
+
+      const periodeReset = await tx.periodePayroll.updateMany({
+        where: {
+          id_master_template: params.id,
+        },
+        data: {
+          id_master_template: null,
+        },
+      });
+
+      return {
+        deleted,
+        periode_payroll_dilepas: periodeReset.count,
+      };
     });
 
-    return NextResponse.json({ message: 'Master template dihapus (soft delete).', data: deleted });
+    return NextResponse.json({
+      message: 'Master template dihapus (soft delete) dan relasi periode payroll yang memakainya sudah dilepas.',
+      data: result.deleted,
+      relation_summary: {
+        periode_payroll_dilepas: result.periode_payroll_dilepas,
+      },
+    });
   } catch (err) {
     console.error('DELETE /admin/master-template/[id] error:', err);
     return NextResponse.json({ message: err?.message || 'Server error.' }, { status: err?.status || 500 });

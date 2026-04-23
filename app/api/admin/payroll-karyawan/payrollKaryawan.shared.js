@@ -185,6 +185,21 @@ export function subtractDecimalStrings(minuend, subtrahend, fieldName = 'pendapa
   return result.toFixed(2);
 }
 
+export function computePendapatanBersihFromTotals(totalPendapatanBruto, totalPotongan, options = {}) {
+  const { allowNegative = false, scale = 2, fieldName = 'pendapatan_bersih' } = options;
+  const result = Number(totalPendapatanBruto || 0) - Number(totalPotongan || 0);
+
+  if (!Number.isFinite(result)) {
+    throw new Error(`Field '${fieldName}' tidak valid.`);
+  }
+
+  if (!allowNegative && result < 0) {
+    throw new Error(`Field '${fieldName}' tidak boleh bernilai negatif.`);
+  }
+
+  return result.toFixed(scale);
+}
+
 export function computePph21NominalFromSnapshot(totalPendapatanBruto, persenTarifSnapshot, scale = 2) {
   const bruto = Number(totalPendapatanBruto || 0);
   const persenTarif = Number(persenTarifSnapshot || 0);
@@ -283,8 +298,16 @@ export function buildSelect() {
         tanggal_selesai: true,
         status_periode: true,
         catatan: true,
+        id_master_template: true,
         created_at: true,
         updated_at: true,
+        master_template: {
+          select: {
+            id_master_template: true,
+            nama_template: true,
+            file_template_url: true,
+          },
+        },
       },
     },
     user: {
@@ -577,6 +600,13 @@ export function buildSlipPayload(payroll) {
       tanggal_mulai: enrichedPayroll?.periode?.tanggal_mulai || null,
       tanggal_selesai: enrichedPayroll?.periode?.tanggal_selesai || null,
       status_periode: enrichedPayroll?.periode?.status_periode || null,
+      template: enrichedPayroll?.periode?.master_template
+        ? {
+            id_master_template: enrichedPayroll.periode.master_template.id_master_template || null,
+            nama_template: enrichedPayroll.periode.master_template.nama_template || null,
+            file_template_url: enrichedPayroll.periode.master_template.file_template_url || null,
+          }
+        : null,
     },
     groups: groupedItems,
     summary: {
@@ -607,6 +637,7 @@ export function buildSearchClauses(search) {
     { user: { is: { departement: { is: { nama_departement: { contains: search } } } } } },
     { user: { is: { jabatan: { is: { nama_jabatan: { contains: search } } } } } },
     { periode: { is: { catatan: { contains: search } } } },
+    { periode: { is: { master_template: { is: { nama_template: { contains: search } } } } } },
     { tarif_pajak_ter: { is: { kode_kategori_pajak: { contains: search } } } },
     {
       approvals: {

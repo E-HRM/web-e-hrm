@@ -1,4 +1,4 @@
-import { CheckCircleOutlined, DeleteOutlined, EditOutlined, ExclamationCircleOutlined, FileTextOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, DeleteOutlined, EditOutlined, ExclamationCircleOutlined, FileTextOutlined, InfoCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppCard from '@/app/(view)/component_shared/AppCard';
@@ -48,6 +48,7 @@ function PayoutKonsultanListCard({
   onEditPayout,
   onDeletePayout,
   onPostToPayroll,
+  onUnpostPayout,
   onHoldPayment,
   onReleaseHold,
 }) {
@@ -232,23 +233,6 @@ function PayoutKonsultanListCard({
                     size={12}
                     className='block text-gray-600 mb-1'
                   >
-                    Penyesuaian
-                  </AppTypography.Text>
-
-                  <AppTypography.Text
-                    size={20}
-                    weight={800}
-                    className={toNumber(payout.nominal_penyesuaian) >= 0 ? 'text-green-600' : 'text-red-600'}
-                  >
-                    {toNumber(payout.nominal_penyesuaian) !== 0 ? formatCurrency(payout.nominal_penyesuaian) : '-'}
-                  </AppTypography.Text>
-                </div>
-
-                <div>
-                  <AppTypography.Text
-                    size={12}
-                    className='block text-gray-600 mb-1'
-                  >
                     Total Dibayarkan
                   </AppTypography.Text>
 
@@ -333,13 +317,25 @@ function PayoutKonsultanListCard({
           ) : null}
 
           {payout.status_payout === STATUS_PAYOUT_KONSULTAN.DIPOSTING_KE_PAYROLL && payout.id_periode_payroll ? (
-            <AppButton
-              variant='outline'
-              disabled
-              className='!rounded-lg !h-10'
-            >
-              Sudah Diposting
-            </AppButton>
+            <>
+              <AppButton
+                variant='outline'
+                icon={<RollbackOutlined />}
+                onClick={() => onUnpostPayout(payout)}
+                disabled={isRowLoading || !payout?.business_state?.bisa_lepas_posting}
+                className='!rounded-lg !h-10'
+              >
+                Lepas Posting
+              </AppButton>
+
+              <AppButton
+                variant='outline'
+                disabled
+                className='!rounded-lg !h-10'
+              >
+                Sudah Diposting
+              </AppButton>
+            </>
           ) : null}
 
           {payout.status_payout === STATUS_PAYOUT_KONSULTAN.DITAHAN ? (
@@ -376,39 +372,6 @@ function PayoutKonsultanListCard({
         </div>
       </div>
 
-      <div className='mt-4 pt-4 border-t border-gray-200'>
-        <div className='flex items-center gap-2 text-sm text-gray-600 flex-wrap'>
-          <AppTypography.Text
-            size={14}
-            weight={600}
-            className='text-gray-700'
-          >
-            Perhitungan:
-          </AppTypography.Text>
-
-          <span className='px-2 py-1 bg-blue-100 text-blue-700 rounded font-mono text-xs'>{formatCurrency(payout.total_share)}</span>
-
-          {toNumber(payout.nominal_ditahan) > 0 ? (
-            <>
-              <span>-</span>
-              <span className='px-2 py-1 bg-red-100 text-red-700 rounded font-mono text-xs'>{formatCurrency(payout.nominal_ditahan)}</span>
-            </>
-          ) : null}
-
-          {toNumber(payout.nominal_penyesuaian) !== 0 ? (
-            <>
-              <span>{toNumber(payout.nominal_penyesuaian) >= 0 ? '+' : '-'}</span>
-              <span className={`px-2 py-1 rounded font-mono text-xs ${toNumber(payout.nominal_penyesuaian) >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {formatCurrency(Math.abs(toNumber(payout.nominal_penyesuaian)))}
-              </span>
-            </>
-          ) : null}
-
-          <span>=</span>
-
-          <span className='px-2 py-1 bg-green-100 text-green-700 rounded font-mono text-xs font-bold'>{formatCurrency(payout.nominal_dibayarkan)}</span>
-        </div>
-      </div>
     </AppCard>
   );
 }

@@ -128,6 +128,34 @@ function CreatePayrollForm({ vm }) {
         />
       </div>
 
+      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+        <AppInput
+          label='No. Issue'
+          value={vm.formData.issue_number}
+          onChange={(event) => vm.setFormValue('issue_number', event.target.value)}
+          placeholder='Contoh: PAY-APR-2026-001'
+          inputClassName='!rounded-lg'
+          hint='Nomor dokumen ini dipakai pada slip payroll.'
+        />
+
+        <AppInput
+          label='Tanggal Issue'
+          type='datetime-local'
+          value={vm.formData.issued_at}
+          onChange={(event) => vm.setFormValue('issued_at', event.target.value)}
+          inputClassName='!rounded-lg'
+        />
+      </div>
+
+      <AppInput
+        label='Nama Perusahaan'
+        value={vm.formData.company_name_snapshot}
+        onChange={(event) => vm.setFormValue('company_name_snapshot', event.target.value)}
+        placeholder='Contoh: One Step Solution (OSS) Bali'
+        inputClassName='!rounded-lg'
+        hint='Dipakai sebagai snapshot nama perusahaan pada slip payroll.'
+      />
+
       <ApprovalStepsSection vm={vm} />
 
       <AppSelect

@@ -197,10 +197,13 @@ export function createInitialPeriodePayrollForm(referenceDate = new Date()) {
     tanggal_selesai,
     status_periode: 'DRAFT',
     catatan: '',
+    id_master_template: '',
   };
 }
 
 export function serializePeriodePayrollPayload(formData) {
+  const id_master_template = String(formData?.id_master_template || '').trim();
+
   return {
     bulan: String(formData?.bulan || '')
       .trim()
@@ -212,5 +215,6 @@ export function serializePeriodePayrollPayload(formData) {
       .trim()
       .toUpperCase(),
     catatan: String(formData?.catatan || '').trim() || null,
+    id_master_template: id_master_template || null,
   };
 }

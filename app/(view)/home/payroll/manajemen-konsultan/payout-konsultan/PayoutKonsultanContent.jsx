@@ -30,9 +30,15 @@ export default function PayoutKonsultanContent() {
   return (
     <div className='p-8'>
       <PayoutKonsultanHeaderSection
+        filterPeriode={vm.filterPeriode}
+        setFilterPeriode={vm.setFilterPeriode}
+        periodeOptions={vm.filterPeriodeOptions}
+        activePeriode={vm.activeFilterPeriode}
+        formatPeriodeKonsultanLabel={vm.formatPeriodeKonsultanLabel}
         onCreate={vm.openCreateModal}
         onReload={vm.reloadData}
-        loading={vm.refreshing}
+        loading={vm.loading}
+        refreshing={vm.refreshing}
       />
 
       <PayoutKonsultanSummarySection
@@ -44,7 +50,7 @@ export default function PayoutKonsultanContent() {
 
       <PayoutKonsultanListSection
         loading={vm.loading}
-        payoutWithMeta={vm.payoutWithMeta}
+        payoutWithMeta={vm.filteredPayoutWithMeta}
         pendingActionId={vm.pendingActionId}
         formatCurrency={vm.formatCurrency}
         formatDate={vm.formatDate}
@@ -52,6 +58,7 @@ export default function PayoutKonsultanContent() {
         onEditPayout={vm.openEditModal}
         onDeletePayout={vm.openDeleteDialog}
         onPostToPayroll={vm.openPostModal}
+        onUnpostPayout={vm.handleUnpostPayout}
         onHoldPayment={vm.handleHoldPayment}
         onReleaseHold={vm.handleReleaseHold}
       />

@@ -171,6 +171,8 @@ function buildSelect() {
         foto_profil_user: true,
         role: true,
         nomor_induk_karyawan: true,
+        nomor_rekening: true,
+        jenis_bank: true,
         status_kerja: true,
         deleted_at: true,
         departement: {

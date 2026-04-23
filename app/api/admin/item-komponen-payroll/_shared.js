@@ -2,8 +2,11 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { authenticateRequest } from "@/app/utils/auth/authUtils";
+import { isSystemDerivedPph21Item } from "@/app/api/admin/payroll-karyawan/payrollRecalculation.shared";
 import { verifyAuthToken } from "@/lib/jwt";
 import db from "@/lib/prisma";
+
+export { recalculatePayrollTotals } from "@/app/api/admin/payroll-karyawan/payrollRecalculation.shared";
 
 export const VIEW_ROLES = new Set(["HR", "DIREKTUR", "SUPERADMIN"]);
 export const CREATE_ROLES = new Set(["HR", "DIREKTUR", "SUPERADMIN"]);
@@ -471,6 +474,11 @@ export function enrichItem(data) {
   const isDeleted =
     Boolean(data?.deleted_at) ||
     Boolean(data?.payroll_karyawan?.deleted_at);
+  const isDerivedTaxItem =
+    String(data?.tipe_komponen || "").trim().toUpperCase() === "PAJAK";
+  const systemGenerated =
+    !String(data?.kunci_idempoten || "").startsWith("manual:") ||
+    isSystemDerivedPph21Item(data);
 
   return {
     ...data,
@@ -478,11 +486,18 @@ export function enrichItem(data) {
       payroll_immutable: payrollImmutable,
       periode_immutable: periodeImmutable,
       sourced_from_definition: Boolean(data?.id_definisi_komponen_payroll),
-      system_generated: !String(data?.kunci_idempoten || "").startsWith(
-        "manual:",
-      ),
-      bisa_diubah: !isDeleted && !payrollImmutable && !periodeImmutable,
-      bisa_dihapus: !isDeleted && !payrollImmutable && !periodeImmutable,
+      system_generated: systemGenerated,
+      system_derived_pph21: isDerivedTaxItem,
+      bisa_diubah:
+        !isDeleted &&
+        !payrollImmutable &&
+        !periodeImmutable &&
+        !isDerivedTaxItem,
+      bisa_dihapus:
+        !isDeleted &&
+        !payrollImmutable &&
+        !periodeImmutable &&
+        !isDerivedTaxItem,
     },
   };
 }
@@ -643,85 +658,6 @@ export async function getValidTipeKomponen(tx, namaTipeKomponen) {
   }
 
   return found;
-}
-
-export async function recalculatePayrollTotals(tx, id_payroll_karyawan) {
-  const [payroll, items] = await Promise.all([
-    tx.payrollKaryawan.findUnique({
-      where: {
-        id_payroll_karyawan,
-      },
-      select: {
-        id_payroll_karyawan: true,
-      },
-    }),
-    tx.itemKomponenPayroll.findMany({
-      where: {
-        id_payroll_karyawan,
-        deleted_at: null,
-      },
-      select: {
-        tipe_komponen: true,
-        arah_komponen: true,
-        nominal: true,
-      },
-    }),
-  ]);
-
-  if (!payroll) {
-    throw new Error("Payroll karyawan tidak ditemukan.");
-  }
-
-  let totalPendapatanBruto = 0n;
-  let totalPotongan = 0n;
-  let pph21Nominal = 0n;
-
-  for (const item of items) {
-    const nominal = decimalToScaledBigInt(String(item.nominal), DECIMAL_SCALE);
-
-    if (item.arah_komponen === "PEMASUKAN") {
-      totalPendapatanBruto += nominal;
-      continue;
-    }
-
-    if (item.arah_komponen === "POTONGAN") {
-      totalPotongan += nominal;
-
-      if (String(item.tipe_komponen || "").toUpperCase() === "PAJAK") {
-        pph21Nominal += nominal;
-      }
-    }
-  }
-
-  const pendapatanBersih = totalPendapatanBruto - totalPotongan;
-
-  if (pendapatanBersih < 0n) {
-    throw new Error(
-      "Perubahan item komponen payroll membuat pendapatan_bersih bernilai negatif.",
-    );
-  }
-
-  const payload = {
-    total_pendapatan_bruto: scaledBigIntToDecimalString(
-      totalPendapatanBruto,
-      DECIMAL_SCALE,
-    ),
-    total_potongan: scaledBigIntToDecimalString(totalPotongan, DECIMAL_SCALE),
-    pph21_nominal: scaledBigIntToDecimalString(pph21Nominal, DECIMAL_SCALE),
-    pendapatan_bersih: scaledBigIntToDecimalString(
-      pendapatanBersih,
-      DECIMAL_SCALE,
-    ),
-  };
-
-  await tx.payrollKaryawan.update({
-    where: {
-      id_payroll_karyawan,
-    },
-    data: payload,
-  });
-
-  return payload;
 }
 
 export async function findDuplicateIdempotencyKey(
@@ -909,6 +845,13 @@ export async function resolveItemPayload(
     );
   }
 
+  if (String(tipe_komponen).trim().toUpperCase() === "PAJAK") {
+    throw createHttpError(
+      409,
+      "Item komponen PAJAK dihitung otomatis dari payroll dan tidak boleh dibuat atau diubah manual.",
+    );
+  }
+
   return {
     payload: {
       id_payroll_karyawan,
@@ -948,6 +891,17 @@ export async function getExistingItem(id) {
       deleted_at: true,
     },
   });
+}
+
+export function ensureNonDerivedTaxItem(existing, actionLabel = "diubah") {
+  if (
+    String(existing?.tipe_komponen || "").trim().toUpperCase() === "PAJAK"
+  ) {
+    throw createHttpError(
+      409,
+      `Item komponen PAJAK dihitung otomatis dari payroll dan tidak dapat ${actionLabel} manual.`,
+    );
+  }
 }
 
 export function buildItemValidationMessage(err) {

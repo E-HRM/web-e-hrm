@@ -21,6 +21,7 @@ import {
 
 const FETCH_PAGE_SIZE = 100;
 const PERIODE_PAYROLL_SWR_KEY = 'payroll:periode-payroll:list';
+const MASTER_TEMPLATE_SWR_KEY = 'payroll:master-template:list';
 
 function normalizeText(value) {
   return String(value || '')
@@ -65,6 +66,22 @@ async function fetchAllPeriodePayroll() {
   );
 }
 
+async function fetchAllMasterTemplates() {
+  const response = await crudServiceAuth.get(
+    ApiEndpoints.GetMasterTemplate({
+      all: true,
+      orderBy: 'nama_template',
+      sort: 'asc',
+    }),
+  );
+
+  if (Array.isArray(response?.items)) return response.items;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response)) return response;
+
+  return [];
+}
+
 export default function usePeriodePayrollViewModel() {
   const [searchText, setSearchText] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -87,6 +104,15 @@ export default function usePeriodePayrollViewModel() {
     revalidateOnFocus: false,
   });
 
+  const {
+    data: masterTemplateResponse,
+    error: masterTemplateError,
+    isLoading: isMasterTemplateLoading,
+    isValidating: isMasterTemplateValidating,
+  } = useSWR(MASTER_TEMPLATE_SWR_KEY, fetchAllMasterTemplates, {
+    revalidateOnFocus: false,
+  });
+
   useEffect(() => {
     if (!error) return;
 
@@ -97,7 +123,18 @@ export default function usePeriodePayrollViewModel() {
     });
   }, [error]);
 
+  useEffect(() => {
+    if (!masterTemplateError) return;
+
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'master-template-fetch-error',
+      content: masterTemplateError?.message || 'Gagal memuat daftar master template.',
+    });
+  }, [masterTemplateError]);
+
   const periodeList = useMemo(() => (Array.isArray(periodeResponse) ? periodeResponse : []), [periodeResponse]);
+  const masterTemplateList = useMemo(() => (Array.isArray(masterTemplateResponse) ? masterTemplateResponse : []), [masterTemplateResponse]);
 
   const resolvedSelectedPeriode = useMemo(() => {
     if (!selectedPeriode) return null;
@@ -153,6 +190,7 @@ export default function usePeriodePayrollViewModel() {
       tanggal_selesai: toDateInputValue(periode.tanggal_selesai),
       status_periode: periode.status_periode || 'DRAFT',
       catatan: periode.catatan || '',
+      id_master_template: periode.id_master_template || periode?.master_template?.id_master_template || '',
     });
     setIsEditModalOpen(true);
   }, []);
@@ -308,6 +346,8 @@ export default function usePeriodePayrollViewModel() {
           formatStatusPeriodePayroll(status),
           item?.tanggal_mulai,
           item?.tanggal_selesai,
+          item?.master_template?.nama_template,
+          item?.master_template?.file_template_url,
           `${item?._count?.payroll_karyawan || 0}`,
           `${item?._count?.payout_konsultan ?? item?._count?.payoutKonsultans ?? 0}`,
         ].join(' '),
@@ -358,6 +398,19 @@ export default function usePeriodePayrollViewModel() {
   }, [periodeList]);
 
   const statusOptions = useMemo(() => [{ value: '', label: 'Semua Status' }, ...STATUS_PERIODE_PAYROLL_OPTIONS], []);
+  const templateOptions = useMemo(
+    () =>
+      masterTemplateList.map((item) => ({
+        value: item?.id_master_template || '',
+        label: item?.nama_template || 'Template tanpa nama',
+      })),
+    [masterTemplateList],
+  );
+
+  const resolveTemplateLabel = useCallback((source) => {
+    const template = source?.master_template ?? source;
+    return template?.nama_template || 'Belum ada template payslip';
+  }, []);
 
   return {
     error,
@@ -378,6 +431,8 @@ export default function usePeriodePayrollViewModel() {
     statusOptions,
     tahunOptions,
     bulanOptions: BULAN_OPTIONS,
+    templateOptions,
+    templateLoading: isMasterTemplateLoading || isMasterTemplateValidating,
 
     isCreateModalOpen,
     openCreateModal,
@@ -404,5 +459,6 @@ export default function usePeriodePayrollViewModel() {
     formatDate,
     formatPeriodeLabel: formatPeriodePayrollLabel,
     formatStatusPeriode: formatStatusPeriodePayroll,
+    resolveTemplateLabel,
   };
 }

@@ -33,6 +33,8 @@ export function createInitialTransaksiForm(activePeriode = '') {
     nominal_kredit: '0',
     persen_share_default: '60',
     persen_share_override: '',
+    nominal_share: '',
+    nominal_oss: '',
     override_manual: false,
   };
 }

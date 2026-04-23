@@ -534,7 +534,7 @@ export async function resolvePayoutAndTransaksi(tx, { id_payout_konsultan, id_tr
   if (conflictingLinkedDetail) {
     throw createHttpError(
       409,
-      `Transaksi konsultan sudah terhubung ke payout lain (${conflictingLinkedDetail.id_payout_konsultan}). Lepaskan dari payout lama terlebih dahulu.`,
+      "Transaksi konsultan sudah terhubung ke payout lain. Lepaskan dari payout sebelumnya terlebih dahulu.",
     );
   }
 
@@ -600,14 +600,10 @@ export async function recalculatePayoutSummary(tx, id_payout_konsultan) {
     MONEY_SCALE,
   );
 
-  const nominalDibayarkan = sumDecimalStrings(
-    subtractDecimalStrings(totalShare, nominalDitahan, MONEY_SCALE),
-    getDecimalString(payout.nominal_penyesuaian, MONEY_SCALE),
-    MONEY_SCALE,
-  );
+  const nominalDibayarkan = getDecimalString(payout.nominal_penyesuaian, MONEY_SCALE);
 
   if (decimalToScaledBigInt(nominalDibayarkan, MONEY_SCALE) < 0n) {
-    throw createHttpError(409, "Perhitungan 'nominal_dibayarkan' pada payout menghasilkan nilai negatif. Sesuaikan nominal_ditahan atau nominal_penyesuaian terlebih dahulu.");
+    throw createHttpError(409, "Field 'nominal_penyesuaian' pada payout tidak boleh bernilai negatif.");
   }
 
   return tx.payoutKonsultan.update({

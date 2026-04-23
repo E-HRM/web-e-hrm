@@ -66,10 +66,10 @@ export default function PayoutKonsultanInfoSection() {
               <strong>Nominal Ditahan:</strong> Jumlah yang ditahan dari pembayaran
             </li>
             <li>
-              <strong>Nominal Penyesuaian:</strong> Adjustment manual untuk bonus tambahan atau koreksi
+              <strong>Nominal Penyesuaian:</strong> Nominal akhir payout yang diinput manual pada modal buat atau edit payout
             </li>
             <li>
-              <strong>Nominal Dibayarkan:</strong> Jumlah final yang dibayarkan ke konsultan
+              <strong>Nominal Dibayarkan:</strong> Mengikuti nilai nominal penyesuaian yang disimpan
             </li>
           </ul>
         </div>

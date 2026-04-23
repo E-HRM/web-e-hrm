@@ -129,7 +129,7 @@
  *         description: Terjadi kesalahan server.
  *   post:
  *     summary: Buat tarif pajak TER
- *     description: Menambahkan data tarif pajak TER baru. Sistem akan menolak data jika kode kategori pajak, periode berlaku, dan rentang penghasilan saling overlap dengan data aktif lain.
+ *     description: Menambahkan data tarif pajak TER baru. Overlap antar data diperbolehkan, tetapi sistem tetap menolak data yang identik pada kombinasi kode kategori pajak, periode berlaku, dan rentang penghasilan.
  *     tags: [Admin - Tarif Pajak TER]
  *     security:
  *       - BearerAuth: []

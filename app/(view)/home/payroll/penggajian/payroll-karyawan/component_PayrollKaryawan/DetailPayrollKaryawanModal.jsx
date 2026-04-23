@@ -86,6 +86,33 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
               weight={700}
               className='block text-gray-900 mb-4'
             >
+              Informasi Dokumen
+            </AppTypography.Text>
+
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+              <DetailField
+                label='No. Issue'
+                value={vm.selectedPayroll.issue_number || '-'}
+              />
+
+              <DetailField
+                label='Tanggal Issue'
+                value={vm.selectedPayroll.issued_at ? vm.formatDateTime(vm.selectedPayroll.issued_at) : '-'}
+              />
+
+              <DetailField
+                label='Nama Perusahaan'
+                value={vm.selectedPayroll.company_name_snapshot || '-'}
+              />
+            </div>
+          </div>
+
+          <div className='border-b border-gray-200 pb-4'>
+            <AppTypography.Text
+              size={18}
+              weight={700}
+              className='block text-gray-900 mb-4'
+            >
               Ringkasan Keuangan
             </AppTypography.Text>
 

@@ -30,7 +30,9 @@
  *       Memperbarui payout konsultan berdasarkan ID dengan aturan bisnis berikut:
  *       - payout yang sudah `DIPOSTING_KE_PAYROLL` tidak bisa diubah lagi.
  *       - perubahan `id_periode_konsultan` atau `id_user` akan memicu sinkronisasi ulang detail transaksi sumber.
- *       - `total_share`, `nominal_dibayarkan`, `disetujui_pada`, dan `diposting_pada` dihitung otomatis oleh sistem.
+ *       - `total_share`, `nominal_ditahan`, `disetujui_pada`, dan `diposting_pada` dihitung otomatis oleh sistem.
+ *       - `nominal_penyesuaian` tetap diisi manual sebagai nominal akhir payout.
+ *       - `nominal_dibayarkan` mengikuti nilai `nominal_penyesuaian` yang tersimpan.
  *       - jika status diubah menjadi `DIPOSTING_KE_PAYROLL`, sistem akan membuat/memperbarui item komponen payroll dan menandai transaksi sumber sebagai sudah diposting.
  *     tags: [Admin - Payout Konsultan]
  *     security:
@@ -60,7 +62,8 @@
  *                 example: '0.00'
  *               nominal_penyesuaian:
  *                 type: string
- *                 example: '-50000.00'
+ *                 example: '850000.00'
+ *                 description: Nominal akhir payout yang diinput manual user.
  *               status_payout:
  *                 type: string
  *                 enum: [DRAFT, DISETUJUI, DIPOSTING_KE_PAYROLL, DITAHAN]

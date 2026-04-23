@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import { getMasterTemplateDelegate } from '../master-template/_shared';
 
 const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
@@ -60,6 +61,19 @@ function normalizeNullableString(value, fieldName = 'string') {
 
   const normalized = String(value).trim();
   if (!normalized) return null;
+
+  return normalized;
+}
+
+function normalizeNullableId(value, fieldName = 'id') {
+  if (value === undefined || value === null) return null;
+
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+
+  if (normalized.length > 36) {
+    throw new Error(`Field '${fieldName}' maksimal 36 karakter.`);
+  }
 
   return normalized;
 }
@@ -146,8 +160,16 @@ function buildSelect() {
     tanggal_selesai: true,
     status_periode: true,
     catatan: true,
+    id_master_template: true,
     created_at: true,
     updated_at: true,
+    master_template: {
+      select: {
+        id_master_template: true,
+        nama_template: true,
+        file_template_url: true,
+      },
+    },
     _count: {
       select: {
         payroll_karyawan: true,
@@ -155,6 +177,37 @@ function buildSelect() {
       },
     },
   };
+}
+
+async function ensureMasterTemplateExists(id_master_template) {
+  if (!id_master_template) return null;
+
+  const masterTemplate = getMasterTemplateDelegate();
+  if (!masterTemplate) {
+    const err = new Error('Prisma model master_template tidak ditemukan. Pastikan schema + prisma generate sudah benar.');
+    err.status = 500;
+    throw err;
+  }
+
+  const template = await masterTemplate.findFirst({
+    where: {
+      id_master_template,
+      deleted_at: null,
+    },
+    select: {
+      id_master_template: true,
+      nama_template: true,
+      file_template_url: true,
+    },
+  });
+
+  if (!template) {
+    const err = new Error('Master template payroll tidak ditemukan atau sudah dihapus.');
+    err.status = 400;
+    throw err;
+  }
+
+  return template;
 }
 
 function enrichPeriode(item) {
@@ -238,6 +291,14 @@ export async function GET(req) {
               { bulan: { equals: search.toUpperCase() } },
               ...(searchAsYear ? [{ tahun: searchAsYear }] : []),
               { catatan: { contains: search } },
+              {
+                master_template: {
+                  is: {
+                    deleted_at: null,
+                    OR: [{ nama_template: { contains: search } }, { file_template_url: { contains: search } }],
+                  },
+                },
+              },
             ],
           }
         : {}),
@@ -292,6 +353,7 @@ export async function POST(req) {
     const tanggal_selesai = parseRequiredDateOnly(body?.tanggal_selesai, 'tanggal_selesai');
     const status_periode = body?.status_periode === undefined ? 'DRAFT' : normalizeEnum(body?.status_periode, STATUS_PERIODE_VALUES, 'status_periode');
     const catatan = normalizeNullableString(body?.catatan, 'catatan');
+    const id_master_template = normalizeNullableId(body?.id_master_template, 'id_master_template');
 
     validatePeriodeState({
       tahun,
@@ -299,6 +361,8 @@ export async function POST(req) {
       tanggal_mulai,
       tanggal_selesai,
     });
+
+    await ensureMasterTemplateExists(id_master_template);
 
     const existing = await db.periodePayroll.findFirst({
       where: { tahun, bulan },
@@ -319,6 +383,7 @@ export async function POST(req) {
         tanggal_selesai,
         status_periode,
         catatan,
+        id_master_template,
       },
       select: buildSelect(),
     });
@@ -336,6 +401,6 @@ export async function POST(req) {
     }
 
     console.error('POST /api/admin/periode-payroll error:', err);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    return NextResponse.json({ message: err?.message || 'Server error' }, { status: err?.status || 500 });
   }
 }

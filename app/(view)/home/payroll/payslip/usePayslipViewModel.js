@@ -1,5 +1,6 @@
 'use client';
 
+import Cookies from 'js-cookie';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
@@ -19,43 +20,6 @@ function normalizeText(value) {
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function formatCurrency(value) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(toNumber(value));
-}
-
-function formatDate(value) {
-  if (!value) return '-';
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-
-  return new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).format(date);
-}
-
-function formatDateTime(value) {
-  if (!value) return '-';
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-
-  return new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
 }
 
 function formatBulan(value) {
@@ -80,52 +44,6 @@ function formatBulan(value) {
 function formatPeriodeLabel(periode) {
   if (!periode) return '-';
   return `${formatBulan(periode.bulan)} ${periode.tahun || '-'}`;
-}
-
-function formatJenisHubungan(value) {
-  const map = {
-    PKWTT: 'PKWTT',
-    PKWT: 'PKWT',
-    FREELANCE: 'Freelance',
-    INTERNSHIP: 'Internship',
-  };
-
-  return map[normalizeText(value).toUpperCase()] || value || '-';
-}
-
-function formatStatusPayroll(status) {
-  const map = {
-    DRAFT: { label: 'Draft', tone: 'neutral' },
-    TERSIMPAN: { label: 'Tersimpan', tone: 'info' },
-    DISETUJUI: { label: 'Disetujui', tone: 'info' },
-    DIBAYAR: { label: 'Dibayar', tone: 'success' },
-  };
-
-  return map[normalizeText(status).toUpperCase()] || { label: status || '-', tone: 'neutral' };
-}
-
-function formatStatusApproval(status) {
-  const map = {
-    pending: { label: 'Pending', tone: 'warning' },
-    disetujui: { label: 'Disetujui', tone: 'success' },
-    ditolak: { label: 'Ditolak', tone: 'danger' },
-  };
-
-  return map[normalizeText(status).toLowerCase()] || { label: status || '-', tone: 'neutral' };
-}
-
-function formatApproverRole(role) {
-  const map = {
-    KARYAWAN: 'Karyawan',
-    HR: 'HR',
-    OPERASIONAL: 'Operasional',
-    DIREKTUR: 'Direktur',
-    SUPERADMIN: 'Superadmin',
-    SUBADMIN: 'Subadmin',
-    SUPERVISI: 'Supervisi',
-  };
-
-  return map[normalizeText(role).toUpperCase()] || role || '-';
 }
 
 async function fetchAllPages(fetcher) {
@@ -161,6 +79,35 @@ async function fetchPayrollByPeriode(idPeriodePayroll) {
   );
 }
 
+async function fetchPdfBlob(url, signal) {
+  const token = Cookies.get('token');
+  const headers = {};
+  if (token) headers.authorization = `Bearer ${token}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers,
+    credentials: 'include',
+    signal,
+  });
+
+  if (!res.ok) {
+    const contentType = res.headers.get('content-type') || '';
+    const payload = contentType.includes('application/json')
+      ? await res.json().catch(() => ({}))
+      : await res.text().catch(() => '');
+
+    const message =
+      typeof payload === 'string'
+        ? payload || `Gagal memuat preview PDF (${res.status}).`
+        : payload?.message || payload?.error || `Gagal memuat preview PDF (${res.status}).`;
+
+    throw new Error(message);
+  }
+
+  return res.blob();
+}
+
 function normalizePayrollListItem(item) {
   if (!item) return null;
 
@@ -169,11 +116,8 @@ function normalizePayrollListItem(item) {
     id_periode_payroll: item.id_periode_payroll,
     nama_karyawan: item.nama_karyawan || item?.user?.nama_pengguna || '-',
     issue_number: item.issue_number || null,
-    issued_at: item.issued_at || null,
-    company_name_snapshot: item.company_name_snapshot || null,
     period_label: item?.periode ? formatPeriodeLabel(item.periode) : '-',
     status_payroll: item.status_payroll || 'DRAFT',
-    status_approval: item.status_approval || 'pending',
     pendapatan_bersih: toNumber(item.pendapatan_bersih),
   };
 }
@@ -190,22 +134,25 @@ function buildSearchParams(searchParams, nextPayrollId) {
   return nextParams.toString();
 }
 
-function isVisualTemplate(url) {
-  const value = normalizeText(url).toLowerCase();
-  if (!value) return false;
-  if (value.startsWith('data:image/')) return true;
-  return /\.(png|jpe?g|webp|gif|svg)(\?.*)?$/i.test(value);
-}
-
 export default function usePayslipViewModel() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const requestedPayrollId = useMemo(() => normalizeText(searchParams?.get('payroll') || searchParams?.get('id_payroll_karyawan')), [searchParams]);
-  const requestedPeriodeId = useMemo(() => normalizeText(searchParams?.get('periode') || searchParams?.get('id_periode_payroll')), [searchParams]);
+  const requestedPayrollId = useMemo(
+    () => normalizeText(searchParams?.get('payroll') || searchParams?.get('id_payroll_karyawan')),
+    [searchParams],
+  );
+  const requestedPeriodeId = useMemo(
+    () => normalizeText(searchParams?.get('periode') || searchParams?.get('id_periode_payroll')),
+    [searchParams],
+  );
 
   const [selectedPayrollId, setSelectedPayrollId] = useState(requestedPayrollId);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
+  const [pdfPreviewError, setPdfPreviewError] = useState('');
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+  const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
 
   useEffect(() => {
     setSelectedPayrollId(requestedPayrollId);
@@ -243,7 +190,8 @@ export default function usePayslipViewModel() {
   useEffect(() => {
     if (!payrollList.length) return;
 
-    const hasRequestedPayroll = requestedPayrollId && payrollList.some((item) => item.id_payroll_karyawan === requestedPayrollId);
+    const hasRequestedPayroll =
+      requestedPayrollId && payrollList.some((item) => item.id_payroll_karyawan === requestedPayrollId);
     if (hasRequestedPayroll) return;
 
     if (selectedPayrollId && payrollList.some((item) => item.id_payroll_karyawan === selectedPayrollId)) return;
@@ -257,7 +205,8 @@ export default function usePayslipViewModel() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
   }, [pathname, payrollList, requestedPayrollId, router, searchParams, selectedPayrollId]);
 
-  const activePayrollId = selectedPayrollId || requestedPayrollId || payrollList[0]?.id_payroll_karyawan || '';
+  const activePayrollId =
+    selectedPayrollId || requestedPayrollId || payrollList[0]?.id_payroll_karyawan || '';
 
   const {
     data: slipResponse,
@@ -285,6 +234,50 @@ export default function usePayslipViewModel() {
 
   const slip = useMemo(() => slipResponse?.data || null, [slipResponse]);
 
+  useEffect(() => {
+    let objectUrl = '';
+    const controller = new AbortController();
+
+    if (!activePayrollId) {
+      setPdfPreviewUrl((current) => {
+        if (current?.startsWith('blob:')) URL.revokeObjectURL(current);
+        return '';
+      });
+      setPdfPreviewError('');
+      setPdfPreviewLoading(false);
+      return () => controller.abort();
+    }
+
+    setPdfPreviewLoading(true);
+    setPdfPreviewError('');
+    setPdfPreviewUrl((current) => {
+      if (current?.startsWith('blob:')) URL.revokeObjectURL(current);
+      return '';
+    });
+
+    fetchPdfBlob(ApiEndpoints.GetPayrollSlipPdfKaryawanById(activePayrollId), controller.signal)
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setPdfPreviewUrl(objectUrl);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setPdfPreviewError(error?.message || 'Gagal memuat preview PDF slip payroll.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setPdfPreviewLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [activePayrollId, pdfRefreshKey]);
+
   const selectPayroll = useCallback(
     (payrollId) => {
       const nextPayrollId = normalizeText(payrollId);
@@ -300,17 +293,8 @@ export default function usePayslipViewModel() {
 
   const reloadData = useCallback(async () => {
     await Promise.all([mutatePayrollList(), mutateSlip()]);
+    setPdfRefreshKey((current) => current + 1);
   }, [mutatePayrollList, mutateSlip]);
-
-  const handlePrint = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    window.print();
-  }, []);
-
-  const selectedPayrollListItem = useMemo(() => {
-    if (!activePayrollId) return null;
-    return payrollList.find((item) => item.id_payroll_karyawan === activePayrollId) || null;
-  }, [activePayrollId, payrollList]);
 
   const backHref = useMemo(() => {
     if (requestedPeriodeId) {
@@ -349,43 +333,28 @@ export default function usePayslipViewModel() {
     return `/home/payroll/penggajian/payroll-karyawan/item-komponen?${query.toString()}`;
   }, []);
 
-  const headerTemplate = useMemo(() => {
-    const template = slip?.templates?.header;
-    if (!template?.file_template_url || !isVisualTemplate(template.file_template_url)) return null;
-    return template;
-  }, [slip]);
-
-  const footerTemplate = useMemo(() => {
-    const template = slip?.templates?.footer;
-    if (!template?.file_template_url || !isVisualTemplate(template.file_template_url)) return null;
-    return template;
-  }, [slip]);
+  const openPdfPreview = useCallback(() => {
+    if (!pdfPreviewUrl || typeof window === 'undefined') return;
+    window.open(pdfPreviewUrl, '_blank', 'noopener,noreferrer');
+  }, [pdfPreviewUrl]);
 
   return {
     slip,
     payrollList,
-    selectedPayrollListItem,
     activePayrollId,
     backHref,
-    headerTemplate,
-    footerTemplate,
+
+    pdfPreviewUrl,
+    pdfPreviewError,
+    pdfPreviewLoading,
 
     loading: isPayrollListLoading || isSlipLoading,
     validating: isPayrollListValidating || isSlipValidating,
     hasFilters: Boolean(requestedPeriodeId || requestedPayrollId),
 
-    formatCurrency,
-    formatDate,
-    formatDateTime,
-    formatJenisHubungan,
-    formatPeriodeLabel,
-    formatStatusPayroll,
-    formatStatusApproval,
-    formatApproverRole,
-
     selectPayroll,
     reloadData,
-    handlePrint,
     buildItemKomponenHref,
+    openPdfPreview,
   };
 }

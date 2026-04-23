@@ -23,11 +23,11 @@ import {
   parseDateTime,
   parseNonNegativeDecimal,
   computePph21NominalFromSnapshot,
+  computePendapatanBersihFromTotals,
   replaceApprovalSteps,
   resolveApprovalSteps,
   STATUS_PAYROLL_VALUES,
   addDecimalStrings,
-  subtractDecimalStrings,
 } from '../payrollKaryawan.shared';
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
@@ -36,16 +36,19 @@ function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
   const existingPph21 = Number(existing?.pph21_nominal || 0);
   const existingTotalPotongan = Number(existing?.total_potongan || 0);
   const existingOtherPotongan = Math.max(existingTotalPotongan - existingPph21, 0);
+  const statusPayroll = String(options?.statusPayroll ?? body?.status_payroll ?? existing?.status_payroll ?? 'DRAFT')
+    .trim()
+    .toUpperCase();
+  const allowNegativePendapatanBersih = statusPayroll === 'DRAFT';
 
   const totalPendapatanBruto = parseNonNegativeDecimal(body?.total_pendapatan_bruto ?? body?.total_bruto_kena_pajak ?? existing?.total_pendapatan_bruto ?? '0', 'total_pendapatan_bruto');
   const persenTarifSnapshot = options?.persenTarifSnapshot ?? existing?.persen_tarif_snapshot ?? body?.persen_tarif_snapshot ?? '0';
   const pph21Nominal = parseNonNegativeDecimal(computePph21NominalFromSnapshot(totalPendapatanBruto, persenTarifSnapshot), 'pph21_nominal');
   const totalPotonganLain = parseNonNegativeDecimal(body?.total_potongan_lain ?? existingOtherPotongan, 'total_potongan_lain');
   const totalPotongan = parseNonNegativeDecimal(body?.total_potongan ?? addDecimalStrings(pph21Nominal, totalPotonganLain), 'total_potongan');
-  const pendapatanBersih = parseNonNegativeDecimal(
-    body?.pendapatan_bersih ?? body?.total_dibayarkan ?? existing?.pendapatan_bersih ?? subtractDecimalStrings(totalPendapatanBruto, totalPotongan),
-    'pendapatan_bersih',
-  );
+  const pendapatanBersih = computePendapatanBersihFromTotals(totalPendapatanBruto, totalPotongan, {
+    allowNegative: allowNegativePendapatanBersih,
+  });
 
   return {
     total_pendapatan_bruto: totalPendapatanBruto,
@@ -180,6 +183,11 @@ async function resolveUpdatePayload(existing, body = {}) {
         normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) ||
         user.nomor_rekening ||
         existing.bank_account,
+      issue_number: hasOwn(body, 'issue_number') ? normalizeNullableString(body?.issue_number, 'issue_number', 100) : existing.issue_number,
+      issued_at: hasOwn(body, 'issued_at') ? parseDateTime(body?.issued_at, 'issued_at') : existing.issued_at,
+      company_name_snapshot: hasOwn(body, 'company_name_snapshot')
+        ? normalizeNullableString(body?.company_name_snapshot, 'company_name_snapshot', 255)
+        : existing.company_name_snapshot,
       catatan: hasOwn(body, 'catatan') ? normalizeNullableString(body?.catatan, 'catatan') : existing.catatan,
       ...totals,
       ...statusFields,

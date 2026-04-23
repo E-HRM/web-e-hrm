@@ -25,15 +25,7 @@ function TransactionMeta({ label, value, accentClassName = 'text-gray-900' }) {
   );
 }
 
-export default function PayoutKonsultanTransactionSelectionSection({
-  transactions = [],
-  heldTransactionIds = [],
-  onToggleHeldTransaction,
-  formatCurrency,
-  formatDate,
-  formatPeriodeKonsultanLabel,
-  isLoading = false,
-}) {
+export default function PayoutKonsultanTransactionSelectionSection({ transactions = [], heldTransactionIds = [], onToggleHeldTransaction, formatCurrency, formatDate, formatPeriodeKonsultanLabel, isLoading = false }) {
   const heldIdSet = new Set(heldTransactionIds);
 
   return (
@@ -51,7 +43,7 @@ export default function PayoutKonsultanTransactionSelectionSection({
           size={12}
           className='block text-gray-500 mt-1'
         >
-          Centang transaksi yang ingin ditahan. Daftar ini juga dapat memuat carry-forward transaksi ditahan dari periode sebelumnya.
+          Centang transaksi yang ingin ditahan. Daftar ini juga memuat transaksi ditahan dari periode sebelumnya.
         </AppTypography.Text>
       </div>
 
@@ -81,17 +73,13 @@ export default function PayoutKonsultanTransactionSelectionSection({
             const productName = item?.jenis_produk?.nama_produk || '-';
             const clientName = item?.nama_klien || 'Klien tanpa nama';
             const description = item?.deskripsi || 'Tidak ada deskripsi transaksi.';
-            const periodeLabel = formatPeriodeKonsultanLabel?.(
-              item?.periode_konsultan || item?.id_periode_konsultan,
-            ) || '-';
+            const periodeLabel = formatPeriodeKonsultanLabel?.(item?.periode_konsultan || item?.id_periode_konsultan) || '-';
             const isCarryForward = Boolean(item?.is_carry_forward);
 
             return (
               <label
                 key={transaksiId}
-                className={`flex items-start gap-3 px-4 py-4 cursor-pointer transition-colors ${
-                  isHeld ? 'bg-rose-50/70' : 'hover:bg-gray-50'
-                }`}
+                className={`flex items-start gap-3 px-4 py-4 cursor-pointer transition-colors ${isHeld ? 'bg-rose-50/70' : 'hover:bg-gray-50'}`}
               >
                 <input
                   type='checkbox'
@@ -126,7 +114,7 @@ export default function PayoutKonsultanTransactionSelectionSection({
                             variant='soft'
                             size='sm'
                           >
-                            Carry Forward
+                            Transaksi Tertahan
                           </AppTag>
                         ) : null}
                       </div>

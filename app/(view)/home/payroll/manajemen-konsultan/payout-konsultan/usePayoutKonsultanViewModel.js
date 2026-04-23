@@ -105,7 +105,7 @@ function buildUrlWithQuery(baseUrl, params = {}) {
 }
 
 function isReleasedHeldDetail(detail) {
-  return Boolean(detail?.ditahan) && detail?.payout?.status_payout === STATUS_PAYOUT_KONSULTAN.DIPOSTING_KE_PAYROLL;
+  return Boolean(detail?.ditahan) && detail?.payout?.status_payout && detail?.payout?.status_payout !== STATUS_PAYOUT_KONSULTAN.DRAFT;
 }
 
 function getPayoutMutationBlockedReason(payout) {
@@ -115,6 +115,18 @@ function getPayoutMutationBlockedReason(payout) {
   if (payout?.business_state?.periode_deleted) return 'Periode konsultan payout ini sudah dihapus.';
   if (payout?.business_state?.payout_deleted) return 'Payout konsultan ini sudah dihapus.';
   return 'Payout konsultan ini tidak dapat diproses.';
+}
+
+function getPayoutUnpostBlockedReason(payout) {
+  if (!payout) return 'Data payout tidak ditemukan.';
+  if (!payout?.business_state?.payout_posted) return 'Payout konsultan ini belum diposting ke payroll.';
+  if (payout?.business_state?.payout_deleted) return 'Payout konsultan ini sudah dihapus.';
+  if (payout?.business_state?.periode_deleted) return 'Periode konsultan payout ini sudah dihapus.';
+  if (payout?.business_state?.periode_terkunci) return 'Periode konsultan payout ini sudah terkunci.';
+  if (!payout?.business_state?.payroll_attached) return 'Payout konsultan ini belum memiliki payroll tujuan aktif.';
+  if (payout?.business_state?.payroll_deleted) return 'Payroll tujuan payout ini sudah dihapus.';
+  if (payout?.business_state?.payroll_immutable) return 'Periode payroll tujuan sudah final atau terkunci.';
+  return 'Posting payout konsultan ini belum dapat dilepas.';
 }
 
 async function fetchAllPages(fetcher) {
@@ -236,6 +248,7 @@ async function fetchTransaksiByPeriode(idPeriodeKonsultan) {
 export default function usePayoutKonsultanViewModel() {
   const auth = useAuth();
 
+  const [filterPeriode, setFilterPeriode] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -243,6 +256,7 @@ export default function usePayoutKonsultanViewModel() {
   const [selectedPayout, setSelectedPayout] = useState(null);
   const [formData, setFormData] = useState(createInitialPayoutKonsultanForm());
   const [postFormData, setPostFormData] = useState(createInitialPostPayrollForm());
+  const [isNominalPenyesuaianManual, setIsNominalPenyesuaianManual] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingActionId, setPendingActionId] = useState('');
 
@@ -533,6 +547,13 @@ export default function usePayoutKonsultanViewModel() {
       });
   }, [detailCountMap, payoutData, periodeKonsultanMap, periodePayrollMap, usersMap]);
 
+  const filteredPayoutWithMeta = useMemo(() => {
+    const periodeId = normalizeText(filterPeriode);
+    if (!periodeId) return payoutWithMeta;
+
+    return payoutWithMeta.filter((item) => normalizeText(item.id_periode_konsultan) === periodeId);
+  }, [filterPeriode, payoutWithMeta]);
+
   const resolvedSelectedPayout = useMemo(() => {
     if (!selectedPayout?.id_payout_konsultan) return null;
 
@@ -563,6 +584,42 @@ export default function usePayoutKonsultanViewModel() {
       disabled: Boolean(item.deleted_at) || item.status_periode === LOCKED_PERIODE_KONSULTAN_STATUS,
     }));
   }, [periodeKonsultanData]);
+
+  const filterPeriodeOptions = useMemo(() => {
+    return periodeKonsultanData.map((item) => ({
+      value: item.id_periode_konsultan,
+      label: `${formatPeriodeKonsultanLabel(item)} - ${item.status_periode || 'DRAFT'}`,
+      disabled: Boolean(item.deleted_at),
+    }));
+  }, [periodeKonsultanData]);
+
+  useEffect(() => {
+    if (filterPeriodeOptions.length === 0) {
+      if (filterPeriode) {
+        setFilterPeriode('');
+      }
+      return;
+    }
+
+    const selectedOption = filterPeriodeOptions.find((item) => item.value === filterPeriode);
+    if (selectedOption && !selectedOption.disabled) return;
+
+    const preferredOption = filterPeriodeOptions.find((item) => !item.disabled) || filterPeriodeOptions[0];
+    const nextFilterPeriode = preferredOption?.value || '';
+
+    if (nextFilterPeriode !== filterPeriode) {
+      setFilterPeriode(nextFilterPeriode);
+    }
+  }, [filterPeriode, filterPeriodeOptions]);
+
+  const activeFilterPeriode = useMemo(() => {
+    return periodeKonsultanMap.get(normalizeText(filterPeriode)) || null;
+  }, [filterPeriode, periodeKonsultanMap]);
+
+  const createModalPeriodeId = useMemo(() => {
+    const selectedOption = periodeKonsultanOptions.find((item) => item.value === filterPeriode && !item.disabled);
+    return selectedOption?.value || defaultCreatePeriodeId;
+  }, [defaultCreatePeriodeId, filterPeriode, periodeKonsultanOptions]);
 
   const payrollOptions = useMemo(() => {
     return periodePayrollData.map((item) => ({
@@ -751,15 +808,18 @@ export default function usePayoutKonsultanViewModel() {
       (acc, item) => {
         const transaksiId = normalizeText(item.id_transaksi_konsultan);
         const isHeld = heldTransactionIds.has(transaksiId);
+        const nominalShare = toNumber(item.nominal_share);
 
         acc.detailCount += 1;
         acc.totalIncome += toNumber(item.total_income);
-        acc.totalShare += toNumber(item.nominal_share);
+        acc.totalShareBruto += nominalShare;
         acc.totalOss += toNumber(item.nominal_oss);
 
         if (isHeld) {
           acc.detailDitahanCount += 1;
-          acc.totalDitahan += toNumber(item.nominal_share);
+          acc.totalDitahan += nominalShare;
+        } else {
+          acc.totalShare += nominalShare;
         }
 
         return acc;
@@ -769,6 +829,7 @@ export default function usePayoutKonsultanViewModel() {
         detailDitahanCount: 0,
         totalIncome: 0,
         totalShare: 0,
+        totalShareBruto: 0,
         totalOss: 0,
         totalDitahan: 0,
       },
@@ -777,29 +838,26 @@ export default function usePayoutKonsultanViewModel() {
 
   const nominalDibayarkanPreview = useMemo(() => {
     return calculateNominalDibayarkan({
-      total_share: formSummary.totalShare,
-      nominal_ditahan: formSummary.totalDitahan,
       nominal_penyesuaian: formData.nominal_penyesuaian,
     });
-  }, [formData.nominal_penyesuaian, formSummary.totalDitahan, formSummary.totalShare]);
+  }, [formData.nominal_penyesuaian]);
 
   const summary = useMemo(() => {
     return {
-      totalShare: payoutWithMeta.reduce((acc, item) => acc + toNumber(item.total_share), 0),
-      totalDitahan: payoutWithMeta.reduce((acc, item) => acc + toNumber(item.nominal_ditahan), 0),
-      totalPenyesuaian: payoutWithMeta.reduce((acc, item) => acc + toNumber(item.nominal_penyesuaian), 0),
-      totalDibayarkan: payoutWithMeta.reduce((acc, item) => acc + toNumber(item.nominal_dibayarkan), 0),
+      totalShare: filteredPayoutWithMeta.reduce((acc, item) => acc + toNumber(item.total_share), 0),
+      totalDitahan: filteredPayoutWithMeta.reduce((acc, item) => acc + toNumber(item.nominal_ditahan), 0),
+      totalDibayarkan: filteredPayoutWithMeta.reduce((acc, item) => acc + toNumber(item.nominal_dibayarkan), 0),
     };
-  }, [payoutWithMeta]);
+  }, [filteredPayoutWithMeta]);
 
   const statusCounts = useMemo(() => {
     return {
-      draft: payoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DRAFT).length,
-      disetujui: payoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DISETUJUI).length,
-      diposting: payoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DIPOSTING_KE_PAYROLL).length,
-      ditahan: payoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DITAHAN).length,
+      draft: filteredPayoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DRAFT).length,
+      disetujui: filteredPayoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DISETUJUI).length,
+      diposting: filteredPayoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DIPOSTING_KE_PAYROLL).length,
+      ditahan: filteredPayoutWithMeta.filter((item) => item.status_payout === STATUS_PAYOUT_KONSULTAN.DITAHAN).length,
     };
-  }, [payoutWithMeta]);
+  }, [filteredPayoutWithMeta]);
 
   const loading =
     auth.isLoading ||
@@ -814,6 +872,10 @@ export default function usePayoutKonsultanViewModel() {
   const error = payoutError || payoutDetailError || usersError || periodeKonsultanError || periodePayrollError || definisiKomponenError || previewTransaksiError;
 
   const setFormValue = useCallback((field, value) => {
+    if (field === 'nominal_penyesuaian') {
+      setIsNominalPenyesuaianManual(true);
+    }
+
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -848,10 +910,11 @@ export default function usePayoutKonsultanViewModel() {
   }, []);
 
   const resetForm = useCallback(
-    (periodeId = defaultCreatePeriodeId) => {
+    (periodeId = createModalPeriodeId) => {
+      setIsNominalPenyesuaianManual(false);
       setFormData(createInitialPayoutKonsultanForm({ id_periode_konsultan: periodeId }));
     },
-    [defaultCreatePeriodeId],
+    [createModalPeriodeId],
   );
 
   const resetPostForm = useCallback(
@@ -904,6 +967,23 @@ export default function usePayoutKonsultanViewModel() {
   }, [isCreateModalOpen, isEditModalOpen, selectedEligibleTransactions]);
 
   useEffect(() => {
+    if (!isCreateModalOpen || isPreviewLoading || isNominalPenyesuaianManual) return;
+
+    const nextNominalPenyesuaian = Math.max(formSummary.totalShare, 0);
+
+    setFormData((prev) => {
+      if (toNumber(prev.nominal_penyesuaian) === nextNominalPenyesuaian) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        nominal_penyesuaian: nextNominalPenyesuaian,
+      };
+    });
+  }, [formSummary.totalDitahan, formSummary.totalShare, isCreateModalOpen, isNominalPenyesuaianManual, isPreviewLoading]);
+
+  useEffect(() => {
     if (!isPostModalOpen) return;
     if (normalizeText(postFormData.id_definisi_komponen_payroll)) return;
     if (!defaultPostingDefinitionId) return;
@@ -937,23 +1017,23 @@ export default function usePayoutKonsultanViewModel() {
   }, [mutateDefinisiKomponen, mutatePeriodeKonsultan, mutatePeriodePayroll, mutatePayout, mutatePayoutDetail, mutatePreviewTransaksi, mutateUsers, previewTransaksiKey, shouldFetch]);
 
   const openCreateModal = useCallback(() => {
-    if (!defaultCreatePeriodeId) {
+    if (!createModalPeriodeId) {
       AppMessage.warning('Belum ada periode konsultan aktif yang bisa digunakan untuk payout.');
       return;
     }
 
     setSelectedPayout(null);
-    resetForm(defaultCreatePeriodeId);
+    resetForm(createModalPeriodeId);
     setIsCreateModalOpen(true);
-  }, [defaultCreatePeriodeId, resetForm]);
+  }, [createModalPeriodeId, resetForm]);
 
   const closeCreateModal = useCallback(() => {
     if (isSubmitting) return;
 
     setIsCreateModalOpen(false);
     setSelectedPayout(null);
-    resetForm(defaultCreatePeriodeId);
-  }, [defaultCreatePeriodeId, isSubmitting, resetForm]);
+    resetForm(createModalPeriodeId);
+  }, [createModalPeriodeId, isSubmitting, resetForm]);
 
   const openEditModal = useCallback((payout) => {
     if (!payout) return;
@@ -974,11 +1054,12 @@ export default function usePayoutKonsultanViewModel() {
     );
 
     setSelectedPayout(payout);
+    setIsNominalPenyesuaianManual(true);
     setFormData(
       createInitialPayoutKonsultanForm({
         id_user: payout.id_user,
         id_periode_konsultan: payout.id_periode_konsultan,
-        nominal_penyesuaian: payout.nominal_penyesuaian,
+        nominal_penyesuaian: payout.nominal_dibayarkan,
         id_transaksi_konsultan_ditahan: heldTransactionIds,
         catatan: payout.catatan,
       }),
@@ -991,8 +1072,8 @@ export default function usePayoutKonsultanViewModel() {
 
     setIsEditModalOpen(false);
     setSelectedPayout(null);
-    resetForm(defaultCreatePeriodeId);
-  }, [defaultCreatePeriodeId, isSubmitting, resetForm]);
+    resetForm(createModalPeriodeId);
+  }, [createModalPeriodeId, isSubmitting, resetForm]);
 
   const openDeleteDialog = useCallback((payout) => {
     if (!payout) return;
@@ -1080,18 +1161,18 @@ export default function usePayoutKonsultanViewModel() {
       return false;
     }
 
-    if (formSummary.detailCount <= 0 || formSummary.totalShare <= 0) {
+    if (formSummary.detailCount <= 0 || formSummary.totalShareBruto <= 0) {
       AppMessage.warning('Belum ada transaksi konsultan aktif atau carry-forward ditahan yang siap dipayout untuk kombinasi user dan periode ini.');
       return false;
     }
 
     if (nominalDibayarkanPreview < 0) {
-      AppMessage.warning('Nominal dibayarkan tidak boleh bernilai negatif.');
+      AppMessage.warning('Nominal penyesuaian tidak boleh bernilai negatif.');
       return false;
     }
 
     return true;
-  }, [formData.id_periode_konsultan, formData.id_user, formSummary.detailCount, formSummary.totalShare, isPreviewLoading, nominalDibayarkanPreview, periodeKonsultanMap, resolvedSelectedPayout?.periode_konsultan]);
+  }, [formData.id_periode_konsultan, formData.id_user, formSummary.detailCount, formSummary.totalShareBruto, isPreviewLoading, nominalDibayarkanPreview, periodeKonsultanMap, resolvedSelectedPayout?.periode_konsultan]);
 
   const buildPayload = useCallback(() => {
     return {
@@ -1116,7 +1197,7 @@ export default function usePayoutKonsultanViewModel() {
 
       setIsCreateModalOpen(false);
       setSelectedPayout(null);
-      resetForm(defaultCreatePeriodeId);
+      resetForm(createModalPeriodeId);
 
       AppMessage.success(response?.message || 'Payout konsultan berhasil dibuat.');
     } catch (err) {
@@ -1124,7 +1205,7 @@ export default function usePayoutKonsultanViewModel() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [buildPayload, defaultCreatePeriodeId, isSubmitting, refreshPayoutCollections, resetForm, validateForm]);
+  }, [buildPayload, createModalPeriodeId, isSubmitting, refreshPayoutCollections, resetForm, validateForm]);
 
   const handleEdit = useCallback(async () => {
     if (isSubmitting) return;
@@ -1150,7 +1231,7 @@ export default function usePayoutKonsultanViewModel() {
 
       setIsEditModalOpen(false);
       setSelectedPayout(null);
-      resetForm(defaultCreatePeriodeId);
+      resetForm(createModalPeriodeId);
 
       AppMessage.success(response?.message || 'Payout konsultan berhasil diperbarui.');
     } catch (err) {
@@ -1158,7 +1239,7 @@ export default function usePayoutKonsultanViewModel() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [buildPayload, defaultCreatePeriodeId, isSubmitting, refreshPayoutCollections, resetForm, resolvedSelectedPayout, validateForm]);
+  }, [buildPayload, createModalPeriodeId, isSubmitting, refreshPayoutCollections, resetForm, resolvedSelectedPayout, validateForm]);
 
   const handleDelete = useCallback(async () => {
     if (isSubmitting) return;
@@ -1239,6 +1320,43 @@ export default function usePayoutKonsultanViewModel() {
     [updatePayoutStatus],
   );
 
+  const handleUnpostPayout = useCallback(
+    async (payout) => {
+      if (!payout?.id_payout_konsultan) return;
+      if (pendingActionId) return;
+
+      if (!payout?.business_state?.bisa_lepas_posting) {
+        AppMessage.warning(getPayoutUnpostBlockedReason(payout));
+        return;
+      }
+
+      setPendingActionId(payout.id_payout_konsultan);
+
+      try {
+        const response = await crudServiceAuth.post(
+          ApiEndpoints.UnpostPayoutKonsultan(payout.id_payout_konsultan),
+        );
+
+        await refreshPayoutCollections();
+        setSelectedPayout((prev) =>
+          normalizeText(prev?.id_payout_konsultan) === normalizeText(payout.id_payout_konsultan)
+            ? null
+            : prev,
+        );
+
+        AppMessage.success(
+          response?.message ||
+            'Posting payout konsultan berhasil dilepas. Payout kembali ke draft dan dapat diedit lagi.',
+        );
+      } catch (err) {
+        AppMessage.error(err?.message || 'Gagal melepas posting payout konsultan.');
+      } finally {
+        setPendingActionId('');
+      }
+    },
+    [pendingActionId, refreshPayoutCollections],
+  );
+
   const handlePostToPayroll = useCallback(async () => {
     if (isSubmitting) return;
 
@@ -1306,6 +1424,7 @@ export default function usePayoutKonsultanViewModel() {
     canAccess,
 
     payoutWithMeta,
+    filteredPayoutWithMeta,
     summary,
     statusCounts,
     formSummary,
@@ -1316,7 +1435,11 @@ export default function usePayoutKonsultanViewModel() {
     formData,
     postFormData,
     selectedPayout: resolvedSelectedPayout,
+    filterPeriode,
+    setFilterPeriode,
+    activeFilterPeriode,
 
+    filterPeriodeOptions,
     periodeKonsultanOptions,
     createConsultantOptions,
     identityConsultantOptions,
@@ -1365,5 +1488,6 @@ export default function usePayoutKonsultanViewModel() {
     handleApprovePayout,
     handleHoldPayment,
     handleReleaseHold,
+    handleUnpostPayout,
   };
 }

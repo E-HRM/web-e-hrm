@@ -21,13 +21,13 @@ import {
   parseDateTime,
   parseNonNegativeDecimal,
   computePph21NominalFromSnapshot,
+  computePendapatanBersihFromTotals,
   replaceApprovalSteps,
   resolveApprovalSteps,
   STATUS_APPROVAL_VALUES,
   STATUS_PAYROLL_VALUES,
   VIEW_ROLES,
   addDecimalStrings,
-  subtractDecimalStrings,
 } from './payrollKaryawan.shared';
 
 async function ensureProfilPayrollAktifExists(id_user) {
@@ -65,6 +65,10 @@ function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
   const existingPph21 = Number(existing?.pph21_nominal || 0);
   const existingTotalPotongan = Number(existing?.total_potongan || 0);
   const existingOtherPotongan = Math.max(existingTotalPotongan - existingPph21, 0);
+  const statusPayroll = String(options?.statusPayroll ?? body?.status_payroll ?? existing?.status_payroll ?? 'DRAFT')
+    .trim()
+    .toUpperCase();
+  const allowNegativePendapatanBersih = statusPayroll === 'DRAFT';
 
   const totalPendapatanBruto = parseNonNegativeDecimal(body?.total_pendapatan_bruto ?? body?.total_bruto_kena_pajak ?? existing?.total_pendapatan_bruto ?? '0', 'total_pendapatan_bruto');
   const persenTarifSnapshot = options?.persenTarifSnapshot ?? existing?.persen_tarif_snapshot ?? body?.persen_tarif_snapshot ?? '0';
@@ -74,7 +78,9 @@ function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
 
   const totalPotongan = parseNonNegativeDecimal(body?.total_potongan ?? addDecimalStrings(pph21Nominal, totalPotonganLain), 'total_potongan');
 
-  const pendapatanBersih = parseNonNegativeDecimal(body?.pendapatan_bersih ?? body?.total_dibayarkan ?? existing?.pendapatan_bersih ?? subtractDecimalStrings(totalPendapatanBruto, totalPotongan), 'pendapatan_bersih');
+  const pendapatanBersih = computePendapatanBersihFromTotals(totalPendapatanBruto, totalPotongan, {
+    allowNegative: allowNegativePendapatanBersih,
+  });
 
   return {
     total_pendapatan_bruto: totalPendapatanBruto,
@@ -192,6 +198,9 @@ async function resolveCreatePayload(body = {}) {
       bank_name: normalizeNullableString(body?.bank_name, 'bank_name', 50) || normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) || normalizeNullableString(user.jenis_bank, 'jenis_bank', 50) || null,
       bank_account:
         normalizeNullableString(body?.bank_account, 'bank_account', 50) || normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) || normalizeNullableString(user.nomor_rekening, 'nomor_rekening', 50) || null,
+      issue_number: normalizeNullableString(body?.issue_number, 'issue_number', 100),
+      issued_at: parseDateTime(body?.issued_at, 'issued_at'),
+      company_name_snapshot: normalizeNullableString(body?.company_name_snapshot, 'company_name_snapshot', 255),
       catatan: normalizeNullableString(body?.catatan, 'catatan'),
       ...totals,
       ...statusFields,

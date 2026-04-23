@@ -109,6 +109,12 @@ function buildDetailProsesHref(periode, vm) {
   return `/home/payroll/penggajian/payroll-karyawan?${query.toString()}`;
 }
 
+function openTemplateFile(template) {
+  const url = String(template?.file_template_url || '').trim();
+  if (!url || typeof window === 'undefined') return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function PeriodeFormFields({ vm }) {
   return (
     <div className='space-y-4'>
@@ -125,7 +131,7 @@ function PeriodeFormFields({ vm }) {
           size={12}
           className='mt-1 block leading-5 text-blue-700'
         >
-          Sistem membentuk periode dari bulan, tahun, rentang tanggal aktif, status proses, dan catatan operasional sesuai schema terbaru.
+          Sistem membentuk periode dari bulan, tahun, rentang tanggal aktif, status proses, catatan operasional, dan pilihan template payslip sesuai schema terbaru.
         </AppTypography.Text>
       </div>
 
@@ -180,6 +186,17 @@ function PeriodeFormFields({ vm }) {
           onChange={(value) => vm.setFormValue('status_periode', value)}
           options={vm.statusOptions.filter((item) => item.value)}
           showSearch={false}
+          selectClassName='!rounded-lg'
+        />
+
+        <AppSelect
+          label='Template Payslip'
+          value={vm.formData.id_master_template}
+          onChange={(value) => vm.setFormValue('id_master_template', value || '')}
+          options={vm.templateOptions}
+          loading={vm.templateLoading}
+          allowClear
+          placeholder='Pilih template payslip bila diperlukan'
           selectClassName='!rounded-lg'
         />
       </div>
@@ -386,7 +403,24 @@ function DetailPeriodeModal({ vm }) {
                 label='Tanggal Selesai'
                 value={vm.formatDate(periode.tanggal_selesai)}
               />
+              <DetailField
+                label='Template Payslip'
+                value={vm.resolveTemplateLabel(periode)}
+              />
             </div>
+
+            {periode?.master_template?.file_template_url ? (
+              <div className='mt-4'>
+                <AppButton
+                  variant='outline'
+                  icon={<FileTextOutlined />}
+                  onClick={() => openTemplateFile(periode.master_template)}
+                  className='!rounded-lg !h-10'
+                >
+                  Buka File Template
+                </AppButton>
+              </div>
+            ) : null}
           </div>
 
           <div className='rounded-2xl border border-gray-200 p-5'>
@@ -534,6 +568,29 @@ export default function PeriodePayrollContent() {
       },
     },
     {
+      title: 'Template Payslip',
+      key: 'template',
+      width: 240,
+      render: (_, record) => (
+        <div>
+          <AppTypography.Text
+            size={13}
+            weight={700}
+            className='block text-gray-900'
+          >
+            {vm.resolveTemplateLabel(record)}
+          </AppTypography.Text>
+
+          <AppTypography.Text
+            size={12}
+            className='mt-0.5 block text-gray-500'
+          >
+            {record?.master_template?.file_template_url ? 'Template aktif dari master template' : 'Belum memilih template'}
+          </AppTypography.Text>
+        </div>
+      ),
+    },
+    {
       title: 'Catatan',
       dataIndex: 'catatan',
       key: 'catatan',
@@ -623,7 +680,7 @@ export default function PeriodePayrollContent() {
             Periode Payroll
           </AppTypography.Title>
 
-          <AppTypography.Text className='text-gray-600'>Kelola periode payroll sebagai acuan payroll karyawan dan keterhubungan payout konsultan tanpa approval level periode.</AppTypography.Text>
+          <AppTypography.Text className='text-gray-600'>Kelola periode payroll sebagai acuan payroll karyawan, keterhubungan payout konsultan, dan pemilihan template payslip per periode.</AppTypography.Text>
         </div>
 
         <div className='flex items-center gap-3'>
@@ -691,7 +748,7 @@ export default function PeriodePayrollContent() {
               label='Cari Periode'
               value={vm.searchText}
               onChange={(event) => vm.setSearchText(event.target.value)}
-              placeholder='Cari bulan, tahun, status, catatan, atau aktivitas periode'
+              placeholder='Cari bulan, tahun, status, template, catatan, atau aktivitas periode'
               allowClear
               inputClassName='!rounded-lg'
             />
@@ -739,7 +796,7 @@ export default function PeriodePayrollContent() {
 
       <AppTable
         title='Daftar Periode Payroll'
-        subtitle='Pantau rentang periode, status proses, keterkaitan payroll karyawan, dan payout konsultan dalam satu tampilan.'
+        subtitle='Pantau rentang periode, status proses, template payslip aktif, keterkaitan payroll karyawan, dan payout konsultan dalam satu tampilan.'
         columns={columns}
         dataSource={vm.dataSource}
         loading={vm.loading}

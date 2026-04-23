@@ -494,6 +494,8 @@ export default function useTransaksiKonsultanViewModel() {
         nominal_kredit: String(transaksi.nominal_kredit ?? '0'),
         persen_share_default: transaksi.persen_share_default == null ? '' : String(transaksi.persen_share_default),
         persen_share_override: transaksi.persen_share_override == null ? '' : String(transaksi.persen_share_override),
+        nominal_share: transaksi.nominal_share == null ? '' : String(transaksi.nominal_share),
+        nominal_oss: transaksi.nominal_oss == null ? '' : String(transaksi.nominal_oss),
         override_manual: Boolean(transaksi.override_manual),
       });
       setIsEditModalOpen(true);
@@ -536,6 +538,7 @@ export default function useTransaksiKonsultanViewModel() {
 
     const nominalDebit = toNumber(formData.nominal_debit);
     const nominalKredit = toNumber(formData.nominal_kredit);
+    const totalIncome = nominalDebit - nominalKredit;
 
     if (nominalDebit < 0) {
       AppMessage.warning('Nominal debit tidak boleh kurang dari 0.');
@@ -554,10 +557,16 @@ export default function useTransaksiKonsultanViewModel() {
 
     const persenShareDefault = normalizeDecimalInput(formData.persen_share_default, { allowNull: true });
     const persenShareOverride = normalizeDecimalInput(formData.persen_share_override, { allowNull: true });
+    const nominalShareManual = normalizeDecimalInput(formData.nominal_share, { allowNull: true });
+    const nominalOssManual = normalizeDecimalInput(formData.nominal_oss, { allowNull: true });
+    const overrideManual = Boolean(formData.override_manual);
+    const hasManualNominal = nominalShareManual !== null || nominalOssManual !== null;
 
-    if (persenShareDefault === null && persenShareOverride === null) {
-      AppMessage.warning('Persen share default atau override wajib diisi.');
-      return false;
+    if (!overrideManual || !hasManualNominal) {
+      if (persenShareDefault === null && persenShareOverride === null) {
+        AppMessage.warning('Persen share default atau override wajib diisi.');
+        return false;
+      }
     }
 
     if (persenShareDefault !== null) {
@@ -576,10 +585,48 @@ export default function useTransaksiKonsultanViewModel() {
       }
     }
 
+    if (overrideManual && nominalShareManual !== null) {
+      const parsedNominalShare = Number(nominalShareManual);
+      if (!Number.isFinite(parsedNominalShare) || parsedNominalShare < 0) {
+        AppMessage.warning('Nominal share manual tidak boleh kurang dari 0.');
+        return false;
+      }
+
+      if (parsedNominalShare > totalIncome) {
+        AppMessage.warning('Nominal share manual tidak boleh lebih besar dari total income.');
+        return false;
+      }
+    }
+
+    if (overrideManual && nominalOssManual !== null) {
+      const parsedNominalOss = Number(nominalOssManual);
+      if (!Number.isFinite(parsedNominalOss) || parsedNominalOss < 0) {
+        AppMessage.warning('Nominal OSS manual tidak boleh kurang dari 0.');
+        return false;
+      }
+
+      if (parsedNominalOss > totalIncome) {
+        AppMessage.warning('Nominal OSS manual tidak boleh lebih besar dari total income.');
+        return false;
+      }
+    }
+
+    if (overrideManual && nominalShareManual !== null && nominalOssManual !== null) {
+      const manualTotal = Number(nominalShareManual) + Number(nominalOssManual);
+      if (Math.abs(manualTotal - totalIncome) > 0.009) {
+        AppMessage.warning('Total nominal share manual dan nominal OSS manual harus sama dengan total income.');
+        return false;
+      }
+    }
+
     return true;
-  }, [formData.deskripsi, formData.id_periode_konsultan, formData.id_user_konsultan, formData.nominal_debit, formData.nominal_kredit, formData.persen_share_default, formData.persen_share_override, formData.tanggal_transaksi]);
+  }, [formData.deskripsi, formData.id_periode_konsultan, formData.id_user_konsultan, formData.nominal_debit, formData.nominal_kredit, formData.nominal_oss, formData.nominal_share, formData.override_manual, formData.persen_share_default, formData.persen_share_override, formData.tanggal_transaksi]);
 
   const buildPayload = useCallback(() => {
+    const overrideManual = Boolean(formData.override_manual);
+    const nominalShareManual = normalizeDecimalInput(formData.nominal_share, { allowNull: true });
+    const nominalOssManual = normalizeDecimalInput(formData.nominal_oss, { allowNull: true });
+
     return {
       id_user_konsultan: String(formData.id_user_konsultan || '').trim(),
       id_jenis_produk_konsultan: String(formData.id_jenis_produk_konsultan || '').trim() || null,
@@ -591,7 +638,9 @@ export default function useTransaksiKonsultanViewModel() {
       nominal_kredit: normalizeDecimalInput(formData.nominal_kredit, { fallback: '0' }),
       persen_share_default: normalizeDecimalInput(formData.persen_share_default, { allowNull: true }),
       persen_share_override: normalizeDecimalInput(formData.persen_share_override, { allowNull: true }),
-      override_manual: Boolean(formData.override_manual),
+      override_manual: overrideManual,
+      ...(overrideManual && nominalShareManual !== null ? { nominal_share: nominalShareManual } : {}),
+      ...(overrideManual && nominalOssManual !== null ? { nominal_oss: nominalOssManual } : {}),
     };
   }, [formData]);
 

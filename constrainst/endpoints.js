@@ -398,6 +398,7 @@ export const ApiEndpoints = {
   CreatePayrollKaryawan: () => API_PAYROLL_KARYAWAN,
   GetPayrollKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   GetPayrollSlipKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip`,
+  GetPayrollSlipPdfKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip/pdf`,
   UpdatePayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   DeletePayrollKaryawan: (id, qsObj = {}) => `${API_PAYROLL_KARYAWAN}/${id}${buildQS(qsObj)}`,
   ApprovePayrollKaryawan: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}`,
@@ -418,6 +419,7 @@ export const ApiEndpoints = {
   CreatePayoutKonsultan: () => API_PAYOUT_KONSULTAN,
   GetPayoutKonsultanById: (id) => `${API_PAYOUT_KONSULTAN}/${id}`,
   UpdatePayoutKonsultan: (id) => `${API_PAYOUT_KONSULTAN}/${id}`,
+  UnpostPayoutKonsultan: (id) => `${API_PAYOUT_KONSULTAN}/${id}/unpost`,
   DeletePayoutKonsultan: (id, qsObj = {}) => `${API_PAYOUT_KONSULTAN}/${id}${buildQS(qsObj)}`,
 
   GetPayoutKonsultanDetail: (qsObj = {}) => `${API_PAYOUT_KONSULTAN_DETAIL}${buildQS(qsObj)}`,

@@ -87,7 +87,9 @@
  *       Membuat payout konsultan baru dengan aturan bisnis berikut:
  *       - detail payout dibangun otomatis dari seluruh transaksi konsultan aktif (`deleted_at=null`) milik user pada periode yang dipilih.
  *       - hanya transaksi yang belum diposting ke payroll (`sudah_posting_payroll=false`) yang akan dihitung.
- *       - `total_share` dan `nominal_dibayarkan` dihitung otomatis oleh sistem.
+ *       - `total_share` dan `nominal_ditahan` dihitung otomatis oleh sistem.
+ *       - `nominal_penyesuaian` diisi manual sebagai nominal akhir payout.
+ *       - `nominal_dibayarkan` mengikuti nilai `nominal_penyesuaian` yang disimpan.
  *       - jika kombinasi `id_periode_konsultan + id_user` sudah ada dalam kondisi soft delete, data akan dipulihkan dan disinkronkan ulang.
  *       - jika `status_payout=DIPOSTING_KE_PAYROLL`, sistem akan membuat/memperbarui item komponen payroll bertipe `INSENTIF_KONSULTAN` dan menandai transaksi sumber sebagai sudah diposting.
  *     tags: [Admin - Payout Konsultan]
@@ -113,8 +115,8 @@
  *                 example: '0.00'
  *               nominal_penyesuaian:
  *                 type: string
- *                 example: '0.00'
- *                 description: Boleh bernilai negatif atau positif.
+ *                 example: '850000.00'
+ *                 description: Nominal akhir payout yang diinput manual user.
  *               status_payout:
  *                 type: string
  *                 enum: [DRAFT, DISETUJUI, DIPOSTING_KE_PAYROLL, DITAHAN]
