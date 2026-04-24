@@ -44,14 +44,14 @@ export default function ItemKomponenPayrollContextSection({ vm }) {
             weight={800}
             className='block text-gray-900'
           >
-            Ringkasan Payroll Karyawan
+            Ringkasan Gaji Karyawan
           </AppTypography.Text>
 
           <AppTypography.Text
             size={13}
             className='text-gray-500'
           >
-            Context payroll yang sedang dikelola oleh halaman item komponen.
+            Informasi karyawan dan periode gaji yang sedang dikelola.
           </AppTypography.Text>
         </div>
 
@@ -70,7 +70,7 @@ export default function ItemKomponenPayrollContextSection({ vm }) {
               tone='info'
               variant='soft'
             >
-              Tarif TER: {payrollTarifPajakLabel}
+              Tarif Pajak: {payrollTarifPajakLabel}
             </AppTag>
           ) : null}
         </div>
@@ -98,11 +98,11 @@ export default function ItemKomponenPayrollContextSection({ vm }) {
           value={vm.currentPayroll.bank_name || '-'}
         />
         <DetailField
-          label='No. Rekening'
+          label='Nomor Rekening'
           value={vm.currentPayroll.bank_account || '-'}
         />
         <DetailField
-          label='Bruto Payroll'
+          label='Total Pendapatan Kotor'
           value={vm.formatCurrency(vm.currentPayroll.total_pendapatan_bruto)}
           valueClassName='text-blue-700'
         />

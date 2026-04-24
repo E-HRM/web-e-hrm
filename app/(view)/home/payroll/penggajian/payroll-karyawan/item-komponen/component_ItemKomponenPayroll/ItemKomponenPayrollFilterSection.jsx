@@ -25,11 +25,11 @@ export default function ItemKomponenPayrollFilterSection({ vm }) {
             weight={800}
             className="block text-gray-900"
           >
-            Filter Item Komponen
+            Cari Rincian Gaji
           </AppTypography.Text>
 
           <AppTypography.Text size={13} className="text-gray-500">
-            Gunakan filter untuk memeriksa item komponen pada payroll ini.
+            Temukan rincian berdasarkan nama, jenis, atau kategori perhitungan.
           </AppTypography.Text>
         </div>
 
@@ -38,7 +38,7 @@ export default function ItemKomponenPayrollFilterSection({ vm }) {
           onClick={vm.clearFilters}
           className="!rounded-lg !h-10 !text-gray-700"
         >
-          Reset Filter
+          Bersihkan Filter
         </AppButton>
       </div>
 
@@ -46,7 +46,7 @@ export default function ItemKomponenPayrollFilterSection({ vm }) {
         <AppInput
           allowClear
           label="Pencarian"
-          placeholder="Cari nama komponen atau kunci idempoten..."
+          placeholder="Cari nama rincian gaji..."
           value={vm.searchQuery}
           onChange={(event) => vm.setSearchQuery(event.target.value)}
           prefix={<SearchOutlined />}
@@ -54,21 +54,21 @@ export default function ItemKomponenPayrollFilterSection({ vm }) {
         />
 
         <AppSelect
-          label="Tipe Komponen"
+          label="Jenis Rincian"
           value={vm.filterTipeKomponen}
           onChange={(value) => vm.setFilterTipeKomponen(value)}
           options={vm.tipeKomponenOptions}
-          placeholder="Semua tipe"
+          placeholder="Semua jenis"
           allowClear
           selectClassName="!rounded-lg"
         />
 
         <AppSelect
-          label="Arah"
+          label="Kategori"
           value={vm.filterArahKomponen}
           onChange={(value) => vm.setFilterArahKomponen(value)}
           options={vm.arahKomponenOptions}
-          placeholder="Semua arah"
+          placeholder="Semua kategori"
           allowClear
           selectClassName="!rounded-lg"
         />

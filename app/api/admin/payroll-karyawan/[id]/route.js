@@ -1,5 +1,9 @@
+export const runtime = 'nodejs';
+
+import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
+import { findFileInBody, isNullLike, parseRequestBody } from '@/app/api/_utils/requestBody';
 import { markPostedCicilanAsPaidForPayroll } from '@/app/api/admin/cicilan-pinjaman-karyawan/payrollPosting.shared';
 
 import {
@@ -32,6 +36,103 @@ import {
 } from '../payrollKaryawan.shared';
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
+
+function createHttpError(message, status = 400) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+function getSupabase() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw createHttpError('Supabase env tidak lengkap.', 500);
+  }
+
+  return createClient(url, key);
+}
+
+function extractBucketPath(publicUrl) {
+  if (!publicUrl) return null;
+
+  try {
+    const url = new URL(publicUrl);
+    const match = url.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+    if (match) {
+      return {
+        bucket: match[1],
+        path: decodeURIComponent(match[2]),
+      };
+    }
+  } catch (_) {
+    const fallback = String(publicUrl).match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+    if (fallback) {
+      return {
+        bucket: fallback[1],
+        path: decodeURIComponent(fallback[2]),
+      };
+    }
+  }
+
+  return null;
+}
+
+function sanitizePathPart(part) {
+  const safe = String(part || '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_')
+    .slice(0, 120);
+
+  return safe || 'unknown';
+}
+
+async function uploadBuktiBayarToSupabase(actorId, payrollId, file) {
+  if (!file) return null;
+
+  const supabase = getSupabase();
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const extCandidate = (file.name?.split('.').pop() || '').toLowerCase();
+  const ext = extCandidate && /^[a-z0-9]+$/.test(extCandidate) ? extCandidate : 'bin';
+  const timestamp = Date.now();
+  const safeActorId = sanitizePathPart(actorId);
+  const safePayrollId = sanitizePathPart(payrollId);
+  const path = `payroll/bukti_bayar/${safeActorId}/${safePayrollId}-${timestamp}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, buffer, {
+    upsert: true,
+    contentType: file.type || 'application/octet-stream',
+  });
+
+  if (uploadError) {
+    throw createHttpError(`Gagal upload bukti bayar: ${uploadError.message}`, 502);
+  }
+
+  const { data: publicData, error: publicError } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
+  if (publicError) {
+    throw createHttpError(`Gagal membuat URL bukti bayar: ${publicError.message}`, 502);
+  }
+
+  return publicData?.publicUrl || null;
+}
+
+async function deleteBuktiBayarFromSupabase(publicUrl) {
+  const info = extractBucketPath(publicUrl);
+  if (!info) return;
+
+  try {
+    const supabase = getSupabase();
+    const { error } = await supabase.storage.from(info.bucket).remove([info.path]);
+    if (error) {
+      console.warn('Gagal hapus bukti bayar upload yang batal:', error.message);
+    }
+  } catch (err) {
+    console.warn('Gagal hapus bukti bayar upload yang batal:', err?.message || err);
+  }
+}
 
 function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
   const existingPph21 = Number(existing?.pph21_nominal || 0);
@@ -64,15 +165,9 @@ function normalizeStatusRelatedFields(body = {}, existing = null) {
     ? normalizeEnum(body.status_payroll, STATUS_PAYROLL_VALUES, 'status_payroll')
     : String(existing?.status_payroll || 'DRAFT').trim().toUpperCase();
 
-  const dibayar_pada_raw = body?.dibayar_pada !== undefined ? body.dibayar_pada : existing?.dibayar_pada;
-  const finalized_at_raw = body?.finalized_at !== undefined ? body.finalized_at : existing?.finalized_at;
-  const locked_at_raw = body?.locked_at !== undefined ? body.locked_at : existing?.locked_at;
-
   return {
     status_payroll,
-    dibayar_pada: status_payroll === 'DIBAYAR' ? parseDateTime(dibayar_pada_raw || new Date().toISOString(), 'dibayar_pada') : null,
-    finalized_at: parseDateTime(finalized_at_raw, 'finalized_at'),
-    locked_at: parseDateTime(locked_at_raw, 'locked_at'),
+    finalized_at: existing?.finalized_at || null,
   };
 }
 
@@ -254,6 +349,10 @@ export async function PUT(req, { params }) {
 
     ensureCanMarkPayrollAsPaid(resolved.payload.status_payroll, effectiveApprovalStatus);
 
+    if (resolved.payload.status_payroll === 'DIBAYAR' && !existing.bukti_bayar_url) {
+      return NextResponse.json({ message: 'Upload bukti bayar wajib dilakukan sebelum payroll ditandai dibayar.' }, { status: 400 });
+    }
+
     if (resolved.payload.id_periode_payroll !== existing.id_periode_payroll || resolved.payload.id_user !== existing.id_user) {
       const duplicate = await db.payrollKaryawan.findFirst({
         where: {
@@ -312,7 +411,7 @@ export async function PUT(req, { params }) {
       if (existing.status_payroll !== 'DIBAYAR' && resolved.payload.status_payroll === 'DIBAYAR') {
         cicilanSyncSummary = await markPostedCicilanAsPaidForPayroll(tx, {
           id_payroll_karyawan: existing.id_payroll_karyawan,
-          dibayar_pada: resolved.payload.dibayar_pada || new Date(),
+          dibayar_pada: resolved.payload.finalized_at || new Date(),
         });
       }
 
@@ -349,6 +448,128 @@ export async function PUT(req, { params }) {
     }
 
     console.error('PUT /api/admin/payroll-karyawan/[id] error:', err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req, { params }) {
+  const auth = await ensureAuth(req);
+  if (auth instanceof NextResponse) return auth;
+
+  const forbidden = guardRole(auth.actor, EDIT_ROLES);
+  if (forbidden) return forbidden;
+
+  const actorId = String(auth.actor?.id || '').trim();
+  const payrollId = String(params?.id || '').trim();
+
+  if (!payrollId) {
+    return NextResponse.json({ message: 'ID payroll karyawan wajib diisi.' }, { status: 400 });
+  }
+
+  let body;
+  try {
+    const parsed = await parseRequestBody(req);
+    body = parsed.body;
+  } catch (err) {
+    return NextResponse.json({ message: err?.message || 'Body tidak valid.' }, { status: err?.status || 400 });
+  }
+
+  const buktiFile = findFileInBody(body, ['bukti_bayar', 'bukti_bayar_file', 'bukti', 'file']);
+  const directUrl = hasOwn(body || {}, 'bukti_bayar_url') && !isNullLike(body?.bukti_bayar_url) ? String(body.bukti_bayar_url).trim() : null;
+
+  if (!buktiFile && !directUrl) {
+    return NextResponse.json({ message: 'Bukti bayar wajib diunggah.' }, { status: 400 });
+  }
+
+  let uploadedUrl = null;
+  let paymentPersisted = false;
+
+  try {
+    const initialPayroll = await ensurePayrollExists(payrollId);
+
+    if (!initialPayroll || initialPayroll.deleted_at) {
+      return NextResponse.json({ message: 'Payroll karyawan tidak ditemukan.' }, { status: 404 });
+    }
+
+    const enrichedInitial = enrichPayroll(initialPayroll);
+    if (enrichedInitial.status_approval !== 'disetujui') {
+      return NextResponse.json({ message: 'Bukti bayar hanya dapat diunggah setelah seluruh approval disetujui.' }, { status: 409 });
+    }
+
+    if (initialPayroll.bukti_bayar_url && initialPayroll.status_payroll === 'DIBAYAR') {
+      return NextResponse.json({ message: 'Bukti bayar untuk payroll ini sudah diunggah.' }, { status: 409 });
+    }
+
+    if (buktiFile) {
+      uploadedUrl = await uploadBuktiBayarToSupabase(actorId, payrollId, buktiFile);
+    }
+
+    const nextBuktiBayarUrl = uploadedUrl || directUrl;
+    const result = await db.$transaction(async (tx) => {
+      const current = await tx.payrollKaryawan.findUnique({
+        where: { id_payroll_karyawan: payrollId },
+        select: buildSelect(),
+      });
+
+      if (!current || current.deleted_at) {
+        throw createHttpError('Payroll karyawan tidak ditemukan.', 404);
+      }
+
+      const enrichedCurrent = enrichPayroll(current);
+      if (enrichedCurrent.status_approval !== 'disetujui') {
+        throw createHttpError('Bukti bayar hanya dapat diunggah setelah seluruh approval disetujui.', 409);
+      }
+
+      if (current.bukti_bayar_url && current.status_payroll === 'DIBAYAR') {
+        throw createHttpError('Bukti bayar untuk payroll ini sudah diunggah.', 409);
+      }
+
+      const finalizedAt = current.finalized_at || new Date();
+
+      const updated = await tx.payrollKaryawan.update({
+        where: { id_payroll_karyawan: payrollId },
+        data: {
+          bukti_bayar_url: nextBuktiBayarUrl,
+          status_payroll: 'DIBAYAR',
+          finalized_at: finalizedAt,
+        },
+        select: buildSelect(),
+      });
+
+      let cicilanSyncSummary = null;
+      if (current.status_payroll !== 'DIBAYAR') {
+        cicilanSyncSummary = await markPostedCicilanAsPaidForPayroll(tx, {
+          id_payroll_karyawan: payrollId,
+          dibayar_pada: finalizedAt,
+        });
+      }
+
+      return {
+        updated,
+        cicilanSyncSummary,
+      };
+    });
+    paymentPersisted = true;
+
+    return NextResponse.json({
+      message: 'Bukti bayar berhasil diunggah dan payroll ditandai dibayar.',
+      ...(result.cicilanSyncSummary
+        ? {
+            cicilan_sync_summary: result.cicilanSyncSummary,
+          }
+        : {}),
+      data: enrichPayroll(result.updated),
+    });
+  } catch (err) {
+    if (uploadedUrl && !paymentPersisted) {
+      await deleteBuktiBayarFromSupabase(uploadedUrl);
+    }
+
+    if (err instanceof Error) {
+      return NextResponse.json({ message: err.message }, { status: err.status || 500 });
+    }
+
+    console.error('PATCH /api/admin/payroll-karyawan/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }

@@ -9,8 +9,8 @@ export default function ItemKomponenPayrollDeleteDialog({ vm }) {
     <AppModal
       open={vm.isDeleteDialogOpen}
       onClose={vm.closeDeleteDialog}
-      title='Hapus Item Komponen Payroll'
-      subtitle='Data yang dihapus akan memengaruhi total payroll karyawan.'
+      title='Hapus Rincian Gaji'
+      subtitle='Rincian yang dihapus akan langsung memperbarui total gaji karyawan.'
       variant='danger'
       okText='Hapus'
       onOk={vm.handleDelete}
@@ -21,7 +21,7 @@ export default function ItemKomponenPayrollDeleteDialog({ vm }) {
         size={14}
         className='block text-gray-700'
       >
-        Anda akan menghapus item komponen <span className='font-semibold text-gray-900'>{vm.selectedItem?.nama_komponen || '-'}</span>. Lanjutkan?
+        Anda akan menghapus rincian gaji <span className='font-semibold text-gray-900'>{vm.selectedItem?.nama_komponen || '-'}</span>. Lanjutkan?
       </AppTypography.Text>
     </AppModal>
   );

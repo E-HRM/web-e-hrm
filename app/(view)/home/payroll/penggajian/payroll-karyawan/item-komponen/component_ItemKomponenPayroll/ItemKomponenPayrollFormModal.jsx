@@ -13,11 +13,11 @@ function ItemKomponenForm({ vm }) {
   return (
     <div className="space-y-4">
       <AppSelect
-        label="Definisi Komponen"
+        label="Gunakan Rincian Standar"
         value={vm.formData.id_definisi_komponen_payroll || undefined}
         onChange={(value) => vm.handleDefinitionChange(value ?? null)}
         options={vm.definitionsOptions}
-        placeholder="Pilih definisi komponen (opsional)"
+        placeholder="Pilih rincian standar (opsional)"
         allowClear
         loading={vm.isDefinisiLoading}
         selectClassName="!rounded-lg"
@@ -30,19 +30,19 @@ function ItemKomponenForm({ vm }) {
             weight={600}
             className="block text-blue-700"
           >
-            Snapshot komponen mengikuti definisi terpilih
+            Data rincian mengikuti pilihan standar
           </AppTypography.Text>
 
           <AppTypography.Text size={12} className="block text-blue-600 mt-1">
-            Nama, tipe, arah, dan status kena pajak akan mengikuti definisi
-            komponen payroll aktif.
+            Nama, jenis, kategori, dan status pajak akan otomatis mengikuti
+            rincian standar yang dipilih.
           </AppTypography.Text>
         </div>
       ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <AppInput
-          label="Nama Komponen"
+          label="Nama Rincian"
           required={!vm.isUsingDefinition}
           value={vm.formData.nama_komponen}
           onChange={(event) =>
@@ -67,12 +67,12 @@ function ItemKomponenForm({ vm }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <AppSelect
-          label="Tipe Komponen"
+          label="Jenis Rincian"
           required={!vm.isUsingDefinition}
           value={vm.formData.tipe_komponen || undefined}
           onChange={(value) => vm.setFormValue("tipe_komponen", value)}
           options={vm.tipeKomponenOptions}
-          placeholder="Pilih tipe komponen"
+          placeholder="Pilih jenis rincian"
           disabled={manualDisabled}
           loading={vm.isTipeKomponenLoading}
           showSearch
@@ -80,12 +80,12 @@ function ItemKomponenForm({ vm }) {
         />
 
         <AppSelect
-          label="Arah Komponen"
+          label="Masuk Sebagai"
           required={!vm.isUsingDefinition}
           value={vm.formData.arah_komponen}
           onChange={(value) => vm.setFormValue("arah_komponen", value)}
           options={vm.arahKomponenOptions}
-          placeholder="Pilih arah komponen"
+          placeholder="Pilih pemasukan atau potongan"
           disabled={manualDisabled}
           showSearch={false}
           selectClassName="!rounded-lg"
@@ -94,7 +94,7 @@ function ItemKomponenForm({ vm }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <AppSwitch
-          label="Kena Pajak"
+          label="Masuk Perhitungan Pajak"
           checked={Boolean(vm.formData.kena_pajak)}
           onChange={(checked) => vm.setFormValue("kena_pajak", checked)}
           checkedLabel="Ya"
@@ -132,11 +132,11 @@ export default function ItemKomponenPayrollFormModal({ vm }) {
       onClose={vm.closeFormModal}
       title={
         vm.isEditMode
-          ? "Edit Item Komponen Payroll"
-          : "Tambah Item Komponen Payroll"
+          ? "Ubah Rincian Gaji"
+          : "Tambah Rincian Gaji"
       }
-      subtitle="Perubahan pada item komponen akan memengaruhi ringkasan payroll karyawan."
-      okText={vm.isEditMode ? "Update" : "Simpan"}
+      subtitle="Perubahan rincian akan langsung memperbarui ringkasan gaji karyawan."
+      okText={vm.isEditMode ? "Simpan Perubahan" : "Simpan"}
       onOk={vm.handleSubmit}
       closeOnOk={false}
       okLoading={vm.isSubmitting}

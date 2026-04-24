@@ -182,12 +182,19 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
               {statusFormat.label}
             </AppTag>
 
-            {payroll.dibayar_pada ? (
+            {payroll.finalized_at ? (
               <AppTypography.Text
                 size={12}
                 className='block text-gray-500 mt-1'
               >
-                {vm.formatDate(payroll.dibayar_pada)}
+                {vm.formatDate(payroll.finalized_at)}
+              </AppTypography.Text>
+            ) : payroll.bukti_bayar_url ? (
+              <AppTypography.Text
+                size={12}
+                className='block text-gray-500 mt-1'
+              >
+                Bukti tersedia
               </AppTypography.Text>
             ) : (
               <AppTypography.Text

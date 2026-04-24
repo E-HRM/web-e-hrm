@@ -1,10 +1,13 @@
 // app/(view)/home/payroll/payroll-karyawan/component_PayrollKaryawan/DetailPayrollKaryawanModal.jsx
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
+
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppTag from '@/app/(view)/component_shared/AppTag';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
+import AppUpload from '@/app/(view)/component_shared/AppUpload';
 
 function DetailField({ label, value, valueClassName = 'text-gray-900', valueSize = 14, weight = 600 }) {
   return (
@@ -28,6 +31,27 @@ function DetailField({ label, value, valueClassName = 'text-gray-900', valueSize
 }
 
 export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }) {
+  const [proofFileList, setProofFileList] = useState([]);
+  const payroll = vm.selectedPayroll;
+  const proofUrl = String(payroll?.bukti_bayar_url || '').trim();
+  const isImageProof = useMemo(() => /\.(png|jpe?g|webp)(\?|#|$)/i.test(proofUrl), [proofUrl]);
+
+  useEffect(() => {
+    if (!vm.isDetailModalOpen) return;
+
+    setProofFileList([]);
+  }, [vm.isDetailModalOpen, payroll?.id_payroll_karyawan]);
+
+  const handleUploadBuktiBayar = async () => {
+    const uploaded = await vm.handleUploadBuktiBayar?.({
+      proofFiles: proofFileList,
+    });
+
+    if (uploaded) {
+      setProofFileList([]);
+    }
+  };
+
   return (
     <AppModal
       open={vm.isDetailModalOpen}
@@ -36,7 +60,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
       footer={null}
       width={760}
     >
-      {vm.selectedPayroll ? (
+      {payroll ? (
         <div className='space-y-6'>
           <div className='border-b border-gray-200 pb-4'>
             <AppTypography.Text
@@ -50,32 +74,32 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
               <DetailField
                 label='Nama Karyawan'
-                value={vm.selectedPayroll.nama_karyawan_snapshot}
+                value={payroll.nama_karyawan_snapshot}
               />
 
               <DetailField
                 label='Jenis Hubungan'
-                value={vm.formatJenisHubungan(vm.selectedPayroll.jenis_hubungan_snapshot)}
+                value={vm.formatJenisHubungan(payroll.jenis_hubungan_snapshot)}
               />
 
               <DetailField
                 label='Departemen'
-                value={vm.selectedPayroll.nama_departement_snapshot || '-'}
+                value={payroll.nama_departement_snapshot || '-'}
               />
 
               <DetailField
                 label='Jabatan'
-                value={vm.selectedPayroll.nama_jabatan_snapshot || '-'}
+                value={payroll.nama_jabatan_snapshot || '-'}
               />
 
               <DetailField
                 label='Bank'
-                value={vm.selectedPayroll.nama_bank_snapshot || '-'}
+                value={payroll.nama_bank_snapshot || '-'}
               />
 
               <DetailField
                 label='Nomor Rekening'
-                value={vm.selectedPayroll.nomor_rekening_snapshot || '-'}
+                value={payroll.nomor_rekening_snapshot || '-'}
               />
             </div>
           </div>
@@ -92,17 +116,17 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
               <DetailField
                 label='Nomor Slip'
-                value={vm.selectedPayroll.issue_number || '-'}
+                value={payroll.issue_number || '-'}
               />
 
               <DetailField
                 label='Tanggal Slip'
-                value={vm.selectedPayroll.issued_at ? vm.formatDateTime(vm.selectedPayroll.issued_at) : '-'}
+                value={payroll.issued_at ? vm.formatDateTime(payroll.issued_at) : '-'}
               />
 
               <DetailField
                 label='Nama Perusahaan'
-                value={vm.selectedPayroll.company_name_snapshot || '-'}
+                value={payroll.company_name_snapshot || '-'}
               />
             </div>
           </div>
@@ -130,7 +154,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={600}
                   className='text-gray-900'
                 >
-                  {vm.formatCurrency(vm.selectedPayroll.total_pendapatan_tetap)}
+                  {vm.formatCurrency(payroll.total_pendapatan_tetap)}
                 </AppTypography.Text>
               </div>
 
@@ -147,7 +171,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={600}
                   className='text-gray-900'
                 >
-                  {vm.formatCurrency(vm.selectedPayroll.total_pendapatan_variabel)}
+                  {vm.formatCurrency(payroll.total_pendapatan_variabel)}
                 </AppTypography.Text>
               </div>
 
@@ -165,7 +189,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={700}
                   className='text-gray-900'
                 >
-                  {vm.formatCurrency(vm.selectedPayroll.total_bruto_kena_pajak)}
+                  {vm.formatCurrency(payroll.total_bruto_kena_pajak)}
                 </AppTypography.Text>
               </div>
 
@@ -174,7 +198,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   size={14}
                   className='text-red-600'
                 >
-                  PPh 21 ({vm.selectedPayroll.persen_pajak}%)
+                  PPh 21 ({payroll.persen_pajak}%)
                 </AppTypography.Text>
 
                 <AppTypography.Text
@@ -182,7 +206,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={600}
                   className='text-red-600'
                 >
-                  -{vm.formatCurrency(vm.selectedPayroll.total_pajak)}
+                  -{vm.formatCurrency(payroll.total_pajak)}
                 </AppTypography.Text>
               </div>
 
@@ -199,7 +223,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={600}
                   className='text-red-600'
                 >
-                  -{vm.formatCurrency(vm.selectedPayroll.total_potongan_lain)}
+                  -{vm.formatCurrency(payroll.total_potongan_lain)}
                 </AppTypography.Text>
               </div>
 
@@ -217,7 +241,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={800}
                   className='text-green-600'
                 >
-                  {vm.formatCurrency(vm.selectedPayroll.total_dibayarkan)}
+                  {vm.formatCurrency(payroll.total_dibayarkan)}
                 </AppTypography.Text>
               </div>
             </div>
@@ -242,12 +266,12 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                 </AppTypography.Text>
 
                 <AppTag
-                  tone={vm.formatStatusPayroll(vm.selectedPayroll.status_payroll).tone}
+                  tone={vm.formatStatusPayroll(payroll.status_payroll).tone}
                   variant='soft'
                   size='sm'
                   className='!font-medium'
                 >
-                  {vm.formatStatusPayroll(vm.selectedPayroll.status_payroll).label}
+                  {vm.formatStatusPayroll(payroll.status_payroll).label}
                 </AppTag>
               </div>
 
@@ -260,45 +284,45 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                 </AppTypography.Text>
 
                 <AppTag
-                  tone={vm.formatStatusApproval(vm.selectedPayroll.status_approval).tone}
+                  tone={vm.formatStatusApproval(payroll.status_approval).tone}
                   variant='soft'
                   size='sm'
                   className='!font-medium'
                 >
-                  {vm.formatStatusApproval(vm.selectedPayroll.status_approval).label}
+                  {vm.formatStatusApproval(payroll.status_approval).label}
                 </AppTag>
 
                 <AppTypography.Text
                   size={12}
                   className='block text-gray-500 mt-2'
                 >
-                  {vm.selectedPayroll.approval_progress_label}
+                  {payroll.approval_progress_label}
                 </AppTypography.Text>
 
                 <AppTypography.Text
                   size={12}
                   className='block text-gray-500 mt-1'
                 >
-                  {vm.selectedPayroll.current_approval_label}
+                  {payroll.current_approval_label}
                 </AppTypography.Text>
               </div>
 
-              {vm.selectedPayroll.dibayar_pada ? (
+              {payroll.finalized_at ? (
                 <DetailField
-                  label='Tanggal Dibayar'
-                  value={vm.formatDate(vm.selectedPayroll.dibayar_pada)}
+                  label='Tanggal Finalisasi'
+                  value={vm.formatDateTime(payroll.finalized_at)}
                 />
               ) : null}
 
               <DetailField
                 label='Jumlah Rincian Gaji'
-                value={String(vm.selectedPayroll.item_komponen_count || 0)}
+                value={String(payroll.item_komponen_count || 0)}
               />
 
-              {vm.selectedPayroll.catatan ? (
+              {payroll.catatan ? (
                 <DetailField
                   label='Catatan'
-                  value={vm.selectedPayroll.catatan}
+                  value={payroll.catatan}
                   weight={400}
                 />
               ) : null}
@@ -315,8 +339,8 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
             </AppTypography.Text>
 
             <div className='space-y-3'>
-              {Array.isArray(vm.selectedPayroll.approval_steps) && vm.selectedPayroll.approval_steps.length > 0 ? (
-                vm.selectedPayroll.approval_steps.map((step) => (
+              {Array.isArray(payroll.approval_steps) && payroll.approval_steps.length > 0 ? (
+                payroll.approval_steps.map((step) => (
                   <div
                     key={step.id_approval_payroll_karyawan || `${step.level}-${step.approver_user_id || step.approver_display_name}`}
                     className='rounded-2xl border border-gray-200 p-4'
@@ -361,10 +385,101 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
             </div>
           </div>
 
+          <div className='border-t border-gray-200 pt-4'>
+            <AppTypography.Text
+              size={18}
+              weight={700}
+              className='block text-gray-900 mb-4'
+            >
+              Bukti Pembayaran
+            </AppTypography.Text>
+
+            {proofUrl ? (
+              <div className='space-y-3 rounded-2xl border border-green-100 bg-green-50 p-4'>
+                <div className='flex flex-col gap-3 md:flex-row md:items-start md:justify-between'>
+                  <div>
+                    <AppTag
+                      tone='success'
+                      variant='soft'
+                      size='sm'
+                      className='!font-medium'
+                    >
+                      Bukti bayar terunggah
+                    </AppTag>
+
+                    <AppTypography.Text
+                      size={12}
+                      className='mt-2 block text-green-700'
+                    >
+                      Finalisasi: {payroll.finalized_at ? vm.formatDateTime(payroll.finalized_at) : '-'}
+                    </AppTypography.Text>
+                  </div>
+
+                  <AppButton
+                    variant='outline'
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.open(proofUrl, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
+                    className='!rounded-lg !px-4 !h-10'
+                  >
+                    Lihat Bukti
+                  </AppButton>
+                </div>
+
+                {isImageProof ? (
+                  <div className='flex max-h-[260px] items-center justify-center overflow-hidden rounded-xl border border-green-100 bg-white'>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={proofUrl}
+                      alt='Bukti pembayaran payroll'
+                      className='max-h-[260px] max-w-full object-contain'
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : payroll.can_upload_bukti_bayar ? (
+              <div className='space-y-4 rounded-2xl border border-gray-200 p-4'>
+                <AppUpload
+                  label='Upload Bukti Bayar'
+                  required
+                  maxCount={1}
+                  listType='picture'
+                  fileList={proofFileList}
+                  onChange={(info) => setProofFileList(info?.fileList || [])}
+                  beforeUpload={() => false}
+                  accept='.jpg,.jpeg,.png,.pdf'
+                  hint='Format yang didukung: JPG, PNG, atau PDF.'
+                />
+
+                <div className='flex justify-end'>
+                  <AppButton
+                    onClick={handleUploadBuktiBayar}
+                    loading={vm.isSubmitting}
+                    disabled={!proofFileList.length || vm.isSubmitting}
+                    className='!rounded-lg !px-4 !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
+                  >
+                    Simpan Bukti Bayar
+                  </AppButton>
+                </div>
+              </div>
+            ) : (
+              <div className='rounded-2xl border border-gray-200 bg-gray-50 p-4'>
+                <AppTypography.Text
+                  size={13}
+                  className='block text-gray-500'
+                >
+                  Bukti bayar belum tersedia.
+                </AppTypography.Text>
+              </div>
+            )}
+          </div>
+
           <div className='flex justify-end gap-3 pt-4'>
             <AppButton
               variant='outline'
-              href={buildItemKomponenHref(vm.selectedPayroll)}
+              href={buildItemKomponenHref(payroll)}
               className='!rounded-lg !px-4 !h-10'
             >
               Buka Rincian Gaji

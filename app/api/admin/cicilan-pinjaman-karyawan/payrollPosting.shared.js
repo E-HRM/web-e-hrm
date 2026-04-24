@@ -89,7 +89,6 @@ export async function ensurePayrollPostingTarget(
       id_user: true,
       status_payroll: true,
       finalized_at: true,
-      locked_at: true,
       deleted_at: true,
       periode: {
         select: {
@@ -120,7 +119,6 @@ export async function ensurePayrollPostingTarget(
     IMMUTABLE_PAYROLL_STATUS.has(
       String(payroll.status_payroll || "").toUpperCase(),
     ) ||
-    payroll.locked_at ||
     payroll.finalized_at
   ) {
     throw new Error(

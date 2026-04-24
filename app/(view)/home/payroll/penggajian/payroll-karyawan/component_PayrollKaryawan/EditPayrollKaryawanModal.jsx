@@ -7,7 +7,7 @@ import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppSelect from '@/app/(view)/component_shared/AppSelect';
 
 import ApprovalStepsSection from './ApprovalStepsSection';
-import { STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
+import { EDITABLE_STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
 
 function EditPayrollForm({ vm }) {
   return (
@@ -110,7 +110,7 @@ function EditPayrollForm({ vm }) {
         label='Status Penggajian'
         value={vm.formData.status_payroll}
         onChange={(value) => vm.setFormValue('status_payroll', value)}
-        options={STATUS_PAYROLL_OPTIONS}
+        options={EDITABLE_STATUS_PAYROLL_OPTIONS}
         showSearch={false}
         selectClassName='!rounded-lg'
       />

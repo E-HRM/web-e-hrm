@@ -497,6 +497,25 @@ async function createPdfDocument(templateUrl) {
   return { pdfDoc, background: { kind: 'blank' } };
 }
 
+async function addTemplateBackedPage(pdfDoc, background, pageIndex = 0) {
+  if (background?.kind === 'pdf' && background.sourceDoc) {
+    const pageCount = background.sourceDoc.getPageCount();
+    const safePageIndex = Math.min(Math.max(pageIndex, 0), Math.max(pageCount - 1, 0));
+    const [templatePage] = await pdfDoc.copyPages(background.sourceDoc, [safePageIndex]);
+    pdfDoc.addPage(templatePage);
+    return templatePage;
+  }
+
+  const page = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+
+  if (background?.kind === 'image' && background.bytes) {
+    const image = background.imageKind === 'png' ? await pdfDoc.embedPng(background.bytes) : await pdfDoc.embedJpg(background.bytes);
+    drawImageContain(page, image, 0, 0, A4_WIDTH, A4_HEIGHT);
+  }
+
+  return page;
+}
+
 async function loadSignatureImages(pdfDoc, steps = []) {
   const cache = new Map();
 
@@ -527,10 +546,53 @@ async function loadSignatureImages(pdfDoc, steps = []) {
   return cache;
 }
 
+async function appendPaymentProofPage(pdfDoc, slip, background) {
+  const proofUrl = normalizeText(slip?.payment?.bukti_bayar_url);
+  if (!proofUrl) return;
+
+  try {
+    const asset = await fetchBinaryAsset(proofUrl);
+    const assetKind = inferPdfKind(proofUrl, asset.contentType);
+    if (!['pdf', 'png', 'jpg'].includes(assetKind)) return;
+
+    const page = await addTemplateBackedPage(pdfDoc, background, 1);
+    const { width: pageWidth, height: pageHeight } = page.getSize();
+    const marginX = (42 / A4_WIDTH) * pageWidth;
+    const marginY = (58 / A4_HEIGHT) * pageHeight;
+    const proofX = marginX;
+    const proofY = marginY;
+    const proofWidth = pageWidth - marginX * 2;
+    const proofHeight = pageHeight - marginY * 2;
+
+    if (assetKind === 'pdf') {
+      const [proofPage] = await pdfDoc.embedPdf(asset.bytes, [0]);
+      const ratio = Math.min(proofWidth / proofPage.width, proofHeight / proofPage.height);
+      const drawWidth = proofPage.width * ratio;
+      const drawHeight = proofPage.height * ratio;
+
+      page.drawPage(proofPage, {
+        x: proofX + (proofWidth - drawWidth) / 2,
+        y: proofY + (proofHeight - drawHeight) / 2,
+        width: drawWidth,
+        height: drawHeight,
+      });
+      return;
+    }
+
+    if (assetKind === 'png' || assetKind === 'jpg') {
+      const image = assetKind === 'png' ? await pdfDoc.embedPng(asset.bytes) : await pdfDoc.embedJpg(asset.bytes);
+      drawImageContain(page, image, proofX, proofY, proofWidth, proofHeight);
+      return;
+    }
+  } catch (err) {
+    console.warn('Gagal memuat bukti bayar slip PDF:', err);
+  }
+}
+
 async function buildSlipPdf(slip) {
   const templateUrl = slip?.period?.template?.file_template_url || '';
   const hasTemplate = Boolean(normalizeText(templateUrl));
-  const { pdfDoc } = await createPdfDocument(templateUrl);
+  const { pdfDoc, background } = await createPdfDocument(templateUrl);
   const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
@@ -817,6 +879,8 @@ async function buildSlipPdf(slip) {
       align: 'center',
     });
   });
+
+  await appendPaymentProofPage(pdfDoc, slip, background);
 
   return pdfDoc.save();
 }

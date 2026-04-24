@@ -17,7 +17,7 @@ import AppTypography from "@/app/(view)/component_shared/AppTypography";
 export default function ItemKomponenPayrollDataSection({ vm }) {
   const columns = [
     {
-      title: "Komponen",
+      title: "Rincian Gaji",
       key: "komponen",
       render: (_, item) => (
         <div>
@@ -44,7 +44,7 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
 
             {item.kena_pajak ? (
               <AppTag tone="warning" variant="soft" size="sm">
-                Kena Pajak
+                Masuk Pajak
               </AppTag>
             ) : null}
           </div>
@@ -52,7 +52,7 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
       ),
     },
     {
-      title: "Definisi / Mode",
+      title: "Sumber Rincian",
       key: "definisi",
       render: (_, item) => (
         <div>
@@ -66,12 +66,12 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
               variant="soft"
               size="sm"
             >
-              {item.definisi_komponen ? "Dari Definisi" : "Manual"}
+              {item.definisi_komponen ? "Dari Daftar Standar" : "Dibuat Manual"}
             </AppTag>
 
             {item.business_state?.system_generated ? (
               <AppTag tone="warning" variant="soft" size="sm">
-                System Generated
+                Dibuat Otomatis
               </AppTag>
             ) : null}
           </div>
@@ -96,12 +96,12 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
       ),
     },
     {
-      title: "Urutan / Pembuat",
+      title: "Urutan / Dibuat Oleh",
       key: "metadata",
       render: (_, item) => (
         <div>
           <AppTypography.Text size={13} className="block text-gray-900">
-            Urutan: {item.urutan_tampil ?? 0}
+            Urutan tampil: {item.urutan_tampil ?? 0}
           </AppTypography.Text>
 
           <AppTypography.Text size={12} className="block text-gray-500 mt-1">
@@ -121,13 +121,13 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
               variant="soft"
               size="sm"
             >
-              {item.deleted_at ? "Soft Deleted" : "Aktif"}
+              {item.deleted_at ? "Sudah Dihapus" : "Aktif"}
             </AppTag>
 
             {item.business_state?.payroll_immutable ||
             item.business_state?.periode_immutable ? (
               <AppTag tone="warning" variant="soft" size="sm">
-                Read Only
+                Tidak Bisa Diubah
               </AppTag>
             ) : null}
           </div>
@@ -148,7 +148,7 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
             variant="text"
             shape="circle"
             size="middle"
-            aria-label="Detail"
+            aria-label="Lihat detail"
             className="!text-blue-600 hover:!bg-blue-50"
             icon={<EyeOutlined />}
             onClick={() => vm.openDetailModal(item)}
@@ -158,7 +158,7 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
             variant="text"
             shape="circle"
             size="middle"
-            aria-label="Edit"
+            aria-label="Ubah rincian"
             className="!text-yellow-600 hover:!bg-yellow-50"
             icon={<EditOutlined />}
             disabled={!item?.business_state?.bisa_diubah}
@@ -169,7 +169,7 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
             variant="text"
             shape="circle"
             size="middle"
-            aria-label="Hapus"
+            aria-label="Hapus rincian"
             className="!text-red-600 hover:!bg-red-50"
             icon={<DeleteOutlined />}
             disabled={!item?.business_state?.bisa_dihapus}
@@ -183,8 +183,8 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
   if (vm.items.length === 0 && !vm.isLoading) {
     return (
       <AppEmpty.Card
-        title="Belum ada item komponen payroll"
-        description="Tambahkan item komponen untuk mulai membentuk rincian pemasukan dan potongan payroll karyawan ini."
+        title="Belum ada rincian gaji"
+        description="Tambahkan rincian untuk mulai mengatur pemasukan dan potongan gaji karyawan ini."
         action={
           vm.isReadonly ? null : (
             <AppButton
@@ -192,7 +192,7 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
               icon={<PlusOutlined />}
               className="!rounded-lg !px-4 !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white"
             >
-              Tambah Komponen
+              Tambah Rincian
             </AppButton>
           )
         }
@@ -203,15 +203,15 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
   return (
     <AppTable
       card
-      title="Daftar Item Komponen"
-      subtitle="List komponen payroll berdasarkan urutan tampil"
+      title="Daftar Rincian Gaji"
+      subtitle="Rincian pendapatan dan potongan sesuai urutan tampil"
       columns={columns}
       dataSource={vm.items}
       rowKey="id_item_komponen_payroll"
       loading={vm.isLoading || vm.isValidating}
       pagination={vm.pagination}
       onChange={vm.handleTableChange}
-      totalLabel="item"
+      totalLabel="rincian"
     />
   );
 }

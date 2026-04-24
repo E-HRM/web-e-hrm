@@ -2,10 +2,11 @@
 
 export const STATUS_PAYROLL_OPTIONS = [
   { value: 'DRAFT', label: 'Belum Final' },
-  { value: 'TERSIMPAN', label: 'Tersimpan' },
   { value: 'DISETUJUI', label: 'Disetujui' },
   { value: 'DIBAYAR', label: 'Dibayar' },
 ];
+
+export const EDITABLE_STATUS_PAYROLL_OPTIONS = STATUS_PAYROLL_OPTIONS.filter((option) => option.value !== 'DIBAYAR');
 
 export const STATUS_APPROVAL_OPTIONS = [
   { value: 'pending', label: 'Menunggu Persetujuan' },
@@ -62,7 +63,6 @@ export function createInitialPayrollKaryawanForm(defaultPeriode = '') {
     status_approval: 'pending',
     current_level_approval: 1,
     approval_steps: [createEmptyApprovalStep()],
-    dibayar_pada: null,
     catatan: '',
   };
 }
@@ -206,10 +206,6 @@ export function formatStatusPayroll(status) {
       label: 'Belum Final',
       tone: 'neutral',
     },
-    TERSIMPAN: {
-      label: 'Tersimpan',
-      tone: 'info',
-    },
     DISETUJUI: {
       label: 'Disetujui',
       tone: 'info',
@@ -328,6 +324,10 @@ export function normalizePayrollKaryawanItem(item) {
   const approvalStatus = String(item?.status_approval || 'pending')
     .trim()
     .toLowerCase();
+  const payrollStatus = String(item?.status_payroll || 'DRAFT')
+    .trim()
+    .toUpperCase();
+  const hasBuktiBayar = Boolean(String(item?.bukti_bayar_url || '').trim());
   const currentApprovalLevel = Number(item?.current_level_approval || 0) || null;
   const pendingApprovalSteps = approvalSteps.filter(
     (step) =>
@@ -374,6 +374,8 @@ export function normalizePayrollKaryawanItem(item) {
     current_approval_step: currentApprovalStep,
     approval_count: Number(item?._count?.approvals || approvalSteps.length || 0),
     status_approval: approvalStatus,
+    has_bukti_bayar: hasBuktiBayar,
+    can_upload_bukti_bayar: approvalStatus === 'disetujui' && payrollStatus !== 'DIBAYAR' && !hasBuktiBayar && !item.deleted_at,
     current_level_approval: currentApprovalLevel,
     approval_progress_label: approvalProgressLabel,
     current_approval_label: currentApprovalLabel,
@@ -415,12 +417,6 @@ export function buildPayrollKaryawanPayload(formData) {
           approver_user_id: String(step?.approver_user_id || '').trim(),
         }))
       : [],
-    dibayar_pada:
-      String(formData.status_payroll || '')
-        .trim()
-        .toUpperCase() === 'DIBAYAR'
-        ? formData.dibayar_pada || new Date().toISOString()
-        : null,
     catatan: String(formData.catatan || '').trim() || null,
   };
 }

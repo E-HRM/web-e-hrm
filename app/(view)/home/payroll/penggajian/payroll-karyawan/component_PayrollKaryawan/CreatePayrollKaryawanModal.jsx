@@ -8,7 +8,7 @@ import AppSelect from '@/app/(view)/component_shared/AppSelect';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
 import ApprovalStepsSection from './ApprovalStepsSection';
-import { STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
+import { EDITABLE_STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
 
 function CreatePayrollForm({ vm }) {
   return (
@@ -162,7 +162,7 @@ function CreatePayrollForm({ vm }) {
         label='Status Penggajian'
         value={vm.formData.status_payroll}
         onChange={(value) => vm.setFormValue('status_payroll', value)}
-        options={STATUS_PAYROLL_OPTIONS}
+        options={EDITABLE_STATUS_PAYROLL_OPTIONS}
         showSearch={false}
         selectClassName='!rounded-lg'
       />

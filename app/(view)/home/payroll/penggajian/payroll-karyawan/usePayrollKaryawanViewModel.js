@@ -646,7 +646,6 @@ export default function usePayrollKaryawanViewModel() {
       status_approval: payroll.status_approval || 'pending',
       current_level_approval: payroll.current_level_approval || 1,
       approval_steps: mapApprovalStepsForForm(payroll),
-      dibayar_pada: payroll.dibayar_pada || null,
       catatan: payroll.catatan || '',
     });
     setIsEditModalOpen(true);
@@ -832,6 +831,50 @@ export default function usePayrollKaryawanViewModel() {
       }
     },
     [getActionableApprovalStep, isSubmitting, mutatePayroll, resolvedApprovalTargetPayroll],
+  );
+
+  const handleUploadBuktiBayar = useCallback(
+    async ({ proofFiles = [] } = {}) => {
+      if (isSubmitting) return false;
+
+      const payroll = resolvedSelectedPayroll;
+      if (!payroll?.id_payroll_karyawan) {
+        AppMessage.warning('Data penggajian tidak ditemukan.');
+        return false;
+      }
+
+      if (!payroll.can_upload_bukti_bayar) {
+        AppMessage.warning('Bukti bayar hanya dapat diunggah setelah seluruh approval disetujui.');
+        return false;
+      }
+
+      const fileObj = proofFiles?.[0]?.originFileObj;
+      if (!fileObj) {
+        AppMessage.warning('Bukti bayar wajib diunggah.');
+        return false;
+      }
+
+      setIsSubmitting(true);
+      try {
+        const formData = new FormData();
+        formData.append('bukti_bayar', fileObj);
+
+        const response = await crudServiceAuth.patchForm(ApiEndpoints.UploadBuktiBayarPayrollKaryawan(payroll.id_payroll_karyawan), formData);
+
+        AppMessage.success(response?.message || 'Bukti bayar berhasil diunggah.');
+        if (response?.data) {
+          setSelectedPayroll(normalizePayrollKaryawanItem(response.data));
+        }
+        await mutatePayroll();
+        return true;
+      } catch (err) {
+        AppMessage.error(err?.message || 'Gagal mengunggah bukti bayar.');
+        return false;
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [isSubmitting, mutatePayroll, resolvedSelectedPayroll],
   );
 
   const filteredData = useMemo(() => {
@@ -1031,6 +1074,7 @@ export default function usePayrollKaryawanViewModel() {
     closeApproveModal,
     handleApprove,
     getActionableApprovalStep,
+    handleUploadBuktiBayar,
 
     openDeleteDialog,
     closeDeleteDialog,

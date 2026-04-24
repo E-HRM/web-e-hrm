@@ -8,7 +8,7 @@ export const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 export const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 export const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
-export const STATUS_PAYROLL_VALUES = new Set(['DRAFT', 'TERSIMPAN', 'DISETUJUI', 'DIBAYAR']);
+export const STATUS_PAYROLL_VALUES = new Set(['DRAFT', 'DISETUJUI', 'DIBAYAR']);
 export const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']);
 export const STATUS_APPROVAL_VALUES = new Set(['pending', 'disetujui', 'ditolak']);
 export const JENIS_HUBUNGAN_KERJA_VALUES = new Set(['FREELANCE', 'INTERNSHIP', 'PKWT', 'PKWTT']);
@@ -27,9 +27,8 @@ export const ALLOWED_ORDER_BY = new Set([
   'total_potongan',
   'pph21_nominal',
   'pendapatan_bersih',
-  'dibayar_pada',
+  'bukti_bayar_url',
   'finalized_at',
-  'locked_at',
 ]);
 
 export const normRole = (role) =>
@@ -292,9 +291,8 @@ export function buildSelect() {
     status_payroll: true,
     status_approval: true,
     current_level_approval: true,
-    dibayar_pada: true,
+    bukti_bayar_url: true,
     finalized_at: true,
-    locked_at: true,
     catatan: true,
     issue_number: true,
     issued_at: true,
@@ -505,7 +503,7 @@ export function enrichPayroll(item) {
   const resolvedStatusApproval = approvalState.total_steps > 0 ? approvalState.status_approval : normalizeApprovalStatus(item.status_approval || 'pending');
   const resolvedCurrentLevelApproval = approvalState.total_steps > 0 ? approvalState.current_level_approval : (item.current_level_approval ?? null);
   const approvalImmutable = resolvedStatusApproval === 'disetujui';
-  const payrollImmutable = IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) || Boolean(item.finalized_at) || Boolean(item.locked_at);
+  const payrollImmutable = IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) || Boolean(item.finalized_at);
   const periodeImmutable = IMMUTABLE_PERIODE_STATUS.has(periodeStatus);
 
   return {
@@ -633,6 +631,10 @@ export function buildSlipPayload(payroll) {
       current_level_approval: enrichedPayroll.current_level_approval,
       steps: approvalSteps,
       approved_steps: approvedSteps,
+    },
+    payment: {
+      bukti_bayar_url: enrichedPayroll.bukti_bayar_url || null,
+      finalized_at: enrichedPayroll.finalized_at || null,
     },
   };
 }

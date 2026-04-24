@@ -20,7 +20,6 @@ export const DECIMAL_MAX_INTEGER_DIGITS = DECIMAL_PRECISION - DECIMAL_SCALE;
 export const ARAH_KOMPONEN_VALUES = new Set(["PEMASUKAN", "POTONGAN"]);
 export const STATUS_PAYROLL_VALUES = new Set([
   "DRAFT",
-  "TERSIMPAN",
   "DISETUJUI",
   "DIBAYAR",
 ]);
@@ -369,9 +368,8 @@ export function buildSelect() {
         bank_name: true,
         bank_account: true,
         status_payroll: true,
-        dibayar_pada: true,
+        bukti_bayar_url: true,
         finalized_at: true,
-        locked_at: true,
         catatan: true,
         deleted_at: true,
         periode: {
@@ -465,7 +463,6 @@ export function enrichItem(data) {
 
   const payrollImmutable =
     IMMUTABLE_PAYROLL_STATUS.has(payrollStatus) ||
-    Boolean(data?.payroll_karyawan?.locked_at) ||
     Boolean(data?.payroll_karyawan?.finalized_at);
 
   const periodeImmutable =
@@ -516,7 +513,6 @@ export async function ensurePayrollEditable(
       id_user: true,
       status_payroll: true,
       finalized_at: true,
-      locked_at: true,
       deleted_at: true,
       periode: {
         select: {
@@ -556,7 +552,6 @@ export async function ensurePayrollEditable(
 
   if (
     IMMUTABLE_PAYROLL_STATUS.has(statusPayroll) ||
-    payroll.locked_at ||
     payroll.finalized_at
   ) {
     throw new Error(

@@ -18,7 +18,7 @@ export default function ItemKomponenPayrollReadonlySection({ vm }) {
         weight={700}
         className='block text-amber-800'
       >
-        Payroll tidak dapat diubah
+        Rincian gaji tidak dapat diubah
       </AppTypography.Text>
 
       <AppTypography.Text

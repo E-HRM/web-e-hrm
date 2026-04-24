@@ -269,7 +269,7 @@ function buildSelect() {
         id_payroll_karyawan: true,
         id_user: true,
         status_payroll: true,
-        dibayar_pada: true,
+        finalized_at: true,
         deleted_at: true,
         periode: {
           select: {
@@ -539,7 +539,7 @@ async function resolveBusinessState(tx, input, existing = null) {
           id_payroll_karyawan: true,
           id_user: true,
           status_payroll: true,
-          dibayar_pada: true,
+          finalized_at: true,
           created_at: true,
           deleted_at: true,
           periode: {
@@ -606,7 +606,7 @@ async function resolveBusinessState(tx, input, existing = null) {
       diposting_pada = payroll?.created_at || new Date();
     }
     if (!dibayar_pada) {
-      dibayar_pada = payroll?.dibayar_pada || new Date();
+      dibayar_pada = payroll?.finalized_at || new Date();
     }
   }
 

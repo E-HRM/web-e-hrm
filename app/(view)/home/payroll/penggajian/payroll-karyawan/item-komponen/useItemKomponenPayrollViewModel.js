@@ -273,13 +273,12 @@ function normalizePayrollFromItem(payroll) {
     pph21_nominal: parseNumber(payroll.pph21_nominal),
     pendapatan_bersih: parseNumber(payroll.pendapatan_bersih),
     finalized_at: payroll.finalized_at || null,
-    locked_at: payroll.locked_at || null,
   };
 }
 
 function validateItemForm({ payrollId, formData, usingDefinition }) {
   if (!payrollId) {
-    AppMessage.warning("Payroll karyawan belum dipilih.");
+    AppMessage.warning("Data gaji karyawan belum dipilih.");
     return false;
   }
 
@@ -292,17 +291,17 @@ function validateItemForm({ payrollId, formData, usingDefinition }) {
 
   if (!usingDefinition) {
     if (!normalizeText(formData.nama_komponen)) {
-      AppMessage.warning("Nama komponen wajib diisi.");
+      AppMessage.warning("Nama rincian wajib diisi.");
       return false;
     }
 
     if (!normalizeUpperText(formData.tipe_komponen)) {
-      AppMessage.warning("Tipe komponen wajib dipilih.");
+      AppMessage.warning("Jenis rincian wajib dipilih.");
       return false;
     }
 
     if (!normalizeUpperText(formData.arah_komponen)) {
-      AppMessage.warning("Arah komponen wajib dipilih.");
+      AppMessage.warning("Kategori pemasukan atau potongan wajib dipilih.");
       return false;
     }
 
@@ -310,14 +309,14 @@ function validateItemForm({ payrollId, formData, usingDefinition }) {
       normalizeUpperText(formData.tipe_komponen) === "PAJAK" &&
       normalizeUpperText(formData.arah_komponen) !== "POTONGAN"
     ) {
-      AppMessage.warning("Komponen pajak wajib memiliki arah 'Potongan'.");
+      AppMessage.warning("Rincian pajak harus masuk sebagai potongan.");
       return false;
     }
   }
 
   if (normalizeUpperText(formData.tipe_komponen) === "PAJAK") {
     AppMessage.warning(
-      "Komponen PAJAK dihitung otomatis dari payroll dan tidak dapat dikelola manual.",
+      "Pajak dihitung otomatis oleh sistem, sehingga tidak perlu ditambahkan atau diubah di halaman ini.",
     );
     return false;
   }
@@ -433,7 +432,7 @@ export default function useItemKomponenPayrollViewModel() {
     AppMessage.once({
       type: "error",
       onceKey: "item-komponen-payroll-fetch-error",
-      content: itemsError?.message || "Gagal memuat item komponen payroll.",
+      content: itemsError?.message || "Gagal memuat rincian gaji karyawan.",
     });
   }, [itemsError]);
 
@@ -444,7 +443,7 @@ export default function useItemKomponenPayrollViewModel() {
       type: "error",
       onceKey: "item-komponen-payroll-definisi-fetch-error",
       content:
-        definisiError?.message || "Gagal memuat definisi komponen payroll.",
+        definisiError?.message || "Gagal memuat daftar rincian standar.",
     });
   }, [definisiError]);
 
@@ -456,7 +455,7 @@ export default function useItemKomponenPayrollViewModel() {
       onceKey: "item-komponen-payroll-tipe-fetch-error",
       content:
         tipeKomponenError?.message ||
-        "Gagal memuat master tipe komponen payroll.",
+        "Gagal memuat pilihan jenis rincian.",
     });
   }, [tipeKomponenError]);
 
@@ -517,7 +516,7 @@ export default function useItemKomponenPayrollViewModel() {
       total: Number(rawPagination.total) || 0,
       showSizeChanger: true,
       showQuickJumper: true,
-      showTotal: (total) => `Total ${total} item`,
+      showTotal: (total) => `Total ${total} rincian`,
     };
   }, [itemsResponse, page, pageSize]);
 
@@ -575,15 +574,15 @@ export default function useItemKomponenPayrollViewModel() {
 
   const readonlyReason = useMemo(() => {
     if (pageBusinessState.periode_immutable) {
-      return `Periode payroll berada pada status ${formatEnumLabel(
+      return `Periode gaji sudah berstatus ${formatEnumLabel(
         currentPayroll.periode_status,
-      )} sehingga item komponen menjadi read only.`;
+      )} sehingga rincian gaji tidak bisa diubah.`;
     }
 
     if (pageBusinessState.payroll_immutable) {
-      return `Payroll karyawan berada pada status ${formatEnumLabel(
+      return `Gaji karyawan sudah berstatus ${formatEnumLabel(
         currentPayroll.status_payroll,
-      )} sehingga item komponen tidak dapat diubah.`;
+      )} sehingga rincian gaji tidak bisa diubah.`;
     }
 
     return "";
@@ -686,7 +685,7 @@ export default function useItemKomponenPayrollViewModel() {
 
   const openCreateModal = useCallback(() => {
     if (isReadonly) {
-      AppMessage.warning(readonlyReason || "Payroll ini tidak dapat diubah.");
+      AppMessage.warning(readonlyReason || "Rincian gaji ini tidak dapat diubah.");
       return;
     }
 
@@ -707,7 +706,7 @@ export default function useItemKomponenPayrollViewModel() {
     if (!item) return;
 
     if (!item?.business_state?.bisa_diubah) {
-      AppMessage.warning("Item komponen payroll ini tidak dapat diperbarui.");
+      AppMessage.warning("Rincian gaji ini tidak dapat diubah.");
       return;
     }
 
@@ -742,7 +741,7 @@ export default function useItemKomponenPayrollViewModel() {
     if (!item) return;
 
     if (!item?.business_state?.bisa_dihapus) {
-      AppMessage.warning("Item komponen payroll ini tidak dapat dihapus.");
+      AppMessage.warning("Rincian gaji ini tidak dapat dihapus.");
       return;
     }
 
@@ -761,7 +760,7 @@ export default function useItemKomponenPayrollViewModel() {
     if (isSubmitting) return false;
 
     if (isReadonly) {
-      AppMessage.warning(readonlyReason || "Payroll ini tidak dapat diubah.");
+      AppMessage.warning(readonlyReason || "Rincian gaji ini tidak dapat diubah.");
       return false;
     }
 
@@ -802,14 +801,14 @@ export default function useItemKomponenPayrollViewModel() {
       AppMessage.success(
         response?.message ||
           (isEditMode
-            ? "Item komponen payroll berhasil diperbarui."
-            : "Item komponen payroll berhasil dibuat."),
+            ? "Rincian gaji berhasil diperbarui."
+            : "Rincian gaji berhasil ditambahkan."),
       );
 
       return true;
     } catch (err) {
       AppMessage.error(
-        err?.message || "Gagal menyimpan item komponen payroll.",
+        err?.message || "Gagal menyimpan rincian gaji.",
       );
       return false;
     } finally {
@@ -832,7 +831,7 @@ export default function useItemKomponenPayrollViewModel() {
     if (isSubmitting) return false;
 
     if (!selectedItem?.id_item_komponen_payroll) {
-      AppMessage.warning("Item komponen payroll tidak ditemukan.");
+      AppMessage.warning("Rincian gaji tidak ditemukan.");
       return false;
     }
 
@@ -849,12 +848,12 @@ export default function useItemKomponenPayrollViewModel() {
       setSelectedItem(null);
 
       AppMessage.success(
-        response?.message || "Item komponen payroll berhasil dihapus.",
+        response?.message || "Rincian gaji berhasil dihapus.",
       );
       return true;
     } catch (err) {
       AppMessage.error(
-        err?.message || "Gagal menghapus item komponen payroll.",
+        err?.message || "Gagal menghapus rincian gaji.",
       );
       return false;
     } finally {

@@ -35,7 +35,7 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
     <AppModal
       open={vm.isDetailModalOpen}
       onClose={vm.closeDetailModal}
-      title="Detail Item Komponen Payroll"
+      title="Detail Rincian Gaji"
       footer={null}
       width={760}
     >
@@ -43,7 +43,7 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <DetailField
-              label="Nama Komponen"
+              label="Nama Rincian"
               value={vm.selectedItem.nama_komponen}
             />
             <DetailField
@@ -56,15 +56,15 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
               }
             />
             <DetailField
-              label="Tipe Komponen"
+              label="Jenis Rincian"
               value={vm.formatEnumLabel(vm.selectedItem.tipe_komponen)}
             />
             <DetailField
-              label="Arah Komponen"
+              label="Masuk Sebagai"
               value={vm.formatEnumLabel(vm.selectedItem.arah_komponen)}
             />
             <DetailField
-              label="Definisi Komponen"
+              label="Rincian Standar"
               value={vm.selectedItem.definisi_komponen?.nama_komponen || "-"}
             />
             <DetailField
@@ -72,7 +72,7 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
               value={vm.selectedItem.urutan_tampil ?? 0}
             />
             <DetailField
-              label="Kunci Idempoten"
+              label="Kode Referensi"
               value={vm.selectedItem.kunci_idempoten || "-"}
               weight={500}
             />
@@ -89,7 +89,7 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
               value={vm.formatDateTime(vm.selectedItem.created_at)}
             />
             <DetailField
-              label="Diupdate Pada"
+              label="Diperbarui Pada"
               value={vm.formatDateTime(vm.selectedItem.updated_at)}
             />
           </div>
@@ -99,19 +99,19 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
               tone={vm.selectedItem.kena_pajak ? "warning" : "neutral"}
               variant="soft"
             >
-              {vm.selectedItem.kena_pajak ? "Kena Pajak" : "Tidak Kena Pajak"}
+              {vm.selectedItem.kena_pajak ? "Masuk Perhitungan Pajak" : "Tidak Masuk Pajak"}
             </AppTag>
 
             <AppTag
               tone={vm.selectedItem.definisi_komponen ? "info" : "neutral"}
               variant="soft"
             >
-              {vm.selectedItem.definisi_komponen ? "Dari Definisi" : "Manual"}
+              {vm.selectedItem.definisi_komponen ? "Dari Daftar Standar" : "Dibuat Manual"}
             </AppTag>
 
             {vm.selectedItem.deleted_at ? (
               <AppTag tone="danger" variant="soft">
-                Soft Deleted
+                Sudah Dihapus
               </AppTag>
             ) : null}
           </div>

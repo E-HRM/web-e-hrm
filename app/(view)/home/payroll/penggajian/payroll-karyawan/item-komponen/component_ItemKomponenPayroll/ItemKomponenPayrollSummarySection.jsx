@@ -49,8 +49,8 @@ export default function ItemKomponenPayrollSummarySection({ vm }) {
   return (
     <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6'>
       <SummaryCard
-        title='Total Item'
-        subtitle='Baris komponen payroll aktif'
+        title='Jumlah Rincian'
+        subtitle='Rincian yang sedang digunakan'
         value={vm.statistics.totalItems}
         icon={<DollarOutlined />}
         iconClassName='text-blue-500 text-xl'
@@ -58,7 +58,7 @@ export default function ItemKomponenPayrollSummarySection({ vm }) {
 
       <SummaryCard
         title='Total Pemasukan'
-        subtitle='Akumulasi semua pemasukan'
+        subtitle='Jumlah tambahan pendapatan'
         value={vm.formatCurrency(vm.statistics.totalPemasukan)}
         icon={<PlusOutlined />}
         iconClassName='text-green-500 text-xl'
@@ -66,15 +66,15 @@ export default function ItemKomponenPayrollSummarySection({ vm }) {
 
       <SummaryCard
         title='Total Potongan'
-        subtitle='Akumulasi semua potongan'
+        subtitle='Jumlah potongan gaji'
         value={vm.formatCurrency(vm.statistics.totalPotongan)}
         icon={<DeleteOutlined />}
         iconClassName='text-red-500 text-xl'
       />
 
       <SummaryCard
-        title='Kena Pajak'
-        subtitle='Nominal item bertanda pajak'
+        title='Masuk Perhitungan Pajak'
+        subtitle='Total rincian yang dihitung untuk pajak'
         value={vm.formatCurrency(vm.statistics.totalKenaPajak)}
         icon={<EyeOutlined />}
         iconClassName='text-amber-500 text-xl'

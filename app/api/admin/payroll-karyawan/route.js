@@ -98,15 +98,9 @@ function normalizeStatusRelatedFields(body = {}, existing = null) {
         .trim()
         .toUpperCase();
 
-  const dibayar_pada_raw = body?.dibayar_pada !== undefined ? body.dibayar_pada : existing?.dibayar_pada;
-  const finalized_at_raw = body?.finalized_at !== undefined ? body.finalized_at : existing?.finalized_at;
-  const locked_at_raw = body?.locked_at !== undefined ? body.locked_at : existing?.locked_at;
-
   return {
     status_payroll,
-    dibayar_pada: status_payroll === 'DIBAYAR' ? parseDateTime(dibayar_pada_raw || new Date().toISOString(), 'dibayar_pada') : null,
-    finalized_at: parseDateTime(finalized_at_raw, 'finalized_at'),
-    locked_at: parseDateTime(locked_at_raw, 'locked_at'),
+    finalized_at: existing?.finalized_at || null,
   };
 }
 

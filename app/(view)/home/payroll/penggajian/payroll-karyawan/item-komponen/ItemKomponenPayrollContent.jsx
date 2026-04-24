@@ -1,4 +1,4 @@
-// app/(view)/home/payroll/payroll-karyawan/item-komponen/ItemKomponenPayrollContent.jsx
+// app/(view)/home/payroll/penggajian/payroll-karyawan/item-komponen/ItemKomponenPayrollContent.jsx
 'use client';
 
 import { LeftOutlined } from '@ant-design/icons';
@@ -29,19 +29,19 @@ export default function ItemKomponenPayrollContent() {
           href='/home/payroll/penggajian/payroll-karyawan'
           className='!rounded-lg !h-10'
         >
-          Kembali ke Payroll Karyawan
+          Kembali ke Daftar Gaji Karyawan
         </AppButton>
 
         <AppEmpty.Card
-          title='Payroll karyawan belum dipilih'
-          description='Buka halaman ini dari daftar payroll karyawan agar context payroll yang sedang dikelola dapat diketahui.'
+          title='Data gaji karyawan belum dipilih'
+          description='Silakan buka halaman ini melalui daftar gaji karyawan agar data yang akan dikelola dapat dikenali.'
         />
       </div>
     );
   }
 
   return (
-    <div className='p-8 space-y-6'>
+    <div className='p-8 space-y-5 md:space-y-6'>
       <ItemKomponenPayrollHeader vm={vm} />
 
       {vm.isReadonly ? <ItemKomponenPayrollReadonlySection vm={vm} /> : null}
