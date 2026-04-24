@@ -1,42 +1,32 @@
 'use client';
 
-import { HistoryOutlined, TeamOutlined } from '@ant-design/icons';
+import { TeamOutlined } from '@ant-design/icons';
 
 import PayrollHubContent from '../components_hub/PayrollHubContent';
 
 const MANAJEMEN_KARYAWAN_ITEMS = [
   {
-    key: 'direktori-karyawan',
-    title: 'Direktori Karyawan',
-    description: 'Menampilkan data User dan ProfilPayroll untuk kebutuhan administrasi payroll karyawan dalam satu direktori.',
-    helperText: 'Pada tahap 1 diarahkan ke halaman profile payroll yang sudah tersedia.',
+    key: 'profile-payroll',
+    title: 'Profil Payroll Karyawan',
+    description: 'Kelola data payroll karyawan seperti rekening pembayaran, status payroll, NPWP, PTKP, dan informasi administrasi penggajian.',
+    helperText: 'Pastikan data payroll karyawan sudah lengkap dan sesuai sebelum proses penggajian dijalankan.',
     href: '/home/payroll/manajemen-karyawan/profile-payroll',
     status: 'ready',
     icon: TeamOutlined,
     iconWrapClassName: 'bg-blue-100',
     iconClassName: 'text-blue-600',
-  },
-  {
-    key: 'riwayat-kompensasi',
-    title: 'Riwayat Kompensasi',
-    description: 'Menampilkan model RiwayatKompensasiKaryawan untuk menelusuri histori kompensasi tiap karyawan.',
-    helperText: 'Mengarah ke halaman riwayat kompensasi karyawan yang sudah tersedia.',
-    href: '/home/payroll/manajemen-karyawan/riwayat-kompensasi-karyawan',
-    status: 'ready',
-    icon: HistoryOutlined,
-    iconWrapClassName: 'bg-violet-100',
-    iconClassName: 'text-violet-600',
+    ctaLabel: 'Kelola Profil Payroll',
   },
 ];
-
-
 
 export default function ManajemenKaryawanPayrollContent() {
   return (
     <PayrollHubContent
       title='Manajemen Karyawan Payroll'
-      description='Kelompok navigasi untuk direktori data karyawan payroll dan riwayat kompensasi. Tahap 1 seluruh item di bagian ini sudah dapat dipakai melalui halaman existing.'
+      description='Kelola data karyawan yang digunakan dalam proses payroll, termasuk informasi pembayaran, pajak, dan status administrasi penggajian.'
       items={MANAJEMEN_KARYAWAN_ITEMS}
+      showHeaderSummary={false}
+      showStatusTag={false}
     />
   );
 }

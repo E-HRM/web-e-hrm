@@ -129,7 +129,7 @@ export default function usePeriodePayrollViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'master-template-fetch-error',
-      content: masterTemplateError?.message || 'Gagal memuat daftar master template.',
+      content: masterTemplateError?.message || 'Gagal memuat daftar template slip gaji.',
     });
   }, [masterTemplateError]);
 
@@ -308,7 +308,7 @@ export default function usePeriodePayrollViewModel() {
 
         AppMessage.success(
           payrollAffected || payoutAffected
-            ? `Periode payroll berhasil dihapus permanen. ${payrollAffected} payroll karyawan terhapus mengikuti cascade dan ${payoutAffected} payout dilepas dari periode.`
+            ? `Periode payroll berhasil dihapus. ${payrollAffected} data payroll karyawan yang terkait ikut dihapus dan ${payoutAffected} payout konsultan dilepaskan dari periode ini.`
             : response?.message || 'Periode payroll berhasil dihapus.',
         );
 
@@ -409,7 +409,7 @@ export default function usePeriodePayrollViewModel() {
 
   const resolveTemplateLabel = useCallback((source) => {
     const template = source?.master_template ?? source;
-    return template?.nama_template || 'Belum ada template payslip';
+    return template?.nama_template || 'Belum memilih template slip gaji';
   }, []);
 
   return {

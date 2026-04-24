@@ -12,6 +12,7 @@ import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
 export default function MasterTemplateFormModal({ open, template, onClose, onSave }) {
   const [submitting, setSubmitting] = useState(false);
+  const isEditMode = Boolean(template);
 
   const initialValues = useMemo(() => {
     if (!open) return {};
@@ -44,30 +45,38 @@ export default function MasterTemplateFormModal({ open, template, onClose, onSav
   }, [open, template]);
 
   const fields = useMemo(
-    () => [
-      {
-        type: 'text',
-        name: 'nama_template',
-        label: 'Nama Template',
-        placeholder: 'Masukkan nama template payroll',
-        rules: [{ required: true, message: 'Nama template wajib diisi' }],
-      },
-      {
-        type: 'radio-group',
-        name: 'source_type',
-        label: 'Sumber File',
-        options: [
-          { value: 'upload', label: 'Upload File' },
-          { value: 'link', label: 'URL / Link' },
-        ],
-        rules: [{ required: true, message: 'Pilih sumber file' }],
-      },
-      {
+    () => {
+      const resolvedSourceType = (ctx) => (isEditMode ? ctx?.values?.source_type || template?.source_type || 'upload' : 'upload');
+
+      const formFields = [
+        {
+          type: 'text',
+          name: 'nama_template',
+          label: 'Nama Template',
+          placeholder: 'Masukkan nama template payroll',
+          rules: [{ required: true, message: 'Nama template wajib diisi' }],
+        },
+      ];
+
+      if (isEditMode) {
+        formFields.push({
+          type: 'radio-group',
+          name: 'source_type',
+          label: 'Sumber File',
+          options: [
+            { value: 'upload', label: 'Upload File' },
+            { value: 'link', label: 'URL / Link' },
+          ],
+          rules: [{ required: true, message: 'Pilih sumber file' }],
+        });
+      }
+
+      formFields.push({
         type: 'custom',
         name: 'fileList',
         label: 'Upload Template',
         watch: ['source_type'],
-        hidden: (ctx) => ctx?.values?.source_type !== 'upload',
+        hidden: (ctx) => resolvedSourceType(ctx) !== 'upload',
         valuePropName: 'fileList',
         getValueFromEvent: () => (event) => {
           if (Array.isArray(event)) return event;
@@ -86,7 +95,7 @@ export default function MasterTemplateFormModal({ open, template, onClose, onSav
         rules: [
           {
             validator: async (_rule, value, ctx) => {
-              if (ctx?.getValue?.('source_type') !== 'upload') return Promise.resolve();
+              if (resolvedSourceType(ctx) !== 'upload') return Promise.resolve();
 
               const hasExisting = Boolean(template?.file_template_url && template?.source_type !== 'link');
               const fileList = Array.isArray(value) ? value : [];
@@ -98,7 +107,7 @@ export default function MasterTemplateFormModal({ open, template, onClose, onSav
           },
         ],
         extra: (ctx) => {
-          if (ctx?.values?.source_type !== 'upload') return null;
+          if (resolvedSourceType(ctx) !== 'upload') return null;
           if (!template?.file_template_url || template?.source_type === 'link') return null;
 
           return (
@@ -137,32 +146,37 @@ export default function MasterTemplateFormModal({ open, template, onClose, onSav
             </div>
           </Upload.Dragger>
         ),
-      },
-      {
-        type: 'text',
-        name: 'link_url',
-        label: 'Link Template',
-        placeholder: 'https://example.com/template',
-        watch: ['source_type'],
-        hidden: (ctx) => ctx?.values?.source_type !== 'link',
-        rules: [
-          {
-            validator: async (_rule, value, ctx) => {
-              if (ctx?.getValue?.('source_type') !== 'link') return Promise.resolve();
-              if (!value) return Promise.reject(new Error('Link template wajib diisi'));
+      });
 
-              try {
-                new URL(String(value));
-                return Promise.resolve();
-              } catch {
-                return Promise.reject(new Error('URL tidak valid'));
-              }
+      if (isEditMode) {
+        formFields.push({
+          type: 'text',
+          name: 'link_url',
+          label: 'Link Template',
+          placeholder: 'https://example.com/template',
+          watch: ['source_type'],
+          hidden: (ctx) => resolvedSourceType(ctx) !== 'link',
+          rules: [
+            {
+              validator: async (_rule, value, ctx) => {
+                if (resolvedSourceType(ctx) !== 'link') return Promise.resolve();
+                if (!value) return Promise.reject(new Error('Link template wajib diisi'));
+
+                try {
+                  new URL(String(value));
+                  return Promise.resolve();
+                } catch {
+                  return Promise.reject(new Error('URL tidak valid'));
+                }
+              },
             },
-          },
-        ],
-      },
-    ],
-    [template]
+          ],
+        });
+      }
+
+      return formFields;
+    },
+    [isEditMode, template]
   );
 
   return (
@@ -197,13 +211,14 @@ export default function MasterTemplateFormModal({ open, template, onClose, onSav
           </div>
         )}
         onFinish={async (values) => {
+          const sourceType = isEditMode ? values?.source_type || template?.source_type || 'upload' : 'upload';
           const payload = {
             id_master_template: template?.id_master_template,
             nama_template: values?.nama_template,
-            source_type: values?.source_type,
-            fileList: values?.source_type === 'upload' ? (Array.isArray(values?.fileList) ? values.fileList : []) : [],
-            file_template_url: values?.source_type === 'upload' ? template?.file_template_url : undefined,
-            link_url: values?.source_type === 'link' ? values?.link_url : undefined,
+            source_type: sourceType,
+            fileList: sourceType === 'upload' ? (Array.isArray(values?.fileList) ? values.fileList : []) : [],
+            file_template_url: sourceType === 'upload' ? template?.file_template_url : undefined,
+            link_url: sourceType === 'link' ? values?.link_url : undefined,
           };
 
           try {

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import useSWR from 'swr';
 
 import AppMessage from '@/app/(view)/component_shared/AppMessage';
+import { useAuth } from '@/app/utils/auth/authService';
 import { crudServiceAuth } from '@/app/utils/services/crudServiceAuth';
 import { ApiEndpoints } from '@/constrainst/endpoints';
 
@@ -194,6 +195,46 @@ function filterApproverOption(input, option) {
     .includes(String(input || '').toLowerCase());
 }
 
+function normalizeRole(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase();
+}
+
+function isPendingApprovalDecision(value) {
+  return String(value || 'pending')
+    .trim()
+    .toLowerCase() === 'pending';
+}
+
+function findActionableApprovalStep(payroll, actorId, actorRole) {
+  const approvalSteps = Array.isArray(payroll?.approval_steps) ? payroll.approval_steps : [];
+  const pendingSteps = approvalSteps.filter((step) => isPendingApprovalDecision(step?.decision));
+
+  if (pendingSteps.length === 0) return null;
+
+  const normalizedActorId = String(actorId || '').trim();
+  const normalizedActorRole = normalizeRole(actorRole);
+
+  if (normalizedActorId) {
+    const stepByUser = pendingSteps.find((step) => String(step?.approver_user_id || '').trim() === normalizedActorId);
+    if (stepByUser) return stepByUser;
+  }
+
+  if (normalizedActorRole) {
+    const stepByRole = pendingSteps.find(
+      (step) => !String(step?.approver_user_id || '').trim() && normalizeRole(step?.approver_role) === normalizedActorRole,
+    );
+    if (stepByRole) return stepByRole;
+  }
+
+  if (normalizedActorRole === 'SUPERADMIN') {
+    return pendingSteps[0] || null;
+  }
+
+  return null;
+}
+
 function clearSelectedEmployeeSnapshot(previousForm) {
   return {
     ...previousForm,
@@ -277,6 +318,7 @@ function mapApprovalStepsForForm(payroll) {
 
 export default function usePayrollKaryawanViewModel() {
   const searchParams = useSearchParams();
+  const auth = useAuth();
   const periodeFilterFromQuery = useMemo(() => String(searchParams?.get('id_periode_payroll') || '').trim(), [searchParams]);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -435,28 +477,8 @@ export default function usePayrollKaryawanViewModel() {
   const getActionableApprovalStep = useCallback((payroll) => {
     if (!payroll) return null;
 
-    const approvalSteps = Array.isArray(payroll?.approval_steps) ? payroll.approval_steps : [];
-    const currentApprovalLevel = Number(payroll?.current_level_approval || 0) || null;
-    const currentPendingStep =
-      approvalSteps.find(
-        (step) =>
-          Number(step?.level || 0) === currentApprovalLevel &&
-          String(step?.decision || '')
-            .trim()
-            .toLowerCase() === 'pending',
-      ) || null;
-
-    return (
-      currentPendingStep ||
-      approvalSteps.find(
-        (step) =>
-          String(step?.decision || '')
-            .trim()
-            .toLowerCase() === 'pending',
-      ) ||
-      null
-    );
-  }, []);
+    return findActionableApprovalStep(payroll, auth.userId, auth.role);
+  }, [auth.role, auth.userId]);
 
   const setFormValue = useCallback((field, value) => {
     setFormData((prev) => ({
@@ -656,7 +678,7 @@ export default function usePayrollKaryawanViewModel() {
 
       const approvalStep = getActionableApprovalStep(payroll);
       if (!approvalStep?.id_approval_payroll_karyawan) {
-        AppMessage.warning('Payroll ini tidak memiliki approval aktif yang bisa diproses.');
+        AppMessage.warning('Anda tidak memiliki approval pending pada payroll ini.');
         return;
       }
 
@@ -773,7 +795,7 @@ export default function usePayrollKaryawanViewModel() {
 
       const approvalStep = getActionableApprovalStep(payroll);
       if (!approvalStep?.id_approval_payroll_karyawan) {
-        AppMessage.warning('Approval aktif payroll tidak ditemukan.');
+        AppMessage.warning('Approval payroll Anda tidak ditemukan atau sudah diproses.');
         return false;
       }
 
@@ -923,7 +945,7 @@ export default function usePayrollKaryawanViewModel() {
       return 'Belum ada user aktif yang bisa dipilih sebagai approver payroll.';
     }
 
-    return 'Tambahkan satu level untuk single approver, atau beberapa level untuk approval berjenjang.';
+    return 'Tambahkan satu approver untuk persetujuan tunggal, atau beberapa approver untuk approval paralel.';
   }, [activeApproverUsers.length, isUsersLoading]);
 
   const getPeriodeInfo = useCallback(

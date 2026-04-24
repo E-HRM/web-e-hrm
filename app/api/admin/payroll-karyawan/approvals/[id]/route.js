@@ -113,6 +113,39 @@ function isSuperAdmin(role) {
   return SUPER_ROLES.has(normRole(role));
 }
 
+async function syncPayrollApprovalState(id_payroll_karyawan) {
+  const approvals = await db.approvalPayrollKaryawan.findMany({
+    where: {
+      id_payroll_karyawan,
+      deleted_at: null,
+    },
+    orderBy: {
+      level: 'asc',
+    },
+    select: {
+      id_approval_payroll_karyawan: true,
+      level: true,
+      decision: true,
+      deleted_at: true,
+    },
+  });
+
+  const approvalState = deriveApprovalState(approvals);
+
+  await db.payrollKaryawan.update({
+    where: { id_payroll_karyawan },
+    data: {
+      status_approval: approvalState.status_approval,
+      current_level_approval: approvalState.current_level_approval,
+    },
+  });
+
+  return db.payrollKaryawan.findUnique({
+    where: { id_payroll_karyawan },
+    select: buildSelect(),
+  });
+}
+
 export async function PATCH(req, { params }) {
   const auth = await ensureAuth(req);
   if (auth instanceof NextResponse) return auth;
@@ -153,6 +186,7 @@ export async function PATCH(req, { params }) {
   }
 
   let uploadedUrl = null;
+  let approvalPersisted = false;
 
   try {
     const initialApproval = await db.approvalPayrollKaryawan.findUnique({
@@ -224,27 +258,6 @@ export async function PATCH(req, { params }) {
         throw createHttpError('Approval payroll sudah memiliki keputusan.', 409);
       }
 
-      const siblingApprovals = await tx.approvalPayrollKaryawan.findMany({
-        where: {
-          id_payroll_karyawan: approvalRecord.id_payroll_karyawan,
-          deleted_at: null,
-        },
-        orderBy: {
-          level: 'asc',
-        },
-        select: {
-          id_approval_payroll_karyawan: true,
-          level: true,
-          decision: true,
-          deleted_at: true,
-        },
-      });
-
-      const approvalStateBefore = deriveApprovalState(siblingApprovals);
-      if (approvalStateBefore.current_step?.id_approval_payroll_karyawan !== approvalId) {
-        throw createHttpError('Approval ini bukan level aktif saat ini.', 409);
-      }
-
       await tx.approvalPayrollKaryawan.update({
         where: { id_approval_payroll_karyawan: approvalId },
         data: {
@@ -255,43 +268,28 @@ export async function PATCH(req, { params }) {
         },
       });
 
-      const updatedApprovals = await tx.approvalPayrollKaryawan.findMany({
-        where: {
-          id_payroll_karyawan: approvalRecord.id_payroll_karyawan,
-          deleted_at: null,
-        },
-        orderBy: {
-          level: 'asc',
-        },
-        select: {
-          id_approval_payroll_karyawan: true,
-          level: true,
-          decision: true,
-          deleted_at: true,
-        },
-      });
-
-      const approvalState = deriveApprovalState(updatedApprovals);
-
-      await tx.payrollKaryawan.update({
-        where: { id_payroll_karyawan: approvalRecord.id_payroll_karyawan },
-        data: {
-          status_approval: approvalState.status_approval,
-          current_level_approval: approvalState.current_level_approval,
-        },
-      });
-
-      const refreshedPayroll = await tx.payrollKaryawan.findUnique({
-        where: { id_payroll_karyawan: approvalRecord.id_payroll_karyawan },
-        select: buildSelect(),
-      });
-
       return {
-        payroll: refreshedPayroll,
+        id_payroll_karyawan: approvalRecord.id_payroll_karyawan,
         oldTtdUrl,
         nextTtdUrl,
       };
     });
+    approvalPersisted = true;
+
+    let refreshedPayroll = null;
+    try {
+      refreshedPayroll = await syncPayrollApprovalState(result.id_payroll_karyawan);
+    } catch (syncError) {
+      console.error('Sync approval payroll state gagal, fallback ke data latest:', syncError);
+      refreshedPayroll = await db.payrollKaryawan.findUnique({
+        where: { id_payroll_karyawan: result.id_payroll_karyawan },
+        select: buildSelect(),
+      });
+    }
+
+    if (!refreshedPayroll) {
+      throw createHttpError('Payroll karyawan tidak ditemukan setelah approval disimpan.', 404);
+    }
 
     if (result.oldTtdUrl && result.oldTtdUrl !== result.nextTtdUrl) {
       await deleteTtdFromSupabase(result.oldTtdUrl);
@@ -299,10 +297,10 @@ export async function PATCH(req, { params }) {
 
     return NextResponse.json({
       message: 'Approval payroll karyawan berhasil disimpan.',
-      data: enrichPayroll(result.payroll),
+      data: enrichPayroll(refreshedPayroll),
     });
   } catch (err) {
-    if (uploadedUrl) {
+    if (uploadedUrl && !approvalPersisted) {
       await deleteTtdFromSupabase(uploadedUrl);
     }
 

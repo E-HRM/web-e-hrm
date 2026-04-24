@@ -42,7 +42,7 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
     const approvalStep = getApprovalStep?.(payroll);
 
     if (!approvalStep?.id_approval_payroll_karyawan) {
-      AppMessage.error('Approval payroll aktif tidak ditemukan.');
+      AppMessage.error('Approval payroll Anda tidak ditemukan atau sudah diproses.');
       return false;
     }
 

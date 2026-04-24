@@ -8,6 +8,7 @@ import {
   VIEW_ROLES,
   buildSelect,
   deriveApprovalState,
+  ensureCanMarkPayrollAsPaid,
   ensureAuth,
   ensurePayrollExists,
   ensurePeriodeExists,
@@ -249,6 +250,9 @@ export async function PUT(req, { params }) {
     const shouldReplaceApprovals = Object.prototype.hasOwnProperty.call(body || {}, 'approval_steps');
     const approvalSteps = shouldReplaceApprovals ? await resolveApprovalSteps(body.approval_steps) : null;
     const approvalState = approvalSteps ? deriveApprovalState(approvalSteps) : null;
+    const effectiveApprovalStatus = approvalState?.status_approval || enrichPayroll(existing)?.status_approval || existing.status_approval;
+
+    ensureCanMarkPayrollAsPaid(resolved.payload.status_payroll, effectiveApprovalStatus);
 
     if (resolved.payload.id_periode_payroll !== existing.id_periode_payroll || resolved.payload.id_user !== existing.id_user) {
       const duplicate = await db.payrollKaryawan.findFirst({
@@ -332,7 +336,15 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ message: 'Payroll karyawan untuk user dan periode tujuan sudah ada.' }, { status: 409 });
     }
 
-    if (err instanceof Error && (err.message.startsWith('Field ') || err.message.includes('tidak valid') || err.message.includes('tanggal') || err.message.includes('cicilan') || err.message.includes('pinjaman'))) {
+    if (
+      err instanceof Error &&
+      (err.message.startsWith('Field ') ||
+        err.message.includes('tidak valid') ||
+        err.message.includes('tanggal') ||
+        err.message.includes('cicilan') ||
+        err.message.includes('pinjaman') ||
+        err.message.includes('Payroll hanya dapat'))
+    ) {
       return NextResponse.json({ message: err.message }, { status: 400 });
     }
 

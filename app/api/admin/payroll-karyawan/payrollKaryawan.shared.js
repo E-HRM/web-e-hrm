@@ -67,6 +67,19 @@ function normalizeApprovalStatus(value, fieldName = 'status_approval') {
   return normalized;
 }
 
+export function ensureCanMarkPayrollAsPaid(statusPayroll, statusApproval) {
+  const normalizedPayrollStatus = String(statusPayroll || '')
+    .trim()
+    .toUpperCase();
+  const normalizedApprovalStatus = String(statusApproval || '')
+    .trim()
+    .toLowerCase();
+
+  if (normalizedPayrollStatus === 'DIBAYAR' && normalizedApprovalStatus !== 'disetujui') {
+    throw new Error('Payroll hanya dapat ditandai dibayar setelah seluruh approver menyetujui.');
+  }
+}
+
 export function normalizeNullableString(value, fieldName = 'string', maxLength = null) {
   if (value === undefined) return undefined;
   if (value === null) return null;

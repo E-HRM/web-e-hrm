@@ -7,6 +7,7 @@ import {
   buildSelect,
   CREATE_ROLES,
   deriveApprovalState,
+  ensureCanMarkPayrollAsPaid,
   ensureAuth,
   ensurePeriodeExists,
   ensureTarifPajakTerExists,
@@ -300,7 +301,13 @@ export async function GET(req) {
       },
     });
   } catch (err) {
-    if (err instanceof Error && (err.message.startsWith('Field ') || err.message.includes('tidak valid') || err.message.includes('tanggal'))) {
+    if (
+      err instanceof Error &&
+      (err.message.startsWith('Field ') ||
+        err.message.includes('tidak valid') ||
+        err.message.includes('tanggal') ||
+        err.message.includes('Payroll hanya dapat'))
+    ) {
       return NextResponse.json({ message: err.message }, { status: 400 });
     }
 
@@ -324,6 +331,8 @@ export async function POST(req) {
 
     const approvalSteps = await resolveApprovalSteps(body?.approval_steps);
     const approvalState = deriveApprovalState(approvalSteps);
+
+    ensureCanMarkPayrollAsPaid(resolved.payload.status_payroll, approvalState.status_approval);
 
     const existing = await db.payrollKaryawan.findFirst({
       where: {
@@ -400,7 +409,13 @@ export async function POST(req) {
       return NextResponse.json({ message: 'Payroll karyawan untuk user dan periode tersebut sudah ada.' }, { status: 409 });
     }
 
-    if (err instanceof Error && (err.message.startsWith('Field ') || err.message.includes('tidak valid') || err.message.includes('tanggal'))) {
+    if (
+      err instanceof Error &&
+      (err.message.startsWith('Field ') ||
+        err.message.includes('tidak valid') ||
+        err.message.includes('tanggal') ||
+        err.message.includes('Payroll hanya dapat'))
+    ) {
       return NextResponse.json({ message: err.message }, { status: 400 });
     }
 

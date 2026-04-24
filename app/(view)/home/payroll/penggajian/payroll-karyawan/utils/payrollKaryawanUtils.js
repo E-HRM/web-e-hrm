@@ -272,6 +272,18 @@ function normalizeApprovalStep(step) {
   };
 }
 
+function buildPendingApproverSummary(pendingApprovalSteps = []) {
+  const pendingNames = pendingApprovalSteps
+    .map((step) => String(step?.approver_display_name || '').trim())
+    .filter(Boolean);
+
+  if (pendingNames.length === 0) return 'Semua approver sudah menyetujui';
+  if (pendingNames.length <= 2) return `Menunggu: ${pendingNames.join(', ')}`;
+
+  const preview = pendingNames.slice(0, 2).join(', ');
+  return `Menunggu: ${preview} +${pendingNames.length - 2} approver lain`;
+}
+
 export function normalizePayrollKaryawanItem(item) {
   if (!item) return null;
 
@@ -286,13 +298,22 @@ export function normalizePayrollKaryawanItem(item) {
   const approvalSteps = Array.isArray(item.approvals) ? item.approvals.map(normalizeApprovalStep).filter(Boolean) : [];
   const approvalStatus = String(item?.status_approval || 'pending').trim().toLowerCase();
   const currentApprovalLevel = Number(item?.current_level_approval || 0) || null;
+  const pendingApprovalSteps = approvalSteps.filter((step) => String(step?.decision || '').trim().toLowerCase() === 'pending');
   const currentApprovalStep =
-    approvalSteps.find((step) => step.level === currentApprovalLevel) ||
-    approvalSteps.find((step) => String(step?.decision || '').trim().toLowerCase() === 'pending') ||
+    pendingApprovalSteps.find((step) => step.level === currentApprovalLevel) ||
+    pendingApprovalSteps[0] ||
     approvalSteps.at(-1) ||
     null;
   const approvedApprovalCount = approvalSteps.filter((step) => String(step?.decision || '').trim().toLowerCase() === 'disetujui').length;
-  const approvalProgressLabel = approvalSteps.length > 0 ? `${approvedApprovalCount}/${approvalSteps.length} level selesai` : 'Belum ada approver';
+  const approvalProgressLabel = approvalSteps.length > 0 ? `${approvedApprovalCount}/${approvalSteps.length} approver selesai` : 'Belum ada approver';
+  const currentApprovalLabel =
+    approvalSteps.length === 0
+      ? 'Belum ada approver'
+      : approvalStatus === 'disetujui'
+        ? 'Semua approver sudah menyetujui'
+        : approvalStatus === 'ditolak'
+          ? 'Payroll ditolak oleh approver'
+        : buildPendingApproverSummary(pendingApprovalSteps);
 
   return {
     ...item,
@@ -318,7 +339,7 @@ export function normalizePayrollKaryawanItem(item) {
     status_approval: approvalStatus,
     current_level_approval: currentApprovalLevel,
     approval_progress_label: approvalProgressLabel,
-    current_approval_label: currentApprovalStep ? `Level ${currentApprovalStep.level} - ${currentApprovalStep.approver_display_name}` : 'Belum ada approver',
+    current_approval_label: currentApprovalLabel,
   };
 }
 

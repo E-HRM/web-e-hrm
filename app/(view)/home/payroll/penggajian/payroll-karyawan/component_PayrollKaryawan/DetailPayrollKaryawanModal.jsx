@@ -311,7 +311,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
               weight={700}
               className='block text-gray-900 mb-4'
             >
-              Approval Berjenjang
+              Daftar Approver Payroll
             </AppTypography.Text>
 
             <div className='space-y-3'>

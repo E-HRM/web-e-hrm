@@ -20,11 +20,11 @@ export const BULAN_OPTIONS = BULAN_ENTRIES.map(([value, label, number]) => ({
 }));
 
 export const STATUS_PERIODE_PAYROLL_OPTIONS = [
-  { value: 'DRAFT', label: 'Draft' },
-  { value: 'DIPROSES', label: 'Diproses' },
-  { value: 'DIREVIEW', label: 'Direview' },
-  { value: 'FINAL', label: 'Final' },
-  { value: 'TERKUNCI', label: 'Terkunci' },
+  { value: 'DRAFT', label: 'Dalam Persiapan' },
+  { value: 'DIPROSES', label: 'Sedang Diproses' },
+  { value: 'DIREVIEW', label: 'Menunggu Review' },
+  { value: 'FINAL', label: 'Selesai' },
+  { value: 'TERKUNCI', label: 'Dikunci' },
 ];
 
 const BULAN_LABEL_MAP = BULAN_ENTRIES.reduce((acc, [value, label]) => {
@@ -105,29 +105,29 @@ export function getPeriodePayrollStatusMeta(status) {
 
   const map = {
     DRAFT: {
-      label: 'Draft',
+      label: 'Dalam Persiapan',
       tone: 'warning',
-      helper: 'Periode masih disiapkan dan belum aktif untuk finalisasi payroll.',
+      helper: 'Periode masih disiapkan dan belum digunakan untuk proses penggajian akhir.',
     },
     DIPROSES: {
-      label: 'Diproses',
+      label: 'Sedang Diproses',
       tone: 'info',
-      helper: 'Periode aktif untuk pengolahan payroll karyawan dan setup approval.',
+      helper: 'Data penggajian untuk periode ini sedang diproses.',
     },
     DIREVIEW: {
-      label: 'Direview',
+      label: 'Menunggu Review',
       tone: 'info',
-      helper: 'Periode sedang direview sebelum status payroll ditutup.',
+      helper: 'Data periode ini sedang diperiksa sebelum diselesaikan.',
     },
     FINAL: {
-      label: 'Final',
+      label: 'Selesai',
       tone: 'success',
-      helper: 'Periode sudah final dan tidak menerima perubahan payroll baru.',
+      helper: 'Periode sudah selesai diproses dan tidak menerima perubahan baru.',
     },
     TERKUNCI: {
-      label: 'Terkunci',
+      label: 'Dikunci',
       tone: 'neutral',
-      helper: 'Periode dikunci untuk menjaga konsistensi data payroll dan payout.',
+      helper: 'Periode dikunci agar data penggajian dan payout tetap aman.',
     },
   };
 
