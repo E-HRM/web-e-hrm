@@ -12,7 +12,7 @@ export default function DeletePayrollKaryawanDialog({ vm }) {
     <AppModal
       open={vm.isDeleteDialogOpen}
       onClose={vm.closeDeleteDialog}
-      title='Hapus Payroll Karyawan'
+      title='Hapus Penggajian Karyawan'
       variant='danger'
       footer={null}
       width={520}
@@ -21,7 +21,7 @@ export default function DeletePayrollKaryawanDialog({ vm }) {
         size={14}
         className='text-gray-700 leading-relaxed'
       >
-        Apakah Anda yakin ingin menghapus payroll untuk <strong>{vm.selectedPayroll?.nama_karyawan_snapshot || '-'}</strong>? Item komponen dan approval payroll yang terkait akan ikut terdampak.
+        Apakah Anda yakin ingin menghapus data penggajian untuk <strong>{vm.selectedPayroll?.nama_karyawan_snapshot || '-'}</strong>? Rincian gaji dan data persetujuan yang terkait akan ikut terdampak.
       </AppTypography.Text>
 
       <div className='flex justify-end gap-3 pt-6'>

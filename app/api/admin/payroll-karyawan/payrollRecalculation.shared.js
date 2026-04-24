@@ -2,10 +2,6 @@ import { computePph21NominalFromSnapshot } from "./payrollKaryawan.shared";
 
 const DECIMAL_SCALE = 2;
 const STATUS_PAYROLL_DRAFT = "DRAFT";
-const SYSTEM_PPH21_ITEM_NAME = "PPh 21";
-const SYSTEM_PPH21_ITEM_NOTE =
-  "Komponen pajak ini dihitung otomatis dari bruto payroll dan snapshot tarif TER.";
-const SYSTEM_PPH21_ITEM_ORDER = 980;
 
 function stripLeadingZeros(numStr) {
   const stripped = String(numStr || "0").replace(/^0+(?=\d)/, "");
@@ -47,87 +43,6 @@ export function isSystemDerivedPph21Item(item) {
   );
 }
 
-async function syncSystemPph21Item(
-  tx,
-  payroll,
-  { pph21Nominal, activeTaxItems = [], includeDeleted = [] },
-) {
-  const systemKey = buildSystemPph21ItemKey(payroll.id_payroll_karyawan);
-  const existingSystemItem =
-    includeDeleted.find((item) => item.kunci_idempoten === systemKey) || null;
-  const legacyTaxItems = activeTaxItems.filter(
-    (item) => item.kunci_idempoten !== systemKey,
-  );
-
-  if (legacyTaxItems.length > 0) {
-    await Promise.all(
-      legacyTaxItems.map((item) =>
-        tx.itemKomponenPayroll.update({
-          where: {
-            id_item_komponen_payroll: item.id_item_komponen_payroll,
-          },
-          data: {
-            deleted_at: new Date(),
-          },
-        }),
-      ),
-    );
-  }
-
-  if (pph21Nominal <= 0n) {
-    if (existingSystemItem && !existingSystemItem.deleted_at) {
-      await tx.itemKomponenPayroll.update({
-        where: {
-          id_item_komponen_payroll: existingSystemItem.id_item_komponen_payroll,
-        },
-        data: {
-          deleted_at: new Date(),
-        },
-      });
-    }
-
-    return null;
-  }
-
-  const systemItemPayload = {
-    id_payroll_karyawan: payroll.id_payroll_karyawan,
-    id_definisi_komponen_payroll: null,
-    id_user_pembuat: null,
-    kunci_idempoten: systemKey,
-    tipe_komponen: "PAJAK",
-    arah_komponen: "POTONGAN",
-    nama_komponen: SYSTEM_PPH21_ITEM_NAME,
-    nominal: scaledBigIntToDecimalString(pph21Nominal, DECIMAL_SCALE),
-    kena_pajak: false,
-    urutan_tampil: SYSTEM_PPH21_ITEM_ORDER,
-    catatan: SYSTEM_PPH21_ITEM_NOTE,
-    deleted_at: null,
-  };
-
-  if (existingSystemItem) {
-    return tx.itemKomponenPayroll.update({
-      where: {
-        id_item_komponen_payroll: existingSystemItem.id_item_komponen_payroll,
-      },
-      data: systemItemPayload,
-      select: {
-        id_item_komponen_payroll: true,
-        id_payroll_karyawan: true,
-        nominal: true,
-      },
-    });
-  }
-
-  return tx.itemKomponenPayroll.create({
-    data: systemItemPayload,
-    select: {
-      id_item_komponen_payroll: true,
-      id_payroll_karyawan: true,
-      nominal: true,
-    },
-  });
-}
-
 export async function recalculatePayrollTotals(tx, id_payroll_karyawan, options = {}) {
   const {
     negativeNetMessage =
@@ -149,9 +64,6 @@ export async function recalculatePayrollTotals(tx, id_payroll_karyawan, options 
         id_payroll_karyawan,
       },
       select: {
-        id_item_komponen_payroll: true,
-        id_payroll_karyawan: true,
-        kunci_idempoten: true,
         tipe_komponen: true,
         arah_komponen: true,
         nominal: true,
@@ -165,9 +77,6 @@ export async function recalculatePayrollTotals(tx, id_payroll_karyawan, options 
   }
 
   const activeItems = items.filter((item) => !item.deleted_at);
-  const activeTaxItems = activeItems.filter(
-    (item) => String(item.tipe_komponen || "").trim().toUpperCase() === "PAJAK",
-  );
   const activeNonTaxItems = activeItems.filter(
     (item) => String(item.tipe_komponen || "").trim().toUpperCase() !== "PAJAK",
   );
@@ -199,12 +108,6 @@ export async function recalculatePayrollTotals(tx, id_payroll_karyawan, options 
     ),
     DECIMAL_SCALE,
   );
-
-  await syncSystemPph21Item(tx, payroll, {
-    pph21Nominal,
-    activeTaxItems,
-    includeDeleted: items,
-  });
 
   const totalPotongan = totalPotonganLain + pph21Nominal;
   const pendapatanBersih = totalPendapatanBruto - totalPotongan;

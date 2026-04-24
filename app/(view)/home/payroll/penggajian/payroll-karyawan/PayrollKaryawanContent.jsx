@@ -55,8 +55,8 @@ export default function PayrollKaryawanContent() {
   if (vm.error && vm.payrollData.length === 0) {
     return (
       <AppEmpty.Card
-        title='Data payroll karyawan gagal dimuat'
-        description={vm.error?.message || 'Terjadi kesalahan saat mengambil data payroll karyawan.'}
+        title='Data penggajian karyawan gagal dimuat'
+        description={vm.error?.message || 'Terjadi kendala saat mengambil data penggajian karyawan.'}
         action={
           <AppButton
             variant='outline'

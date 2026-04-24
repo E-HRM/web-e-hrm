@@ -24,7 +24,7 @@ export default function PayrollKaryawanFilterSection({ vm }) {
           <AppInput
             value={vm.searchQuery}
             onChange={(event) => vm.setSearchQuery(event.target.value)}
-            placeholder='Cari nama karyawan, departemen, jabatan, atau approver...'
+            placeholder='Cari nama karyawan, departemen, jabatan, atau penyetuju...'
             prefixIcon={<SearchOutlined className='text-gray-400' />}
             className='flex-1'
             inputClassName='!rounded-lg'
@@ -56,7 +56,7 @@ export default function PayrollKaryawanFilterSection({ vm }) {
           icon={<PlusOutlined />}
           className='!rounded-lg !px-4 !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white whitespace-nowrap'
         >
-          Tambah Payroll
+          Tambah Penggajian
         </AppButton>
       </div>
     </AppCard>

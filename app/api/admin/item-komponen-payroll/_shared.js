@@ -848,7 +848,7 @@ export async function resolveItemPayload(
   if (String(tipe_komponen).trim().toUpperCase() === "PAJAK") {
     throw createHttpError(
       409,
-      "Item komponen PAJAK dihitung otomatis dari payroll dan tidak boleh dibuat atau diubah manual.",
+      "Item komponen PAJAK tidak boleh dibuat atau diubah manual. PPh21 disimpan pada payroll karyawan.",
     );
   }
 
@@ -899,7 +899,7 @@ export function ensureNonDerivedTaxItem(existing, actionLabel = "diubah") {
   ) {
     throw createHttpError(
       409,
-      `Item komponen PAJAK dihitung otomatis dari payroll dan tidak dapat ${actionLabel} manual.`,
+      `Item komponen PAJAK tidak dapat ${actionLabel} manual. PPh21 disimpan pada payroll karyawan.`,
     );
   }
 }

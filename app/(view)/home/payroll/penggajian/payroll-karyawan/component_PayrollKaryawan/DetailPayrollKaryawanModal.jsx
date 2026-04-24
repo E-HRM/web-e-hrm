@@ -32,7 +32,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
     <AppModal
       open={vm.isDetailModalOpen}
       onClose={vm.closeDetailModal}
-      title='Detail Payroll Karyawan'
+      title='Detail Penggajian Karyawan'
       footer={null}
       width={760}
     >
@@ -74,7 +74,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
               />
 
               <DetailField
-                label='No. Rekening'
+                label='Nomor Rekening'
                 value={vm.selectedPayroll.nomor_rekening_snapshot || '-'}
               />
             </div>
@@ -91,12 +91,12 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
 
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
               <DetailField
-                label='No. Issue'
+                label='Nomor Slip'
                 value={vm.selectedPayroll.issue_number || '-'}
               />
 
               <DetailField
-                label='Tanggal Issue'
+                label='Tanggal Slip'
                 value={vm.selectedPayroll.issued_at ? vm.formatDateTime(vm.selectedPayroll.issued_at) : '-'}
               />
 
@@ -157,7 +157,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={700}
                   className='text-gray-900'
                 >
-                  Total Bruto Kena Pajak
+                  Gaji Kotor Kena Pajak
                 </AppTypography.Text>
 
                 <AppTypography.Text
@@ -209,7 +209,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   weight={700}
                   className='text-gray-900'
                 >
-                  Take Home Pay
+                  Gaji Bersih Diterima
                 </AppTypography.Text>
 
                 <AppTypography.Text
@@ -238,7 +238,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   size={12}
                   className='block text-gray-600 mb-1'
                 >
-                  Status Payroll
+                  Status Penggajian
                 </AppTypography.Text>
 
                 <AppTag
@@ -256,7 +256,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   size={12}
                   className='block text-gray-600 mb-1'
                 >
-                  Status Approval
+                  Status Persetujuan
                 </AppTypography.Text>
 
                 <AppTag
@@ -291,7 +291,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
               ) : null}
 
               <DetailField
-                label='Jumlah Item Komponen'
+                label='Jumlah Rincian Gaji'
                 value={String(vm.selectedPayroll.item_komponen_count || 0)}
               />
 
@@ -311,7 +311,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
               weight={700}
               className='block text-gray-900 mb-4'
             >
-              Daftar Approver Payroll
+              Daftar Penyetuju
             </AppTypography.Text>
 
             <div className='space-y-3'>
@@ -328,7 +328,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                           weight={700}
                           className='block text-gray-900'
                         >
-                          Level {step.level} - {step.approver_display_name}
+                          Tahap {step.level} - {step.approver_display_name}
                         </AppTypography.Text>
 
                         <AppTypography.Text
@@ -355,7 +355,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   size={13}
                   className='block text-gray-500'
                 >
-                  Belum ada approval yang terpasang pada payroll ini.
+                  Belum ada penyetuju yang ditambahkan untuk penggajian ini.
                 </AppTypography.Text>
               )}
             </div>
@@ -367,7 +367,7 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
               href={buildItemKomponenHref(vm.selectedPayroll)}
               className='!rounded-lg !px-4 !h-10'
             >
-              Buka Item Komponen
+              Buka Rincian Gaji
             </AppButton>
 
             <AppButton

@@ -202,9 +202,11 @@ function normalizeRole(value) {
 }
 
 function isPendingApprovalDecision(value) {
-  return String(value || 'pending')
-    .trim()
-    .toLowerCase() === 'pending';
+  return (
+    String(value || 'pending')
+      .trim()
+      .toLowerCase() === 'pending'
+  );
 }
 
 function findActionableApprovalStep(payroll, actorId, actorRole) {
@@ -222,9 +224,7 @@ function findActionableApprovalStep(payroll, actorId, actorRole) {
   }
 
   if (normalizedActorRole) {
-    const stepByRole = pendingSteps.find(
-      (step) => !String(step?.approver_user_id || '').trim() && normalizeRole(step?.approver_role) === normalizedActorRole,
-    );
+    const stepByRole = pendingSteps.find((step) => !String(step?.approver_user_id || '').trim() && normalizeRole(step?.approver_role) === normalizedActorRole);
     if (stepByRole) return stepByRole;
   }
 
@@ -300,11 +300,7 @@ function applyProfilPayrollToForm(previousForm, profile) {
 }
 
 function mapApprovalStepsForForm(payroll) {
-  const sourceSteps = Array.isArray(payroll?.approval_steps)
-    ? payroll.approval_steps
-    : Array.isArray(payroll?.approvals)
-      ? payroll.approvals
-      : [];
+  const sourceSteps = Array.isArray(payroll?.approval_steps) ? payroll.approval_steps : Array.isArray(payroll?.approvals) ? payroll.approvals : [];
 
   if (!sourceSteps.length) {
     return [createEmptyApprovalStep()];
@@ -386,7 +382,7 @@ export default function usePayrollKaryawanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payroll-karyawan-fetch-error',
-      content: payrollError?.message || 'Gagal memuat data payroll karyawan.',
+      content: payrollError?.message || 'Gagal memuat data penggajian karyawan.',
     });
   }, [payrollError]);
 
@@ -396,7 +392,7 @@ export default function usePayrollKaryawanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payroll-karyawan-periode-fetch-error',
-      content: periodeError?.message || 'Gagal memuat referensi periode payroll.',
+      content: periodeError?.message || 'Gagal memuat daftar periode penggajian.',
     });
   }, [periodeError]);
 
@@ -406,7 +402,7 @@ export default function usePayrollKaryawanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payroll-karyawan-profil-payroll-fetch-error',
-      content: profilPayrollError?.message || 'Gagal memuat kandidat karyawan payroll.',
+      content: profilPayrollError?.message || 'Gagal memuat daftar karyawan yang dapat diproses penggajiannya.',
     });
   }, [profilPayrollError]);
 
@@ -416,7 +412,7 @@ export default function usePayrollKaryawanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payroll-karyawan-approver-fetch-error',
-      content: usersError?.message || 'Gagal memuat referensi user approval payroll.',
+      content: usersError?.message || 'Gagal memuat daftar penyetuju.',
     });
   }, [usersError]);
 
@@ -474,11 +470,14 @@ export default function usePayrollKaryawanViewModel() {
     return payrollData.find((item) => item.id_payroll_karyawan === approvalTargetPayroll.id_payroll_karyawan) || approvalTargetPayroll;
   }, [approvalTargetPayroll, payrollData]);
 
-  const getActionableApprovalStep = useCallback((payroll) => {
-    if (!payroll) return null;
+  const getActionableApprovalStep = useCallback(
+    (payroll) => {
+      if (!payroll) return null;
 
-    return findActionableApprovalStep(payroll, auth.userId, auth.role);
-  }, [auth.role, auth.userId]);
+      return findActionableApprovalStep(payroll, auth.userId, auth.role);
+    },
+    [auth.role, auth.userId],
+  );
 
   const setFormValue = useCallback((field, value) => {
     setFormData((prev) => ({
@@ -532,7 +531,7 @@ export default function usePayrollKaryawanViewModel() {
       const profile = profilPayrollMap.get(nextUserId);
 
       if (!profile) {
-        AppMessage.warning('Profil payroll karyawan tidak ditemukan.');
+        AppMessage.warning('Profil penggajian karyawan tidak ditemukan.');
         setFormData((prev) => clearSelectedEmployeeSnapshot(prev));
         return;
       }
@@ -559,17 +558,17 @@ export default function usePayrollKaryawanViewModel() {
     if (!usedUserIds?.has(selectedUserId)) return;
 
     setFormData((prev) => clearSelectedEmployeeSnapshot(prev));
-    AppMessage.warning('Karyawan yang dipilih sudah memiliki payroll pada periode tersebut.');
+    AppMessage.warning('Karyawan yang dipilih sudah memiliki data penggajian pada periode tersebut.');
   }, [formData.id_periode_payroll, formData.id_user, isCreateModalOpen, payrollUserIdsByPeriode]);
 
   const validateForm = useCallback(() => {
     if (!String(formData.id_periode_payroll || '').trim()) {
-      AppMessage.warning('Periode payroll wajib dipilih.');
+      AppMessage.warning('Periode penggajian wajib dipilih.');
       return false;
     }
 
     if (!String(formData.id_user || '').trim()) {
-      AppMessage.warning('ID user wajib diisi.');
+      AppMessage.warning('Karyawan wajib dipilih.');
       return false;
     }
 
@@ -581,19 +580,19 @@ export default function usePayrollKaryawanViewModel() {
     const approvalSteps = Array.isArray(formData.approval_steps) ? formData.approval_steps : [];
 
     if (approvalSteps.length === 0) {
-      AppMessage.warning('Minimal satu approval payroll wajib dipilih.');
+      AppMessage.warning('Minimal satu penyetuju wajib dipilih.');
       return false;
     }
 
     const approverIds = approvalSteps.map((step) => String(step?.approver_user_id || '').trim());
 
     if (approverIds.some((approverId) => !approverId)) {
-      AppMessage.warning('Setiap level approval payroll wajib memilih user approver.');
+      AppMessage.warning('Setiap tahap persetujuan wajib memiliki penyetuju.');
       return false;
     }
 
     if (new Set(approverIds).size !== approverIds.length) {
-      AppMessage.warning('User approver tidak boleh dipilih lebih dari satu kali pada payroll yang sama.');
+      AppMessage.warning('Penyetuju tidak boleh dipilih lebih dari satu kali pada data penggajian yang sama.');
       return false;
     }
 
@@ -678,7 +677,7 @@ export default function usePayrollKaryawanViewModel() {
 
       const approvalStep = getActionableApprovalStep(payroll);
       if (!approvalStep?.id_approval_payroll_karyawan) {
-        AppMessage.warning('Anda tidak memiliki approval pending pada payroll ini.');
+        AppMessage.warning('Tidak ada persetujuan yang perlu Anda proses untuk data ini.');
         return;
       }
 
@@ -716,13 +715,13 @@ export default function usePayrollKaryawanViewModel() {
     try {
       const response = await crudServiceAuth.post(ApiEndpoints.CreatePayrollKaryawan(), buildPayrollKaryawanPayload(formData));
 
-      AppMessage.success(response?.message || 'Payroll karyawan berhasil ditambahkan.');
+      AppMessage.success(response?.message || 'Data penggajian karyawan berhasil ditambahkan.');
       setIsCreateModalOpen(false);
       resetForm();
       await mutatePayroll();
       return true;
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal menambahkan payroll karyawan.');
+      AppMessage.error(err?.message || 'Gagal menambahkan data penggajian karyawan.');
       return false;
     } finally {
       setIsSubmitting(false);
@@ -733,7 +732,7 @@ export default function usePayrollKaryawanViewModel() {
     if (isSubmitting) return false;
 
     if (!resolvedSelectedPayroll?.id_payroll_karyawan) {
-      AppMessage.warning('Data payroll tidak ditemukan.');
+      AppMessage.warning('Data penggajian tidak ditemukan.');
       return false;
     }
 
@@ -743,14 +742,14 @@ export default function usePayrollKaryawanViewModel() {
     try {
       const response = await crudServiceAuth.put(ApiEndpoints.UpdatePayrollKaryawan(resolvedSelectedPayroll.id_payroll_karyawan), buildPayrollKaryawanPayload(formData));
 
-      AppMessage.success(response?.message || 'Payroll karyawan berhasil diperbarui.');
+      AppMessage.success(response?.message || 'Data penggajian karyawan berhasil diperbarui.');
       setIsEditModalOpen(false);
       setSelectedPayroll(null);
       resetForm();
       await mutatePayroll();
       return true;
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal memperbarui payroll karyawan.');
+      AppMessage.error(err?.message || 'Gagal memperbarui data penggajian karyawan.');
       return false;
     } finally {
       setIsSubmitting(false);
@@ -761,7 +760,7 @@ export default function usePayrollKaryawanViewModel() {
     if (isSubmitting) return false;
 
     if (!resolvedSelectedPayroll?.id_payroll_karyawan) {
-      AppMessage.warning('Data payroll tidak ditemukan.');
+      AppMessage.warning('Data penggajian tidak ditemukan.');
       return false;
     }
 
@@ -769,14 +768,14 @@ export default function usePayrollKaryawanViewModel() {
     try {
       const response = await crudServiceAuth.delete(ApiEndpoints.DeletePayrollKaryawan(resolvedSelectedPayroll.id_payroll_karyawan));
 
-      AppMessage.success(response?.message || 'Payroll karyawan berhasil dihapus.');
+      AppMessage.success(response?.message || 'Data penggajian karyawan berhasil dihapus.');
       setIsDeleteDialogOpen(false);
       setIsDetailModalOpen(false);
       setSelectedPayroll(null);
       await mutatePayroll();
       return true;
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal menghapus payroll karyawan.');
+      AppMessage.error(err?.message || 'Gagal menghapus data penggajian karyawan.');
       return false;
     } finally {
       setIsSubmitting(false);
@@ -789,13 +788,13 @@ export default function usePayrollKaryawanViewModel() {
 
       const payroll = resolvedApprovalTargetPayroll;
       if (!payroll?.id_payroll_karyawan) {
-        AppMessage.warning('Data payroll approval tidak ditemukan.');
+        AppMessage.warning('Data persetujuan tidak ditemukan.');
         return false;
       }
 
       const approvalStep = getActionableApprovalStep(payroll);
       if (!approvalStep?.id_approval_payroll_karyawan) {
-        AppMessage.warning('Approval payroll Anda tidak ditemukan atau sudah diproses.');
+        AppMessage.warning('Persetujuan Anda tidak ditemukan atau sudah diproses.');
         return false;
       }
 
@@ -803,7 +802,7 @@ export default function usePayrollKaryawanViewModel() {
       const normalizedNote = String(note || '').trim();
 
       if (!fileObj) {
-        AppMessage.warning('TTD approval wajib diisi.');
+        AppMessage.warning('Tanda tangan persetujuan wajib diunggah.');
         return false;
       }
 
@@ -818,18 +817,15 @@ export default function usePayrollKaryawanViewModel() {
           formData.append('note', normalizedNote);
         }
 
-        const response = await crudServiceAuth.patchForm(
-          ApiEndpoints.ApprovePayrollKaryawan(approvalStep.id_approval_payroll_karyawan),
-          formData,
-        );
+        const response = await crudServiceAuth.patchForm(ApiEndpoints.ApprovePayrollKaryawan(approvalStep.id_approval_payroll_karyawan), formData);
 
-        AppMessage.success(response?.message || 'Approval payroll karyawan berhasil disimpan.');
+        AppMessage.success(response?.message || 'Persetujuan penggajian karyawan berhasil disimpan.');
         setIsApproveModalOpen(false);
         setApprovalTargetPayroll(null);
         await mutatePayroll();
         return true;
       } catch (err) {
-        AppMessage.error(err?.message || 'Gagal menyimpan approval payroll karyawan.');
+        AppMessage.error(err?.message || 'Gagal menyimpan persetujuan penggajian karyawan.');
         return false;
       } finally {
         setIsSubmitting(false);
@@ -918,19 +914,19 @@ export default function usePayrollKaryawanViewModel() {
 
   const employeeSelectionHint = useMemo(() => {
     if (isProfilPayrollLoading) {
-      return 'Memuat kandidat karyawan payroll...';
+      return 'Memuat daftar karyawan yang dapat digaji...';
     }
 
     if (activeProfilPayrollList.length === 0) {
-      return 'Belum ada profil payroll aktif yang bisa dipakai. Lengkapi profil payroll terlebih dahulu.';
+      return 'Belum ada profil penggajian aktif yang bisa digunakan. Lengkapi profil penggajian terlebih dahulu.';
     }
 
     if (!String(formData.id_periode_payroll || '').trim()) {
-      return 'Pilih periode payroll terlebih dahulu agar kandidat karyawan bisa difilter per periode.';
+      return 'Pilih periode penggajian terlebih dahulu agar daftar karyawan sesuai dengan periode tersebut.';
     }
 
     if (employeeOptions.length === 0) {
-      return 'Semua karyawan dengan profil payroll aktif sudah memiliki payroll pada periode ini.';
+      return 'Semua karyawan dengan profil penggajian aktif sudah memiliki data penggajian pada periode ini.';
     }
 
     return 'Cari berdasarkan nama, NIK, email, departemen, atau jabatan.';
@@ -938,20 +934,20 @@ export default function usePayrollKaryawanViewModel() {
 
   const approverSelectionHint = useMemo(() => {
     if (isUsersLoading) {
-      return 'Memuat user approver payroll...';
+      return 'Memuat daftar penyetuju...';
     }
 
     if (activeApproverUsers.length === 0) {
-      return 'Belum ada user aktif yang bisa dipilih sebagai approver payroll.';
+      return 'Belum ada pengguna aktif yang bisa dipilih sebagai penyetuju.';
     }
 
-    return 'Tambahkan satu approver untuk persetujuan tunggal, atau beberapa approver untuk approval paralel.';
+    return 'Tambahkan satu penyetuju, atau tambahkan beberapa penyetuju bila penggajian perlu diperiksa lebih dari satu pihak.';
   }, [activeApproverUsers.length, isUsersLoading]);
 
   const getPeriodeInfo = useCallback(
     (id) => {
       const periode = periodeMap.get(String(id || ''));
-      if (!periode) return 'Unknown';
+      if (!periode) return 'Tidak diketahui';
 
       return formatPeriodeLabel(periode);
     },

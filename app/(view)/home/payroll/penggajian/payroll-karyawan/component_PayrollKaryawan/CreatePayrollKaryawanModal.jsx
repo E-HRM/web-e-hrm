@@ -15,7 +15,7 @@ function CreatePayrollForm({ vm }) {
     <div className='space-y-4'>
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppSelect
-          label='Periode Payroll'
+          label='Periode Penggajian'
           required
           value={vm.formData.id_periode_payroll}
           onChange={(value) => vm.setFormValue('id_periode_payroll', value)}
@@ -48,7 +48,7 @@ function CreatePayrollForm({ vm }) {
             weight={700}
             className='block text-blue-800'
           >
-            Data payroll karyawan diambil dari profil payroll aktif
+            Data penggajian karyawan diambil dari profil penggajian aktif
           </AppTypography.Text>
 
           <AppTypography.Text
@@ -69,7 +69,7 @@ function CreatePayrollForm({ vm }) {
             size={12}
             className='block text-blue-700 mt-1'
           >
-            Data bank otomatis diambil dari tabel user. Nilai final payroll tetap bisa berubah mengikuti item komponen, payout konsultan, dan cicilan yang diposting ke payroll ini.
+            Data bank otomatis diambil dari data karyawan. Nilai akhir gaji dapat berubah sesuai rincian gaji, pembayaran konsultan, dan cicilan yang masuk ke penggajian ini.
           </AppTypography.Text>
         </div>
       ) : null}
@@ -114,15 +114,15 @@ function CreatePayrollForm({ vm }) {
         <AppInput
           label='Bank'
           value={vm.formData.nama_bank_snapshot}
-          placeholder='Diambil otomatis dari data user'
+          placeholder='Diambil otomatis dari data karyawan'
           disabled
           inputClassName='!rounded-lg'
         />
 
         <AppInput
-          label='No. Rekening'
+          label='Nomor Rekening'
           value={vm.formData.nomor_rekening_snapshot}
-          placeholder='Diambil otomatis dari data user'
+          placeholder='Diambil otomatis dari data karyawan'
           disabled
           inputClassName='!rounded-lg'
         />
@@ -130,16 +130,16 @@ function CreatePayrollForm({ vm }) {
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppInput
-          label='No. Issue'
+          label='Nomor Slip'
           value={vm.formData.issue_number}
           onChange={(event) => vm.setFormValue('issue_number', event.target.value)}
           placeholder='Contoh: PAY-APR-2026-001'
           inputClassName='!rounded-lg'
-          hint='Nomor dokumen ini dipakai pada slip payroll.'
+          hint='Nomor ini akan tampil pada slip gaji.'
         />
 
         <AppInput
-          label='Tanggal Issue'
+          label='Tanggal Slip'
           type='datetime-local'
           value={vm.formData.issued_at}
           onChange={(event) => vm.setFormValue('issued_at', event.target.value)}
@@ -153,13 +153,13 @@ function CreatePayrollForm({ vm }) {
         onChange={(event) => vm.setFormValue('company_name_snapshot', event.target.value)}
         placeholder='Contoh: One Step Solution (OSS) Bali'
         inputClassName='!rounded-lg'
-        hint='Dipakai sebagai snapshot nama perusahaan pada slip payroll.'
+        hint='Nama ini akan tampil pada slip gaji.'
       />
 
       <ApprovalStepsSection vm={vm} />
 
       <AppSelect
-        label='Status Payroll'
+        label='Status Penggajian'
         value={vm.formData.status_payroll}
         onChange={(value) => vm.setFormValue('status_payroll', value)}
         options={STATUS_PAYROLL_OPTIONS}
@@ -184,7 +184,7 @@ export default function CreatePayrollKaryawanModal({ vm }) {
     <AppModal
       open={vm.isCreateModalOpen}
       onClose={vm.closeCreateModal}
-      title='Tambah Payroll Karyawan'
+      title='Tambah Penggajian Karyawan'
       footer={null}
       width={760}
     >

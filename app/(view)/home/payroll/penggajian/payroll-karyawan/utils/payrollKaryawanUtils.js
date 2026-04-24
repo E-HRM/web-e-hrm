@@ -1,14 +1,14 @@
 'use client';
 
 export const STATUS_PAYROLL_OPTIONS = [
-  { value: 'DRAFT', label: 'Draft' },
+  { value: 'DRAFT', label: 'Belum Final' },
   { value: 'TERSIMPAN', label: 'Tersimpan' },
   { value: 'DISETUJUI', label: 'Disetujui' },
   { value: 'DIBAYAR', label: 'Dibayar' },
 ];
 
 export const STATUS_APPROVAL_OPTIONS = [
-  { value: 'pending', label: 'Pending' },
+  { value: 'pending', label: 'Menunggu Persetujuan' },
   { value: 'disetujui', label: 'Disetujui' },
   { value: 'ditolak', label: 'Ditolak' },
 ];
@@ -16,8 +16,8 @@ export const STATUS_APPROVAL_OPTIONS = [
 export const JENIS_HUBUNGAN_OPTIONS = [
   { value: 'PKWTT', label: 'PKWTT' },
   { value: 'PKWT', label: 'PKWT' },
-  { value: 'FREELANCE', label: 'Freelance' },
-  { value: 'INTERNSHIP', label: 'Internship' },
+  { value: 'FREELANCE', label: 'Pekerja Lepas' },
+  { value: 'INTERNSHIP', label: 'Magang' },
 ];
 
 function createApprovalStepKey() {
@@ -162,7 +162,12 @@ export function formatBulan(value) {
     12: 'Desember',
   };
 
-  const key = typeof value === 'number' ? String(value) : String(value || '').trim().toUpperCase();
+  const key =
+    typeof value === 'number'
+      ? String(value)
+      : String(value || '')
+          .trim()
+          .toUpperCase();
   return bulanMap[key] || '-';
 }
 
@@ -170,11 +175,19 @@ export function formatJenisHubungan(value) {
   const map = {
     PKWTT: 'PKWTT',
     PKWT: 'PKWT',
-    FREELANCE: 'Freelance',
-    INTERNSHIP: 'Internship',
+    FREELANCE: 'Pekerja Lepas',
+    INTERNSHIP: 'Magang',
   };
 
-  return map[String(value || '').trim().toUpperCase()] || value || '-';
+  return (
+    map[
+      String(value || '')
+        .trim()
+        .toUpperCase()
+    ] ||
+    value ||
+    '-'
+  );
 }
 
 export function formatTarifPajakSnapshot(kodeKategoriPajak, persenTarif) {
@@ -190,7 +203,7 @@ export function formatTarifPajakSnapshot(kodeKategoriPajak, persenTarif) {
 export function formatStatusPayroll(status) {
   const map = {
     DRAFT: {
-      label: 'Draft',
+      label: 'Belum Final',
       tone: 'neutral',
     },
     TERSIMPAN: {
@@ -208,7 +221,11 @@ export function formatStatusPayroll(status) {
   };
 
   return (
-    map[String(status || '').trim().toUpperCase()] || {
+    map[
+      String(status || '')
+        .trim()
+        .toUpperCase()
+    ] || {
       label: status || '-',
       tone: 'neutral',
     }
@@ -218,7 +235,7 @@ export function formatStatusPayroll(status) {
 export function formatStatusApproval(status) {
   const map = {
     pending: {
-      label: 'Pending',
+      label: 'Menunggu Persetujuan',
       tone: 'warning',
     },
     disetujui: {
@@ -232,7 +249,11 @@ export function formatStatusApproval(status) {
   };
 
   return (
-    map[String(status || '').trim().toLowerCase()] || {
+    map[
+      String(status || '')
+        .trim()
+        .toLowerCase()
+    ] || {
       label: status || '-',
       tone: 'neutral',
     }
@@ -250,7 +271,15 @@ export function formatApproverRole(role) {
     SUPERVISI: 'Supervisi',
   };
 
-  return map[String(role || '').trim().toUpperCase()] || role || '-';
+  return (
+    map[
+      String(role || '')
+        .trim()
+        .toUpperCase()
+    ] ||
+    role ||
+    '-'
+  );
 }
 
 export function formatPeriodeLabel(periode) {
@@ -262,7 +291,9 @@ function normalizeApprovalStep(step) {
   if (!step) return null;
 
   const approverName = step?.approver_nama_snapshot || step?.approver?.nama_pengguna || '-';
-  const decision = String(step?.decision || 'pending').trim().toLowerCase();
+  const decision = String(step?.decision || 'pending')
+    .trim()
+    .toLowerCase();
 
   return {
     ...step,
@@ -273,15 +304,13 @@ function normalizeApprovalStep(step) {
 }
 
 function buildPendingApproverSummary(pendingApprovalSteps = []) {
-  const pendingNames = pendingApprovalSteps
-    .map((step) => String(step?.approver_display_name || '').trim())
-    .filter(Boolean);
+  const pendingNames = pendingApprovalSteps.map((step) => String(step?.approver_display_name || '').trim()).filter(Boolean);
 
-  if (pendingNames.length === 0) return 'Semua approver sudah menyetujui';
+  if (pendingNames.length === 0) return 'Semua penyetuju sudah menyetujui';
   if (pendingNames.length <= 2) return `Menunggu: ${pendingNames.join(', ')}`;
 
   const preview = pendingNames.slice(0, 2).join(', ');
-  return `Menunggu: ${preview} +${pendingNames.length - 2} approver lain`;
+  return `Menunggu: ${preview} +${pendingNames.length - 2} penyetuju lain`;
 }
 
 export function normalizePayrollKaryawanItem(item) {
@@ -296,24 +325,32 @@ export function normalizePayrollKaryawanItem(item) {
   const totalPendapatanVariabel = Math.max(totalPendapatanBruto - totalPendapatanTetap, 0);
   const periodeLabel = item?.periode ? formatPeriodeLabel(item.periode) : '-';
   const approvalSteps = Array.isArray(item.approvals) ? item.approvals.map(normalizeApprovalStep).filter(Boolean) : [];
-  const approvalStatus = String(item?.status_approval || 'pending').trim().toLowerCase();
+  const approvalStatus = String(item?.status_approval || 'pending')
+    .trim()
+    .toLowerCase();
   const currentApprovalLevel = Number(item?.current_level_approval || 0) || null;
-  const pendingApprovalSteps = approvalSteps.filter((step) => String(step?.decision || '').trim().toLowerCase() === 'pending');
-  const currentApprovalStep =
-    pendingApprovalSteps.find((step) => step.level === currentApprovalLevel) ||
-    pendingApprovalSteps[0] ||
-    approvalSteps.at(-1) ||
-    null;
-  const approvedApprovalCount = approvalSteps.filter((step) => String(step?.decision || '').trim().toLowerCase() === 'disetujui').length;
-  const approvalProgressLabel = approvalSteps.length > 0 ? `${approvedApprovalCount}/${approvalSteps.length} approver selesai` : 'Belum ada approver';
+  const pendingApprovalSteps = approvalSteps.filter(
+    (step) =>
+      String(step?.decision || '')
+        .trim()
+        .toLowerCase() === 'pending',
+  );
+  const currentApprovalStep = pendingApprovalSteps.find((step) => step.level === currentApprovalLevel) || pendingApprovalSteps[0] || approvalSteps.at(-1) || null;
+  const approvedApprovalCount = approvalSteps.filter(
+    (step) =>
+      String(step?.decision || '')
+        .trim()
+        .toLowerCase() === 'disetujui',
+  ).length;
+  const approvalProgressLabel = approvalSteps.length > 0 ? `${approvedApprovalCount}/${approvalSteps.length} penyetuju selesai` : 'Belum ada penyetuju';
   const currentApprovalLabel =
     approvalSteps.length === 0
-      ? 'Belum ada approver'
+      ? 'Belum ada penyetuju'
       : approvalStatus === 'disetujui'
-        ? 'Semua approver sudah menyetujui'
+        ? 'Semua penyetuju sudah menyetujui'
         : approvalStatus === 'ditolak'
-          ? 'Payroll ditolak oleh approver'
-        : buildPendingApproverSummary(pendingApprovalSteps);
+          ? 'Penggajian ditolak oleh penyetuju'
+          : buildPendingApproverSummary(pendingApprovalSteps);
 
   return {
     ...item,
@@ -379,7 +416,11 @@ export function buildPayrollKaryawanPayload(formData) {
         }))
       : [],
     dibayar_pada:
-      String(formData.status_payroll || '').trim().toUpperCase() === 'DIBAYAR' ? formData.dibayar_pada || new Date().toISOString() : null,
+      String(formData.status_payroll || '')
+        .trim()
+        .toUpperCase() === 'DIBAYAR'
+        ? formData.dibayar_pada || new Date().toISOString()
+        : null,
     catatan: String(formData.catatan || '').trim() || null,
   };
 }

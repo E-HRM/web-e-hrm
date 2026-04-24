@@ -42,12 +42,12 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
     const approvalStep = getApprovalStep?.(payroll);
 
     if (!approvalStep?.id_approval_payroll_karyawan) {
-      AppMessage.error('Approval payroll Anda tidak ditemukan atau sudah diproses.');
+      AppMessage.error('Persetujuan Anda tidak ditemukan atau sudah diproses.');
       return false;
     }
 
     if (!Array.isArray(fileList) || fileList.length === 0) {
-      AppMessage.error('TTD approval wajib diisi.');
+      AppMessage.error('Tanda tangan persetujuan wajib diunggah.');
       return false;
     }
 
@@ -64,8 +64,8 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
       open={open}
       onClose={onClose}
       onCancel={onClose}
-      title='Approval Payroll Karyawan'
-      okText='Simpan Approval'
+      title='Setujui Penggajian Karyawan'
+      okText='Simpan Persetujuan'
       cancelText='Batal'
       onOk={handleSubmit}
       okLoading={submitting}
@@ -74,7 +74,7 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
       <div className='flex flex-col gap-5'>
         <div className='flex flex-col gap-3'>
           <AppUpload
-            label='TTD Approval'
+            label='Tanda Tangan Persetujuan'
             required
             maxCount={1}
             listType='picture'
@@ -82,7 +82,7 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
             onChange={(info) => setFileList(info?.fileList || [])}
             beforeUpload={() => false}
             accept='.jpg,.jpeg,.png,.webp'
-            hint='Upload gambar tanda tangan.'
+            hint='Unggah gambar tanda tangan.'
           />
 
           <div className='space-y-2'>
@@ -91,7 +91,7 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
               weight={600}
               className='block text-gray-700'
             >
-              Preview:
+              Pratinjau:
             </AppTypography.Text>
 
             <div className='flex h-[160px] items-center justify-center overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3'>
@@ -99,7 +99,7 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={previewSrc}
-                  alt='Preview TTD approval'
+                  alt='Pratinjau tanda tangan'
                   className='max-h-full max-w-full object-contain'
                 />
               ) : (
@@ -115,10 +115,10 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
         </div>
 
         <AppInput.TextArea
-          label='Catatan Approval'
+          label='Catatan Persetujuan'
           value={note}
           onChange={(event) => setNote(event?.target?.value ?? '')}
-          placeholder='Tambahkan catatan approval bila diperlukan.'
+          placeholder='Tambahkan catatan bila diperlukan.'
           autoSize={{ minRows: 3, maxRows: 6 }}
         />
       </div>

@@ -68,7 +68,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
       ),
     },
     {
-      title: 'Total Bruto',
+      title: 'Total Gaji Kotor',
       key: 'total_bruto_kena_pajak',
       render: (_, payroll) => (
         <div>
@@ -91,7 +91,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
             size={12}
             className='text-gray-500'
           >
-            Variabel: {vm.formatCurrency(payroll.total_pendapatan_variabel)}
+            Tambahan: {vm.formatCurrency(payroll.total_pendapatan_variabel)}
           </AppTypography.Text>
         </div>
       ),
@@ -118,7 +118,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
       ),
     },
     {
-      title: 'Approval',
+      title: 'Persetujuan',
       key: 'approval',
       render: (_, payroll) => {
         const approvalStatus = vm.formatStatusApproval(payroll.status_approval);
@@ -152,7 +152,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
       },
     },
     {
-      title: 'Take Home Pay',
+      title: 'Gaji Diterima',
       dataIndex: 'total_dibayarkan',
       key: 'total_dibayarkan',
       render: (value) => (
@@ -166,7 +166,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
       ),
     },
     {
-      title: 'Status',
+      title: 'Status Penggajian',
       key: 'status_payroll',
       render: (_, payroll) => {
         const statusFormat = vm.formatStatusPayroll(payroll.status_payroll);
@@ -214,7 +214,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
               variant='text'
               shape='circle'
               size='middle'
-              aria-label='Approval'
+              aria-label='Setujui penggajian'
               className='!text-cyan-700 hover:!bg-cyan-50'
               icon={<FileDoneOutlined />}
               disabled={!approvalStep || vm.isSubmitting}
@@ -235,7 +235,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
               variant='text'
               shape='circle'
               size='middle'
-              aria-label='Buka payslip'
+              aria-label='Buka slip gaji'
               className='!text-emerald-600 hover:!bg-emerald-50'
               icon={<FilePdfOutlined />}
               href={buildPayslipHref(payroll)}
@@ -245,7 +245,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
               variant='text'
               shape='circle'
               size='middle'
-              aria-label='Edit'
+              aria-label='Ubah'
               className='!text-yellow-600 hover:!bg-yellow-50'
               icon={<EditOutlined />}
               disabled={payroll.business_state && !payroll.business_state.bisa_diubah}
@@ -271,8 +271,8 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
   if (vm.sortedData.length === 0 && !vm.loading) {
     return (
       <AppEmpty.Card
-        title='Tidak ada data payroll karyawan'
-        description='Ubah filter atau tambahkan payroll baru untuk mulai mengelola data.'
+        title='Tidak ada data penggajian karyawan'
+        description='Ubah filter atau tambahkan data penggajian baru untuk mulai mengelola data.'
       />
     );
   }
@@ -289,8 +289,8 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
         showSizeChanger: true,
         showQuickJumper: true,
       }}
-      totalLabel='payroll'
-      emptyTitle='Tidak ada data payroll karyawan'
+      totalLabel='data penggajian'
+      emptyTitle='Tidak ada data penggajian karyawan'
       emptyDescription='Belum ada data yang sesuai dengan filter.'
     />
   );

@@ -8,21 +8,19 @@ import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
 function ApprovalStepCard({ vm, step, index, disabled = false, removable = false }) {
   const approver = vm.getApproverById(step?.approver_user_id);
-  const helperText = approver
-    ? `Role approver: ${vm.formatApproverRole(approver.role)}${approver.email ? ` • ${approver.email}` : ''}`
-    : 'Pilih user approver untuk payroll ini.';
+  const helperText = approver ? `Peran penyetuju: ${vm.formatApproverRole(approver.role)}${approver.email ? ` • ${approver.email}` : ''}` : 'Pilih penyetuju untuk penggajian ini.';
 
   return (
     <div className='rounded-2xl border border-gray-200 bg-white p-4'>
       <div className='flex items-start justify-between gap-3'>
         <div className='flex-1'>
           <AppSelect
-            label={`Approver ${index + 1}`}
+            label={`Penyetuju ${index + 1}`}
             required
             value={step?.approver_user_id || undefined}
             onChange={(value) => vm.updateApprovalStep(step.client_key, value)}
             options={vm.approverOptions}
-            placeholder='Pilih user approver'
+            placeholder='Pilih penyetuju'
             allowClear
             filterOption={vm.filterApproverOption}
             optionFilterProp='searchText'
@@ -66,14 +64,14 @@ export default function ApprovalStepsSection({ vm, disabled = false }) {
             weight={700}
             className='block text-gray-900'
           >
-            Approval Payroll Karyawan
+            Persetujuan Penggajian Karyawan
           </AppTypography.Text>
 
           <AppTypography.Text
             size={12}
             className='mt-1 block leading-5 text-gray-500'
           >
-            Satu approver cukup untuk persetujuan tunggal. Tambahkan beberapa approver jika payroll membutuhkan approval paralel.
+            Pilih satu penyetuju untuk alur sederhana. Tambahkan penyetuju lain bila penggajian perlu diperiksa lebih dari satu pihak.
           </AppTypography.Text>
         </div>
 
@@ -84,7 +82,7 @@ export default function ApprovalStepsSection({ vm, disabled = false }) {
           className='!rounded-lg !h-10'
           disabled={disabled}
         >
-          Tambah Approver
+          Tambah Penyetuju
         </AppButton>
       </div>
 

@@ -13,7 +13,7 @@ export default function Page() {
       fallback={
         <div className='grid place-items-center min-h-[calc(100dvh-64px-56px)]'>
           <LoadingSplash
-            label='Menyiapkan payroll karyawan...'
+            label='Menyiapkan data penggajian karyawan...'
             brand='#003A6F'
             size={124}
             fullscreen={false}

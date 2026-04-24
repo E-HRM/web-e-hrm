@@ -140,11 +140,11 @@ async function resolveCreatePayload(body = {}) {
     };
   }
 
-  const requestedTarifId = normalizeNullableString(body?.id_tarif_pajak_ter, 'id_tarif_pajak_ter', 36);
-
   const requestedJenisHubungan = body?.jenis_hubungan_kerja ? normalizeEnum(body.jenis_hubungan_kerja, JENIS_HUBUNGAN_KERJA_VALUES, 'jenis_hubungan_kerja') : '';
 
-  const tarifPajakTer = requestedTarifId ? await ensureTarifPajakTerExists(requestedTarifId) : profilPayroll?.id_tarif_pajak_ter ? await ensureTarifPajakTerExists(profilPayroll.id_tarif_pajak_ter) : null;
+  // Snapshot awal payroll harus mengikuti profil payroll aktif di database.
+  // Payload dari client bisa stale, terutama ketika memulihkan payroll yang sebelumnya di-soft delete.
+  const tarifPajakTer = profilPayroll?.id_tarif_pajak_ter ? await ensureTarifPajakTerExists(profilPayroll.id_tarif_pajak_ter) : null;
 
   if (!tarifPajakTer) {
     return {

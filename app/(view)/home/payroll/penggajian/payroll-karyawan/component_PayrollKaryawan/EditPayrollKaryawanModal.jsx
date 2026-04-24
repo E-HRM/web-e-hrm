@@ -13,7 +13,7 @@ function EditPayrollForm({ vm }) {
   return (
     <div className='space-y-4'>
       <AppSelect
-        label='Periode Payroll'
+        label='Periode Penggajian'
         required
         value={vm.formData.id_periode_payroll}
         onChange={(value) => vm.setFormValue('id_periode_payroll', value)}
@@ -64,15 +64,15 @@ function EditPayrollForm({ vm }) {
         <AppInput
           label='Bank'
           value={vm.formData.nama_bank_snapshot}
-          placeholder='Diambil dari data user'
+          placeholder='Diambil dari data karyawan'
           disabled
           inputClassName='!rounded-lg'
         />
 
         <AppInput
-          label='No. Rekening'
+          label='Nomor Rekening'
           value={vm.formData.nomor_rekening_snapshot}
-          placeholder='Diambil dari data user'
+          placeholder='Diambil dari data karyawan'
           disabled
           inputClassName='!rounded-lg'
         />
@@ -80,15 +80,15 @@ function EditPayrollForm({ vm }) {
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppInput
-          label='No. Issue'
+          label='Nomor Slip'
           value={vm.formData.issue_number}
           onChange={(event) => vm.setFormValue('issue_number', event.target.value)}
-          placeholder='Nomor dokumen payroll'
+          placeholder='Nomor slip gaji'
           inputClassName='!rounded-lg'
         />
 
         <AppInput
-          label='Tanggal Issue'
+          label='Tanggal Slip'
           type='datetime-local'
           value={vm.formData.issued_at}
           onChange={(event) => vm.setFormValue('issued_at', event.target.value)}
@@ -100,14 +100,14 @@ function EditPayrollForm({ vm }) {
         label='Nama Perusahaan'
         value={vm.formData.company_name_snapshot}
         onChange={(event) => vm.setFormValue('company_name_snapshot', event.target.value)}
-        placeholder='Nama perusahaan pada slip payroll'
+        placeholder='Nama perusahaan pada slip gaji'
         inputClassName='!rounded-lg'
       />
 
       <ApprovalStepsSection vm={vm} />
 
       <AppSelect
-        label='Status Payroll'
+        label='Status Penggajian'
         value={vm.formData.status_payroll}
         onChange={(value) => vm.setFormValue('status_payroll', value)}
         options={STATUS_PAYROLL_OPTIONS}
@@ -132,7 +132,7 @@ export default function EditPayrollKaryawanModal({ vm }) {
     <AppModal
       open={vm.isEditModalOpen}
       onClose={vm.closeEditModal}
-      title='Edit Payroll Karyawan'
+      title='Ubah Penggajian Karyawan'
       footer={null}
       width={720}
     >
@@ -151,7 +151,7 @@ export default function EditPayrollKaryawanModal({ vm }) {
           onClick={vm.handleEdit}
           className='!rounded-lg !px-4 !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
         >
-          Update
+          Simpan Perubahan
         </AppButton>
       </div>
     </AppModal>
