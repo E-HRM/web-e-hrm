@@ -51,7 +51,7 @@ export function StatusTag({ status }) {
         size='sm'
         className='!font-medium'
       >
-        DRAFT
+        Draft
       </AppTag>
     );
   }
@@ -64,7 +64,7 @@ export function StatusTag({ status }) {
         size='sm'
         className='!font-medium'
       >
-        AKTIF
+        Aktif
       </AppTag>
     );
   }
@@ -77,7 +77,7 @@ export function StatusTag({ status }) {
         size='sm'
         className='!font-medium'
       >
-        LUNAS
+        Lunas
       </AppTag>
     );
   }
@@ -90,7 +90,7 @@ export function StatusTag({ status }) {
         size='sm'
         className='!font-medium'
       >
-        DIBATALKAN
+        Dibatalkan
       </AppTag>
     );
   }
@@ -279,14 +279,14 @@ export function PinjamanForm({ vm, formData, setFormValue, duplicateNameForUser,
         />
 
         <AppInput.Number
-          label='Tenor Bulan'
+          label='Lama Cicilan'
           required
           min={1}
           precision={0}
           step={1}
           value={formData.tenor_bulan}
           onChange={(value) => setFormValue('tenor_bulan', value ?? 0)}
-          placeholder='20'
+          placeholder='Contoh: 20'
           disabled={vm.isSubmitting}
           inputClassName='!rounded-lg'
         />
@@ -304,12 +304,12 @@ export function PinjamanForm({ vm, formData, setFormValue, duplicateNameForUser,
         />
 
         <AppSelect
-          label='Status Pengajuan'
+          label='Status Pinjaman'
           required
           value={formData.status_pinjaman || undefined}
           onChange={(value) => setFormValue('status_pinjaman', value || STATUS_PINJAMAN.DRAFT)}
           options={statusOptions}
-          placeholder='Pilih status pengajuan'
+          placeholder='Pilih status pinjaman'
           disabled={vm.isSubmitting}
           selectClassName='!rounded-lg'
           hint={vm.statusFieldHint}

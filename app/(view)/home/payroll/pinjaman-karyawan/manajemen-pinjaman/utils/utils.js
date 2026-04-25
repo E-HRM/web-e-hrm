@@ -8,15 +8,15 @@ export const STATUS_PINJAMAN = {
 export const PINJAMAN_FORM_STATUS_OPTIONS = [
   {
     value: STATUS_PINJAMAN.DRAFT,
-    label: 'DRAFT',
+    label: 'Draft',
   },
   {
     value: STATUS_PINJAMAN.AKTIF,
-    label: 'AKTIF',
+    label: 'Aktif',
   },
   {
     value: STATUS_PINJAMAN.DIBATALKAN,
-    label: 'DIBATALKAN',
+    label: 'Dibatalkan',
   },
 ];
 
@@ -43,7 +43,7 @@ export function calculateNominalCicilan(nominalPinjaman, tenorBulan) {
 
   if (total <= 0 || tenor <= 0) return 0;
 
-  return Math.floor(total * 100 / tenor) / 100;
+  return Math.floor((total * 100) / tenor) / 100;
 }
 
 export function toDateInputValue(value) {

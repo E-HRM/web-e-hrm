@@ -10,7 +10,7 @@ export default function CreatePinjamanModalSection({ vm }) {
     <AppModal
       open={vm.isCreateModalOpen}
       onClose={vm.closeCreateModal}
-      title='Tambah Pinjaman Baru'
+      title='Tambah Pinjaman'
       footer={null}
       width={680}
     >

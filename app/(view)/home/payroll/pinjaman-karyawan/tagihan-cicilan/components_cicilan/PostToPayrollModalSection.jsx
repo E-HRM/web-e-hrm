@@ -33,20 +33,20 @@ export default function PostToPayrollModalSection({ vm }) {
   const hasOptions = vm.payrollOptions.length > 0;
   const componentSnapshot = vm.selectedPostComponentSnapshot;
 
-  let selectHint = 'Posting akan membuat atau memperbarui item komponen payroll pinjaman pada payroll karyawan yang dipilih.';
+  let selectHint = 'Cicilan ini akan ditambahkan sebagai potongan pada payroll yang dipilih.';
 
   if (vm.payrollTargetsError) {
-    selectHint = vm.payrollTargetsError?.message || 'Data payroll tujuan belum berhasil dimuat.';
+    selectHint = vm.payrollTargetsError?.message || 'Data payroll belum berhasil dimuat.';
   } else if (!vm.payrollTargetsLoading && !hasOptions) {
-    selectHint = 'Belum ada payroll mutable untuk karyawan ini. Buat payroll karyawan terlebih dahulu.';
+    selectHint = 'Belum ada payroll yang masih bisa diubah untuk karyawan ini. Buat payroll karyawan terlebih dahulu.';
   }
 
   return (
     <AppModal
       open={vm.isPostModalOpen}
       onClose={vm.closePostModal}
-      title={cicilan ? `Posting ke Payroll - ${cicilan.nama_karyawan}` : 'Posting ke Payroll'}
-      subtitle='Pilih payroll tujuan agar tagihan cicilan diposting sebagai komponen potongan payroll.'
+      title={cicilan ? `Masukkan Cicilan ke Payroll - ${cicilan.nama_karyawan}` : 'Masukkan Cicilan ke Payroll'}
+      subtitle='Pilih payroll tujuan agar cicilan ini masuk sebagai potongan gaji.'
       footer={null}
       width={820}
     >
@@ -91,41 +91,41 @@ export default function PostToPayrollModalSection({ vm }) {
               weight={700}
               className='block text-gray-900 mb-3'
             >
-              Pengaturan Posting
+              Pengaturan Potongan Payroll
             </AppTypography.Text>
 
             <div className='space-y-4'>
               <AppSelect
-                label='Payroll Tujuan'
+                label='Payroll yang Akan Dipotong'
                 required
                 value={vm.postFormData.id_payroll_karyawan || undefined}
                 options={vm.payrollOptions}
                 loading={vm.payrollTargetsLoading || vm.payrollTargetsValidating}
                 disabled={isSubmitting || !hasOptions}
                 onChange={(value) => vm.setPostFormValue('id_payroll_karyawan', value || '')}
-                placeholder='Pilih payroll karyawan tujuan'
+                placeholder='Pilih payroll karyawan'
                 hint={selectHint}
                 selectClassName='!rounded-lg'
               />
 
               <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
                 <InfoCard
-                  label='Tipe Komponen'
+                  label='Jenis Potongan'
                   value='Pinjaman'
                 />
 
                 <InfoCard
-                  label='Nama Komponen'
+                  label='Nama Potongan'
                   value={componentSnapshot?.nama_komponen || 'Pinjaman'}
                 />
 
                 <InfoCard
-                  label='Arah Komponen'
+                  label='Jenis Transaksi'
                   value='Potongan'
                 />
 
                 <InfoCard
-                  label='Nominal Item Payroll'
+                  label='Nominal Potongan'
                   value={vm.formatCurrency(componentSnapshot?.nominal ?? cicilan.nominal_tagihan)}
                   valueClassName='text-green-700'
                 />
@@ -133,7 +133,7 @@ export default function PostToPayrollModalSection({ vm }) {
 
               <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
                 <AppInput.Number
-                  label='Urutan Tampil'
+                  label='Urutan di Slip Gaji'
                   required
                   value={vm.postFormData.urutan_tampil}
                   onChange={(value) => vm.setPostFormValue('urutan_tampil', value ?? 0)}
@@ -141,7 +141,7 @@ export default function PostToPayrollModalSection({ vm }) {
                   step={1}
                   precision={0}
                   disabled={isSubmitting}
-                  hint='Nilai ini akan disimpan ke field urutan_tampil pada item komponen payroll hasil posting cicilan pinjaman.'
+                  hint='Angka ini menentukan posisi potongan cicilan saat ditampilkan di slip gaji.'
                   inputClassName='!rounded-lg'
                 />
 
@@ -151,14 +151,14 @@ export default function PostToPayrollModalSection({ vm }) {
                     weight={600}
                     className='block text-blue-700'
                   >
-                    Snapshot komponen payroll
+                    Rincian Potongan yang Akan Dibuat
                   </AppTypography.Text>
 
                   <AppTypography.Text
                     size={12}
                     className='block text-blue-600 mt-1 leading-5'
                   >
-                    Tipe komponen tetap Pinjaman, nama komponen mengikuti nama pinjaman, arah komponen tetap Potongan, dan nominal mengikuti nominal tagihan.
+                    Jenis potongan tetap Pinjaman, nama potongan mengikuti nama pinjaman, dan nominal mengikuti tagihan cicilan.
                   </AppTypography.Text>
                 </div>
               </div>
@@ -169,8 +169,8 @@ export default function PostToPayrollModalSection({ vm }) {
                 onChange={(event) => vm.setPostFormValue('catatan_item_payroll', event?.target?.value || '')}
                 disabled={isSubmitting}
                 autoSize={{ minRows: 3, maxRows: 5 }}
-                placeholder='Tambahkan catatan opsional untuk item komponen payroll hasil posting'
-                hint='Catatan ini akan disimpan pada item komponen payroll hasil posting cicilan pinjaman.'
+                placeholder='Tambahkan catatan opsional untuk potongan cicilan'
+                hint='Catatan ini akan muncul pada data potongan cicilan di payroll.'
                 inputClassName='!rounded-lg'
               />
             </div>
@@ -192,7 +192,7 @@ export default function PostToPayrollModalSection({ vm }) {
               disabled={isSubmitting || !hasOptions}
               className='!rounded-lg !px-4 !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
             >
-              Posting ke Payroll
+              Masukkan ke Payroll
             </AppButton>
           </div>
         </div>

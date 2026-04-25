@@ -28,7 +28,7 @@ function getPayrollStatusMeta(status) {
     DIPROSES: {
       label: 'Payroll Diproses',
       tone: 'info',
-      helper: 'Cicilan sedang mengikuti proses payroll periode berjalan.',
+      helper: 'Cicilan sudah masuk payroll periode berjalan.',
     },
     DISETUJUI: {
       label: 'Payroll Disetujui',
@@ -38,7 +38,7 @@ function getPayrollStatusMeta(status) {
     DRAFT: {
       label: 'Payroll Draft',
       tone: 'warning',
-      helper: 'Payroll sudah terbentuk, tetapi masih menunggu finalisasi.',
+      helper: 'Payroll sudah dibuat, tetapi masih menunggu finalisasi.',
     },
   };
 
@@ -124,7 +124,7 @@ export default function DetailCicilanModalSection({ vm }) {
       open={vm.isDetailModalOpen}
       onClose={vm.closeDetailModal}
       title={cicilan ? `Detail Tagihan Cicilan - ${cicilan.nama_karyawan}` : 'Detail Tagihan Cicilan'}
-      subtitle='Rincian cicilan pinjaman karyawan untuk kebutuhan monitoring operasional payroll dan proses posting cicilan.'
+      subtitle='Lihat rincian cicilan, status pembayaran, dan informasi payroll terkait.'
       width={860}
       footer={({ close }) => (
         <div className='flex items-center justify-end gap-3'>
@@ -145,10 +145,9 @@ export default function DetailCicilanModalSection({ vm }) {
               }}
               className='!bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
             >
-              Posting ke Payroll
+              Masukkan ke Payroll
             </AppButton>
           ) : null}
-
         </div>
       )}
     >
@@ -216,13 +215,13 @@ export default function DetailCicilanModalSection({ vm }) {
                   {vm.formatDate(cicilan.jatuh_tempo)}
                 </AppTypography.Text>
               }
-              helper='Gunakan tanggal jatuh tempo untuk memprioritaskan penagihan dan posting payroll.'
+              helper='Gunakan tanggal jatuh tempo untuk menentukan cicilan mana yang perlu diproses lebih dulu.'
             />
           </div>
 
           <SectionBlock
-            title='Ringkasan Cicilan'
-            subtitle='Informasi utama yang dibutuhkan tim HR dan payroll untuk membaca konteks tagihan.'
+            title='Informasi Cicilan'
+            subtitle='Informasi utama cicilan karyawan.'
           >
             <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
               <DetailField
@@ -248,7 +247,7 @@ export default function DetailCicilanModalSection({ vm }) {
           </SectionBlock>
 
           <SectionBlock
-            title='Nilai Tagihan'
+            title='Rincian Nominal'
             subtitle='Nominal yang perlu dimonitor untuk memastikan pembayaran cicilan tetap akurat.'
           >
             <div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
@@ -291,7 +290,7 @@ export default function DetailCicilanModalSection({ vm }) {
                   size={12}
                   className='block text-gray-500 mb-2'
                 >
-                  Outstanding
+                  Sisa Tagihan
                 </AppTypography.Text>
 
                 <AppTypography.Text
@@ -306,8 +305,8 @@ export default function DetailCicilanModalSection({ vm }) {
           </SectionBlock>
 
           <SectionBlock
-            title='Informasi Payroll Terkait'
-            subtitle='Status ini membantu menentukan apakah cicilan masih perlu diposting ke payroll atau sudah masuk payroll.'
+            title='Payroll Terkait'
+            subtitle='Status ini membantu menentukan apakah cicilan sudah masuk payroll atau masih perlu diproses.'
           >
             {cicilan.id_payroll_karyawan ? (
               <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
@@ -348,22 +347,22 @@ export default function DetailCicilanModalSection({ vm }) {
                   weight={700}
                   className='block text-amber-800'
                 >
-                  Belum terhubung ke payroll
+                  Belum masuk payroll
                 </AppTypography.Text>
 
                 <AppTypography.Text
                   size={13}
                   className='block text-amber-700 mt-1 leading-6'
                 >
-                  Tagihan ini masih perlu diposting ke payroll tujuan sebelum pembayaran payroll dilakukan.
+                  Tagihan ini belum dimasukkan ke payroll periode yang sesuai.
                 </AppTypography.Text>
               </div>
             )}
           </SectionBlock>
 
           <SectionBlock
-            title='Timeline Proses'
-            subtitle='Jejak waktu proses cicilan untuk kebutuhan audit operasional dan tindak lanjut.'
+            title='Riwayat Proses'
+            subtitle='Riwayat waktu pembayaran, masuk payroll, dan pembaruan data cicilan.'
           >
             <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
               <DetailField
@@ -372,7 +371,7 @@ export default function DetailCicilanModalSection({ vm }) {
               />
 
               <DetailField
-                label='Diposting Pada'
+                label='Masuk Payroll Pada'
                 value={vm.formatDateTime(cicilan.diposting_pada)}
               />
 
@@ -384,7 +383,7 @@ export default function DetailCicilanModalSection({ vm }) {
           </SectionBlock>
 
           <SectionBlock
-            title='Snapshot Pinjaman'
+            title='Ringkasan Pinjaman'
             subtitle='Gambaran pinjaman asal tagihan untuk membantu validasi nominal cicilan.'
           >
             <div className='grid grid-cols-1 md:grid-cols-4 gap-6'>

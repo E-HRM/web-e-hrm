@@ -14,7 +14,7 @@ const COLORS = {
   text: rgb(0.06, 0.09, 0.16),
   muted: rgb(0.37, 0.41, 0.47),
   border: rgb(0.44, 0.47, 0.52),
-  divider: rgb(0.80, 0.82, 0.86),
+  divider: rgb(0.8, 0.82, 0.86),
   labelFill: rgb(0.78, 0.84, 0.93),
   white: rgb(1, 1, 1),
 };
@@ -154,16 +154,14 @@ function buildDetailRows(slip) {
       ? [
           {
             snapshotKey: 'pph21',
-            label: 'PPh 21',
+            label: 'PPh %',
             value: `-${formatCurrency(pph21Nominal)}`,
           },
         ]
       : []),
   ];
 
-  const filteredDetailItems = detailItems.filter(
-    (item) => !snapshotRows.some((row) => isSnapshotBackedDetail(item, row.snapshotKey)),
-  );
+  const filteredDetailItems = detailItems.filter((item) => !snapshotRows.some((row) => isSnapshotBackedDetail(item, row.snapshotKey)));
 
   const rows =
     snapshotRows.length > 0 || filteredDetailItems.length > 0
@@ -361,17 +359,9 @@ function drawDetailTable(page, rows, { x, topY, width, typeWidth, labelWidth, ro
       });
     }
 
-    const labelX = hasTypeColumn
-      ? row?.labelColSpan === 2
-        ? x
-        : x + typeWidth
-      : x;
+    const labelX = hasTypeColumn ? (row?.labelColSpan === 2 ? x : x + typeWidth) : x;
 
-    const labelCellWidth = hasTypeColumn
-      ? row?.labelColSpan === 2
-        ? typeWidth + labelWidth
-        : labelWidth
-      : labelWidth;
+    const labelCellWidth = hasTypeColumn ? (row?.labelColSpan === 2 ? typeWidth + labelWidth : labelWidth) : labelWidth;
 
     page.drawRectangle({
       x: labelX,
@@ -922,7 +912,11 @@ export async function GET(req, { params }) {
 
     const slip = buildSlipPayload(payroll);
     const pdfBytes = await buildSlipPdf(slip);
-    const filename = `slip-payroll-${normalizeText(slip?.employee?.nama_karyawan || id).replace(/[^a-zA-Z0-9_-]+/g, '-').toLowerCase() || id}.pdf`;
+    const filename = `slip-payroll-${
+      normalizeText(slip?.employee?.nama_karyawan || id)
+        .replace(/[^a-zA-Z0-9_-]+/g, '-')
+        .toLowerCase() || id
+    }.pdf`;
 
     return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,

@@ -8,8 +8,8 @@ const PINJAMAN_KARYAWAN_ITEMS = [
   {
     key: 'daftar-pinjaman',
     title: 'Daftar Pinjaman',
-    description: 'Kelola data pinjaman karyawan aktif, status pinjaman, sisa saldo, dan kebutuhan administrasi pinjaman payroll.',
-    helperText: 'Mengarah ke halaman manajemen pinjaman yang sudah disesuaikan dengan modul payroll.',
+    description: 'Kelola pinjaman karyawan, pantau sisa saldo, dan pastikan cicilan berjalan sesuai jadwal.',
+    helperText: 'Buka daftar pinjaman untuk menambah, mengubah, atau melihat rincian pinjaman karyawan.',
     href: '/home/payroll/pinjaman-karyawan/manajemen-pinjaman',
     status: 'ready',
     icon: CreditCardOutlined,
@@ -19,8 +19,8 @@ const PINJAMAN_KARYAWAN_ITEMS = [
   {
     key: 'tagihan-cicilan',
     title: 'Tagihan & Cicilan',
-    description: 'Pantau daftar cicilan pinjaman karyawan berdasarkan jatuh tempo, status pembayaran, keterkaitan payroll, dan nilai outstanding.',
-    helperText: 'Frontend sudah mengikuti pola halaman payroll: summary, filter, tabel, dan modal detail.',
+    description: 'Pantau cicilan berdasarkan jatuh tempo, status pembayaran, dan sisa tagihan.',
+    helperText: 'Lihat ringkasan, cari cicilan, dan buka rincian tagihan dari satu halaman.',
     href: '/home/payroll/pinjaman-karyawan/tagihan-cicilan',
     status: 'ready',
     icon: WalletOutlined,
@@ -32,9 +32,11 @@ const PINJAMAN_KARYAWAN_ITEMS = [
 export default function PinjamanKaryawanPayrollContent() {
   return (
     <PayrollHubContent
-      title='Pinjaman Karyawan Payroll'
-      description='Kelompok navigasi untuk pengelolaan pinjaman dan cicilan karyawan. Halaman daftar pinjaman dan tagihan cicilan sudah terhubung dengan API internal payroll agar operasional pinjaman dapat dipantau dari satu area.'
+      title='Pinjaman Karyawan'
+      description='Kelola pinjaman dan cicilan karyawan dari satu area, mulai dari pembuatan pinjaman sampai pemantauan tagihan.'
       items={PINJAMAN_KARYAWAN_ITEMS}
+      showHeaderSummary={false}
+      showStatusTag={false}
     />
   );
 }

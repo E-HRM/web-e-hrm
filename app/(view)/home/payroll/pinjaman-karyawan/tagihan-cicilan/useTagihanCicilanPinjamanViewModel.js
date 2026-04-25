@@ -188,35 +188,35 @@ function getCicilanPostBlockedMessage(cicilan) {
   if (linkedPayroll) {
     return {
       title: 'Cicilan sudah masuk payroll',
-      description: 'Cicilan ini sudah terhubung ke payroll karyawan, sehingga tidak perlu diposting ulang.',
+      description: 'Cicilan ini sudah masuk payroll karyawan, sehingga tidak perlu dimasukkan lagi.',
     };
   }
 
   if (status === STATUS_CICILAN.DIBAYAR) {
     return {
       title: 'Cicilan sudah dibayar',
-      description: 'Cicilan yang sudah dibayar tidak bisa diposting lagi ke payroll.',
+      description: 'Cicilan yang sudah dibayar tidak bisa dimasukkan lagi ke payroll.',
     };
   }
 
   if (cicilan?.business_state?.bisa_diubah === false) {
     return {
-      title: 'Cicilan tidak bisa diubah',
-      description: 'Cicilan ini terkunci oleh status payroll atau periode payroll yang sudah final.',
+      title: 'Cicilan tidak dapat diproses',
+      description: 'Cicilan ini sudah terkait dengan payroll yang tidak bisa diubah lagi.',
     };
   }
 
   return {
-    title: 'Cicilan belum bisa diposting',
-    description: 'Posting hanya bisa dilakukan untuk cicilan berstatus Menunggu atau Dilewati yang belum masuk payroll.',
+    title: 'Cicilan belum bisa dimasukkan ke payroll',
+    description: 'Cicilan hanya bisa dimasukkan ke payroll jika statusnya Menunggu atau Dilewati dan belum masuk payroll.',
   };
 }
 
 function getPayrollTargetUnavailableMessage(userPayrollTargets = []) {
   if (!userPayrollTargets.length) {
     return {
-      title: 'Payroll tujuan belum tersedia',
-      description: 'Belum ada payroll karyawan untuk user ini. Buat payroll pada periode yang sesuai terlebih dahulu, lalu ulangi posting cicilan.',
+      title: 'Payroll belum tersedia',
+      description: 'Belum ada payroll untuk karyawan ini. Buat payroll pada periode yang sesuai terlebih dahulu, lalu masukkan cicilan kembali.',
     };
   }
 
@@ -234,11 +234,11 @@ function getPayrollTargetUnavailableMessage(userPayrollTargets = []) {
     reasons.push('periode payroll sudah terkunci');
   }
 
-  const reasonText = reasons.length ? reasons.join(', ') : 'payroll tujuan sedang tidak bisa diubah';
+  const reasonText = reasons.length ? reasons.join(', ') : 'payroll sedang tidak bisa diubah';
 
   return {
-    title: 'Payroll tujuan belum bisa dipakai',
-    description: `Payroll untuk karyawan ini belum bisa dipakai karena ${reasonText}. Posting cicilan hanya bisa ke payroll draft yang belum disetujui/dibayar dan periodenya masih terbuka.`,
+    title: 'Payroll belum bisa dipilih',
+    description: `Payroll untuk karyawan ini belum bisa dipilih karena ${reasonText}. Cicilan hanya bisa dimasukkan ke payroll yang masih Draft dan periodenya belum dikunci.`,
   };
 }
 
@@ -249,6 +249,19 @@ function createInitialPostFormData(overrides = {}) {
     catatan_item_payroll: '',
     ...overrides,
   };
+}
+
+function formatPayrollStatusLabel(status) {
+  const normalized = normalizeText(status).toUpperCase();
+
+  const map = {
+    DRAFT: 'Draft',
+    DIPROSES: 'Diproses',
+    DISETUJUI: 'Disetujui',
+    DIBAYAR: 'Dibayar',
+  };
+
+  return map[normalized] || normalized || 'Draft';
 }
 
 function getPostComponentSnapshot(cicilan) {
@@ -320,13 +333,10 @@ export default function useTagihanCicilanPinjamanViewModel() {
   const payrollOptions = useMemo(() => {
     return selectablePayrollTargets.map((item) => ({
       value: item.id_payroll_karyawan,
-      label: `${item.periode_label || item.id_payroll_karyawan} • ${item.payroll_status || 'DRAFT'}`,
+      label: `${item.periode_label || item.id_payroll_karyawan} • ${formatPayrollStatusLabel(item.payroll_status)}`,
     }));
   }, [selectablePayrollTargets]);
-  const selectedPostComponentSnapshot = useMemo(
-    () => getPostComponentSnapshot(selectedPostCicilan),
-    [selectedPostCicilan],
-  );
+  const selectedPostComponentSnapshot = useMemo(() => getPostComponentSnapshot(selectedPostCicilan), [selectedPostCicilan]);
 
   const filteredCicilan = useMemo(() => {
     const search = normalizeSearchText(searchText);
@@ -383,15 +393,15 @@ export default function useTagihanCicilanPinjamanViewModel() {
 
       if (isPayrollLoading || isPayrollValidating) {
         AppMessage.warning({
-          title: 'Data payroll tujuan masih dimuat',
-          description: 'Tunggu sebentar sampai daftar payroll karyawan selesai dimuat, lalu coba lagi.',
+          title: 'Data payroll masih dimuat',
+          description: 'Daftar payroll karyawan masih dimuat. Coba lagi setelah data selesai tampil.',
         });
         return false;
       }
 
       if (payrollError && payrollTargets.length === 0) {
         AppMessage.warning({
-          title: 'Payroll tujuan belum tersedia',
+          title: 'Payroll belum tersedia',
           description: payrollError?.message || 'Terjadi kesalahan saat memuat daftar payroll karyawan.',
         });
         return false;
@@ -464,7 +474,6 @@ export default function useTagihanCicilanPinjamanViewModel() {
       AppMessage.error(err, 4);
     }
   }, [mutate, mutatePayrollTargets]);
- 
 
   const handlePostToPayroll = useCallback(async () => {
     if (!selectedPostCicilan) return false;
@@ -477,8 +486,8 @@ export default function useTagihanCicilanPinjamanViewModel() {
     const payrollId = normalizeText(postFormData.id_payroll_karyawan);
     if (!payrollId) {
       AppMessage.warning({
-        title: 'Payroll tujuan wajib dipilih',
-        description: 'Pilih payroll karyawan tujuan sebelum memposting cicilan.',
+        title: 'Payroll wajib dipilih',
+        description: 'Pilih payroll karyawan sebelum memasukkan cicilan.',
       });
       return false;
     }
@@ -488,8 +497,8 @@ export default function useTagihanCicilanPinjamanViewModel() {
 
     if (!Number.isFinite(urutanTampil)) {
       AppMessage.warning({
-        title: 'Urutan tampil tidak valid',
-        description: 'Isi urutan tampil dengan angka bulat 0 atau lebih besar.',
+        title: 'Urutan di slip gaji tidak valid',
+        description: 'Isi urutan di slip gaji dengan angka bulat 0 atau lebih besar.',
       });
       return false;
     }
@@ -510,7 +519,7 @@ export default function useTagihanCicilanPinjamanViewModel() {
       const updated = normalizeCicilanItem(response?.data);
 
       AppMessage.success({
-        title: 'Cicilan berhasil diposting ke payroll',
+        title: 'Cicilan berhasil dimasukkan ke payroll',
         description: `${updated?.nama_karyawan || 'Karyawan'} - ${updated?.nama_pinjaman || 'Pinjaman'}`,
       });
 
@@ -524,23 +533,14 @@ export default function useTagihanCicilanPinjamanViewModel() {
       return true;
     } catch (err) {
       AppMessage.error({
-        title: 'Gagal memposting cicilan',
-        description: err?.message || 'Terjadi kesalahan saat memposting cicilan ke payroll.',
+        title: 'Gagal memasukkan cicilan ke payroll',
+        description: err?.message || 'Terjadi kesalahan saat memasukkan cicilan ke payroll.',
       });
       return false;
     } finally {
       setActionLoadingId(null);
     }
-  }, [
-    closePostModal,
-    mutate,
-    mutatePayrollTargets,
-    postFormData.catatan_item_payroll,
-    postFormData.id_payroll_karyawan,
-    postFormData.urutan_tampil,
-    selectedCicilan,
-    selectedPostCicilan,
-  ]);
+  }, [closePostModal, mutate, mutatePayrollTargets, postFormData.catatan_item_payroll, postFormData.id_payroll_karyawan, postFormData.urutan_tampil, selectedCicilan, selectedPostCicilan]);
 
   const selectedStatusMeta = useMemo(() => getStatusCicilanMeta(selectedCicilan?.status_cicilan), [selectedCicilan]);
 

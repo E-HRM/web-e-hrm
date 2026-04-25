@@ -113,7 +113,7 @@ export default function DetailPinjamanModalSection({ vm }) {
 
             <DetailField
               label='Jumlah Cicilan'
-              value={`${vm.selectedPinjaman.jumlah_cicilan || 0} item`}
+              value={`${vm.selectedPinjaman.jumlah_cicilan || 0} kali`}
             />
           </div>
 
@@ -124,7 +124,7 @@ export default function DetailPinjamanModalSection({ vm }) {
                   size={14}
                   className='text-gray-600'
                 >
-                  Progress Pembayaran
+                  Progres Pembayaran
                 </AppTypography.Text>
 
                 <AppTypography.Text

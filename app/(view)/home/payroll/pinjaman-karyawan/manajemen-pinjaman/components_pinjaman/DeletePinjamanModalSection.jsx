@@ -28,7 +28,7 @@ export default function DeletePinjamanModalSection({ vm }) {
           size={13}
           className='block text-gray-500 leading-relaxed'
         >
-          Penghapusan hanya diizinkan untuk pinjaman berstatus <strong>DRAFT</strong> atau <strong>DIBATALKAN</strong>. Jika masih ada cicilan terkait, data cicilan akan ikut ditandai terhapus.
+          Pinjaman hanya bisa dihapus jika masih berstatus <strong>Draft</strong> atau sudah <strong>Dibatalkan</strong>. Jika masih ada cicilan terkait, cicilan tersebut juga akan ditandai sebagai terhapus.
         </AppTypography.Text>
       </div>
 

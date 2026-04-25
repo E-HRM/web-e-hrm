@@ -16,7 +16,7 @@ export default function HeaderSection({ vm }) {
           Tagihan & Cicilan Pinjaman
         </AppTypography.Title>
 
-        <AppTypography.Text className='block max-w-3xl text-gray-600 leading-6'>Pantau cicilan pinjaman karyawan berdasarkan status lifecycle backend payroll, nilai outstanding, dan keterkaitan dengan payroll karyawan.</AppTypography.Text>
+        <AppTypography.Text className='block max-w-3xl text-gray-600 leading-6'>Pantau cicilan pinjaman karyawan berdasarkan jatuh tempo, status pembayaran, dan hubungan dengan payroll.</AppTypography.Text>
       </div>
 
       <div className='flex items-center gap-3 flex-wrap'>
@@ -25,7 +25,7 @@ export default function HeaderSection({ vm }) {
           variant='outline'
           className='!rounded-lg !px-4 !h-10'
         >
-          Lihat Master Pinjaman
+          Lihat Daftar Pinjaman
         </AppButton>
 
         <AppButton

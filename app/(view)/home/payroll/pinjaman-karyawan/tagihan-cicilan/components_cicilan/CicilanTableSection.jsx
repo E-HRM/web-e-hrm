@@ -29,7 +29,7 @@ function getPayrollStatusMeta(status) {
     DIPROSES: {
       label: 'Payroll Diproses',
       tone: 'info',
-      helper: 'Cicilan sudah masuk proses payroll periode berjalan.',
+      helper: 'Cicilan sudah masuk payroll periode berjalan.',
     },
     DISETUJUI: {
       label: 'Payroll Disetujui',
@@ -81,7 +81,7 @@ function PayrollInfo({ record }) {
           size={12}
           className='block text-gray-500 mt-2 leading-5'
         >
-          Tagihan ini masih menunggu penghubungan ke periode payroll tujuan.
+          Tagihan ini belum dimasukkan ke payroll periode yang sesuai.
         </AppTypography.Text>
       </div>
     );
@@ -103,7 +103,7 @@ function PayrollInfo({ record }) {
         size={12}
         className='block text-gray-500 mt-0.5'
       >
-        Sudah terhubung ke payroll karyawan
+        Sudah masuk payroll karyawan
       </AppTypography.Text>
 
       <div className='mt-2'>
@@ -272,7 +272,7 @@ export default function CicilanTableSection({ vm }) {
             size={12}
             className='block text-gray-500'
           >
-            Outstanding {vm.formatCurrency(record.outstanding_nominal)}
+            Sisa tagihan {vm.formatCurrency(record.outstanding_nominal)}
           </AppTypography.Text>
         </div>
       ),
@@ -332,10 +332,9 @@ export default function CicilanTableSection({ vm }) {
                 onClick={() => vm.openPostModal(record)}
                 className='!rounded-lg !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
               >
-                Posting ke Payroll
+                Masukkan ke Payroll
               </AppButton>
             ) : null}
-
           </div>
         );
       },
@@ -344,8 +343,8 @@ export default function CicilanTableSection({ vm }) {
 
   return (
     <AppTable
-      title='Daftar Tagihan Cicilan'
-      subtitle='Pantau tagihan cicilan pinjaman karyawan, keterhubungan payroll, dan tindak lanjut pembayarannya dari satu halaman.'
+      title='Daftar Cicilan Pinjaman'
+      subtitle='Pantau cicilan pinjaman karyawan, hubungan dengan payroll, dan tindak lanjut pembayarannya dari satu halaman.'
       columns={columns}
       dataSource={vm.dataSource}
       loading={vm.loading || vm.validating}

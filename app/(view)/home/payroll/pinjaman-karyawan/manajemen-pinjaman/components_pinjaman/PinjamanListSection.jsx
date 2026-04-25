@@ -146,7 +146,7 @@ export default function PinjamanListSection({ vm }) {
                         size={14}
                         className='text-gray-600'
                       >
-                        Progress Pembayaran
+                        Progres Pembayaran
                       </AppTypography.Text>
 
                       <AppTypography.Text
@@ -221,7 +221,7 @@ export default function PinjamanListSection({ vm }) {
                   shape='circle'
                   size='middle'
                   aria-label='Hapus'
-                  title={canDelete ? 'Hapus pinjaman' : 'Hanya pinjaman DRAFT atau DIBATALKAN yang bisa dihapus'}
+                  title={canDelete ? 'Hapus pinjaman' : 'Pinjaman hanya bisa dihapus jika masih Draft atau sudah Dibatalkan.'}
                   disabled={!canDelete}
                   className={canDelete ? '!text-red-600 hover:!bg-red-50' : '!text-gray-300'}
                   icon={<DeleteOutlined />}

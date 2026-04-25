@@ -302,10 +302,7 @@ export default function useManajemenPinjamanViewModel() {
       nominal_pinjaman: toNumber(pinjaman.nominal_pinjaman),
       tenor_bulan: Math.trunc(toNumber(pinjaman.tenor_bulan)),
       tanggal_mulai: toDateInputValue(pinjaman.tanggal_mulai),
-      status_pinjaman:
-        pinjaman.status_pinjaman === STATUS_PINJAMAN.LUNAS
-          ? STATUS_PINJAMAN.AKTIF
-          : pinjaman.status_pinjaman || STATUS_PINJAMAN.DRAFT,
+      status_pinjaman: pinjaman.status_pinjaman === STATUS_PINJAMAN.LUNAS ? STATUS_PINJAMAN.AKTIF : pinjaman.status_pinjaman || STATUS_PINJAMAN.DRAFT,
       catatan: pinjaman.catatan || '',
     });
     setIsEditModalOpen(true);
@@ -318,20 +315,17 @@ export default function useManajemenPinjamanViewModel() {
     setIsDetailModalOpen(true);
   }, []);
 
-  const openDeleteDialog = useCallback(
-    (pinjaman) => {
-      if (!pinjaman) return;
+  const openDeleteDialog = useCallback((pinjaman) => {
+    if (!pinjaman) return;
 
-      if (!canDeletePinjamanItem(pinjaman)) {
-        AppMessage.warning('Pinjaman hanya bisa dihapus jika statusnya DRAFT atau DIBATALKAN.');
-        return;
-      }
+    if (!canDeletePinjamanItem(pinjaman)) {
+      AppMessage.warning('Pinjaman hanya bisa dihapus jika masih Draft atau sudah Dibatalkan.');
+      return;
+    }
 
-      setSelectedPinjaman(pinjaman);
-      setIsDeleteDialogOpen(true);
-    },
-    [],
-  );
+    setSelectedPinjaman(pinjaman);
+    setIsDeleteDialogOpen(true);
+  }, []);
 
   const duplicateNameForUser = useMemo(() => {
     const idUser = normalizeSearchText(formData.id_user);
@@ -381,7 +375,7 @@ export default function useManajemenPinjamanViewModel() {
     }
 
     if (!normalizeText(formData.status_pinjaman)) {
-      AppMessage.warning('Status pengajuan wajib dipilih.');
+      AppMessage.warning('Status pinjaman wajib dipilih.');
       return false;
     }
 
@@ -446,7 +440,7 @@ export default function useManajemenPinjamanViewModel() {
 
     const payload = buildEditPayload();
     if (!payload) {
-      AppMessage.warning('Payload pinjaman tidak valid.');
+      AppMessage.warning('Data pinjaman belum lengkap atau tidak sesuai.');
       return;
     }
 
@@ -476,7 +470,7 @@ export default function useManajemenPinjamanViewModel() {
     }
 
     if (!canDeletePinjamanItem(resolvedSelectedPinjaman)) {
-      AppMessage.warning('Pinjaman hanya bisa dihapus jika statusnya DRAFT atau DIBATALKAN.');
+      AppMessage.warning('Pinjaman hanya bisa dihapus jika masih Draft atau sudah Dibatalkan.');
       return;
     }
 
@@ -535,7 +529,7 @@ export default function useManajemenPinjamanViewModel() {
     [totalAktif, totalLunas, totalNominalAktif],
   );
 
-  const statusFieldHint = useMemo(() => 'Cicilan hanya digenerate saat status pinjaman disimpan sebagai AKTIF.', []);
+  const statusFieldHint = useMemo(() => 'Cicilan akan dibuat otomatis saat status pinjaman diubah menjadi Aktif.', []);
 
   const isStatusOptionDisabled = useCallback(() => false, []);
 
