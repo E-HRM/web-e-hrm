@@ -4,6 +4,7 @@ import CreateModalSection from './components_transaksi_konsultan/CreateModalSect
 import DeleteModalSection from './components_transaksi_konsultan/DeleteModalSection';
 import EditModalSection from './components_transaksi_konsultan/EditModalSection';
 import HeaderSection from './components_transaksi_konsultan/HeaderSection';
+import ImportModalSection from './components_transaksi_konsultan/ImportModalSection';
 import PayoutInfoSection from './components_transaksi_konsultan/PayoutInfoSection';
 import ShareInfoSection from './components_transaksi_konsultan/ShareInfoSection';
 import SummarySection from './components_transaksi_konsultan/SummarySection';
@@ -27,6 +28,7 @@ export default function TransaksiKonsultanContent() {
       <CreateModalSection vm={vm} />
       <EditModalSection vm={vm} />
       <DeleteModalSection vm={vm} />
+      <ImportModalSection vm={vm} />
     </div>
   );
 }

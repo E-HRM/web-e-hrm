@@ -46,8 +46,8 @@ export default function DetailModalSection({ vm }) {
             />
 
             <DetailField
-              label='Tarif Pajak TER'
-              value={vm.formatTarifPajakLabel(vm.selectedProfil.tarif_pajak_ter, vm.selectedProfil.id_tarif_pajak_ter)}
+              label='Tunjangan BPJS'
+              value={vm.formatCurrency(vm.selectedProfil.tunjangan_bpjs ?? 0)}
             />
           </div>
 

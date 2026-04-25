@@ -282,6 +282,7 @@ export function buildSelect() {
     berlaku_mulai_tarif_snapshot: true,
     berlaku_sampai_tarif_snapshot: true,
     gaji_pokok_snapshot: true,
+    tunjangan_bpjs_snapshot: true,
     total_pendapatan_bruto: true,
     total_potongan: true,
     pph21_nominal: true,
@@ -351,6 +352,7 @@ export function buildSelect() {
       select: {
         id_profil_payroll: true,
         gaji_pokok: true,
+        tunjangan_bpjs: true,
         jenis_hubungan_kerja: true,
         payroll_aktif: true,
       },
@@ -417,7 +419,6 @@ function buildSlipItemSelect() {
     arah_komponen: true,
     nama_komponen: true,
     nominal: true,
-    kena_pajak: true,
     urutan_tampil: true,
     catatan: true,
     created_at: true,
@@ -428,7 +429,6 @@ function buildSlipItemSelect() {
         id_definisi_komponen_payroll: true,
         nama_komponen: true,
         arah_komponen: true,
-        kena_pajak_default: true,
         tipe_komponen: {
           select: {
             id_tipe_komponen_payroll: true,
@@ -739,23 +739,11 @@ export async function ensureProfilPayrollExists(id_user) {
     select: {
       id_profil_payroll: true,
       id_user: true,
-      id_tarif_pajak_ter: true,
       jenis_hubungan_kerja: true,
       gaji_pokok: true,
+      tunjangan_bpjs: true,
       payroll_aktif: true,
       deleted_at: true,
-      tarif_pajak_ter: {
-        select: {
-          id_tarif_pajak_ter: true,
-          kode_kategori_pajak: true,
-          persen_tarif: true,
-          penghasilan_dari: true,
-          penghasilan_sampai: true,
-          berlaku_mulai: true,
-          berlaku_sampai: true,
-          deleted_at: true,
-        },
-      },
     },
   });
 }

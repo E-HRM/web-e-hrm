@@ -90,7 +90,7 @@
  *         name: orderBy
  *         schema:
  *           type: string
- *           enum: [created_at, updated_at, nama_pinjaman, nominal_pinjaman, nominal_cicilan, sisa_saldo, tanggal_mulai, tanggal_selesai, status_pinjaman]
+ *           enum: [created_at, updated_at, nama_pinjaman, nominal_pinjaman, tenor_bulan, sisa_saldo, tanggal_mulai, tanggal_selesai, status_pinjaman]
  *           default: created_at
  *         description: Kolom pengurutan.
  *       - in: query
@@ -153,7 +153,7 @@
  *               - id_user
  *               - nama_pinjaman
  *               - nominal_pinjaman
- *               - nominal_cicilan
+ *               - tenor_bulan
  *               - tanggal_mulai
  *             properties:
  *               id_user:
@@ -164,9 +164,10 @@
  *               nominal_pinjaman:
  *                 type: string
  *                 example: '10000000.00'
- *               nominal_cicilan:
- *                 type: string
- *                 example: '1000000.00'
+ *               tenor_bulan:
+ *                 type: integer
+ *                 minimum: 1
+ *                 example: 10
  *               tanggal_mulai:
  *                 type: string
  *                 format: date
@@ -258,8 +259,12 @@
  *         nominal_pinjaman:
  *           type: string
  *           example: '10000000.00'
+ *         tenor_bulan:
+ *           type: integer
+ *           example: 10
  *         nominal_cicilan:
  *           type: string
+ *           description: Nilai hasil hitung `nominal_pinjaman / tenor_bulan`, bukan kolom database.
  *           example: '1000000.00'
  *         sisa_saldo:
  *           type: string

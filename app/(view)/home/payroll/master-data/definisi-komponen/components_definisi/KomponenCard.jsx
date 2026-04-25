@@ -53,13 +53,7 @@ export default function KomponenCard({ komponen, onDetail, onEdit, onDelete, for
             </AppTypography.Text>
           </div>
 
-          <div className='mb-3 grid grid-cols-2 gap-2'>
-            <DotInfo
-              active={komponen.kena_pajak_default}
-              label='Kena Pajak'
-              activeClassName='bg-blue-500'
-            />
-
+          <div className='mb-3 grid grid-cols-1 gap-2'>
             <DotInfo
               active={komponen.berulang_default}
               label='Berulang'

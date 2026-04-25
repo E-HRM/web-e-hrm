@@ -136,8 +136,9 @@ async function deleteBuktiBayarFromSupabase(publicUrl) {
 
 function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
   const existingPph21 = Number(existing?.pph21_nominal || 0);
+  const existingTunjanganBpjs = Number(existing?.tunjangan_bpjs_snapshot || 0);
   const existingTotalPotongan = Number(existing?.total_potongan || 0);
-  const existingOtherPotongan = Math.max(existingTotalPotongan - existingPph21, 0);
+  const existingOtherPotongan = Math.max(existingTotalPotongan - existingPph21 - existingTunjanganBpjs, 0);
   const statusPayroll = String(options?.statusPayroll ?? body?.status_payroll ?? existing?.status_payroll ?? 'DRAFT')
     .trim()
     .toUpperCase();
@@ -145,9 +146,10 @@ function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
 
   const totalPendapatanBruto = parseNonNegativeDecimal(body?.total_pendapatan_bruto ?? body?.total_bruto_kena_pajak ?? existing?.total_pendapatan_bruto ?? '0', 'total_pendapatan_bruto');
   const persenTarifSnapshot = options?.persenTarifSnapshot ?? existing?.persen_tarif_snapshot ?? body?.persen_tarif_snapshot ?? '0';
+  const tunjanganBpjsSnapshot = parseNonNegativeDecimal(options?.tunjanganBpjsSnapshot ?? body?.tunjangan_bpjs_snapshot ?? existing?.tunjangan_bpjs_snapshot ?? '0', 'tunjangan_bpjs_snapshot');
   const pph21Nominal = parseNonNegativeDecimal(computePph21NominalFromSnapshot(totalPendapatanBruto, persenTarifSnapshot), 'pph21_nominal');
   const totalPotonganLain = parseNonNegativeDecimal(body?.total_potongan_lain ?? existingOtherPotongan, 'total_potongan_lain');
-  const totalPotongan = parseNonNegativeDecimal(body?.total_potongan ?? addDecimalStrings(pph21Nominal, totalPotonganLain), 'total_potongan');
+  const totalPotongan = parseNonNegativeDecimal(addDecimalStrings(pph21Nominal, totalPotonganLain, tunjanganBpjsSnapshot), 'total_potongan');
   const pendapatanBersih = computePendapatanBersihFromTotals(totalPendapatanBruto, totalPotongan, {
     allowNegative: allowNegativePendapatanBersih,
   });
@@ -206,18 +208,23 @@ async function resolveUpdatePayload(existing, body = {}) {
   let berlaku_mulai_tarif_snapshot = existing.berlaku_mulai_tarif_snapshot;
   let berlaku_sampai_tarif_snapshot = existing.berlaku_sampai_tarif_snapshot;
   let gaji_pokok_snapshot = existing.gaji_pokok_snapshot;
+  let tunjangan_bpjs_snapshot = existing.tunjangan_bpjs_snapshot;
 
   if (shouldRefreshSnapshot) {
     const profilPayroll = await ensureProfilPayrollExists(nextUserId);
 
+    if (!profilPayroll) {
+      return { error: NextResponse.json({ message: 'Profil payroll aktif untuk user ini belum tersedia.' }, { status: 404 }) };
+    }
+
     tarifPajakTer = requestedTarifId
       ? await ensureTarifPajakTerExists(requestedTarifId)
-      : profilPayroll?.id_tarif_pajak_ter
-        ? await ensureTarifPajakTerExists(profilPayroll.id_tarif_pajak_ter)
+      : existing.id_tarif_pajak_ter
+        ? await ensureTarifPajakTerExists(existing.id_tarif_pajak_ter)
         : null;
 
     if (!tarifPajakTer) {
-      return { error: NextResponse.json({ message: 'Tarif pajak TER untuk user ini belum tersedia.' }, { status: 404 }) };
+      return { error: NextResponse.json({ message: 'Tarif pajak TER wajib dipilih untuk payroll karyawan ini.' }, { status: 400 }) };
     }
 
     id_profil_payroll = profilPayroll?.id_profil_payroll || existing.id_profil_payroll;
@@ -243,10 +250,17 @@ async function resolveUpdatePayload(existing, body = {}) {
     berlaku_mulai_tarif_snapshot = tarifPajakTer.berlaku_mulai;
     berlaku_sampai_tarif_snapshot = tarifPajakTer.berlaku_sampai;
     gaji_pokok_snapshot = parseNonNegativeDecimal(profilPayroll?.gaji_pokok ?? existing.gaji_pokok_snapshot ?? '0', 'gaji_pokok_snapshot');
+    tunjangan_bpjs_snapshot = parseNonNegativeDecimal(profilPayroll?.tunjangan_bpjs ?? existing.tunjangan_bpjs_snapshot ?? '0', 'tunjangan_bpjs_snapshot');
   }
 
-  const totals = resolveDraftDecimalStrings(body, existing, {
+  const totalInput = {
+    ...body,
+    ...(!hasOwn(body, 'total_pendapatan_bruto') && !hasOwn(body, 'total_bruto_kena_pajak') && shouldRefreshSnapshot ? { total_pendapatan_bruto: gaji_pokok_snapshot } : {}),
+  };
+
+  const totals = resolveDraftDecimalStrings(totalInput, existing, {
     persenTarifSnapshot: persen_tarif_snapshot,
+    tunjanganBpjsSnapshot: tunjangan_bpjs_snapshot,
   });
   const statusFields = normalizeStatusRelatedFields(body, existing);
 
@@ -269,6 +283,7 @@ async function resolveUpdatePayload(existing, body = {}) {
       berlaku_mulai_tarif_snapshot,
       berlaku_sampai_tarif_snapshot,
       gaji_pokok_snapshot,
+      tunjangan_bpjs_snapshot,
       bank_name:
         normalizeNullableString(body?.bank_name, 'bank_name', 50) ||
         normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) ||

@@ -67,8 +67,6 @@
  *                 type: string
  *               nominal:
  *                 type: number
- *               kena_pajak:
- *                 type: boolean
  *               urutan_tampil:
  *                 type: integer
  *                 minimum: 0

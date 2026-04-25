@@ -101,7 +101,6 @@ function createInitialItemKomponenForm() {
     tipe_komponen: "",
     arah_komponen: "PEMASUKAN",
     nominal: 0,
-    kena_pajak: false,
     urutan_tampil: 0,
     catatan: "",
   };
@@ -189,7 +188,6 @@ function normalizeDefinition(item) {
     nama_komponen: normalizeText(item.nama_komponen),
     tipe_komponen: normalizeUpperText(tipeKomponen),
     arah_komponen: normalizeUpperText(item.arah_komponen),
-    kena_pajak_default: Boolean(item.kena_pajak_default),
     aktif: Boolean(item.aktif),
     deleted_at: item.deleted_at || null,
   };
@@ -341,7 +339,6 @@ function buildPayload({ payrollId, formData, usingDefinition }) {
     payload.nama_komponen = normalizeText(formData.nama_komponen);
     payload.tipe_komponen = normalizeUpperText(formData.tipe_komponen);
     payload.arah_komponen = normalizeUpperText(formData.arah_komponen);
-    payload.kena_pajak = Boolean(formData.kena_pajak);
   }
 
   return payload;
@@ -598,15 +595,10 @@ export default function useItemKomponenPayrollViewModel() {
       .filter((item) => item.arah_komponen === "POTONGAN")
       .reduce((sum, item) => sum + parseNumber(item.nominal), 0);
 
-    const totalKenaPajak = items
-      .filter((item) => item.kena_pajak)
-      .reduce((sum, item) => sum + parseNumber(item.nominal), 0);
-
     return {
       totalItems,
       totalPemasukan,
       totalPotongan,
-      totalKenaPajak,
       pendapatanBersih:
         parseNumber(currentPayroll.pendapatan_bersih) ||
         Math.max(totalPemasukan - totalPotongan, 0),
@@ -671,7 +663,6 @@ export default function useItemKomponenPayrollViewModel() {
               nama_komponen: definition.nama_komponen,
               tipe_komponen: definition.tipe_komponen,
               arah_komponen: definition.arah_komponen,
-              kena_pajak: Boolean(definition.kena_pajak_default),
             }
           : {}),
       }));
@@ -717,7 +708,6 @@ export default function useItemKomponenPayrollViewModel() {
       tipe_komponen: item.tipe_komponen || "",
       arah_komponen: item.arah_komponen || "PEMASUKAN",
       nominal: parseNumber(item.nominal),
-      kena_pajak: Boolean(item.kena_pajak),
       urutan_tampil: Number.isFinite(Number(item.urutan_tampil))
         ? Number(item.urutan_tampil)
         : 0,

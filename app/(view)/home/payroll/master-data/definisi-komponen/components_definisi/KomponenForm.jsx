@@ -96,14 +96,7 @@ export default function KomponenForm({
         </div>
       ) : null}
 
-      <div className='grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3'>
-        <SwitchCard
-          label='Kena Pajak'
-          checked={formData.kena_pajak_default}
-          onChange={(checked) => setFormValue('kena_pajak_default', checked)}
-          disabled={disabled}
-        />
-
+      <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
         <SwitchCard
           label='Berulang'
           checked={formData.berulang_default}

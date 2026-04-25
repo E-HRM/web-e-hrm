@@ -44,7 +44,7 @@ export default function PayrollKaryawanContent() {
       status_payroll: payroll.status_payroll || '',
       periode_status: payroll.periode_status || '',
       total_pendapatan_bruto: String(payroll.total_bruto_kena_pajak ?? ''),
-      total_potongan: String((payroll.total_pajak || 0) + (payroll.total_potongan_lain || 0)),
+      total_potongan: String((payroll.total_pajak || 0) + (payroll.total_potongan_lain || 0) + (payroll.tunjangan_bpjs_snapshot || 0)),
       pph21_nominal: String(payroll.total_pajak ?? ''),
       pendapatan_bersih: String(payroll.total_dibayarkan ?? ''),
     });

@@ -16,7 +16,6 @@ import {
   enrichItem,
   findDuplicateIdempotencyKey,
   guardRole,
-  normalizeBoolean,
   normalizeDecimalString,
   normalizeEnum,
   normalizeNullableString,
@@ -178,17 +177,6 @@ export async function GET(req) {
       (searchParams.get("deletedOnly") || "").toLowerCase(),
     );
 
-    let kena_pajak;
-    if (
-      searchParams.get("kena_pajak") !== null &&
-      searchParams.get("kena_pajak") !== ""
-    ) {
-      kena_pajak = normalizeBoolean(
-        searchParams.get("kena_pajak"),
-        "kena_pajak",
-      );
-    }
-
     const orderByParam = (
       searchParams.get("orderBy") || "urutan_tampil"
     ).trim();
@@ -209,7 +197,6 @@ export async function GET(req) {
       ...(kunci_idempoten ? { kunci_idempoten } : {}),
       ...(tipe_komponen ? { tipe_komponen } : {}),
       ...(arah_komponen ? { arah_komponen } : {}),
-      ...(typeof kena_pajak === "boolean" ? { kena_pajak } : {}),
       ...(id_periode_payroll || id_user || status_payroll
         ? {
             payroll_karyawan: {
@@ -347,11 +334,6 @@ export async function POST(req) {
                 maxIntegerDigits: DECIMAL_MAX_INTEGER_DIGITS,
               },
             ),
-          }
-        : {}),
-      ...(body?.kena_pajak !== undefined
-        ? {
-            kena_pajak: normalizeBoolean(body?.kena_pajak, "kena_pajak"),
           }
         : {}),
       ...(body?.urutan_tampil !== undefined

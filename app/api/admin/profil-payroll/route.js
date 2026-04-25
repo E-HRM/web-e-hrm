@@ -7,7 +7,7 @@ import { authenticateRequest } from '@/app/utils/auth/authUtils';
 const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
-const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'tanggal_mulai_payroll', 'jenis_hubungan_kerja', 'id_tarif_pajak_ter', 'payroll_aktif']);
+const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'tanggal_mulai_payroll', 'jenis_hubungan_kerja', 'gaji_pokok', 'tunjangan_bpjs', 'payroll_aktif']);
 
 const JENIS_HUBUNGAN_KERJA_VALUES = new Set(['FREELANCE', 'INTERNSHIP', 'PKWT', 'PKWTT']);
 
@@ -99,18 +99,6 @@ function parseOptionalDateOnly(value, fieldName) {
   return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
 }
 
-async function ensureTarifPajakTerExists(id_tarif_pajak_ter) {
-  return db.tarifPajakTER.findFirst({
-    where: {
-      id_tarif_pajak_ter,
-      deleted_at: null,
-    },
-    select: {
-      id_tarif_pajak_ter: true,
-    },
-  });
-}
-
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
 
@@ -154,9 +142,9 @@ function buildSelect() {
   return {
     id_profil_payroll: true,
     id_user: true,
-    id_tarif_pajak_ter: true,
     jenis_hubungan_kerja: true,
     gaji_pokok: true,
+    tunjangan_bpjs: true,
     payroll_aktif: true,
     tanggal_mulai_payroll: true,
     catatan: true,
@@ -195,18 +183,6 @@ function buildSelect() {
         },
       },
     },
-    tarif_pajak_ter: {
-      select: {
-        id_tarif_pajak_ter: true,
-        kode_kategori_pajak: true,
-        penghasilan_dari: true,
-        penghasilan_sampai: true,
-        persen_tarif: true,
-        berlaku_mulai: true,
-        berlaku_sampai: true,
-        deleted_at: true,
-      },
-    },
   };
 }
 
@@ -215,13 +191,11 @@ function buildSearchClauses(search) {
 
   return [
     { catatan: { contains: search } },
-    { id_tarif_pajak_ter: { contains: search } },
     { user: { is: { nama_pengguna: { contains: search } } } },
     { user: { is: { email: { contains: search } } } },
     { user: { is: { nomor_induk_karyawan: { contains: search } } } },
     { user: { is: { jabatan: { is: { nama_jabatan: { contains: search } } } } } },
     { user: { is: { departement: { is: { nama_departement: { contains: search } } } } } },
-    { tarif_pajak_ter: { is: { kode_kategori_pajak: { contains: search } } } },
   ];
 }
 
@@ -240,7 +214,6 @@ export async function GET(req) {
 
     const search = String(searchParams.get('search') || '').trim();
     const id_user = String(searchParams.get('id_user') || '').trim();
-    const id_tarif_pajak_ter = String(searchParams.get('id_tarif_pajak_ter') || '').trim();
     const includeDeleted = searchParams.get('includeDeleted') === '1';
 
     const jenis_hubungan_kerja = normalizeEnum(searchParams.get('jenis_hubungan_kerja'));
@@ -269,7 +242,6 @@ export async function GET(req) {
     const where = {
       ...(includeDeleted ? {} : { deleted_at: null }),
       ...(id_user ? { id_user } : {}),
-      ...(id_tarif_pajak_ter ? { id_tarif_pajak_ter } : {}),
       ...(jenis_hubungan_kerja ? { jenis_hubungan_kerja } : {}),
       ...(typeof payroll_aktif === 'boolean' ? { payroll_aktif } : {}),
       ...(searchClauses.length > 0 ? { OR: searchClauses } : {}),
@@ -316,7 +288,6 @@ export async function POST(req) {
     const body = await req.json();
 
     const id_user = normalizeRequiredId(body?.id_user, 'id_user');
-    const id_tarif_pajak_ter = normalizeRequiredId(body?.id_tarif_pajak_ter, 'id_tarif_pajak_ter');
     const jenis_hubungan_kerja = normalizeEnum(body?.jenis_hubungan_kerja);
 
     if (!jenis_hubungan_kerja) {
@@ -332,30 +303,19 @@ export async function POST(req) {
       );
     }
 
-    const [user, tarifPajakTer] = await Promise.all([
-      db.user.findFirst({
-        where: {
-          id_user,
-          deleted_at: null,
-        },
-        select: {
-          id_user: true,
-        },
-      }),
-      ensureTarifPajakTerExists(id_tarif_pajak_ter),
-    ]);
+    const user = await db.user.findFirst({
+      where: {
+        id_user,
+        deleted_at: null,
+      },
+      select: {
+        id_user: true,
+      },
+    });
 
     if (!user) {
       return NextResponse.json({ message: 'User tidak ditemukan atau sudah dihapus.' }, { status: 404 });
     }
-
-    if (!tarifPajakTer) {
-      return NextResponse.json({ message: 'Tarif pajak TER tidak ditemukan atau sudah dihapus.' }, { status: 404 });
-    }
-
-    const catatan = normalizeNullableString(body?.catatan);
-    const tanggal_mulai_payroll = parseOptionalDateOnly(body?.tanggal_mulai_payroll, 'tanggal_mulai_payroll');
-    const payroll_aktif = body?.payroll_aktif === undefined ? undefined : normalizeBoolean(body?.payroll_aktif, 'payroll_aktif');
 
     const existing = await db.profilPayroll.findFirst({
       where: {
@@ -369,9 +329,9 @@ export async function POST(req) {
 
     const payload = {
       id_user,
-      id_tarif_pajak_ter,
       jenis_hubungan_kerja,
       gaji_pokok: parseNonNegativeDecimal(body?.gaji_pokok ?? '0', 'gaji_pokok'),
+      tunjangan_bpjs: parseNonNegativeDecimal(body?.tunjangan_bpjs ?? '0', 'tunjangan_bpjs'),
       payroll_aktif: body?.payroll_aktif === undefined ? true : normalizeBoolean(body.payroll_aktif, 'payroll_aktif'),
       tanggal_mulai_payroll: parseOptionalDateOnly(body?.tanggal_mulai_payroll, 'tanggal_mulai_payroll'),
       catatan: normalizeNullableString(body?.catatan),

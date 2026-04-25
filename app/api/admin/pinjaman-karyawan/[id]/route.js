@@ -10,7 +10,7 @@ const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const STATUS_PINJAMAN_VALUES = new Set(['DRAFT', 'AKTIF', 'LUNAS', 'DIBATALKAN']);
 const DECIMAL_SCALE = 2;
-const { buildGeneratedCicilanSchedule } = pinjamanCicilanSchedule;
+const { buildGeneratedCicilanSchedule, calculateNominalCicilan } = pinjamanCicilanSchedule;
 
 const normRole = (role) =>
   String(role || '')
@@ -116,6 +116,26 @@ function normalizeDecimalString(value, fieldName, scale, options = {}) {
   return normalized;
 }
 
+function normalizePositiveInteger(value, fieldName) {
+  if (value === undefined || value === null || value === '') {
+    throw new Error(`Field '${fieldName}' wajib diisi.`);
+  }
+
+  const raw = String(value).trim();
+
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`Field '${fieldName}' harus berupa bilangan bulat lebih besar dari 0.`);
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`Field '${fieldName}' harus berupa bilangan bulat lebih besar dari 0.`);
+  }
+
+  return parsed;
+}
+
 function parseDateOnly(value, fieldName) {
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
@@ -134,7 +154,7 @@ function buildSelect() {
     id_user: true,
     nama_pinjaman: true,
     nominal_pinjaman: true,
-    nominal_cicilan: true,
+    tenor_bulan: true,
     sisa_saldo: true,
     tanggal_mulai: true,
     tanggal_selesai: true,
@@ -180,17 +200,28 @@ function buildSelect() {
   };
 }
 
-function validateLoanState({ nominal_pinjaman, nominal_cicilan, sisa_saldo, tanggal_mulai, tanggal_selesai, status_pinjaman }) {
+function enrichPinjaman(data) {
+  if (!data) return data;
+
+  return {
+    ...data,
+    nominal_cicilan: calculateNominalCicilan({
+      nominal_pinjaman: data.nominal_pinjaman,
+      tenor_bulan: data.tenor_bulan,
+    }),
+  };
+}
+
+function validateLoanState({ nominal_pinjaman, tenor_bulan, sisa_saldo, tanggal_mulai, tanggal_selesai, status_pinjaman }) {
   const nominalPinjaman = decimalToScaledBigInt(nominal_pinjaman, DECIMAL_SCALE);
-  const nominalCicilan = decimalToScaledBigInt(nominal_cicilan, DECIMAL_SCALE);
   const sisaSaldo = decimalToScaledBigInt(sisa_saldo, DECIMAL_SCALE);
 
   if (nominalPinjaman <= 0n) {
     throw new Error("Field 'nominal_pinjaman' harus lebih besar dari 0.");
   }
 
-  if (nominalCicilan <= 0n) {
-    throw new Error("Field 'nominal_cicilan' harus lebih besar dari 0.");
+  if (!Number.isInteger(Number(tenor_bulan)) || Number(tenor_bulan) <= 0) {
+    throw new Error("Field 'tenor_bulan' harus berupa bilangan bulat lebih besar dari 0.");
   }
 
   if (sisaSaldo < 0n) {
@@ -214,11 +245,11 @@ function validateLoanState({ nominal_pinjaman, nominal_cicilan, sisa_saldo, tang
   }
 }
 
-function buildPinjamanSynchronization({ nominal_pinjaman, nominal_cicilan, tanggal_mulai, status_pinjaman, existingTanggalSelesai = null }) {
+function buildPinjamanSynchronization({ nominal_pinjaman, tenor_bulan, tanggal_mulai, status_pinjaman, existingTanggalSelesai = null }) {
   if (status_pinjaman === 'AKTIF') {
     const generatedSchedule = buildGeneratedCicilanSchedule({
       nominal_pinjaman,
-      nominal_cicilan,
+      tenor_bulan,
       tanggal_mulai,
     });
 
@@ -304,7 +335,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ message: 'Pinjaman karyawan tidak ditemukan.' }, { status: 404 });
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data: enrichPinjaman(data) });
   } catch (err) {
     console.error('GET /api/admin/pinjaman-karyawan/[id] error:', err);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
@@ -329,7 +360,7 @@ export async function PUT(req, { params }) {
         id_user: true,
         nama_pinjaman: true,
         nominal_pinjaman: true,
-        nominal_cicilan: true,
+        tenor_bulan: true,
         sisa_saldo: true,
         tanggal_mulai: true,
         tanggal_selesai: true,
@@ -371,8 +402,8 @@ export async function PUT(req, { params }) {
       payload.nominal_pinjaman = normalizeDecimalString(body.nominal_pinjaman, 'nominal_pinjaman', DECIMAL_SCALE, { min: '0' });
     }
 
-    if (body?.nominal_cicilan !== undefined) {
-      payload.nominal_cicilan = normalizeDecimalString(body.nominal_cicilan, 'nominal_cicilan', DECIMAL_SCALE, { min: '0' });
+    if (body?.tenor_bulan !== undefined) {
+      payload.tenor_bulan = normalizePositiveInteger(body.tenor_bulan, 'tenor_bulan');
     }
 
     if (body?.tanggal_mulai !== undefined) {
@@ -395,13 +426,13 @@ export async function PUT(req, { params }) {
     }
 
     const nextNominalPinjaman = payload.nominal_pinjaman ?? existing.nominal_pinjaman;
-    const nextNominalCicilan = payload.nominal_cicilan ?? existing.nominal_cicilan;
+    const nextTenorBulan = payload.tenor_bulan ?? existing.tenor_bulan;
     const nextTanggalMulai = payload.tanggal_mulai ?? existing.tanggal_mulai;
     const nextStatusPinjaman = payload.status_pinjaman ?? existing.status_pinjaman;
 
     const synchronization = buildPinjamanSynchronization({
       nominal_pinjaman: nextNominalPinjaman,
-      nominal_cicilan: nextNominalCicilan,
+      tenor_bulan: nextTenorBulan,
       tanggal_mulai: nextTanggalMulai,
       status_pinjaman: nextStatusPinjaman,
       existingTanggalSelesai: existing.tanggal_selesai,
@@ -413,7 +444,7 @@ export async function PUT(req, { params }) {
 
     validateLoanState({
       nominal_pinjaman: nextNominalPinjaman,
-      nominal_cicilan: nextNominalCicilan,
+      tenor_bulan: nextTenorBulan,
       sisa_saldo: payload.sisa_saldo,
       tanggal_mulai: nextTanggalMulai,
       tanggal_selesai: payload.tanggal_selesai,
@@ -443,10 +474,12 @@ export async function PUT(req, { params }) {
         }
       }
 
-      return tx.pinjamanKaryawan.findUnique({
+      const data = await tx.pinjamanKaryawan.findUnique({
         where: { id_pinjaman_karyawan: id },
         select: buildSelect(),
       });
+
+      return enrichPinjaman(data);
     });
 
     const message =
@@ -549,7 +582,7 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({
         message: 'Pinjaman karyawan berhasil dihapus.',
         mode: 'soft',
-        data: deleted,
+        data: enrichPinjaman(deleted),
         cascade_summary: {
           cicilan_soft_deleted: affectedCicilan.count,
         },

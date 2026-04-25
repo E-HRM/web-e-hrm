@@ -97,7 +97,7 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
       ),
     },
     {
-      title: 'Pajak',
+      title: 'Potongan',
       key: 'total_pajak',
       render: (_, payroll) => (
         <div>
@@ -110,9 +110,16 @@ export default function PayrollKaryawanDataSection({ vm, buildPayslipHref }) {
 
           <AppTypography.Text
             size={12}
+            className='block text-gray-500'
+          >
+            PPh 21: {payroll.persen_pajak}%
+          </AppTypography.Text>
+
+          <AppTypography.Text
+            size={12}
             className='text-gray-500'
           >
-            {payroll.persen_pajak}%
+            BPJS: -{vm.formatCurrency(payroll.tunjangan_bpjs_snapshot)}
           </AppTypography.Text>
         </div>
       ),

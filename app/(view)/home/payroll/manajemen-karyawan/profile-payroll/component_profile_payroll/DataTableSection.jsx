@@ -99,15 +99,17 @@ export default function DataTableSection({ vm, hasFetchError }) {
       ),
     },
     {
-      title: 'Tarif Pajak TER',
-      key: 'tarif_pajak_ter',
-      width: 280,
-      render: (_, profil) => (
+      title: 'Tunjangan BPJS',
+      dataIndex: 'tunjangan_bpjs',
+      key: 'tunjangan_bpjs',
+      width: 180,
+      render: (value) => (
         <AppTypography.Text
           size={14}
+          weight={700}
           className='text-gray-900'
         >
-          {vm.formatTarifPajakLabel(profil.tarif_pajak_ter, profil.id_tarif_pajak_ter)}
+          {vm.formatCurrency(value ?? 0)}
         </AppTypography.Text>
       ),
     },
@@ -183,7 +185,7 @@ export default function DataTableSection({ vm, hasFetchError }) {
         showSizeChanger: true,
         showQuickJumper: true,
       }}
-      scroll={{ x: 1220 }}
+      scroll={{ x: 1120 }}
       totalLabel='profil payroll'
       emptyTitle={vm.loading ? 'Memuat profil payroll...' : 'Tidak ada data profil payroll'}
       emptyDescription={vm.loading ? 'Data karyawan dan konfigurasi payroll sedang disiapkan.' : 'Coba ubah filter atau tambahkan profil payroll baru.'}

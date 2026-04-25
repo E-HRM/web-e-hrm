@@ -415,6 +415,8 @@ export const ApiEndpoints = {
   GetTransaksiKonsultanById: (id) => `${API_TRANSAKSI_KONSULTAN}/${id}`,
   UpdateTransaksiKonsultan: (id) => `${API_TRANSAKSI_KONSULTAN}/${id}`,
   DeleteTransaksiKonsultan: (id, qsObj = {}) => `${API_TRANSAKSI_KONSULTAN}/${id}${buildQS(qsObj)}`,
+  PreviewImportTransaksiKonsultan: () => `${API_TRANSAKSI_KONSULTAN}/import/preview`,
+  CommitImportTransaksiKonsultan: () => `${API_TRANSAKSI_KONSULTAN}/import/commit`,
 
   GetPayoutKonsultan: (qsObj = {}) => `${API_PAYOUT_KONSULTAN}${buildQS(qsObj)}`,
   CreatePayoutKonsultan: () => API_PAYOUT_KONSULTAN,

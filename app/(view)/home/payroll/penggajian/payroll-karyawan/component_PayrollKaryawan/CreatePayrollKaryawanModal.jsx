@@ -39,6 +39,19 @@ function CreatePayrollForm({ vm }) {
           selectClassName='!rounded-lg'
           hint={vm.employeeSelectionHint}
         />
+
+        <AppSelect
+          label='Tarif Pajak TER'
+          required
+          value={vm.formData.id_tarif_pajak_ter || undefined}
+          onChange={(value) => vm.handleTarifPajakChange(value)}
+          options={vm.tarifPajakOptions}
+          placeholder='Pilih tarif TER'
+          loading={vm.isTarifPajakLoading}
+          disabled={vm.isTarifPajakLoading}
+          selectClassName='!rounded-lg'
+          hint={vm.tarifPajakSelectionHint}
+        />
       </div>
 
       {vm.formData.id_user ? (
@@ -62,7 +75,7 @@ function CreatePayrollForm({ vm }) {
             size={12}
             className='block text-blue-700 mt-1'
           >
-            Gaji pokok awal: {vm.formatCurrency(vm.formData.total_pendapatan_tetap)}.
+            Gaji pokok awal: {vm.formatCurrency(vm.formData.gaji_pokok_snapshot)}. Tunjangan BPJS sebagai potongan: {vm.formatCurrency(vm.formData.tunjangan_bpjs_snapshot)}.
           </AppTypography.Text>
 
           <AppTypography.Text
@@ -102,8 +115,16 @@ function CreatePayrollForm({ vm }) {
         />
 
         <AppInput
-          label='Tarif Pajak TER'
-          value={vm.selectedEmployeeTarifLabel === '-' ? '' : vm.selectedEmployeeTarifLabel}
+          label='Gaji Pokok'
+          value={vm.formData.id_user ? vm.formatCurrency(vm.formData.gaji_pokok_snapshot) : ''}
+          placeholder='Akan terisi otomatis'
+          disabled
+          inputClassName='!rounded-lg'
+        />
+
+        <AppInput
+          label='Tunjangan BPJS (Potongan)'
+          value={vm.formData.id_user ? vm.formatCurrency(vm.formData.tunjangan_bpjs_snapshot) : ''}
           placeholder='Akan terisi otomatis'
           disabled
           inputClassName='!rounded-lg'

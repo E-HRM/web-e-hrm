@@ -134,8 +134,8 @@ export default function PinjamanListSection({ vm }) {
                   />
 
                   <DetailField
-                    label='Jumlah Cicilan'
-                    value={`${pinjaman.jumlah_cicilan || 0} item`}
+                    label='Tenor'
+                    value={`${pinjaman.tenor_bulan || 0} bulan`}
                   />
                 </div>
 

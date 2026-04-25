@@ -946,7 +946,6 @@ async function getDefinitionForPayoutPosting(tx, id_definisi_komponen_payroll) {
       id_tipe_komponen_payroll: true,
       nama_komponen: true,
       arah_komponen: true,
-      kena_pajak_default: true,
       aktif: true,
       deleted_at: true,
       tipe_komponen: {
@@ -1040,7 +1039,6 @@ export async function upsertPayrollItemForPayout(tx, payout, actor = null, optio
       .toUpperCase(),
     nama_komponen: buildPayoutPayrollItemName(payout, definisi),
     nominal: String(payout.nominal_dibayarkan),
-    kena_pajak: definisi?.kena_pajak_default ?? false,
     urutan_tampil: options?.urutan_tampil ?? existingItem?.urutan_tampil ?? 900,
     catatan: payout.catatan || buildPayoutPayrollItemNote(payout),
     deleted_at: null,

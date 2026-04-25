@@ -149,6 +149,13 @@ function PinjamanInfo({ record, vm }) {
         size={12}
         className='block text-gray-500'
       >
+        Tenor {record.pinjaman_karyawan?.tenor_bulan || 0} bulan
+      </AppTypography.Text>
+
+      <AppTypography.Text
+        size={12}
+        className='block text-gray-500'
+      >
         Sisa saldo {formatCurrencySafe(vm, record.pinjaman_karyawan?.sisa_saldo, 'belum tersedia')}
       </AppTypography.Text>
     </div>

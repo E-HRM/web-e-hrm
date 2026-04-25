@@ -38,28 +38,55 @@ function addMonthsPreservingDay(baseDate, monthOffset) {
   return new Date(Date.UTC(targetMonthStart.getUTCFullYear(), targetMonthStart.getUTCMonth(), Math.min(baseDate.getUTCDate(), lastDayOfTargetMonth)));
 }
 
-function buildGeneratedCicilanSchedule({ nominal_pinjaman, nominal_cicilan, tanggal_mulai }) {
-  if (!(tanggal_mulai instanceof Date) || Number.isNaN(tanggal_mulai.getTime())) {
-    throw new Error("Field 'tanggal_mulai' harus berupa tanggal yang valid.");
+function normalizeTenorBulan(tenor_bulan) {
+  const parsed = Number(tenor_bulan);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error("Field 'tenor_bulan' harus berupa bilangan bulat lebih besar dari 0.");
   }
 
+  return parsed;
+}
+
+function calculateNominalCicilan({ nominal_pinjaman, tenor_bulan }) {
   const totalPinjaman = decimalToScaledBigInt(nominal_pinjaman, DECIMAL_SCALE);
-  const nominalPerCicilan = decimalToScaledBigInt(nominal_cicilan, DECIMAL_SCALE);
+  const tenorBulan = normalizeTenorBulan(tenor_bulan);
+  const nominalPerCicilan = totalPinjaman / BigInt(tenorBulan);
 
   if (totalPinjaman <= 0n) {
     throw new Error("Field 'nominal_pinjaman' harus lebih besar dari 0.");
   }
 
   if (nominalPerCicilan <= 0n) {
-    throw new Error("Field 'nominal_cicilan' harus lebih besar dari 0.");
+    throw new Error("Field 'tenor_bulan' terlalu besar untuk 'nominal_pinjaman'.");
+  }
+
+  return scaledBigIntToDecimalString(nominalPerCicilan, DECIMAL_SCALE);
+}
+
+function buildGeneratedCicilanSchedule({ nominal_pinjaman, tenor_bulan, tanggal_mulai }) {
+  if (!(tanggal_mulai instanceof Date) || Number.isNaN(tanggal_mulai.getTime())) {
+    throw new Error("Field 'tanggal_mulai' harus berupa tanggal yang valid.");
+  }
+
+  const totalPinjaman = decimalToScaledBigInt(nominal_pinjaman, DECIMAL_SCALE);
+  const tenorBulan = normalizeTenorBulan(tenor_bulan);
+  const nominalPerCicilan = totalPinjaman / BigInt(tenorBulan);
+
+  if (totalPinjaman <= 0n) {
+    throw new Error("Field 'nominal_pinjaman' harus lebih besar dari 0.");
+  }
+
+  if (nominalPerCicilan <= 0n) {
+    throw new Error("Field 'tenor_bulan' terlalu besar untuk 'nominal_pinjaman'.");
   }
 
   const cicilanDrafts = [];
   let remaining = totalPinjaman;
-  let monthOffset = 0;
 
-  while (remaining > 0n) {
-    const nominalTagihan = remaining > nominalPerCicilan ? nominalPerCicilan : remaining;
+  for (let monthOffset = 0; monthOffset < tenorBulan; monthOffset += 1) {
+    const isLastCicilan = monthOffset === tenorBulan - 1;
+    const nominalTagihan = isLastCicilan ? remaining : nominalPerCicilan;
 
     cicilanDrafts.push({
       jatuh_tempo: addMonthsPreservingDay(tanggal_mulai, monthOffset),
@@ -73,7 +100,6 @@ function buildGeneratedCicilanSchedule({ nominal_pinjaman, nominal_cicilan, tang
     });
 
     remaining -= nominalTagihan;
-    monthOffset += 1;
   }
 
   return {
@@ -85,6 +111,7 @@ function buildGeneratedCicilanSchedule({ nominal_pinjaman, nominal_cicilan, tang
 module.exports = {
   DECIMAL_SCALE,
   buildGeneratedCicilanSchedule,
+  calculateNominalCicilan,
   decimalToScaledBigInt,
   scaledBigIntToDecimalString,
   toDateOnlyComparable,

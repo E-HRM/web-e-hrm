@@ -25,7 +25,7 @@ export function createInitialPinjamanForm() {
     id_user: '',
     nama_pinjaman: '',
     nominal_pinjaman: 0,
-    nominal_cicilan: 0,
+    tenor_bulan: 0,
     tanggal_mulai: '',
     status_pinjaman: STATUS_PINJAMAN.DRAFT,
     catatan: '',
@@ -35,6 +35,15 @@ export function createInitialPinjamanForm() {
 export function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function calculateNominalCicilan(nominalPinjaman, tenorBulan) {
+  const total = toNumber(nominalPinjaman);
+  const tenor = Math.trunc(toNumber(tenorBulan));
+
+  if (total <= 0 || tenor <= 0) return 0;
+
+  return Math.floor(total * 100 / tenor) / 100;
 }
 
 export function toDateInputValue(value) {

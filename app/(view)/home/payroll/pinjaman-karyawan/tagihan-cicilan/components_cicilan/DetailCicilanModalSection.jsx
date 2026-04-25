@@ -387,10 +387,15 @@ export default function DetailCicilanModalSection({ vm }) {
             title='Snapshot Pinjaman'
             subtitle='Gambaran pinjaman asal tagihan untuk membantu validasi nominal cicilan.'
           >
-            <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+            <div className='grid grid-cols-1 md:grid-cols-4 gap-6'>
               <DetailField
                 label='Nominal Pinjaman'
                 value={formatCurrencySafe(vm, cicilan.pinjaman_karyawan?.nominal_pinjaman)}
+              />
+
+              <DetailField
+                label='Tenor'
+                value={`${cicilan.pinjaman_karyawan?.tenor_bulan || 0} bulan`}
               />
 
               <DetailField

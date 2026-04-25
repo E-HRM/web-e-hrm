@@ -279,12 +279,14 @@ export function PinjamanForm({ vm, formData, setFormValue, duplicateNameForUser,
         />
 
         <AppInput.Number
-          label='Cicilan per Bulan'
+          label='Tenor Bulan'
           required
-          min={0}
-          value={formData.nominal_cicilan}
-          onChange={(value) => setFormValue('nominal_cicilan', value ?? 0)}
-          placeholder='250000'
+          min={1}
+          precision={0}
+          step={1}
+          value={formData.tenor_bulan}
+          onChange={(value) => setFormValue('tenor_bulan', value ?? 0)}
+          placeholder='20'
           disabled={vm.isSubmitting}
           inputClassName='!rounded-lg'
         />

@@ -208,6 +208,91 @@ function buildActionLockReason(transaksi) {
   return 'Transaksi ini tidak dapat diproses.';
 }
 
+const KONSULTAN_MAPPING_ERROR_CODES = new Set(['KONSULTAN_EMPTY', 'KONSULTAN_NOT_FOUND', 'KONSULTAN_AMBIGUOUS']);
+const PRODUK_MAPPING_WARNING_CODES = new Set(['PRODUK_NOT_FOUND']);
+
+function getIssueMessage(issue) {
+  if (!issue) return '';
+  if (typeof issue === 'string') return issue;
+  return issue.message || '';
+}
+
+function resolveImportRowIssues(row) {
+  if (row?.selected === false) {
+    return {
+      errors: [],
+      warnings: [],
+      status: 'ignored',
+    };
+  }
+
+  const idUserKonsultan = String(row?.id_user_konsultan || '').trim();
+  const idProdukKonsultan = String(row?.id_jenis_produk_konsultan || '').trim();
+
+  const errors = Array.isArray(row?.errors)
+    ? row.errors.filter((item) => !KONSULTAN_MAPPING_ERROR_CODES.has(item?.code))
+    : [];
+  const warnings = Array.isArray(row?.warnings)
+    ? row.warnings.filter((item) => !PRODUK_MAPPING_WARNING_CODES.has(item?.code))
+    : [];
+
+  if (!row?.is_oss && !idUserKonsultan) {
+    errors.push({
+      code: 'KONSULTAN_NOT_SELECTED',
+      message: 'Konsultan wajib dipilih, kecuali untuk baris OSS.',
+    });
+  }
+
+  if (!idProdukKonsultan) {
+    warnings.push({
+      code: 'PRODUK_NOT_SELECTED',
+      message: 'Kategori/produk belum dipilih. Baris tetap bisa diimpor tanpa produk.',
+    });
+  }
+
+  return {
+    errors,
+    warnings,
+    status: errors.length ? 'error' : warnings.length ? 'warning' : 'valid',
+  };
+}
+
+function buildImportSummary(rows) {
+  return rows.reduce(
+    (summary, row) => {
+      if (row.selected === false) {
+        summary.ignored_rows += 1;
+        return summary;
+      }
+
+      summary.total_rows += 1;
+      summary.total_debit += toNumber(row.nominal_debit);
+      summary.total_kredit += toNumber(row.nominal_kredit);
+      summary.total_income += toNumber(row.total_income);
+      summary.total_share += toNumber(row.nominal_share);
+      summary.total_oss += toNumber(row.nominal_oss);
+
+      if (row.status === 'error') summary.error_rows += 1;
+      else if (row.status === 'warning') summary.warning_rows += 1;
+      else summary.valid_rows += 1;
+
+      return summary;
+    },
+    {
+      total_rows: 0,
+      valid_rows: 0,
+      warning_rows: 0,
+      error_rows: 0,
+      total_debit: 0,
+      total_kredit: 0,
+      total_income: 0,
+      total_share: 0,
+      total_oss: 0,
+      ignored_rows: 0,
+    },
+  );
+}
+
 export default function useTransaksiKonsultanViewModel() {
   const [filterPeriode, setFilterPeriode] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -217,6 +302,13 @@ export default function useTransaksiKonsultanViewModel() {
   const [formData, setFormData] = useState(createInitialTransaksiForm());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importRows, setImportRows] = useState([]);
+  const [importPreviewPage, setImportPreviewPage] = useState(1);
+  const [isImportPreviewing, setIsImportPreviewing] = useState(false);
+  const [isImportCommitting, setIsImportCommitting] = useState(false);
 
   const {
     data: periodeResponse,
@@ -354,10 +446,10 @@ export default function useTransaksiKonsultanViewModel() {
         konsultan,
         periode_konsultan: periode,
         jenis_produk: jenisProduk,
-        konsultan_display_name: getConsultantDisplayName(konsultan),
-        konsultan_identity: getConsultantIdentity(konsultan),
+        konsultan_display_name: konsultan ? getConsultantDisplayName(konsultan) : 'OSS',
+        konsultan_identity: konsultan ? getConsultantIdentity(konsultan) : 'Bagian perusahaan',
         konsultan_photo: getConsultantPhoto(konsultan),
-        konsultan_secondary_text: getConsultantSecondaryText(konsultan),
+        konsultan_secondary_text: konsultan ? getConsultantSecondaryText(konsultan) : 'Tanpa user konsultan',
         produk_display_name: getProdukDisplayName(jenisProduk),
         periode_label: formatPeriodeFromItem(periode),
       };
@@ -387,6 +479,30 @@ export default function useTransaksiKonsultanViewModel() {
     if (activePeriode.deleted_at) return false;
     return activePeriode.status_periode !== 'TERKUNCI';
   }, [activePeriode]);
+
+  const importRowsWithState = useMemo(() => {
+    return importRows.map((row) => {
+      const issues = resolveImportRowIssues(row);
+      return {
+        ...row,
+        errors: issues.errors,
+        warnings: issues.warnings,
+        status: issues.status,
+      };
+    });
+  }, [importRows]);
+
+  const importSummary = useMemo(() => {
+    const summary = buildImportSummary(importRowsWithState);
+    return {
+      ...(importPreview?.summary || {}),
+      ...summary,
+    };
+  }, [importPreview?.summary, importRowsWithState]);
+
+  const canCommitImport = useMemo(() => {
+    return importSummary.total_rows > 0 && importSummary.error_rows === 0 && !isImportPreviewing && !isImportCommitting;
+  }, [importSummary.error_rows, importSummary.total_rows, isImportCommitting, isImportPreviewing]);
 
   const totalIncome = useMemo(() => transaksiList.reduce((sum, item) => sum + toNumber(item.total_income), 0), [transaksiList]);
   const totalShare = useMemo(() => transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_share), 0), [transaksiList]);
@@ -427,7 +543,13 @@ export default function useTransaksiKonsultanViewModel() {
   }, []);
 
   const getPersenShare = useCallback((transaksi) => {
-    return transaksi?.effective_persen_share ?? transaksi?.persen_share_override ?? transaksi?.persen_share_default ?? 0;
+    const explicitShare = transaksi?.effective_persen_share ?? transaksi?.persen_share_override ?? transaksi?.persen_share_default;
+    if (explicitShare !== null && explicitShare !== undefined && explicitShare !== '') return explicitShare;
+
+    const total = toNumber(transaksi?.total_income);
+    if (total === 0) return 0;
+
+    return (toNumber(transaksi?.nominal_share) / total) * 100;
   }, []);
 
   const getDisabledActionReason = useCallback((transaksi) => {
@@ -472,6 +594,66 @@ export default function useTransaksiKonsultanViewModel() {
     setIsDeleteDialogOpen(false);
     setSelectedTransaksi(null);
   }, [isSubmitting]);
+
+  const openImportModal = useCallback(() => {
+    if (!filterPeriode) {
+      AppMessage.warning('Pilih periode konsultan terlebih dahulu.');
+      return;
+    }
+
+    if (!canCreateInActivePeriode) {
+      AppMessage.warning('Periode yang dipilih belum bisa digunakan untuk import transaksi.');
+      return;
+    }
+
+    setImportFile(null);
+    setImportPreview(null);
+    setImportRows([]);
+    setImportPreviewPage(1);
+    setIsImportModalOpen(true);
+  }, [canCreateInActivePeriode, filterPeriode]);
+
+  const closeImportModal = useCallback(() => {
+    if (isImportPreviewing || isImportCommitting) return;
+    setIsImportModalOpen(false);
+    setImportFile(null);
+    setImportPreview(null);
+    setImportRows([]);
+    setImportPreviewPage(1);
+  }, [isImportCommitting, isImportPreviewing]);
+
+  const setImportRowValue = useCallback((importKey, field, value) => {
+    setImportRows((prev) =>
+      prev.map((row) =>
+        row.import_key === importKey
+          ? {
+              ...row,
+              [field]: value || null,
+            }
+          : row,
+      ),
+    );
+  }, []);
+
+  const setImportRowSelected = useCallback((importKey, selected) => {
+    setImportRows((prev) =>
+      prev.map((row) =>
+        row.import_key === importKey
+          ? {
+              ...row,
+              selected: Boolean(selected),
+            }
+          : row,
+      ),
+    );
+  }, []);
+
+  const setImportFileForPreview = useCallback((file) => {
+    setImportFile(file || null);
+    setImportPreview(null);
+    setImportRows([]);
+    setImportPreviewPage(1);
+  }, []);
 
   const openEditModal = useCallback(
     (transaksi) => {
@@ -550,11 +732,6 @@ export default function useTransaksiKonsultanViewModel() {
       return false;
     }
 
-    if (nominalKredit > nominalDebit) {
-      AppMessage.warning('Nominal kredit tidak boleh lebih besar dari nominal debit.');
-      return false;
-    }
-
     const persenShareDefault = normalizeDecimalInput(formData.persen_share_default, { allowNull: true });
     const persenShareOverride = normalizeDecimalInput(formData.persen_share_override, { allowNull: true });
     const nominalShareManual = normalizeDecimalInput(formData.nominal_share, { allowNull: true });
@@ -587,26 +764,16 @@ export default function useTransaksiKonsultanViewModel() {
 
     if (overrideManual && nominalShareManual !== null) {
       const parsedNominalShare = Number(nominalShareManual);
-      if (!Number.isFinite(parsedNominalShare) || parsedNominalShare < 0) {
-        AppMessage.warning('Nominal share manual tidak boleh kurang dari 0.');
-        return false;
-      }
-
-      if (parsedNominalShare > totalIncome) {
-        AppMessage.warning('Nominal share manual tidak boleh lebih besar dari total income.');
+      if (!Number.isFinite(parsedNominalShare)) {
+        AppMessage.warning('Nominal share manual harus berupa angka valid.');
         return false;
       }
     }
 
     if (overrideManual && nominalOssManual !== null) {
       const parsedNominalOss = Number(nominalOssManual);
-      if (!Number.isFinite(parsedNominalOss) || parsedNominalOss < 0) {
-        AppMessage.warning('Nominal OSS manual tidak boleh kurang dari 0.');
-        return false;
-      }
-
-      if (parsedNominalOss > totalIncome) {
-        AppMessage.warning('Nominal OSS manual tidak boleh lebih besar dari total income.');
+      if (!Number.isFinite(parsedNominalOss)) {
+        AppMessage.warning('Nominal OSS manual harus berupa angka valid.');
         return false;
       }
     }
@@ -741,6 +908,84 @@ export default function useTransaksiKonsultanViewModel() {
       setIsSubmitting(false);
     }
   }, [isSubmitting, mutateTransaksi, resolvedSelectedTransaksi]);
+
+  const handlePreviewImport = useCallback(async () => {
+    if (isImportPreviewing) return;
+
+    if (!filterPeriode) {
+      AppMessage.warning('Pilih periode konsultan terlebih dahulu.');
+      return;
+    }
+
+    if (!importFile) {
+      AppMessage.warning('Pilih file Excel terlebih dahulu.');
+      return;
+    }
+
+    setIsImportPreviewing(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('id_periode_konsultan', filterPeriode);
+
+      const response = await apiJson(ApiEndpoints.PreviewImportTransaksiKonsultan(), {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = response?.data || {};
+      setImportPreview(data);
+      setImportRows(Array.isArray(data?.rows) ? data.rows : []);
+      setImportPreviewPage(1);
+      AppMessage.success(response?.message || 'Preview import berhasil dibuat.');
+    } catch (err) {
+      setImportPreview(null);
+      setImportRows([]);
+      AppMessage.error(err?.message || 'Gagal membaca file Excel transaksi konsultan.');
+    } finally {
+      setIsImportPreviewing(false);
+    }
+  }, [filterPeriode, importFile, isImportPreviewing]);
+
+  const handleCommitImport = useCallback(async () => {
+    if (isImportCommitting) return;
+
+    if (!canCommitImport) {
+      AppMessage.warning('Selesaikan error mapping dan validasi sebelum import.');
+      return;
+    }
+
+    setIsImportCommitting(true);
+
+    try {
+      const response = await apiJson(ApiEndpoints.CommitImportTransaksiKonsultan(), {
+        method: 'POST',
+        body: {
+          id_periode_konsultan: filterPeriode,
+          rows: importRowsWithState,
+        },
+      });
+
+      await mutateTransaksi();
+      setIsImportModalOpen(false);
+      setImportFile(null);
+      setImportPreview(null);
+      setImportRows([]);
+      setImportPreviewPage(1);
+      AppMessage.success(response?.message || 'Import transaksi konsultan selesai.');
+    } catch (err) {
+      const details = Array.isArray(err?.payload?.errors)
+        ? ` ${err.payload.errors
+            .slice(0, 3)
+            .map((item) => `Baris ${item.row || '-'}: ${item.message}`)
+            .join(' ')}`
+        : '';
+      AppMessage.error(`${err?.message || 'Gagal menyimpan import transaksi konsultan.'}${details}`);
+    } finally {
+      setIsImportCommitting(false);
+    }
+  }, [canCommitImport, filterPeriode, importRowsWithState, isImportCommitting, mutateTransaksi]);
 
   const handleExport = useCallback(async () => {
     if (isExporting) return;
@@ -891,11 +1136,24 @@ export default function useTransaksiKonsultanViewModel() {
     isCreateModalOpen,
     isEditModalOpen,
     isDeleteDialogOpen,
+    isImportModalOpen,
     selectedTransaksi: resolvedSelectedTransaksi,
 
     formData,
     setFormValue,
     setProdukValue,
+    importFile,
+    setImportFile: setImportFileForPreview,
+    importPreview,
+    importRows: importRowsWithState,
+    importSummary,
+    importPreviewPage,
+    setImportPreviewPage,
+    canCommitImport,
+    isImportPreviewing,
+    isImportCommitting,
+    setImportRowValue,
+    setImportRowSelected,
 
     loading,
     validating,
@@ -909,12 +1167,17 @@ export default function useTransaksiKonsultanViewModel() {
     closeEditModal,
     openDeleteDialog,
     closeDeleteDialog,
+    openImportModal,
+    closeImportModal,
     reloadData,
 
     handleCreate,
     handleEdit,
     handleDelete,
     handleExport,
+    handlePreviewImport,
+    handleCommitImport,
+    getIssueMessage,
 
     getPersenShare,
     getDisabledActionReason,

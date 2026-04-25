@@ -183,15 +183,6 @@ function parseDateOnly(value, fieldName) {
   return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
 }
 
-function toDateOnlyComparable(value) {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate())).getTime();
-}
-
-function isDateWithinRange(targetDate, startDate, endDate) {
-  const target = toDateOnlyComparable(targetDate);
-  return target >= toDateOnlyComparable(startDate) && target <= toDateOnlyComparable(endDate);
-}
-
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
 
@@ -306,10 +297,6 @@ function enrichTransaksi(data) {
 function validateComputedTotals({ nominal_debit, nominal_kredit, total_income, nominal_share, nominal_oss }) {
   const computedTotal = subtractDecimalStrings(nominal_debit, nominal_kredit, MONEY_SCALE);
 
-  if (decimalToScaledBigInt(computedTotal, MONEY_SCALE) < 0n) {
-    throw new Error("Nilai 'nominal_kredit' tidak boleh lebih besar dari 'nominal_debit'.");
-  }
-
   if (computedTotal !== total_income) {
     throw new Error("Field 'total_income' harus sama dengan nominal_debit - nominal_kredit.");
   }
@@ -389,10 +376,6 @@ async function resolveBusinessState(tx, input, existing = null) {
     throw new Error('Periode konsultan yang dipilih sudah terkunci.');
   }
 
-  if (!isDateWithinRange(tanggal_transaksi, periode.tanggal_mulai, periode.tanggal_selesai)) {
-    throw new Error("Field 'tanggal_transaksi' harus berada di dalam rentang tanggal periode konsultan.");
-  }
-
   if (id_user_konsultan && !konsultan) {
     throw new Error('User konsultan tidak ditemukan.');
   }
@@ -466,14 +449,6 @@ async function resolveBusinessState(tx, input, existing = null) {
   } else {
     nominal_share = computeAmountByPercentage(total_income, effectivePersenShare);
     nominal_oss = subtractDecimalStrings(total_income, nominal_share, MONEY_SCALE);
-  }
-
-  if (decimalToScaledBigInt(nominal_share, MONEY_SCALE) < 0n) {
-    throw new Error("Field 'nominal_share' tidak boleh bernilai negatif.");
-  }
-
-  if (decimalToScaledBigInt(nominal_oss, MONEY_SCALE) < 0n) {
-    throw new Error("Field 'nominal_oss' tidak boleh bernilai negatif.");
   }
 
   validateComputedTotals({
@@ -652,11 +627,11 @@ export async function PUT(req, { params }) {
     }
 
     if (body?.nominal_share !== undefined) {
-      payload.nominal_share = normalizeDecimalString(body?.nominal_share, 'nominal_share', MONEY_SCALE, { min: '0' });
+      payload.nominal_share = normalizeDecimalString(body?.nominal_share, 'nominal_share', MONEY_SCALE);
     }
 
     if (body?.nominal_oss !== undefined) {
-      payload.nominal_oss = normalizeDecimalString(body?.nominal_oss, 'nominal_oss', MONEY_SCALE, { min: '0' });
+      payload.nominal_oss = normalizeDecimalString(body?.nominal_oss, 'nominal_oss', MONEY_SCALE);
     }
 
     if (body?.sudah_posting_payroll !== undefined) {

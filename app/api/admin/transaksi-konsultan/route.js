@@ -194,15 +194,6 @@ function parseRequiredDateOnly(value, fieldName) {
   return parsed;
 }
 
-function toDateOnlyComparable(value) {
-  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate())).getTime();
-}
-
-function isDateWithinRange(targetDate, startDate, endDate) {
-  const target = toDateOnlyComparable(targetDate);
-  return target >= toDateOnlyComparable(startDate) && target <= toDateOnlyComparable(endDate);
-}
-
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
 
@@ -341,10 +332,6 @@ function enrichTransaksi(data) {
 function validateComputedTotals({ nominal_debit, nominal_kredit, total_income, nominal_share, nominal_oss }) {
   const computedTotal = subtractDecimalStrings(nominal_debit, nominal_kredit, MONEY_SCALE);
 
-  if (decimalToScaledBigInt(computedTotal, MONEY_SCALE) < 0n) {
-    throw new Error("Nilai 'nominal_kredit' tidak boleh lebih besar dari 'nominal_debit'.");
-  }
-
   if (computedTotal !== total_income) {
     throw new Error("Field 'total_income' harus sama dengan nominal_debit - nominal_kredit.");
   }
@@ -424,10 +411,6 @@ async function resolveBusinessState(tx, input, existing = null) {
     throw new Error('Periode konsultan yang dipilih sudah terkunci.');
   }
 
-  if (!isDateWithinRange(tanggal_transaksi, periode.tanggal_mulai, periode.tanggal_selesai)) {
-    throw new Error("Field 'tanggal_transaksi' harus berada di dalam rentang tanggal periode konsultan.");
-  }
-
   if (id_user_konsultan && !konsultan) {
     throw new Error('User konsultan tidak ditemukan.');
   }
@@ -501,14 +484,6 @@ async function resolveBusinessState(tx, input, existing = null) {
   } else {
     nominal_share = computeAmountByPercentage(total_income, effectivePersenShare);
     nominal_oss = subtractDecimalStrings(total_income, nominal_share, MONEY_SCALE);
-  }
-
-  if (decimalToScaledBigInt(nominal_share, MONEY_SCALE) < 0n) {
-    throw new Error("Field 'nominal_share' tidak boleh bernilai negatif.");
-  }
-
-  if (decimalToScaledBigInt(nominal_oss, MONEY_SCALE) < 0n) {
-    throw new Error("Field 'nominal_oss' tidak boleh bernilai negatif.");
   }
 
   validateComputedTotals({
@@ -717,8 +692,8 @@ export async function POST(req) {
       persen_share_default: body?.persen_share_default === undefined ? undefined : normalizeDecimalString(body?.persen_share_default, 'persen_share_default', SHARE_SCALE, { allowNull: true, min: '0', max: '100' }),
       persen_share_override: body?.persen_share_override === undefined ? undefined : normalizeDecimalString(body?.persen_share_override, 'persen_share_override', SHARE_SCALE, { allowNull: true, min: '0', max: '100' }),
       override_manual: body?.override_manual === undefined ? false : normalizeBoolean(body?.override_manual, 'override_manual'),
-      nominal_share: body?.nominal_share === undefined ? undefined : normalizeDecimalString(body?.nominal_share, 'nominal_share', MONEY_SCALE, { min: '0' }),
-      nominal_oss: body?.nominal_oss === undefined ? undefined : normalizeDecimalString(body?.nominal_oss, 'nominal_oss', MONEY_SCALE, { min: '0' }),
+      nominal_share: body?.nominal_share === undefined ? undefined : normalizeDecimalString(body?.nominal_share, 'nominal_share', MONEY_SCALE),
+      nominal_oss: body?.nominal_oss === undefined ? undefined : normalizeDecimalString(body?.nominal_oss, 'nominal_oss', MONEY_SCALE),
       sudah_posting_payroll: body?.sudah_posting_payroll === undefined ? false : normalizeBoolean(body?.sudah_posting_payroll, 'sudah_posting_payroll'),
       catatan: normalizeNullableString(body?.catatan, 'catatan'),
     };

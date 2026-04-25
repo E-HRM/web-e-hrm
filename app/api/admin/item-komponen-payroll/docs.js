@@ -69,13 +69,6 @@
  *           type: string
  *           enum: [DRAFT, TERSIMPAN, DISETUJUI, DIBAYAR]
  *       - in: query
- *         name: kena_pajak
- *         schema:
- *           oneOf:
- *             - type: boolean
- *             - type: string
- *               enum: ['true', 'false', '1', '0']
- *       - in: query
  *         name: includeDeleted
  *         schema:
  *           type: integer
@@ -91,7 +84,7 @@
  *         name: orderBy
  *         schema:
  *           type: string
- *           enum: [created_at, updated_at, kunci_idempoten, nama_komponen, tipe_komponen, arah_komponen, nominal, kena_pajak, urutan_tampil]
+ *           enum: [created_at, updated_at, kunci_idempoten, nama_komponen, tipe_komponen, arah_komponen, nominal, urutan_tampil]
  *           default: urutan_tampil
  *       - in: query
  *         name: sort
@@ -115,7 +108,7 @@
  *     description: |
  *       Membuat item komponen payroll baru. Logic bisnis yang diterapkan:
  *       - item hanya boleh dibuat pada payroll yang masih mutable (`DRAFT` / `TERSIMPAN`) dan periodenya belum `FINAL` / `TERKUNCI`.
- *       - `id_definisi_komponen_payroll` bersifat opsional. Jika dikirim, snapshot `tipe_komponen`, `arah_komponen`, `nama_komponen`, dan `kena_pajak` mengikuti definisi.
+ *       - `id_definisi_komponen_payroll` bersifat opsional. Jika dikirim, snapshot `tipe_komponen`, `arah_komponen`, dan `nama_komponen` mengikuti definisi.
  *       - jika item dibuat manual tanpa definisi, `tipe_komponen` harus ada pada master `TipeKomponenPayroll` aktif.
  *       - `kunci_idempoten` boleh dikirim manual; jika tidak dikirim untuk item manual, sistem akan membuatkannya otomatis.
  *       - setelah item dibuat, total payroll karyawan akan dihitung ulang.
@@ -152,9 +145,6 @@
  *                 description: Wajib jika item manual tanpa definisi.
  *               nominal:
  *                 type: number
- *               kena_pajak:
- *                 type: boolean
- *                 description: Hanya dipakai untuk item manual tanpa definisi.
  *               urutan_tampil:
  *                 type: integer
  *                 minimum: 0

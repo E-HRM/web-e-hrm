@@ -1520,9 +1520,9 @@ model MasterTemplate {
 model ProfilPayroll {
   id_profil_payroll     String             @id @default(uuid()) @db.Char(36)
   id_user               String             @db.Char(36)
-  id_tarif_pajak_ter    String             @db.Char(36)
   jenis_hubungan_kerja  JenisHubunganKerja
   gaji_pokok            Decimal            @default(0) @db.Decimal(15, 2)
+  tunjangan_bpjs        Decimal            @default(0) @db.Decimal(15, 2)
   payroll_aktif         Boolean            @default(true)
   tanggal_mulai_payroll DateTime?          @db.Date
   catatan               String?            @db.LongText
@@ -1532,12 +1532,10 @@ model ProfilPayroll {
   deleted_at DateTime? @db.DateTime(0)
 
   user             User              @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
-  tarif_pajak_ter  TarifPajakTER     @relation(fields: [id_tarif_pajak_ter], references: [id_tarif_pajak_ter], onDelete: Restrict, onUpdate: Cascade)
   payroll_karyawan PayrollKaryawan[]
 
   @@unique([id_user], name: "uniq_profil_payroll_user")
   @@index([jenis_hubungan_kerja])
-  @@index([id_tarif_pajak_ter])
   @@index([deleted_at])
   @@map("profil_payroll")
 }
@@ -1555,7 +1553,6 @@ model TarifPajakTER {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  profil_payroll   ProfilPayroll[]
   payroll_karyawan PayrollKaryawan[]
 
   @@index([kode_kategori_pajak, penghasilan_dari])
@@ -1584,7 +1581,6 @@ model DefinisiKomponenPayroll {
   id_tipe_komponen_payroll     String              @db.Char(36)
   nama_komponen                String              @db.VarChar(255)
   arah_komponen                ArahKomponenPayroll
-  kena_pajak_default           Boolean             @default(false)
   berulang_default             Boolean             @default(false)
   aktif                        Boolean             @default(true)
   catatan                      String?             @db.LongText
@@ -1641,11 +1637,12 @@ model PayrollKaryawan {
   berlaku_mulai_tarif_snapshot  DateTime  @db.Date
   berlaku_sampai_tarif_snapshot DateTime? @db.Date
 
-  gaji_pokok_snapshot    Decimal @default(0) @db.Decimal(15, 2)
-  total_pendapatan_bruto Decimal @default(0) @db.Decimal(15, 2)
-  total_potongan         Decimal @default(0) @db.Decimal(15, 2)
-  pph21_nominal          Decimal @default(0) @db.Decimal(15, 2)
-  pendapatan_bersih      Decimal @default(0) @db.Decimal(15, 2)
+  gaji_pokok_snapshot     Decimal @default(0) @db.Decimal(15, 2)
+  tunjangan_bpjs_snapshot Decimal @default(0) @db.Decimal(15, 2)
+  total_pendapatan_bruto  Decimal @default(0) @db.Decimal(15, 2)
+  total_potongan          Decimal @default(0) @db.Decimal(15, 2)
+  pph21_nominal           Decimal @default(0) @db.Decimal(15, 2)
+  pendapatan_bersih       Decimal @default(0) @db.Decimal(15, 2)
 
   bank_name    String? @db.VarChar(50)
   bank_account String? @db.VarChar(50)
@@ -1701,7 +1698,6 @@ model ItemKomponenPayroll {
   arah_komponen ArahKomponenPayroll
   nama_komponen String              @db.VarChar(255)
   nominal       Decimal             @db.Decimal(15, 2)
-  kena_pajak    Boolean             @default(false)
 
   urutan_tampil Int?    @default(0)
   catatan       String? @db.LongText
@@ -1758,7 +1754,7 @@ model PinjamanKaryawan {
   id_user              String         @db.Char(36)
   nama_pinjaman        String         @db.VarChar(255)
   nominal_pinjaman     Decimal        @db.Decimal(15, 2)
-  nominal_cicilan      Decimal        @db.Decimal(15, 2)
+  tenor_bulan          Int
   sisa_saldo           Decimal        @db.Decimal(15, 2)
   tanggal_mulai        DateTime       @db.Date
   tanggal_selesai      DateTime?      @db.Date
@@ -1804,6 +1800,7 @@ model CicilanPinjamanKaryawan {
   @@index([deleted_at])
   @@map("cicilan_pinjaman_karyawan")
 }
+
 
 model PeriodeKonsultan {
   id_periode_konsultan String                 @id @default(uuid()) @db.Char(36)

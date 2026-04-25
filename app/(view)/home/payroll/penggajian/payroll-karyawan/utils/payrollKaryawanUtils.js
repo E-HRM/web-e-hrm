@@ -49,9 +49,11 @@ export function createInitialPayrollKaryawanForm(defaultPeriode = '') {
     nama_jabatan_snapshot: '',
     nama_bank_snapshot: '',
     nomor_rekening_snapshot: '',
+    gaji_pokok_snapshot: 0,
     issue_number: '',
     issued_at: '',
     company_name_snapshot: '',
+    tunjangan_bpjs_snapshot: 0,
     total_pendapatan_tetap: 0,
     total_pendapatan_variabel: 0,
     total_bruto_kena_pajak: 0,
@@ -313,11 +315,13 @@ export function normalizePayrollKaryawanItem(item) {
   if (!item) return null;
 
   const gajiPokokSnapshot = toNumber(item.gaji_pokok_snapshot);
+  const tunjanganBpjsSnapshot = toNumber(item.tunjangan_bpjs_snapshot);
   const totalPendapatanBruto = toNumber(item.total_pendapatan_bruto);
   const totalPotongan = toNumber(item.total_potongan);
   const pph21Nominal = toNumber(item.pph21_nominal);
-  const totalPotonganLain = Math.max(totalPotongan - pph21Nominal, 0);
-  const totalPendapatanTetap = gajiPokokSnapshot > 0 ? gajiPokokSnapshot : totalPendapatanBruto;
+  const totalPotonganLain = Math.max(totalPotongan - pph21Nominal - tunjanganBpjsSnapshot, 0);
+  const totalPendapatanTetapSnapshot = gajiPokokSnapshot;
+  const totalPendapatanTetap = totalPendapatanTetapSnapshot;
   const totalPendapatanVariabel = Math.max(totalPendapatanBruto - totalPendapatanTetap, 0);
   const periodeLabel = item?.periode ? formatPeriodeLabel(item.periode) : '-';
   const approvalSteps = Array.isArray(item.approvals) ? item.approvals.map(normalizeApprovalStep).filter(Boolean) : [];
@@ -388,7 +392,8 @@ export function buildPayrollKaryawanPayload(formData) {
   const totalPendapatanBruto = toNumber(formData.total_bruto_kena_pajak) || totalPendapatanTetap + totalPendapatanVariabel;
   const totalPajak = calculatePayrollPph21Nominal(totalPendapatanBruto, formData.persen_tarif_snapshot);
   const totalPotonganLain = toNumber(formData.total_potongan_lain);
-  const totalPotongan = totalPajak + totalPotonganLain;
+  const tunjanganBpjs = toNumber(formData.tunjangan_bpjs_snapshot);
+  const totalPotongan = totalPajak + totalPotonganLain + tunjanganBpjs;
   const pendapatanBersih = Math.max(totalPendapatanBruto - totalPotongan, 0);
 
   return {
@@ -401,6 +406,7 @@ export function buildPayrollKaryawanPayload(formData) {
       .toUpperCase(),
     bank_name: String(formData.nama_bank_snapshot || '').trim() || null,
     bank_account: String(formData.nomor_rekening_snapshot || '').trim() || null,
+    tunjangan_bpjs_snapshot: tunjanganBpjs,
     issue_number: String(formData.issue_number || '').trim() || null,
     issued_at: String(formData.issued_at || '').trim() || null,
     company_name_snapshot: String(formData.company_name_snapshot || '').trim() || null,

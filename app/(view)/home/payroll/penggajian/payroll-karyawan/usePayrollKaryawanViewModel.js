@@ -36,6 +36,7 @@ const PAYROLL_KARYAWAN_SWR_KEY = 'payroll:payroll-karyawan:list';
 const PERIODE_PAYROLL_SWR_KEY = 'payroll:payroll-karyawan:periode';
 const PROFIL_PAYROLL_SWR_KEY = 'payroll:payroll-karyawan:profil-payroll';
 const USERS_SWR_KEY = 'payroll:payroll-karyawan:users';
+const TARIF_PAJAK_TER_SWR_KEY = 'payroll:payroll-karyawan:tarif-pajak-ter';
 
 function buildUrlWithQuery(baseUrl, query = {}) {
   const params = new URLSearchParams();
@@ -125,6 +126,19 @@ async function fetchAllUsers() {
   );
 }
 
+async function fetchAllTarifPajakTER() {
+  return fetchAllPages((page) =>
+    crudServiceAuth.get(
+      ApiEndpoints.GetTarifPajakTER({
+        page,
+        pageSize: FETCH_PAGE_SIZE,
+        orderBy: 'kode_kategori_pajak',
+        sort: 'asc',
+      }),
+    ),
+  );
+}
+
 function buildDefaultForm(filterPeriode) {
   return createInitialPayrollKaryawanForm(filterPeriode && filterPeriode !== 'ALL' ? filterPeriode : '');
 }
@@ -195,6 +209,29 @@ function filterApproverOption(input, option) {
     .includes(String(input || '').toLowerCase());
 }
 
+function formatTarifPajakIncomeRange(tarif) {
+  if (!tarif) return '-';
+
+  const minIncome = formatCurrency(tarif.penghasilan_dari);
+  const maxIncome = tarif.penghasilan_sampai == null ? null : formatCurrency(tarif.penghasilan_sampai);
+
+  return maxIncome ? `${minIncome} - ${maxIncome}` : `${minIncome} ke atas`;
+}
+
+function formatTarifPajakLabel(tarif, fallbackId = null) {
+  if (!tarif) {
+    return fallbackId ? `Tarif tidak ditemukan (${fallbackId})` : '-';
+  }
+
+  const kodeKategoriPajak = String(tarif.kode_kategori_pajak || '').trim() || '-';
+  const persenTarif = toNumber(tarif.persen_tarif).toLocaleString('id-ID', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
+  });
+
+  return `${kodeKategoriPajak} | ${formatTarifPajakIncomeRange(tarif)} | ${persenTarif}%`;
+}
+
 function normalizeRole(value) {
   return String(value || '')
     .trim()
@@ -252,6 +289,8 @@ function clearSelectedEmployeeSnapshot(previousForm) {
     nama_jabatan_snapshot: '',
     nama_bank_snapshot: '',
     nomor_rekening_snapshot: '',
+    gaji_pokok_snapshot: 0,
+    tunjangan_bpjs_snapshot: 0,
     total_pendapatan_tetap: 0,
     total_pendapatan_variabel: 0,
     total_bruto_kena_pajak: 0,
@@ -262,14 +301,34 @@ function clearSelectedEmployeeSnapshot(previousForm) {
   };
 }
 
+function buildTarifSnapshotFromForm(previousForm, totalBruto) {
+  const persenTarifSnapshot = toNumber(previousForm.persen_tarif_snapshot);
+  const totalPajak = calculatePayrollPph21Nominal(totalBruto, persenTarifSnapshot);
+  const totalPotonganLain = toNumber(previousForm.total_potongan_lain);
+  const tunjanganBpjs = toNumber(previousForm.tunjangan_bpjs_snapshot);
+
+  return {
+    total_bruto_kena_pajak: totalBruto,
+    persen_pajak: persenTarifSnapshot,
+    total_pajak: totalPajak,
+    total_dibayarkan: Math.max(totalBruto - totalPajak - totalPotonganLain - tunjanganBpjs, 0),
+  };
+}
+
 function applyProfilPayrollToForm(previousForm, profile) {
   if (!profile) return clearSelectedEmployeeSnapshot(previousForm);
 
-  const tarif = profile?.tarif_pajak_ter;
   const gajiPokok = toNumber(profile?.gaji_pokok);
-  const persenTarifSnapshot = toNumber(tarif?.persen_tarif);
-  const totalPajak = calculatePayrollPph21Nominal(gajiPokok, persenTarifSnapshot);
-  const totalDibayarkan = Math.max(gajiPokok - totalPajak, 0);
+  const tunjanganBpjs = toNumber(profile?.tunjangan_bpjs);
+  const totalPendapatanTetap = gajiPokok;
+  const totalSnapshot = buildTarifSnapshotFromForm(
+    {
+      ...previousForm,
+      tunjangan_bpjs_snapshot: tunjanganBpjs,
+      total_potongan_lain: 0,
+    },
+    totalPendapatanTetap,
+  );
 
   return {
     ...previousForm,
@@ -278,24 +337,64 @@ function applyProfilPayrollToForm(previousForm, profile) {
     jenis_hubungan_snapshot: String(profile?.jenis_hubungan_kerja || 'PKWTT')
       .trim()
       .toUpperCase(),
-    id_tarif_pajak_ter: String(profile?.id_tarif_pajak_ter || '').trim(),
-    kode_kategori_pajak_snapshot: String(tarif?.kode_kategori_pajak || '').trim(),
-    persen_tarif_snapshot: persenTarifSnapshot,
-    penghasilan_dari_snapshot: toNumber(tarif?.penghasilan_dari),
-    penghasilan_sampai_snapshot: tarif?.penghasilan_sampai == null ? null : toNumber(tarif?.penghasilan_sampai),
-    berlaku_mulai_tarif_snapshot: tarif?.berlaku_mulai || '',
-    berlaku_sampai_tarif_snapshot: tarif?.berlaku_sampai || null,
-    persen_pajak: persenTarifSnapshot,
     nama_departement_snapshot: getProfilPayrollEmployeeDepartment(profile),
     nama_jabatan_snapshot: getProfilPayrollEmployeeJob(profile),
     nama_bank_snapshot: String(profile?.user?.jenis_bank || '').trim(),
     nomor_rekening_snapshot: String(profile?.user?.nomor_rekening || '').trim(),
-    total_pendapatan_tetap: gajiPokok,
+    gaji_pokok_snapshot: gajiPokok,
+    tunjangan_bpjs_snapshot: tunjanganBpjs,
+    total_pendapatan_tetap: totalPendapatanTetap,
     total_pendapatan_variabel: 0,
-    total_bruto_kena_pajak: gajiPokok,
-    total_pajak: totalPajak,
     total_potongan_lain: 0,
-    total_dibayarkan: totalDibayarkan,
+    ...totalSnapshot,
+  };
+}
+
+function applyTarifPajakToForm(previousForm, tarif) {
+  const totalBruto = toNumber(previousForm.total_bruto_kena_pajak) || toNumber(previousForm.total_pendapatan_tetap) + toNumber(previousForm.total_pendapatan_variabel);
+
+  if (!tarif) {
+    const totalSnapshot = buildTarifSnapshotFromForm(
+      {
+        ...previousForm,
+        persen_tarif_snapshot: 0,
+        total_potongan_lain: previousForm.total_potongan_lain,
+      },
+      totalBruto,
+    );
+
+    return {
+      ...previousForm,
+      id_tarif_pajak_ter: '',
+      kode_kategori_pajak_snapshot: '',
+      persen_tarif_snapshot: 0,
+      penghasilan_dari_snapshot: 0,
+      penghasilan_sampai_snapshot: null,
+      berlaku_mulai_tarif_snapshot: '',
+      berlaku_sampai_tarif_snapshot: null,
+      ...totalSnapshot,
+    };
+  }
+
+  const persenTarifSnapshot = toNumber(tarif.persen_tarif);
+  const totalSnapshot = buildTarifSnapshotFromForm(
+    {
+      ...previousForm,
+      persen_tarif_snapshot: persenTarifSnapshot,
+    },
+    totalBruto,
+  );
+
+  return {
+    ...previousForm,
+    id_tarif_pajak_ter: String(tarif.id_tarif_pajak_ter || '').trim(),
+    kode_kategori_pajak_snapshot: String(tarif.kode_kategori_pajak || '').trim(),
+    persen_tarif_snapshot: persenTarifSnapshot,
+    penghasilan_dari_snapshot: toNumber(tarif.penghasilan_dari),
+    penghasilan_sampai_snapshot: tarif.penghasilan_sampai == null ? null : toNumber(tarif.penghasilan_sampai),
+    berlaku_mulai_tarif_snapshot: tarif.berlaku_mulai || '',
+    berlaku_sampai_tarif_snapshot: tarif.berlaku_sampai || null,
+    ...totalSnapshot,
   };
 }
 
@@ -376,6 +475,16 @@ export default function usePayrollKaryawanViewModel() {
     revalidateOnFocus: false,
   });
 
+  const {
+    data: tarifPajakResponse,
+    error: tarifPajakError,
+    isLoading: isTarifPajakLoading,
+    isValidating: isTarifPajakValidating,
+    mutate: mutateTarifPajak,
+  } = useSWR(TARIF_PAJAK_TER_SWR_KEY, fetchAllTarifPajakTER, {
+    revalidateOnFocus: false,
+  });
+
   useEffect(() => {
     if (!payrollError) return;
 
@@ -416,9 +525,20 @@ export default function usePayrollKaryawanViewModel() {
     });
   }, [usersError]);
 
+  useEffect(() => {
+    if (!tarifPajakError) return;
+
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'payroll-karyawan-tarif-pajak-fetch-error',
+      content: tarifPajakError?.message || 'Gagal memuat data tarif pajak TER.',
+    });
+  }, [tarifPajakError]);
+
   const periodeList = useMemo(() => (Array.isArray(periodeResponse) ? periodeResponse : []), [periodeResponse]);
   const profilPayrollList = useMemo(() => (Array.isArray(profilPayrollResponse) ? profilPayrollResponse : []), [profilPayrollResponse]);
   const usersList = useMemo(() => (Array.isArray(usersResponse) ? usersResponse : []), [usersResponse]);
+  const tarifPajakList = useMemo(() => (Array.isArray(tarifPajakResponse) ? tarifPajakResponse : []), [tarifPajakResponse]);
   const payrollData = useMemo(() => {
     const rawList = Array.isArray(payrollResponse) ? payrollResponse : [];
     return rawList.map(normalizePayrollKaryawanItem).filter(Boolean);
@@ -426,7 +546,7 @@ export default function usePayrollKaryawanViewModel() {
 
   const activeProfilPayrollList = useMemo(() => {
     return profilPayrollList.filter((profile) => {
-      return !profile?.deleted_at && Boolean(profile?.payroll_aktif) && !profile?.user?.deleted_at && !profile?.tarif_pajak_ter?.deleted_at && String(profile?.id_user || '').trim();
+      return !profile?.deleted_at && Boolean(profile?.payroll_aktif) && !profile?.user?.deleted_at && String(profile?.id_user || '').trim();
     });
   }, [profilPayrollList]);
 
@@ -436,6 +556,7 @@ export default function usePayrollKaryawanViewModel() {
 
   const profilPayrollMap = useMemo(() => new Map(activeProfilPayrollList.map((profile) => [String(profile.id_user), profile])), [activeProfilPayrollList]);
   const approverUsersMap = useMemo(() => new Map(activeApproverUsers.map((user) => [String(user.id_user), user])), [activeApproverUsers]);
+  const tarifPajakMap = useMemo(() => new Map(tarifPajakList.map((tarif) => [String(tarif.id_tarif_pajak_ter), tarif])), [tarifPajakList]);
 
   const payrollUserIdsByPeriode = useMemo(() => {
     const usageMap = new Map();
@@ -541,6 +662,28 @@ export default function usePayrollKaryawanViewModel() {
     [profilPayrollMap],
   );
 
+  const handleTarifPajakChange = useCallback(
+    (value) => {
+      const nextTarifId = String(value || '').trim();
+
+      if (!nextTarifId) {
+        setFormData((prev) => applyTarifPajakToForm(prev, null));
+        return;
+      }
+
+      const tarif = tarifPajakMap.get(nextTarifId);
+
+      if (!tarif) {
+        AppMessage.warning('Tarif pajak TER tidak ditemukan.');
+        setFormData((prev) => applyTarifPajakToForm(prev, null));
+        return;
+      }
+
+      setFormData((prev) => applyTarifPajakToForm(prev, tarif));
+    },
+    [tarifPajakMap],
+  );
+
   const resetForm = useCallback(() => {
     setFormData(buildDefaultForm(filterPeriode));
   }, [filterPeriode]);
@@ -577,6 +720,11 @@ export default function usePayrollKaryawanViewModel() {
       return false;
     }
 
+    if (!String(formData.id_tarif_pajak_ter || '').trim()) {
+      AppMessage.warning('Tarif pajak TER wajib dipilih.');
+      return false;
+    }
+
     const approvalSteps = Array.isArray(formData.approval_steps) ? formData.approval_steps : [];
 
     if (approvalSteps.length === 0) {
@@ -597,7 +745,7 @@ export default function usePayrollKaryawanViewModel() {
     }
 
     return true;
-  }, [formData.approval_steps, formData.id_periode_payroll, formData.id_user, formData.nama_karyawan_snapshot]);
+  }, [formData.approval_steps, formData.id_periode_payroll, formData.id_tarif_pajak_ter, formData.id_user, formData.nama_karyawan_snapshot]);
 
   const openCreateModal = useCallback(() => {
     setSelectedPayroll(null);
@@ -632,9 +780,11 @@ export default function usePayrollKaryawanViewModel() {
       nama_jabatan_snapshot: payroll.nama_jabatan_snapshot || '',
       nama_bank_snapshot: payroll.nama_bank_snapshot || '',
       nomor_rekening_snapshot: payroll.nomor_rekening_snapshot || '',
+      gaji_pokok_snapshot: toNumber(payroll.gaji_pokok_snapshot),
       issue_number: payroll.issue_number || '',
       issued_at: formatDateTimeLocalInput(payroll.issued_at),
       company_name_snapshot: payroll.company_name_snapshot || '',
+      tunjangan_bpjs_snapshot: toNumber(payroll.tunjangan_bpjs_snapshot),
       total_pendapatan_tetap: toNumber(payroll.total_pendapatan_tetap),
       total_pendapatan_variabel: toNumber(payroll.total_pendapatan_variabel),
       total_bruto_kena_pajak: toNumber(payroll.total_bruto_kena_pajak),
@@ -945,6 +1095,24 @@ export default function usePayrollKaryawanViewModel() {
 
   const employeeOptions = useMemo(() => availableEmployeeProfiles.map(buildEmployeeOption), [availableEmployeeProfiles]);
   const approverOptions = useMemo(() => activeApproverUsers.map(buildApproverOption), [activeApproverUsers]);
+  const tarifPajakOptions = useMemo(() => {
+    return [...tarifPajakList]
+      .filter((tarif) => !tarif?.deleted_at)
+      .sort((a, b) => {
+        const kodeA = String(a?.kode_kategori_pajak || '');
+        const kodeB = String(b?.kode_kategori_pajak || '');
+
+        if (kodeA !== kodeB) {
+          return kodeA.localeCompare(kodeB);
+        }
+
+        return Number(a?.penghasilan_dari || 0) - Number(b?.penghasilan_dari || 0);
+      })
+      .map((tarif) => ({
+        value: tarif.id_tarif_pajak_ter,
+        label: formatTarifPajakLabel(tarif),
+      }));
+  }, [tarifPajakList]);
 
   const selectedEmployeeProfile = useMemo(() => {
     const selectedUserId = String(formData.id_user || '').trim();
@@ -954,6 +1122,17 @@ export default function usePayrollKaryawanViewModel() {
   }, [formData.id_user, profilPayrollMap]);
 
   const selectedEmployeeTarifLabel = useMemo(() => formatTarifPajakSnapshot(formData.kode_kategori_pajak_snapshot, formData.persen_tarif_snapshot), [formData.kode_kategori_pajak_snapshot, formData.persen_tarif_snapshot]);
+  const tarifPajakSelectionHint = useMemo(() => {
+    if (isTarifPajakLoading) {
+      return 'Memuat daftar tarif pajak TER...';
+    }
+
+    if (tarifPajakOptions.length === 0) {
+      return 'Belum ada tarif pajak TER aktif. Lengkapi master tarif terlebih dahulu.';
+    }
+
+    return 'Pilih tarif pajak TER untuk payroll karyawan periode ini.';
+  }, [isTarifPajakLoading, tarifPajakOptions.length]);
 
   const employeeSelectionHint = useMemo(() => {
     if (isProfilPayrollLoading) {
@@ -998,8 +1177,8 @@ export default function usePayrollKaryawanViewModel() {
   );
 
   const reloadData = useCallback(async () => {
-    await Promise.all([mutatePayroll(), mutatePeriode(), mutateProfilPayroll(), mutateUsers()]);
-  }, [mutatePayroll, mutatePeriode, mutateProfilPayroll, mutateUsers]);
+    await Promise.all([mutatePayroll(), mutatePeriode(), mutateProfilPayroll(), mutateUsers(), mutateTarifPajak()]);
+  }, [mutatePayroll, mutatePeriode, mutateProfilPayroll, mutateTarifPajak, mutateUsers]);
 
   const focusedPeriode = useMemo(() => {
     if (!filterPeriode || filterPeriode === 'ALL') return null;
@@ -1015,10 +1194,12 @@ export default function usePayrollKaryawanViewModel() {
     focusedPeriode,
     employeeOptions,
     approverOptions,
+    tarifPajakOptions,
     selectedEmployeeProfile,
     selectedEmployeeTarifLabel,
     employeeSelectionHint,
     approverSelectionHint,
+    tarifPajakSelectionHint,
 
     formData,
     filterStatus,
@@ -1031,10 +1212,11 @@ export default function usePayrollKaryawanViewModel() {
     isDetailModalOpen,
     isApproveModalOpen,
 
-    loading: isPayrollLoading || isPeriodeLoading || isProfilPayrollLoading || isUsersLoading,
-    validating: isPayrollValidating || isPeriodeValidating || isProfilPayrollValidating || isUsersValidating,
+    loading: isPayrollLoading || isPeriodeLoading || isProfilPayrollLoading || isUsersLoading || isTarifPajakLoading,
+    validating: isPayrollValidating || isPeriodeValidating || isProfilPayrollValidating || isUsersValidating || isTarifPajakValidating,
+    isTarifPajakLoading,
     isSubmitting,
-    error: payrollError || periodeError || profilPayrollError || usersError,
+    error: payrollError || periodeError || profilPayrollError || usersError || tarifPajakError,
 
     formatCurrency,
     formatDate,
@@ -1050,6 +1232,7 @@ export default function usePayrollKaryawanViewModel() {
 
     setFormValue,
     handleEmployeeChange,
+    handleTarifPajakChange,
     addApprovalStep,
     removeApprovalStep,
     updateApprovalStep,

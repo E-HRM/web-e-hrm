@@ -117,7 +117,7 @@ export default function PayoutKonsultanPostModalSection({
               onChange={(value) => setPostFormValue('id_definisi_komponen_payroll', value || '')}
               placeholder='Pilih definisi komponen payroll'
               loading={isDefinisiKomponenLoading}
-              hint='Nama komponen, tipe komponen, arah komponen, dan status kena pajak akan mengikuti definisi yang dipilih.'
+              hint='Nama komponen, tipe komponen, dan arah komponen akan mengikuti definisi yang dipilih.'
               selectClassName='!rounded-lg'
             />
 

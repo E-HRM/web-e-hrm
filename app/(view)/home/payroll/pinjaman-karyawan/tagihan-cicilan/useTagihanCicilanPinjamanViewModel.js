@@ -181,6 +181,67 @@ function normalizePayrollTarget(item) {
   };
 }
 
+function getCicilanPostBlockedMessage(cicilan) {
+  const status = normalizeText(cicilan?.status_cicilan).toUpperCase();
+  const linkedPayroll = Boolean(cicilan?.id_payroll_karyawan || cicilan?.business_state?.linked_payroll);
+
+  if (linkedPayroll) {
+    return {
+      title: 'Cicilan sudah masuk payroll',
+      description: 'Cicilan ini sudah terhubung ke payroll karyawan, sehingga tidak perlu diposting ulang.',
+    };
+  }
+
+  if (status === STATUS_CICILAN.DIBAYAR) {
+    return {
+      title: 'Cicilan sudah dibayar',
+      description: 'Cicilan yang sudah dibayar tidak bisa diposting lagi ke payroll.',
+    };
+  }
+
+  if (cicilan?.business_state?.bisa_diubah === false) {
+    return {
+      title: 'Cicilan tidak bisa diubah',
+      description: 'Cicilan ini terkunci oleh status payroll atau periode payroll yang sudah final.',
+    };
+  }
+
+  return {
+    title: 'Cicilan belum bisa diposting',
+    description: 'Posting hanya bisa dilakukan untuk cicilan berstatus Menunggu atau Dilewati yang belum masuk payroll.',
+  };
+}
+
+function getPayrollTargetUnavailableMessage(userPayrollTargets = []) {
+  if (!userPayrollTargets.length) {
+    return {
+      title: 'Payroll tujuan belum tersedia',
+      description: 'Belum ada payroll karyawan untuk user ini. Buat payroll pada periode yang sesuai terlebih dahulu, lalu ulangi posting cicilan.',
+    };
+  }
+
+  const reasons = [];
+
+  if (userPayrollTargets.some((item) => item.business_state?.approval_immutable)) {
+    reasons.push('approval payroll sudah selesai');
+  }
+
+  if (userPayrollTargets.some((item) => item.business_state?.payroll_immutable || ['DISETUJUI', 'DIBAYAR'].includes(item.payroll_status))) {
+    reasons.push('payroll sudah disetujui atau dibayar');
+  }
+
+  if (userPayrollTargets.some((item) => item.business_state?.periode_immutable || ['FINAL', 'TERKUNCI'].includes(item.periode_status))) {
+    reasons.push('periode payroll sudah terkunci');
+  }
+
+  const reasonText = reasons.length ? reasons.join(', ') : 'payroll tujuan sedang tidak bisa diubah';
+
+  return {
+    title: 'Payroll tujuan belum bisa dipakai',
+    description: `Payroll untuk karyawan ini belum bisa dipakai karena ${reasonText}. Posting cicilan hanya bisa ke payroll draft yang belum disetujui/dibayar dan periodenya masih terbuka.`,
+  };
+}
+
 function createInitialPostFormData(overrides = {}) {
   return {
     id_payroll_karyawan: '',
@@ -337,21 +398,16 @@ export default function useTagihanCicilanPinjamanViewModel() {
       }
 
       if (!canPostToPayroll(cicilan)) {
-        AppMessage.warning({
-          title: 'Cicilan belum bisa diposting',
-          description: 'Hanya cicilan yang belum terhubung ke payroll dan masih mutable yang dapat diposting dari halaman ini.',
-        });
+        AppMessage.warning(getCicilanPostBlockedMessage(cicilan));
         return false;
       }
 
       const userId = normalizeText(cicilan.user?.id_user || cicilan.pinjaman_karyawan?.id_user);
-      const availableTargets = payrollTargets.filter((item) => item.id_user === userId && item.mutable);
+      const userPayrollTargets = payrollTargets.filter((item) => item.id_user === userId);
+      const availableTargets = userPayrollTargets.filter((item) => item.mutable);
 
       if (!availableTargets.length) {
-        AppMessage.warning({
-          title: 'Payroll tujuan belum tersedia',
-          description: 'Buat payroll karyawan untuk user ini terlebih dahulu sebelum memposting cicilan ke payroll.',
-        });
+        AppMessage.warning(getPayrollTargetUnavailableMessage(userPayrollTargets));
         return false;
       }
 
@@ -414,10 +470,7 @@ export default function useTagihanCicilanPinjamanViewModel() {
     if (!selectedPostCicilan) return false;
 
     if (!canPostToPayroll(selectedPostCicilan)) {
-      AppMessage.warning({
-        title: 'Cicilan belum bisa diposting',
-        description: 'Status cicilan saat ini tidak dapat diposting ke payroll.',
-      });
+      AppMessage.warning(getCicilanPostBlockedMessage(selectedPostCicilan));
       return false;
     }
 

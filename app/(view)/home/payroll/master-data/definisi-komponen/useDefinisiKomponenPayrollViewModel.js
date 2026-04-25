@@ -76,7 +76,6 @@ function buildDefinisiKomponenPayload(formData) {
     id_tipe_komponen_payroll: normalizeText(formData?.id_tipe_komponen_payroll),
     nama_komponen: normalizeText(formData?.nama_komponen),
     arah_komponen: normalizeUppercaseText(formData?.arah_komponen || 'PEMASUKAN'),
-    kena_pajak_default: Boolean(formData?.kena_pajak_default),
     berulang_default: Boolean(formData?.berulang_default),
     aktif: Boolean(formData?.aktif),
     catatan: normalizeText(formData?.catatan) || null,

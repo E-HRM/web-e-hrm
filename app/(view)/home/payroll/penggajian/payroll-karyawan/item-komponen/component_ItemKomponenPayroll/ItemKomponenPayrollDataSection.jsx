@@ -42,11 +42,6 @@ export default function ItemKomponenPayrollDataSection({ vm }) {
               {vm.formatEnumLabel(item.tipe_komponen)}
             </AppTag>
 
-            {item.kena_pajak ? (
-              <AppTag tone="warning" variant="soft" size="sm">
-                Masuk Pajak
-              </AppTag>
-            ) : null}
           </div>
         </div>
       ),

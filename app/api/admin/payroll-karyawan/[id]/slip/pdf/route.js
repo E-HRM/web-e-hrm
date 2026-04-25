@@ -114,6 +114,10 @@ function isSnapshotBackedDetail(item, snapshotKey) {
     return itemType === 'GAJI_POKOK' || itemName.includes('gaji pokok');
   }
 
+  if (snapshotKey === 'tunjangan_bpjs') {
+    return itemName.includes('tunjangan bpjs') || itemName.includes('bpjs');
+  }
+
   if (snapshotKey === 'pph21') {
     return itemType === 'PAJAK' || itemName.includes('pph 21') || itemName.includes('pph21');
   }
@@ -124,6 +128,7 @@ function isSnapshotBackedDetail(item, snapshotKey) {
 function buildDetailRows(slip) {
   const detailItems = buildDetailItems(slip?.groups);
   const gajiPokokSnapshot = Number(slip?.payroll?.gaji_pokok_snapshot || 0);
+  const tunjanganBpjsSnapshot = Number(slip?.payroll?.tunjangan_bpjs_snapshot || 0);
   const pph21Nominal = Number(slip?.summary?.pph21_nominal ?? slip?.payroll?.pph21_nominal ?? 0);
 
   const snapshotRows = [
@@ -133,6 +138,15 @@ function buildDetailRows(slip) {
             snapshotKey: 'gaji_pokok',
             label: 'Gaji Pokok',
             value: formatCurrency(gajiPokokSnapshot),
+          },
+        ]
+      : []),
+    ...(tunjanganBpjsSnapshot > 0
+      ? [
+          {
+            snapshotKey: 'tunjangan_bpjs',
+            label: 'Tunjangan BPJS',
+            value: `-${formatCurrency(tunjanganBpjsSnapshot)}`,
           },
         ]
       : []),

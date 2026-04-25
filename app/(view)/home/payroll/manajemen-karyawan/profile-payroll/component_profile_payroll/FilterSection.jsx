@@ -19,7 +19,7 @@ export default function FilterSection({ vm }) {
           <AppInput
             value={vm.searchQuery}
             onChange={(e) => vm.setSearchQuery(e.target.value)}
-            placeholder='Cari nama karyawan, NIK, email, jabatan, departemen, atau tarif pajak...'
+            placeholder='Cari nama karyawan, NIK, email, jabatan, departemen, gaji pokok, atau tunjangan BPJS...'
             allowClear
             prefixIcon={<SearchOutlined className='text-gray-400' />}
             inputClassName='!rounded-lg'

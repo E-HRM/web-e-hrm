@@ -146,6 +146,23 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   size={14}
                   className='text-gray-600'
                 >
+                  Gaji Pokok
+                </AppTypography.Text>
+
+                <AppTypography.Text
+                  size={14}
+                  weight={600}
+                  className='text-gray-900'
+                >
+                  {vm.formatCurrency(payroll.gaji_pokok_snapshot)}
+                </AppTypography.Text>
+              </div>
+
+              <div className='flex justify-between'>
+                <AppTypography.Text
+                  size={14}
+                  className='text-gray-600'
+                >
                   Pendapatan Tetap
                 </AppTypography.Text>
 
@@ -207,6 +224,23 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                   className='text-red-600'
                 >
                   -{vm.formatCurrency(payroll.total_pajak)}
+                </AppTypography.Text>
+              </div>
+
+              <div className='flex justify-between'>
+                <AppTypography.Text
+                  size={14}
+                  className='text-red-600'
+                >
+                  Tunjangan BPJS
+                </AppTypography.Text>
+
+                <AppTypography.Text
+                  size={14}
+                  weight={600}
+                  className='text-red-600'
+                >
+                  -{vm.formatCurrency(payroll.tunjangan_bpjs_snapshot)}
                 </AppTypography.Text>
               </div>
 

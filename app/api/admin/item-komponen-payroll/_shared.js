@@ -42,7 +42,6 @@ export const ALLOWED_ORDER_BY = new Set([
   "tipe_komponen",
   "arah_komponen",
   "nominal",
-  "kena_pajak",
   "urutan_tampil",
 ]);
 
@@ -341,7 +340,6 @@ export function buildSelect() {
     arah_komponen: true,
     nama_komponen: true,
     nominal: true,
-    kena_pajak: true,
     urutan_tampil: true,
     catatan: true,
     created_at: true,
@@ -426,7 +424,6 @@ export function buildSelect() {
         id_tipe_komponen_payroll: true,
         nama_komponen: true,
         arah_komponen: true,
-        kena_pajak_default: true,
         berulang_default: true,
         aktif: true,
         deleted_at: true,
@@ -584,7 +581,6 @@ export async function getDefinitionForItem(
       id_tipe_komponen_payroll: true,
       nama_komponen: true,
       arah_komponen: true,
-      kena_pajak_default: true,
       aktif: true,
       deleted_at: true,
       tipe_komponen: {
@@ -755,7 +751,6 @@ export async function resolveItemPayload(
   let tipe_komponen = null;
   let arah_komponen = null;
   let nama_komponen = null;
-  let kena_pajak = false;
 
   if (definisi) {
     const tipeDefinisi = String(
@@ -773,7 +768,6 @@ export async function resolveItemPayload(
       .trim()
       .toUpperCase();
     nama_komponen = String(definisi.nama_komponen || "").trim();
-    kena_pajak = Boolean(definisi.kena_pajak_default);
   } else {
     const requestedTipeKomponen = hasOwn(input, "tipe_komponen")
       ? input.tipe_komponen
@@ -790,9 +784,6 @@ export async function resolveItemPayload(
     nama_komponen = hasOwn(input, "nama_komponen")
       ? input.nama_komponen
       : existing?.nama_komponen;
-    kena_pajak = hasOwn(input, "kena_pajak")
-      ? input.kena_pajak
-      : Boolean(existing?.kena_pajak);
   }
 
   const nominal = hasOwn(input, "nominal")
@@ -857,7 +848,6 @@ export async function resolveItemPayload(
       arah_komponen: String(arah_komponen).trim().toUpperCase(),
       nama_komponen,
       nominal,
-      kena_pajak,
       urutan_tampil: urutan_tampil ?? 0,
     },
   };
@@ -878,7 +868,6 @@ export async function getExistingItem(id) {
       arah_komponen: true,
       nama_komponen: true,
       nominal: true,
-      kena_pajak: true,
       urutan_tampil: true,
       catatan: true,
       created_at: true,

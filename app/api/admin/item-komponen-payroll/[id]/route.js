@@ -19,7 +19,6 @@ import {
   findDuplicateIdempotencyKey,
   getExistingItem,
   guardRole,
-  normalizeBoolean,
   normalizeDecimalString,
   normalizeEnum,
   normalizeNullableString,
@@ -186,11 +185,6 @@ export async function PUT(req, { params }) {
                 maxIntegerDigits: DECIMAL_MAX_INTEGER_DIGITS,
               },
             ),
-          }
-        : {}),
-      ...(body?.kena_pajak !== undefined
-        ? {
-            kena_pajak: normalizeBoolean(body?.kena_pajak, "kena_pajak"),
           }
         : {}),
       ...(body?.urutan_tampil !== undefined

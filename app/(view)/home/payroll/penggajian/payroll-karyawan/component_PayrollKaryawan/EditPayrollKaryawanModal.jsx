@@ -40,6 +40,35 @@ function EditPayrollForm({ vm }) {
           disabled
           inputClassName='!rounded-lg'
         />
+
+        <AppSelect
+          label='Tarif Pajak TER'
+          required
+          value={vm.formData.id_tarif_pajak_ter || undefined}
+          onChange={(value) => vm.handleTarifPajakChange(value)}
+          options={vm.tarifPajakOptions}
+          placeholder='Pilih tarif TER'
+          loading={vm.isTarifPajakLoading}
+          disabled={vm.isTarifPajakLoading}
+          selectClassName='!rounded-lg'
+          hint={vm.tarifPajakSelectionHint}
+        />
+
+        <AppInput
+          label='Gaji Pokok'
+          value={vm.formatCurrency(vm.formData.gaji_pokok_snapshot)}
+          placeholder='Gaji pokok snapshot'
+          disabled
+          inputClassName='!rounded-lg'
+        />
+
+        <AppInput
+          label='Tunjangan BPJS (Potongan)'
+          value={vm.formatCurrency(vm.formData.tunjangan_bpjs_snapshot)}
+          placeholder='Tunjangan BPJS snapshot'
+          disabled
+          inputClassName='!rounded-lg'
+        />
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>

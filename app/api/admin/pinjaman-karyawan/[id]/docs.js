@@ -34,7 +34,10 @@
  *         description: Terjadi kesalahan server.
  *   put:
  *     summary: Perbarui pinjaman karyawan
- *     description: Memperbarui pinjaman karyawan berdasarkan ID. Setelah data disimpan, cicilan akan disinkronkan ulang berdasarkan status akhir pinjaman: `AKTIF` akan generate ulang cicilan, sedangkan `DRAFT` dan `DIBATALKAN` akan menghapus seluruh cicilan terkait.
+ *     description: |
+ *       Memperbarui pinjaman karyawan berdasarkan ID. Setelah data disimpan, cicilan akan disinkronkan ulang berdasarkan status akhir pinjaman:
+ *       - `AKTIF` akan generate ulang cicilan.
+ *       - `DRAFT` dan `DIBATALKAN` akan menghapus seluruh cicilan terkait.
  *     tags: [Admin - Pinjaman Karyawan]
  *     security:
  *       - BearerAuth: []
@@ -60,9 +63,10 @@
  *               nominal_pinjaman:
  *                 type: string
  *                 example: '10000000.00'
- *               nominal_cicilan:
- *                 type: string
- *                 example: '1000000.00'
+ *               tenor_bulan:
+ *                 type: integer
+ *                 minimum: 1
+ *                 example: 10
  *               sisa_saldo:
  *                 type: string
  *                 example: '7000000.00'

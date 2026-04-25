@@ -11,8 +11,8 @@ export function createInitialProfilPayrollForm() {
   return {
     id_user: '',
     jenis_hubungan_kerja: 'PKWTT',
-    id_tarif_pajak_ter: '',
     gaji_pokok: 0,
+    tunjangan_bpjs: 0,
     payroll_aktif: true,
     tanggal_mulai_payroll: '',
     catatan: '',
@@ -75,48 +75,6 @@ export function formatJenisHubungan(value) {
   };
 
   return map[value] || value || '-';
-}
-
-export function formatTarifPajakPercent(value) {
-  const parsed = Number(value);
-
-  if (!Number.isFinite(parsed)) return '-';
-
-  return `${parsed.toLocaleString('id-ID', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 4,
-  })}%`;
-}
-
-export function formatTarifPajakIncomeRange(tarif) {
-  if (!tarif) return '-';
-
-  const minIncome = formatCurrency(tarif.penghasilan_dari);
-  const maxIncome = tarif.penghasilan_sampai === null || tarif.penghasilan_sampai === undefined ? null : formatCurrency(tarif.penghasilan_sampai);
-
-  return maxIncome ? `${minIncome} - ${maxIncome}` : `${minIncome} ke atas`;
-}
-
-export function formatTarifPajakLabel(tarif, fallbackId = null) {
-  if (!tarif) {
-    return fallbackId ? `Tarif tidak ditemukan (${fallbackId})` : '-';
-  }
-
-  const kodeKategoriPajak = String(tarif.kode_kategori_pajak || '').trim() || '-';
-  const incomeRange = formatTarifPajakIncomeRange(tarif);
-  const percent = formatTarifPajakPercent(tarif.persen_tarif);
-
-  return [kodeKategoriPajak, incomeRange, percent].filter(Boolean).join(' | ');
-}
-
-export function buildTarifPajakSearchText(tarif, fallbackId = null) {
-  if (!tarif) {
-    return String(fallbackId || '')
-      .trim()
-      .toLowerCase();
-  }
-
-  return [tarif.id_tarif_pajak_ter, tarif.kode_kategori_pajak, tarif.penghasilan_dari, tarif.penghasilan_sampai, tarif.persen_tarif, formatTarifPajakIncomeRange(tarif), formatTarifPajakLabel(tarif)].filter(Boolean).join(' ').toLowerCase();
 }
 
 export function getUserDisplayName(user) {

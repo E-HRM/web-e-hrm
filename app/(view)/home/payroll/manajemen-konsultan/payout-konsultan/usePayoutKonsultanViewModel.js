@@ -82,7 +82,6 @@ function normalizeDefinition(item) {
     nama_komponen: normalizeText(item.nama_komponen),
     tipe_komponen: normalizeUpperText(tipeKomponen),
     arah_komponen: normalizeUpperText(item.arah_komponen),
-    kena_pajak_default: Boolean(item.kena_pajak_default),
     aktif: Boolean(item.aktif),
     deleted_at: item.deleted_at || null,
   };

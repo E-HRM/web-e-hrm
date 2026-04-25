@@ -9,10 +9,10 @@ const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const STATUS_PINJAMAN_VALUES = new Set(['DRAFT', 'AKTIF', 'LUNAS', 'DIBATALKAN']);
 
-const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_pinjaman', 'nominal_pinjaman', 'nominal_cicilan', 'sisa_saldo', 'tanggal_mulai', 'tanggal_selesai', 'status_pinjaman']);
+const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_pinjaman', 'nominal_pinjaman', 'tenor_bulan', 'sisa_saldo', 'tanggal_mulai', 'tanggal_selesai', 'status_pinjaman']);
 
 const DECIMAL_SCALE = 2;
-const { buildGeneratedCicilanSchedule, toDateOnlyComparable } = pinjamanCicilanSchedule;
+const { buildGeneratedCicilanSchedule, calculateNominalCicilan } = pinjamanCicilanSchedule;
 
 const normRole = (role) =>
   String(role || '')
@@ -118,6 +118,26 @@ function normalizeDecimalString(value, fieldName, scale, options = {}) {
   return normalized;
 }
 
+function normalizePositiveInteger(value, fieldName) {
+  if (value === undefined || value === null || value === '') {
+    throw new Error(`Field '${fieldName}' wajib diisi.`);
+  }
+
+  const raw = String(value).trim();
+
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`Field '${fieldName}' harus berupa bilangan bulat lebih besar dari 0.`);
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`Field '${fieldName}' harus berupa bilangan bulat lebih besar dari 0.`);
+  }
+
+  return parsed;
+}
+
 function parseDateOnly(value, fieldName) {
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
@@ -144,7 +164,7 @@ function buildSelect() {
     id_user: true,
     nama_pinjaman: true,
     nominal_pinjaman: true,
-    nominal_cicilan: true,
+    tenor_bulan: true,
     sisa_saldo: true,
     tanggal_mulai: true,
     tanggal_selesai: true,
@@ -190,17 +210,28 @@ function buildSelect() {
   };
 }
 
-function validateLoanState({ nominal_pinjaman, nominal_cicilan, sisa_saldo, tanggal_mulai, tanggal_selesai, status_pinjaman }) {
+function enrichPinjaman(data) {
+  if (!data) return data;
+
+  return {
+    ...data,
+    nominal_cicilan: calculateNominalCicilan({
+      nominal_pinjaman: data.nominal_pinjaman,
+      tenor_bulan: data.tenor_bulan,
+    }),
+  };
+}
+
+function validateLoanState({ nominal_pinjaman, tenor_bulan, sisa_saldo, tanggal_mulai, tanggal_selesai, status_pinjaman }) {
   const nominalPinjaman = decimalToScaledBigInt(nominal_pinjaman, DECIMAL_SCALE);
-  const nominalCicilan = decimalToScaledBigInt(nominal_cicilan, DECIMAL_SCALE);
   const sisaSaldo = decimalToScaledBigInt(sisa_saldo, DECIMAL_SCALE);
 
   if (nominalPinjaman <= 0n) {
     throw new Error("Field 'nominal_pinjaman' harus lebih besar dari 0.");
   }
 
-  if (nominalCicilan <= 0n) {
-    throw new Error("Field 'nominal_cicilan' harus lebih besar dari 0.");
+  if (!Number.isInteger(Number(tenor_bulan)) || Number(tenor_bulan) <= 0) {
+    throw new Error("Field 'tenor_bulan' harus berupa bilangan bulat lebih besar dari 0.");
   }
 
   if (sisaSaldo < 0n) {
@@ -230,7 +261,7 @@ function validateCreateStatus(status_pinjaman) {
   }
 }
 
-function buildCreateScheduleSnapshot({ nominal_pinjaman, nominal_cicilan, tanggal_mulai, status_pinjaman }) {
+function buildCreateScheduleSnapshot({ nominal_pinjaman, tenor_bulan, tanggal_mulai, status_pinjaman }) {
   if (status_pinjaman !== 'AKTIF') {
     return {
       generatedSchedule: null,
@@ -241,7 +272,7 @@ function buildCreateScheduleSnapshot({ nominal_pinjaman, nominal_cicilan, tangga
 
   const generatedSchedule = buildGeneratedCicilanSchedule({
     nominal_pinjaman,
-    nominal_cicilan,
+    tenor_bulan,
     tanggal_mulai,
   });
 
@@ -405,7 +436,7 @@ export async function GET(req) {
     ]);
 
     return NextResponse.json({
-      data,
+      data: data.map(enrichPinjaman),
       pagination: {
         page,
         pageSize,
@@ -439,7 +470,7 @@ export async function POST(req) {
     const nama_pinjaman = normalizeRequiredString(body?.nama_pinjaman, 'nama_pinjaman', 255);
 
     const nominal_pinjaman = normalizeDecimalString(body?.nominal_pinjaman, 'nominal_pinjaman', DECIMAL_SCALE, { min: '0' });
-    const nominal_cicilan = normalizeDecimalString(body?.nominal_cicilan, 'nominal_cicilan', DECIMAL_SCALE, { min: '0' });
+    const tenor_bulan = normalizePositiveInteger(body?.tenor_bulan, 'tenor_bulan');
 
     const tanggal_mulai = parseRequiredDateOnly(body?.tanggal_mulai, 'tanggal_mulai');
     const status_pinjaman = body?.status_pinjaman === undefined ? 'DRAFT' : normalizeEnum(body?.status_pinjaman, STATUS_PINJAMAN_VALUES, 'status_pinjaman');
@@ -449,14 +480,14 @@ export async function POST(req) {
 
     const { generatedSchedule, resolvedTanggalSelesai, resolvedSisaSaldo } = buildCreateScheduleSnapshot({
       nominal_pinjaman,
-      nominal_cicilan,
+      tenor_bulan,
       tanggal_mulai,
       status_pinjaman,
     });
 
     validateLoanState({
       nominal_pinjaman,
-      nominal_cicilan,
+      tenor_bulan,
       sisa_saldo: resolvedSisaSaldo,
       tanggal_mulai,
       tanggal_selesai: resolvedTanggalSelesai,
@@ -483,7 +514,7 @@ export async function POST(req) {
           id_user,
           nama_pinjaman,
           nominal_pinjaman,
-          nominal_cicilan,
+          tenor_bulan,
           sisa_saldo: resolvedSisaSaldo,
           tanggal_mulai,
           tanggal_selesai: resolvedTanggalSelesai,
@@ -504,10 +535,12 @@ export async function POST(req) {
         });
       }
 
-      return tx.pinjamanKaryawan.findUnique({
+      const data = await tx.pinjamanKaryawan.findUnique({
         where: { id_pinjaman_karyawan: createdPinjaman.id_pinjaman_karyawan },
         select: buildSelect(),
       });
+
+      return enrichPinjaman(data);
     });
 
     const message =

@@ -67,10 +67,18 @@ export default function DetailPinjamanModalSection({ vm }) {
             />
           )}
 
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-6 p-4 bg-gray-50 rounded-lg'>
+          <div className='grid grid-cols-1 md:grid-cols-4 gap-6 p-4 bg-gray-50 rounded-lg'>
             <DetailField
               label='Total Pinjaman'
               value={vm.formatCurrency(vm.selectedPinjaman.nominal_pinjaman)}
+              valueSize={22}
+              weight={800}
+            />
+
+            <DetailField
+              label='Tenor'
+              value={`${vm.selectedPinjaman.tenor_bulan || 0} bulan`}
+              valueClassName='text-blue-600'
               valueSize={22}
               weight={800}
             />

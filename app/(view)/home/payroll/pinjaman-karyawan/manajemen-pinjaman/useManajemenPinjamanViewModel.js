@@ -7,7 +7,7 @@ import AppMessage from '@/app/(view)/component_shared/AppMessage';
 import { crudServiceAuth } from '@/app/utils/services/crudServiceAuth';
 import { ApiEndpoints } from '@/constrainst/endpoints';
 
-import { STATUS_PINJAMAN, createInitialPinjamanForm, formatCurrency, formatDate, toDateInputValue, toNumber } from './utils/utils';
+import { STATUS_PINJAMAN, calculateNominalCicilan, createInitialPinjamanForm, formatCurrency, formatDate, toDateInputValue, toNumber } from './utils/utils';
 
 const FETCH_PAGE_SIZE = 100;
 const PINJAMAN_SWR_KEY = 'payroll:pinjaman-karyawan:list';
@@ -138,6 +138,8 @@ function normalizePinjamanItem(item, usersMap) {
 
   const fallbackUser = usersMap.get(String(item.id_user || '')) || null;
   const user = item.user || fallbackUser || null;
+  const tenorBulan = Math.trunc(toNumber(item.tenor_bulan));
+  const nominalCicilan = item.nominal_cicilan !== undefined && item.nominal_cicilan !== null ? toNumber(item.nominal_cicilan) : calculateNominalCicilan(item.nominal_pinjaman, tenorBulan);
 
   return {
     ...item,
@@ -145,7 +147,8 @@ function normalizePinjamanItem(item, usersMap) {
     id_user: normalizeText(item.id_user),
     nama_pinjaman: normalizeText(item.nama_pinjaman),
     nominal_pinjaman: toNumber(item.nominal_pinjaman),
-    nominal_cicilan: toNumber(item.nominal_cicilan),
+    tenor_bulan: tenorBulan,
+    nominal_cicilan: nominalCicilan,
     sisa_saldo: toNumber(item.sisa_saldo),
     tanggal_mulai: item.tanggal_mulai || null,
     tanggal_selesai: item.tanggal_selesai || null,
@@ -297,7 +300,7 @@ export default function useManajemenPinjamanViewModel() {
       id_user: pinjaman.id_user || '',
       nama_pinjaman: pinjaman.nama_pinjaman || '',
       nominal_pinjaman: toNumber(pinjaman.nominal_pinjaman),
-      nominal_cicilan: toNumber(pinjaman.nominal_cicilan),
+      tenor_bulan: Math.trunc(toNumber(pinjaman.tenor_bulan)),
       tanggal_mulai: toDateInputValue(pinjaman.tanggal_mulai),
       status_pinjaman:
         pinjaman.status_pinjaman === STATUS_PINJAMAN.LUNAS
@@ -366,8 +369,9 @@ export default function useManajemenPinjamanViewModel() {
       return false;
     }
 
-    if (toNumber(formData.nominal_cicilan) <= 0) {
-      AppMessage.warning('Cicilan per bulan harus lebih dari 0.');
+    const tenorBulan = toNumber(formData.tenor_bulan);
+    if (!Number.isInteger(tenorBulan) || tenorBulan <= 0) {
+      AppMessage.warning('Tenor bulan harus berupa angka bulat lebih dari 0.');
       return false;
     }
 
@@ -382,14 +386,14 @@ export default function useManajemenPinjamanViewModel() {
     }
 
     return true;
-  }, [duplicateNameForUser, formData.id_user, formData.nama_pinjaman, formData.nominal_cicilan, formData.nominal_pinjaman, formData.status_pinjaman, formData.tanggal_mulai]);
+  }, [duplicateNameForUser, formData.id_user, formData.nama_pinjaman, formData.nominal_pinjaman, formData.status_pinjaman, formData.tanggal_mulai, formData.tenor_bulan]);
 
   const buildCreatePayload = useCallback(() => {
     return {
       id_user: normalizeText(formData.id_user),
       nama_pinjaman: normalizeText(formData.nama_pinjaman),
       nominal_pinjaman: toNumber(formData.nominal_pinjaman),
-      nominal_cicilan: toNumber(formData.nominal_cicilan),
+      tenor_bulan: Math.trunc(toNumber(formData.tenor_bulan)),
       tanggal_mulai: normalizeText(formData.tanggal_mulai),
       status_pinjaman: normalizeText(formData.status_pinjaman || STATUS_PINJAMAN.DRAFT).toUpperCase(),
       catatan: normalizeText(formData.catatan) || null,
@@ -403,7 +407,7 @@ export default function useManajemenPinjamanViewModel() {
       id_user: normalizeText(formData.id_user || resolvedSelectedPinjaman.id_user),
       nama_pinjaman: normalizeText(formData.nama_pinjaman),
       nominal_pinjaman: toNumber(formData.nominal_pinjaman),
-      nominal_cicilan: toNumber(formData.nominal_cicilan),
+      tenor_bulan: Math.trunc(toNumber(formData.tenor_bulan)),
       tanggal_mulai: normalizeText(formData.tanggal_mulai),
       status_pinjaman: normalizeText(formData.status_pinjaman || STATUS_PINJAMAN.DRAFT).toUpperCase(),
       catatan: normalizeText(formData.catatan) || null,

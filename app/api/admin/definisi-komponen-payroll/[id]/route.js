@@ -147,7 +147,6 @@ function buildSelect() {
     id_tipe_komponen_payroll: true,
     nama_komponen: true,
     arah_komponen: true,
-    kena_pajak_default: true,
     berulang_default: true,
     aktif: true,
     catatan: true,
@@ -213,7 +212,6 @@ export async function PUT(req, { params }) {
         id_tipe_komponen_payroll: true,
         nama_komponen: true,
         arah_komponen: true,
-        kena_pajak_default: true,
         berulang_default: true,
         aktif: true,
         catatan: true,
@@ -239,10 +237,6 @@ export async function PUT(req, { params }) {
 
     if (body?.arah_komponen !== undefined) {
       payload.arah_komponen = normalizeEnum(body.arah_komponen, ARAH_KOMPONEN_VALUES, 'arah_komponen');
-    }
-
-    if (body?.kena_pajak_default !== undefined) {
-      payload.kena_pajak_default = normalizeBoolean(body.kena_pajak_default, 'kena_pajak_default');
     }
 
     if (body?.berulang_default !== undefined) {

@@ -55,12 +55,13 @@
  *               id_user:
  *                 type: string
  *                 description: ID user baru. User harus aktif dan tidak boleh memiliki profil payroll lain.
- *               id_tarif_pajak_ter:
- *                 type: string
- *                 description: ID tarif pajak TER aktif yang dipakai pada profil payroll.
  *               jenis_hubungan_kerja:
  *                 type: string
  *                 enum: [FREELANCE, INTERNSHIP, PKWT, PKWTT]
+ *               gaji_pokok:
+ *                 type: number
+ *               tunjangan_bpjs:
+ *                 type: number
  *               payroll_aktif:
  *                 type: boolean
  *               tanggal_mulai_payroll:

@@ -54,8 +54,6 @@
  *               arah_komponen:
  *                 type: string
  *                 enum: [PEMASUKAN, POTONGAN]
- *               kena_pajak_default:
- *                 type: boolean
  *               berulang_default:
  *                 type: boolean
  *               aktif:

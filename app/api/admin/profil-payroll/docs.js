@@ -43,11 +43,6 @@
  *           enum: [FREELANCE, INTERNSHIP, PKWT, PKWTT]
  *         description: Filter berdasarkan jenis hubungan kerja.
  *       - in: query
- *         name: id_tarif_pajak_ter
- *         schema:
- *           type: string
- *         description: Filter berdasarkan ID tarif pajak TER.
- *       - in: query
  *         name: payroll_aktif
  *         schema:
  *           oneOf:
@@ -66,7 +61,7 @@
  *         name: orderBy
  *         schema:
  *           type: string
- *           enum: [created_at, updated_at, tanggal_mulai_payroll, jenis_hubungan_kerja, id_tarif_pajak_ter, payroll_aktif]
+ *           enum: [created_at, updated_at, tanggal_mulai_payroll, jenis_hubungan_kerja, gaji_pokok, tunjangan_bpjs, payroll_aktif]
  *           default: created_at
  *         description: Kolom pengurutan.
  *       - in: query
@@ -121,18 +116,20 @@
  *             type: object
  *             required:
  *               - id_user
- *               - id_tarif_pajak_ter
  *               - jenis_hubungan_kerja
  *             properties:
  *               id_user:
  *                 type: string
  *                 description: ID user yang akan dibuatkan profil payroll.
- *               id_tarif_pajak_ter:
- *                 type: string
- *                 description: ID tarif pajak TER aktif yang dipakai pada profil payroll.
  *               jenis_hubungan_kerja:
  *                 type: string
  *                 enum: [FREELANCE, INTERNSHIP, PKWT, PKWTT]
+ *               gaji_pokok:
+ *                 type: number
+ *                 default: 0
+ *               tunjangan_bpjs:
+ *                 type: number
+ *                 default: 0
  *               payroll_aktif:
  *                 type: boolean
  *                 default: true
@@ -223,11 +220,13 @@
  *           type: string
  *         id_user:
  *           type: string
- *         id_tarif_pajak_ter:
- *           type: string
  *         jenis_hubungan_kerja:
  *           type: string
  *           enum: [FREELANCE, INTERNSHIP, PKWT, PKWTT]
+ *         gaji_pokok:
+ *           type: number
+ *         tunjangan_bpjs:
+ *           type: number
  *         payroll_aktif:
  *           type: boolean
  *         tanggal_mulai_payroll:
@@ -249,33 +248,6 @@
  *           nullable: true
  *         user:
  *           $ref: '#/components/schemas/ProfilPayrollUserRingkas'
- *         tarif_pajak_ter:
- *           $ref: '#/components/schemas/TarifPajakTERRingkas'
- *     TarifPajakTERRingkas:
- *       type: object
- *       properties:
- *         id_tarif_pajak_ter:
- *           type: string
- *         kode_kategori_pajak:
- *           type: string
- *         penghasilan_dari:
- *           type: number
- *         penghasilan_sampai:
- *           type: number
- *           nullable: true
- *         persen_tarif:
- *           type: number
- *         berlaku_mulai:
- *           type: string
- *           format: date
- *         berlaku_sampai:
- *           type: string
- *           format: date
- *           nullable: true
- *         deleted_at:
- *           type: string
- *           format: date-time
- *           nullable: true
  */
 
 const adminProfilPayrollDocs = {};

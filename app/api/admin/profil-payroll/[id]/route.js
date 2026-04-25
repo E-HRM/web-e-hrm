@@ -116,18 +116,6 @@ function parseNonNegativeDecimal(value, fieldName) {
   return parsed.toFixed(2);
 }
 
-async function ensureTarifPajakTerExists(id_tarif_pajak_ter) {
-  return db.tarifPajakTER.findFirst({
-    where: {
-      id_tarif_pajak_ter,
-      deleted_at: null,
-    },
-    select: {
-      id_tarif_pajak_ter: true,
-    },
-  });
-}
-
 async function ensureAuth(req) {
   const auth = req.headers.get('authorization') || '';
 
@@ -171,9 +159,9 @@ function buildSelect() {
   return {
     id_profil_payroll: true,
     id_user: true,
-    id_tarif_pajak_ter: true,
     jenis_hubungan_kerja: true,
     gaji_pokok: true,
+    tunjangan_bpjs: true,
     payroll_aktif: true,
     tanggal_mulai_payroll: true,
     catatan: true,
@@ -210,18 +198,6 @@ function buildSelect() {
             nama_kantor: true,
           },
         },
-      },
-    },
-    tarif_pajak_ter: {
-      select: {
-        id_tarif_pajak_ter: true,
-        kode_kategori_pajak: true,
-        penghasilan_dari: true,
-        penghasilan_sampai: true,
-        persen_tarif: true,
-        berlaku_mulai: true,
-        berlaku_sampai: true,
-        deleted_at: true,
       },
     },
   };
@@ -269,9 +245,9 @@ export async function PUT(req, { params }) {
       select: {
         id_profil_payroll: true,
         id_user: true,
-        id_tarif_pajak_ter: true,
         jenis_hubungan_kerja: true,
         gaji_pokok: true,
+        tunjangan_bpjs: true,
         payroll_aktif: true,
         tanggal_mulai_payroll: true,
         catatan: true,
@@ -346,20 +322,12 @@ export async function PUT(req, { params }) {
       payload.jenis_hubungan_kerja = value;
     }
 
-    if (body?.id_tarif_pajak_ter !== undefined) {
-      const id_tarif_pajak_ter = normalizeRequiredId(body.id_tarif_pajak_ter, 'id_tarif_pajak_ter');
-
-      const tarifPajakTer = await ensureTarifPajakTerExists(id_tarif_pajak_ter);
-
-      if (!tarifPajakTer) {
-        return NextResponse.json({ message: 'Tarif pajak TER tidak ditemukan atau sudah dihapus.' }, { status: 404 });
-      }
-
-      payload.id_tarif_pajak_ter = id_tarif_pajak_ter;
-    }
-
     if (body?.gaji_pokok !== undefined) {
       payload.gaji_pokok = parseNonNegativeDecimal(body.gaji_pokok, 'gaji_pokok');
+    }
+
+    if (body?.tunjangan_bpjs !== undefined) {
+      payload.tunjangan_bpjs = parseNonNegativeDecimal(body.tunjangan_bpjs, 'tunjangan_bpjs');
     }
 
     if (body?.catatan !== undefined) {
@@ -396,11 +364,11 @@ export async function PUT(req, { params }) {
     if (err instanceof Error) {
       if (
         err.message.includes('jenis_hubungan_kerja') ||
-        err.message.includes('id_tarif_pajak_ter') ||
         err.message.includes('tanggal_mulai_payroll') ||
         err.message.includes('deleted_at') ||
         err.message.includes('boolean') ||
-        err.message.includes('gaji_pokok')
+        err.message.includes('gaji_pokok') ||
+        err.message.includes('tunjangan_bpjs')
       ) {
         return NextResponse.json({ message: err.message }, { status: 400 });
       }

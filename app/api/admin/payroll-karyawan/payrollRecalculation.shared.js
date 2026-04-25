@@ -56,6 +56,7 @@ export async function recalculatePayrollTotals(tx, id_payroll_karyawan, options 
         id_payroll_karyawan: true,
         status_payroll: true,
         gaji_pokok_snapshot: true,
+        tunjangan_bpjs_snapshot: true,
         persen_tarif_snapshot: true,
       },
     }),
@@ -85,6 +86,10 @@ export async function recalculatePayrollTotals(tx, id_payroll_karyawan, options 
     String(payroll.gaji_pokok_snapshot || "0"),
     DECIMAL_SCALE,
   );
+  const tunjanganBpjs = decimalToScaledBigInt(
+    String(payroll.tunjangan_bpjs_snapshot || "0"),
+    DECIMAL_SCALE,
+  );
   let totalPotonganLain = 0n;
 
   for (const item of activeNonTaxItems) {
@@ -109,7 +114,7 @@ export async function recalculatePayrollTotals(tx, id_payroll_karyawan, options 
     DECIMAL_SCALE,
   );
 
-  const totalPotongan = totalPotonganLain + pph21Nominal;
+  const totalPotongan = totalPotonganLain + pph21Nominal + tunjanganBpjs;
   const pendapatanBersih = totalPendapatanBruto - totalPotongan;
   const isDraftPayroll =
     String(payroll.status_payroll || "").trim().toUpperCase() ===

@@ -72,6 +72,10 @@ function normalizeEnum(value, allowedValues, fieldName) {
   return normalized;
 }
 
+function hasDefinedField(input, fieldName) {
+  return Object.prototype.hasOwnProperty.call(input, fieldName) && input[fieldName] !== undefined;
+}
+
 function stripLeadingZeros(numStr) {
   const stripped = numStr.replace(/^0+(?=\d)/, '');
   return stripped || '0';
@@ -224,7 +228,7 @@ function buildSelect() {
         id_user: true,
         nama_pinjaman: true,
         nominal_pinjaman: true,
-        nominal_cicilan: true,
+        tenor_bulan: true,
         sisa_saldo: true,
         tanggal_mulai: true,
         tanggal_selesai: true,
@@ -269,7 +273,6 @@ function buildSelect() {
             tanggal_mulai: true,
             tanggal_selesai: true,
             status_periode: true,
-            deleted_at: true,
           },
         },
       },
@@ -277,9 +280,49 @@ function buildSelect() {
   };
 }
 
+function getNominalCicilanDasar(pinjaman) {
+  const tenorBulan = Number(pinjaman?.tenor_bulan);
+
+  if (!Number.isInteger(tenorBulan) || tenorBulan <= 0) {
+    throw new Error("Field 'tenor_bulan' pada pinjaman harus berupa bilangan bulat lebih besar dari 0.");
+  }
+
+  const totalPinjaman = decimalToScaledBigInt(String(pinjaman.nominal_pinjaman), DECIMAL_SCALE);
+
+  if (totalPinjaman <= 0n) {
+    throw new Error("Field 'nominal_pinjaman' pada pinjaman harus lebih besar dari 0.");
+  }
+
+  const nominalCicilan = totalPinjaman / BigInt(tenorBulan);
+
+  if (nominalCicilan <= 0n) {
+    throw new Error("Field 'tenor_bulan' terlalu besar untuk 'nominal_pinjaman'.");
+  }
+
+  return nominalCicilan;
+}
+
+function enrichPinjamanSnapshot(pinjaman) {
+  if (!pinjaman) return pinjaman;
+
+  let nominalCicilan = null;
+
+  try {
+    nominalCicilan = scaledBigIntToDecimalString(getNominalCicilanDasar(pinjaman), DECIMAL_SCALE);
+  } catch (_) {
+    nominalCicilan = null;
+  }
+
+  return {
+    ...pinjaman,
+    nominal_cicilan: nominalCicilan,
+  };
+}
+
 function enrichCicilan(data) {
   if (!data) return data;
 
+  const pinjaman = enrichPinjamanSnapshot(data.pinjaman_karyawan);
   const payrollStatus = String(data.payroll_karyawan?.status_payroll || '').toUpperCase();
   const periodeStatus = String(data.payroll_karyawan?.periode?.status_periode || '').toUpperCase();
   const payrollPaid = payrollStatus === 'DIBAYAR';
@@ -291,6 +334,7 @@ function enrichCicilan(data) {
 
   return {
     ...data,
+    pinjaman_karyawan: pinjaman,
     business_state: {
       linked_payroll: Boolean(data.id_payroll_karyawan),
       payroll_paid: payrollPaid,
@@ -457,14 +501,40 @@ async function validatePaidQuota(tx, { id_pinjaman_karyawan, nominal_terbayar, n
   }
 }
 
+async function resolveDefaultNominalTagihan(tx, { pinjaman, currentId = null }) {
+  const nominalDasar = getNominalCicilanDasar(pinjaman);
+  const tenorBulan = Number(pinjaman.tenor_bulan);
+  const summary = await tx.cicilanPinjamanKaryawan.aggregate({
+    where: {
+      id_pinjaman_karyawan: pinjaman.id_pinjaman_karyawan,
+      deleted_at: null,
+      status_cicilan: { not: 'DILEWATI' },
+      ...(currentId ? { id_cicilan_pinjaman_karyawan: { not: currentId } } : {}),
+    },
+    _sum: {
+      nominal_tagihan: true,
+    },
+    _count: {
+      id_cicilan_pinjaman_karyawan: true,
+    },
+  });
+
+  const existingTotal = summary._sum.nominal_tagihan ? String(summary._sum.nominal_tagihan) : '0.00';
+  const existingCount = Number(summary._count.id_cicilan_pinjaman_karyawan || 0);
+  const remaining = decimalToScaledBigInt(String(pinjaman.nominal_pinjaman), DECIMAL_SCALE) - decimalToScaledBigInt(existingTotal, DECIMAL_SCALE);
+  const nominalTagihan = existingCount >= tenorBulan - 1 && remaining > 0n ? remaining : nominalDasar;
+
+  return scaledBigIntToDecimalString(nominalTagihan, DECIMAL_SCALE);
+}
+
 async function resolveBusinessState(tx, input, existing = null) {
-  const id_pinjaman_karyawan = Object.prototype.hasOwnProperty.call(input, 'id_pinjaman_karyawan') ? input.id_pinjaman_karyawan : existing?.id_pinjaman_karyawan;
+  const id_pinjaman_karyawan = hasDefinedField(input, 'id_pinjaman_karyawan') ? input.id_pinjaman_karyawan : existing?.id_pinjaman_karyawan;
 
   if (!id_pinjaman_karyawan) {
     throw new Error("Field 'id_pinjaman_karyawan' wajib diisi.");
   }
 
-  const jatuh_tempo = Object.prototype.hasOwnProperty.call(input, 'jatuh_tempo') ? input.jatuh_tempo : existing?.jatuh_tempo;
+  const jatuh_tempo = hasDefinedField(input, 'jatuh_tempo') ? input.jatuh_tempo : existing?.jatuh_tempo;
   if (!jatuh_tempo) {
     throw new Error("Field 'jatuh_tempo' wajib diisi.");
   }
@@ -477,7 +547,7 @@ async function resolveBusinessState(tx, input, existing = null) {
         id_user: true,
         nama_pinjaman: true,
         nominal_pinjaman: true,
-        nominal_cicilan: true,
+        tenor_bulan: true,
         sisa_saldo: true,
         tanggal_mulai: true,
         tanggal_selesai: true,
@@ -486,7 +556,7 @@ async function resolveBusinessState(tx, input, existing = null) {
       },
     }),
     Promise.resolve(
-      Object.prototype.hasOwnProperty.call(input, 'status_cicilan')
+      hasDefinedField(input, 'status_cicilan')
         ? input.status_cicilan
         : existing?.status_cicilan
           ? existing.status_cicilan
@@ -520,7 +590,7 @@ async function resolveBusinessState(tx, input, existing = null) {
 
   validateDateWithinLoan(jatuh_tempo, pinjaman);
 
-  const id_payroll_karyawan = Object.prototype.hasOwnProperty.call(input, 'id_payroll_karyawan') ? input.id_payroll_karyawan : (existing?.id_payroll_karyawan ?? null);
+  const id_payroll_karyawan = hasDefinedField(input, 'id_payroll_karyawan') ? input.id_payroll_karyawan : (existing?.id_payroll_karyawan ?? null);
 
   const payroll = id_payroll_karyawan
     ? await tx.payrollKaryawan.findUnique({
@@ -538,7 +608,6 @@ async function resolveBusinessState(tx, input, existing = null) {
               tanggal_mulai: true,
               tanggal_selesai: true,
               status_periode: true,
-              deleted_at: true,
             },
           },
         },
@@ -557,10 +626,6 @@ async function resolveBusinessState(tx, input, existing = null) {
     throw new Error('Payroll karyawan yang dipilih harus milik user yang sama dengan pinjaman.');
   }
 
-  if (payroll?.periode?.deleted_at) {
-    throw new Error('Periode payroll yang terkait dengan payroll karyawan sudah dihapus.');
-  }
-
   if (payroll && IMMUTABLE_PAYROLL_STATUS.has(String(payroll.status_payroll || '').toUpperCase())) {
     throw new Error('Payroll karyawan tujuan sudah final/disetujui dan tidak bisa menerima posting cicilan.');
   }
@@ -569,22 +634,29 @@ async function resolveBusinessState(tx, input, existing = null) {
     throw new Error('Periode payroll yang terkait dengan payroll karyawan sudah final atau terkunci.');
   }
 
-  const nominal_tagihan = Object.prototype.hasOwnProperty.call(input, 'nominal_tagihan')
+  const defaultNominalTagihan = hasDefinedField(input, 'nominal_tagihan') || (existing?.nominal_tagihan !== undefined && existing?.nominal_tagihan !== null)
+    ? null
+    : await resolveDefaultNominalTagihan(tx, {
+        pinjaman,
+        currentId: existing?.id_cicilan_pinjaman_karyawan || null,
+      });
+
+  const nominal_tagihan = hasDefinedField(input, 'nominal_tagihan')
     ? input.nominal_tagihan
     : existing?.nominal_tagihan !== undefined && existing?.nominal_tagihan !== null
       ? String(existing.nominal_tagihan)
-      : String(pinjaman.nominal_cicilan);
+      : defaultNominalTagihan;
 
   const status_cicilan = defaultStatusSeed ?? (id_payroll_karyawan ? (payroll?.status_payroll === 'DIBAYAR' ? 'DIBAYAR' : 'DIPOSTING') : 'MENUNGGU');
 
-  let nominal_terbayar = Object.prototype.hasOwnProperty.call(input, 'nominal_terbayar')
+  let nominal_terbayar = hasDefinedField(input, 'nominal_terbayar')
     ? input.nominal_terbayar
     : existing?.nominal_terbayar !== undefined && existing?.nominal_terbayar !== null
       ? String(existing.nominal_terbayar)
       : '0.00';
 
-  let diposting_pada = Object.prototype.hasOwnProperty.call(input, 'diposting_pada') ? input.diposting_pada : (existing?.diposting_pada ?? null);
-  let dibayar_pada = Object.prototype.hasOwnProperty.call(input, 'dibayar_pada') ? input.dibayar_pada : (existing?.dibayar_pada ?? null);
+  let diposting_pada = hasDefinedField(input, 'diposting_pada') ? input.diposting_pada : (existing?.diposting_pada ?? null);
+  let dibayar_pada = hasDefinedField(input, 'dibayar_pada') ? input.dibayar_pada : (existing?.dibayar_pada ?? null);
 
   if (status_cicilan === 'DIPOSTING' && !diposting_pada) {
     diposting_pada = new Date();

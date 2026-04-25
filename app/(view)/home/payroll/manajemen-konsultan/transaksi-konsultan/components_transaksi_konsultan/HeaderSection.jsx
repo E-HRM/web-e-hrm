@@ -1,4 +1,4 @@
-import { DownloadOutlined, FilterOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DownloadOutlined, FilterOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppSelect from '@/app/(view)/component_shared/AppSelect';
@@ -49,6 +49,17 @@ export default function HeaderSection({ vm }) {
           loading={vm.validating && !vm.loading}
         >
           Muat Ulang
+        </AppButton>
+
+        <AppButton
+          variant='secondary'
+          icon={<UploadOutlined />}
+          className='!h-10 !px-4 !rounded-lg !bg-indigo-600 hover:!bg-indigo-700 !border-indigo-600 hover:!border-indigo-700 !text-white'
+          onClick={vm.openImportModal}
+          disabled={!vm.canCreateInActivePeriode || vm.loading}
+          title={vm.canCreateInActivePeriode ? 'Import transaksi dari Excel' : 'Periode aktif belum bisa digunakan untuk import transaksi.'}
+        >
+          Import Excel
         </AppButton>
 
         <AppButton

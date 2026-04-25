@@ -9,12 +9,10 @@ import { crudServiceAuth } from '@/app/utils/services/crudServiceAuth';
 import { ApiEndpoints } from '@/constrainst/endpoints';
 
 import {
-  buildTarifPajakSearchText,
   createInitialProfilPayrollForm,
   formatCurrency,
   formatDate,
   formatJenisHubungan,
-  formatTarifPajakLabel,
   toDateInputValue,
   getUserDepartment,
   getUserDisplayName,
@@ -27,7 +25,6 @@ import {
 const FETCH_PAGE_SIZE = 100;
 const PROFILE_SWR_KEY = 'payroll:profil-payroll:list';
 const USERS_SWR_KEY = 'payroll:profil-payroll:users';
-const TARIF_PAJAK_TER_SWR_KEY = 'payroll:profil-payroll:tarif-pajak-ter';
 
 function normalizeText(value) {
   return String(value || '')
@@ -96,19 +93,6 @@ async function fetchAllUsers() {
   );
 }
 
-async function fetchAllTarifPajakTER() {
-  return fetchAllPages((page) =>
-    crudServiceAuth.get(
-      ApiEndpoints.GetTarifPajakTER({
-        page,
-        pageSize: FETCH_PAGE_SIZE,
-        orderBy: 'kode_kategori_pajak',
-        sort: 'asc',
-      }),
-    ),
-  );
-}
-
 export default function useProfilPayrollViewModel() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -140,16 +124,6 @@ export default function useProfilPayrollViewModel() {
     revalidateOnFocus: false,
   });
 
-  const {
-    data: tarifPajakResponse,
-    error: tarifPajakError,
-    isLoading: isTarifPajakLoading,
-    isValidating: isTarifPajakValidating,
-    mutate: mutateTarifPajak,
-  } = useSWR(TARIF_PAJAK_TER_SWR_KEY, fetchAllTarifPajakTER, {
-    revalidateOnFocus: false,
-  });
-
   useEffect(() => {
     if (!profilError) return;
 
@@ -170,43 +144,23 @@ export default function useProfilPayrollViewModel() {
     });
   }, [usersError]);
 
-  useEffect(() => {
-    if (!tarifPajakError) return;
-
-    AppMessage.once({
-      type: 'error',
-      onceKey: 'profil-payroll-tarif-fetch-error',
-      content: tarifPajakError?.message || 'Gagal memuat data tarif pajak TER.',
-    });
-  }, [tarifPajakError]);
-
   const usersData = useMemo(() => (Array.isArray(usersResponse) ? usersResponse : []), [usersResponse]);
-  const tarifPajakData = useMemo(() => (Array.isArray(tarifPajakResponse) ? tarifPajakResponse : []), [tarifPajakResponse]);
 
   const usersMap = useMemo(() => {
     return new Map(usersData.map((user) => [String(user.id_user), user]));
   }, [usersData]);
-
-  const tarifPajakMap = useMemo(() => {
-    return new Map(tarifPajakData.map((tarif) => [String(tarif.id_tarif_pajak_ter), tarif]));
-  }, [tarifPajakData]);
 
   const profilData = useMemo(() => {
     const rawData = Array.isArray(profilResponse) ? profilResponse : [];
 
     return rawData.map((item) => {
       const fallbackUser = usersMap.get(String(item?.id_user || '')) || null;
-      const fallbackTarifPajak = tarifPajakMap.get(String(item?.id_tarif_pajak_ter || '')) || null;
       const resolvedUser = item?.user || fallbackUser || null;
-      const resolvedTarifPajak = item?.tarif_pajak_ter || fallbackTarifPajak || null;
 
       return {
         ...item,
         tanggal_mulai_payroll: toDateInputValue(item?.tanggal_mulai_payroll),
         user: resolvedUser,
-        tarif_pajak_ter: resolvedTarifPajak,
-        tarif_pajak_label: formatTarifPajakLabel(resolvedTarifPajak, item?.id_tarif_pajak_ter),
-        tarif_pajak_search_text: buildTarifPajakSearchText(resolvedTarifPajak, item?.id_tarif_pajak_ter),
         user_display_name: getUserDisplayName(resolvedUser),
         user_identity: getUserIdentity(resolvedUser),
         user_department: getUserDepartment(resolvedUser),
@@ -214,7 +168,7 @@ export default function useProfilPayrollViewModel() {
         foto_profil_user: getUserPhoto(resolvedUser),
       };
     });
-  }, [profilResponse, tarifPajakMap, usersMap]);
+  }, [profilResponse, usersMap]);
 
   const resolvedSelectedProfil = useMemo(() => {
     if (!selectedProfil) return null;
@@ -227,25 +181,6 @@ export default function useProfilPayrollViewModel() {
 
     return usersMap.get(String(formData.id_user)) || resolvedSelectedProfil?.user || null;
   }, [formData.id_user, resolvedSelectedProfil, usersMap]);
-
-  const tarifPajakOptions = useMemo(() => {
-    return [...tarifPajakData]
-      .filter((tarif) => !tarif?.deleted_at)
-      .sort((a, b) => {
-        const kodeA = String(a?.kode_kategori_pajak || '');
-        const kodeB = String(b?.kode_kategori_pajak || '');
-
-        if (kodeA !== kodeB) {
-          return kodeA.localeCompare(kodeB);
-        }
-
-        return Number(a?.penghasilan_dari || 0) - Number(b?.penghasilan_dari || 0);
-      })
-      .map((tarif) => ({
-        value: tarif.id_tarif_pajak_ter,
-        label: formatTarifPajakLabel(tarif),
-      }));
-  }, [tarifPajakData]);
 
   const usedUserIds = useMemo(() => {
     return new Set(profilData.map((item) => String(item.id_user || '')).filter(Boolean));
@@ -274,8 +209,8 @@ export default function useProfilPayrollViewModel() {
   }, []);
 
   const reloadData = useCallback(async () => {
-    await Promise.all([mutateProfil(), mutateUsers(), mutateTarifPajak()]);
-  }, [mutateProfil, mutateTarifPajak, mutateUsers]);
+    await Promise.all([mutateProfil(), mutateUsers()]);
+  }, [mutateProfil, mutateUsers]);
 
   const closeCreateModal = useCallback(() => {
     if (isSubmitting) return;
@@ -317,8 +252,8 @@ export default function useProfilPayrollViewModel() {
     setFormData({
       id_user: profil.id_user || '',
       jenis_hubungan_kerja: profil.jenis_hubungan_kerja || 'PKWTT',
-      id_tarif_pajak_ter: profil.id_tarif_pajak_ter || '',
       gaji_pokok: profil.gaji_pokok ?? 0,
+      tunjangan_bpjs: profil.tunjangan_bpjs ?? 0,
       payroll_aktif: Boolean(profil.payroll_aktif),
       tanggal_mulai_payroll: toDateInputValue(profil.tanggal_mulai_payroll),
       catatan: profil.catatan || '',
@@ -359,8 +294,8 @@ export default function useProfilPayrollViewModel() {
         profil.user_department,
         profil.user_role_or_job,
         profil.user?.email,
-        profil.tarif_pajak_label,
-        profil.tarif_pajak_search_text,
+        profil.gaji_pokok,
+        profil.tunjangan_bpjs,
         profil.jenis_hubungan_kerja,
         profil.catatan,
       ]
@@ -386,28 +321,29 @@ export default function useProfilPayrollViewModel() {
       return false;
     }
 
-    if (!String(formData.id_tarif_pajak_ter || '').trim()) {
-      AppMessage.warning('Tarif pajak TER wajib dipilih.');
-      return false;
-    }
-
     const gajiPokok = Number(formData.gaji_pokok);
     if (!Number.isFinite(gajiPokok) || gajiPokok < 0) {
       AppMessage.warning('Gaji pokok wajib diisi dengan angka yang valid.');
       return false;
     }
 
+    const tunjanganBpjs = Number(formData.tunjangan_bpjs);
+    if (!Number.isFinite(tunjanganBpjs) || tunjanganBpjs < 0) {
+      AppMessage.warning('Tunjangan BPJS wajib diisi dengan angka yang valid.');
+      return false;
+    }
+
     return true;
-  }, [formData.gaji_pokok, formData.id_tarif_pajak_ter, formData.id_user, formData.jenis_hubungan_kerja]);
+  }, [formData.gaji_pokok, formData.id_user, formData.jenis_hubungan_kerja, formData.tunjangan_bpjs]);
 
   const buildPayload = useCallback(() => {
     return {
       id_user: String(formData.id_user || '').trim(),
-      id_tarif_pajak_ter: String(formData.id_tarif_pajak_ter || '').trim(),
       jenis_hubungan_kerja: String(formData.jenis_hubungan_kerja || 'PKWTT')
         .trim()
         .toUpperCase(),
       gaji_pokok: Number(formData.gaji_pokok || 0),
+      tunjangan_bpjs: Number(formData.tunjangan_bpjs || 0),
       payroll_aktif: Boolean(formData.payroll_aktif),
       tanggal_mulai_payroll: String(formData.tanggal_mulai_payroll || '').trim() || null,
       catatan: String(formData.catatan || '').trim(),
@@ -510,12 +446,11 @@ export default function useProfilPayrollViewModel() {
     isDeleteDialogOpen,
     isDetailModalOpen,
 
-    loading: isProfilLoading || isUsersLoading || isTarifPajakLoading,
-    validating: isProfilValidating || isUsersValidating || isTarifPajakValidating,
+    loading: isProfilLoading || isUsersLoading,
+    validating: isProfilValidating || isUsersValidating,
     loadingUsers: isUsersLoading,
-    loadingTarifPajak: isTarifPajakLoading,
     isSubmitting,
-    error: profilError || usersError || tarifPajakError,
+    error: profilError || usersError,
 
     openCreateModal,
     closeCreateModal,
@@ -533,11 +468,9 @@ export default function useProfilPayrollViewModel() {
     handleDelete,
 
     jenisHubunganOptions: JENIS_HUBUNGAN_OPTIONS,
-    tarifPajakOptions,
     formatCurrency,
     formatDate,
     formatJenisHubungan,
-    formatTarifPajakLabel,
     getUserDisplayName,
     getUserIdentity,
     getUserDepartment,

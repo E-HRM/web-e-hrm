@@ -17,11 +17,9 @@ export default function EditModalSection({ vm }) {
         formData={vm.formData}
         setFormValue={vm.setFormValue}
         jenisHubunganOptions={vm.jenisHubunganOptions}
-        tarifPajakOptions={vm.tarifPajakOptions}
         mode='edit'
         disabled={vm.isSubmitting}
         loadingUsers={vm.loadingUsers}
-        loadingTarifPajak={vm.loadingTarifPajak}
       />
 
       <div className='flex gap-3 pt-4'>

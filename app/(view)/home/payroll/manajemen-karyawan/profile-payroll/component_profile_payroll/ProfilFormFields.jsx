@@ -9,7 +9,7 @@ import EmptyValue from './EmptyValue';
 import UserMeta from './UserMeta';
 import { buildUserSelectOptions, filterUserOption } from '../utils/userSelectOptions';
 
-export default function ProfilFormFields({ vm, formData, setFormValue, jenisHubunganOptions, tarifPajakOptions, mode, disabled = false, loadingUsers = false, loadingTarifPajak = false }) {
+export default function ProfilFormFields({ vm, formData, setFormValue, jenisHubunganOptions, mode, disabled = false, loadingUsers = false }) {
   const isCreateMode = mode === 'create';
   const userOptions = buildUserSelectOptions(vm.availableUsers, vm);
 
@@ -65,19 +65,6 @@ export default function ProfilFormFields({ vm, formData, setFormValue, jenisHubu
         selectClassName='!rounded-lg'
       />
 
-      <AppSelect
-        label='Tarif Pajak TER'
-        required
-        value={formData.id_tarif_pajak_ter || undefined}
-        onChange={(value) => setFormValue('id_tarif_pajak_ter', value || '')}
-        options={tarifPajakOptions}
-        placeholder='Pilih tarif pajak TER'
-        disabled={disabled || loadingTarifPajak}
-        loading={loadingTarifPajak}
-        selectClassName='!rounded-lg'
-        hint={tarifPajakOptions.length === 0 ? 'Belum ada tarif pajak TER aktif. Lengkapi master tarif terlebih dahulu.' : 'Pilih tarif pajak TER sesuai kategori dan rentang penghasilan yang berlaku.'}
-      />
-
       <AppInput
         label='Gaji Pokok'
         required
@@ -90,6 +77,20 @@ export default function ProfilFormFields({ vm, formData, setFormValue, jenisHubu
         disabled={disabled}
         placeholder='Masukkan gaji pokok'
         hint='Nilai ini akan menjadi default gaji pokok saat payroll karyawan dibuat.'
+      />
+
+      <AppInput
+        label='Tunjangan BPJS'
+        required
+        type='number'
+        min='0'
+        step='0.01'
+        value={formData.tunjangan_bpjs}
+        onChange={(e) => setFormValue('tunjangan_bpjs', e.target.value)}
+        inputClassName='!rounded-lg'
+        disabled={disabled}
+        placeholder='Masukkan tunjangan BPJS'
+        hint='Nilai ini akan menjadi default potongan BPJS saat payroll karyawan dibuat.'
       />
 
       <AppInput

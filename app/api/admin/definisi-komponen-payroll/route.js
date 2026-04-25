@@ -8,7 +8,7 @@ const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const ARAH_KOMPONEN_VALUES = new Set(['PEMASUKAN', 'POTONGAN']);
 
-const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_tipe_komponen', 'nama_komponen', 'arah_komponen', 'kena_pajak_default', 'berulang_default', 'aktif']);
+const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'nama_tipe_komponen', 'nama_komponen', 'arah_komponen', 'berulang_default', 'aktif']);
 
 const normRole = (role) =>
   String(role || '')
@@ -147,7 +147,6 @@ function buildSelect() {
     id_tipe_komponen_payroll: true,
     nama_komponen: true,
     arah_komponen: true,
-    kena_pajak_default: true,
     berulang_default: true,
     aktif: true,
     catatan: true,
@@ -212,11 +211,6 @@ export async function GET(req) {
       aktif = normalizeBoolean(searchParams.get('aktif'), 'aktif');
     }
 
-    let kena_pajak_default;
-    if (searchParams.get('kena_pajak_default') !== null && searchParams.get('kena_pajak_default') !== '') {
-      kena_pajak_default = normalizeBoolean(searchParams.get('kena_pajak_default'), 'kena_pajak_default');
-    }
-
     let berulang_default;
     if (searchParams.get('berulang_default') !== null && searchParams.get('berulang_default') !== '') {
       berulang_default = normalizeBoolean(searchParams.get('berulang_default'), 'berulang_default');
@@ -237,7 +231,6 @@ export async function GET(req) {
         : {}),
       ...(arah_komponen ? { arah_komponen } : {}),
       ...(typeof aktif === 'boolean' ? { aktif } : {}),
-      ...(typeof kena_pajak_default === 'boolean' ? { kena_pajak_default } : {}),
       ...(typeof berulang_default === 'boolean' ? { berulang_default } : {}),
       ...(search
         ? {
@@ -307,7 +300,6 @@ export async function POST(req) {
 
     const nama_komponen = normalizeRequiredString(body?.nama_komponen, 'nama_komponen', 255);
     const arah_komponen = normalizeEnum(body?.arah_komponen, ARAH_KOMPONEN_VALUES, 'arah_komponen');
-    const kena_pajak_default = body?.kena_pajak_default === undefined ? false : normalizeBoolean(body?.kena_pajak_default, 'kena_pajak_default');
     const berulang_default = body?.berulang_default === undefined ? false : normalizeBoolean(body?.berulang_default, 'berulang_default');
     const aktif = body?.aktif === undefined ? true : normalizeBoolean(body?.aktif, 'aktif');
     const catatan = normalizeNullableString(body?.catatan, 'catatan');
@@ -328,7 +320,6 @@ export async function POST(req) {
       id_tipe_komponen_payroll,
       nama_komponen,
       arah_komponen,
-      kena_pajak_default,
       berulang_default,
       aktif,
       catatan,

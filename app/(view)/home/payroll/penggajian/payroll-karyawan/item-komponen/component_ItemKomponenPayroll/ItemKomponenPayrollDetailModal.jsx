@@ -96,13 +96,6 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
 
           <div className="flex items-center gap-2 flex-wrap">
             <AppTag
-              tone={vm.selectedItem.kena_pajak ? "warning" : "neutral"}
-              variant="soft"
-            >
-              {vm.selectedItem.kena_pajak ? "Masuk Perhitungan Pajak" : "Tidak Masuk Pajak"}
-            </AppTag>
-
-            <AppTag
               tone={vm.selectedItem.definisi_komponen ? "info" : "neutral"}
               variant="soft"
             >

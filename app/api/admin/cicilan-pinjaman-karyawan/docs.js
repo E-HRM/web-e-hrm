@@ -142,7 +142,7 @@
  *               nominal_tagihan:
  *                 type: string
  *                 example: '1000000.00'
- *                 description: Jika tidak dikirim, akan memakai `nominal_cicilan` dari pinjaman induk.
+ *                 description: Jika tidak dikirim, akan memakai nominal dasar hasil `nominal_pinjaman / tenor_bulan` dari pinjaman induk; cicilan terakhir memakai sisa nominal agar total tagihan sama dengan pinjaman.
  *               nominal_terbayar:
  *                 type: string
  *                 example: '0.00'

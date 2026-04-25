@@ -154,7 +154,6 @@ async function getDefinitionForCicilanPosting(tx) {
     select: {
       id_definisi_komponen_payroll: true,
       nama_komponen: true,
-      kena_pajak_default: true,
     },
   });
 }
@@ -256,7 +255,6 @@ export async function syncCicilanPayrollPosting(
       arah_komponen: true,
       nama_komponen: true,
       nominal: true,
-      kena_pajak: true,
       urutan_tampil: true,
       catatan: true,
       deleted_at: true,
@@ -295,7 +293,6 @@ export async function syncCicilanPayrollPosting(
       arah_komponen: "POTONGAN",
       nama_komponen: buildCicilanPayrollItemName(cicilan),
       nominal: String(cicilan.nominal_tagihan),
-      kena_pajak: false,
       urutan_tampil:
         postingOptions.urutan_tampil ??
         existingItem?.urutan_tampil ??

@@ -56,14 +56,6 @@
  *               enum: ['true', 'false', '1', '0']
  *         description: Filter status aktif.
  *       - in: query
- *         name: kena_pajak_default
- *         schema:
- *           oneOf:
- *             - type: boolean
- *             - type: string
- *               enum: ['true', 'false', '1', '0']
- *         description: Filter default kena pajak.
- *       - in: query
  *         name: berulang_default
  *         schema:
  *           oneOf:
@@ -89,7 +81,7 @@
  *         name: orderBy
  *         schema:
  *           type: string
- *           enum: [created_at, updated_at, nama_tipe_komponen, nama_komponen, arah_komponen, kena_pajak_default, berulang_default, aktif]
+ *           enum: [created_at, updated_at, nama_tipe_komponen, nama_komponen, arah_komponen, berulang_default, aktif]
  *           default: created_at
  *         description: Kolom pengurutan.
  *       - in: query
@@ -156,9 +148,6 @@
  *               arah_komponen:
  *                 type: string
  *                 enum: [PEMASUKAN, POTONGAN]
- *               kena_pajak_default:
- *                 type: boolean
- *                 default: false
  *               berulang_default:
  *                 type: boolean
  *                 default: false
@@ -218,8 +207,6 @@
  *         arah_komponen:
  *           type: string
  *           enum: [PEMASUKAN, POTONGAN]
- *         kena_pajak_default:
- *           type: boolean
  *         berulang_default:
  *           type: boolean
  *         aktif:

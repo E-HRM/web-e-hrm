@@ -4,7 +4,6 @@
 import AppInput from "@/app/(view)/component_shared/AppInput";
 import AppModal from "@/app/(view)/component_shared/AppModal";
 import AppSelect from "@/app/(view)/component_shared/AppSelect";
-import AppSwitch from "@/app/(view)/component_shared/AppSwitch";
 import AppTypography from "@/app/(view)/component_shared/AppTypography";
 
 function ItemKomponenForm({ vm }) {
@@ -34,8 +33,7 @@ function ItemKomponenForm({ vm }) {
           </AppTypography.Text>
 
           <AppTypography.Text size={12} className="block text-blue-600 mt-1">
-            Nama, jenis, kategori, dan status pajak akan otomatis mengikuti
-            rincian standar yang dipilih.
+            Nama, jenis, dan kategori akan otomatis mengikuti rincian standar yang dipilih.
           </AppTypography.Text>
         </div>
       ) : null}
@@ -93,15 +91,6 @@ function ItemKomponenForm({ vm }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <AppSwitch
-          label="Masuk Perhitungan Pajak"
-          checked={Boolean(vm.formData.kena_pajak)}
-          onChange={(checked) => vm.setFormValue("kena_pajak", checked)}
-          checkedLabel="Ya"
-          uncheckedLabel="Tidak"
-          disabled={manualDisabled}
-        />
-
         <AppInput.Number
           label="Urutan Tampil"
           min={0}
