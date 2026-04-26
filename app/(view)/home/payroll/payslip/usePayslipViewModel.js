@@ -93,19 +93,18 @@ async function fetchPdfBlob(url, signal) {
 
   if (!res.ok) {
     const contentType = res.headers.get('content-type') || '';
-    const payload = contentType.includes('application/json')
-      ? await res.json().catch(() => ({}))
-      : await res.text().catch(() => '');
+    const payload = contentType.includes('application/json') ? await res.json().catch(() => ({})) : await res.text().catch(() => '');
 
-    const message =
-      typeof payload === 'string'
-        ? payload || `Gagal memuat preview PDF (${res.status}).`
-        : payload?.message || payload?.error || `Gagal memuat preview PDF (${res.status}).`;
+    const message = typeof payload === 'string' ? payload || `Gagal memuat preview PDF (${res.status}).` : payload?.message || payload?.error || `Gagal memuat preview PDF (${res.status}).`;
 
     throw new Error(message);
   }
 
   return res.blob();
+}
+
+async function sendPayslipEmailRequest(payrollId, payload) {
+  return crudServiceAuth.post(ApiEndpoints.SendPayrollSlipEmailKaryawanById(payrollId), payload);
 }
 
 function normalizePayrollListItem(item) {
@@ -139,20 +138,20 @@ export default function usePayslipViewModel() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const requestedPayrollId = useMemo(
-    () => normalizeText(searchParams?.get('payroll') || searchParams?.get('id_payroll_karyawan')),
-    [searchParams],
-  );
-  const requestedPeriodeId = useMemo(
-    () => normalizeText(searchParams?.get('periode') || searchParams?.get('id_periode_payroll')),
-    [searchParams],
-  );
+  const requestedPayrollId = useMemo(() => normalizeText(searchParams?.get('payroll') || searchParams?.get('id_payroll_karyawan')), [searchParams]);
+  const requestedPeriodeId = useMemo(() => normalizeText(searchParams?.get('periode') || searchParams?.get('id_periode_payroll')), [searchParams]);
 
   const [selectedPayrollId, setSelectedPayrollId] = useState(requestedPayrollId);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState('');
   const [pdfPreviewError, setPdfPreviewError] = useState('');
   const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
   const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailForm, setEmailForm] = useState({
+    cc: '',
+    message: '',
+  });
+  const [emailSending, setEmailSending] = useState(false);
 
   useEffect(() => {
     setSelectedPayrollId(requestedPayrollId);
@@ -164,13 +163,9 @@ export default function usePayslipViewModel() {
     isLoading: isPayrollListLoading,
     isValidating: isPayrollListValidating,
     mutate: mutatePayrollList,
-  } = useSWR(
-    requestedPeriodeId ? [PAYROLL_LIST_SWR_KEY, requestedPeriodeId] : null,
-    ([, periodeId]) => fetchPayrollByPeriode(periodeId),
-    {
-      revalidateOnFocus: false,
-    },
-  );
+  } = useSWR(requestedPeriodeId ? [PAYROLL_LIST_SWR_KEY, requestedPeriodeId] : null, ([, periodeId]) => fetchPayrollByPeriode(periodeId), {
+    revalidateOnFocus: false,
+  });
 
   const payrollList = useMemo(() => {
     const rows = Array.isArray(payrollListResponse) ? payrollListResponse : [];
@@ -190,8 +185,7 @@ export default function usePayslipViewModel() {
   useEffect(() => {
     if (!payrollList.length) return;
 
-    const hasRequestedPayroll =
-      requestedPayrollId && payrollList.some((item) => item.id_payroll_karyawan === requestedPayrollId);
+    const hasRequestedPayroll = requestedPayrollId && payrollList.some((item) => item.id_payroll_karyawan === requestedPayrollId);
     if (hasRequestedPayroll) return;
 
     if (selectedPayrollId && payrollList.some((item) => item.id_payroll_karyawan === selectedPayrollId)) return;
@@ -205,8 +199,7 @@ export default function usePayslipViewModel() {
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
   }, [pathname, payrollList, requestedPayrollId, router, searchParams, selectedPayrollId]);
 
-  const activePayrollId =
-    selectedPayrollId || requestedPayrollId || payrollList[0]?.id_payroll_karyawan || '';
+  const activePayrollId = selectedPayrollId || requestedPayrollId || payrollList[0]?.id_payroll_karyawan || '';
 
   const {
     data: slipResponse,
@@ -214,13 +207,9 @@ export default function usePayslipViewModel() {
     isLoading: isSlipLoading,
     isValidating: isSlipValidating,
     mutate: mutateSlip,
-  } = useSWR(
-    activePayrollId ? [PAYROLL_SLIP_SWR_KEY, activePayrollId] : null,
-    ([, payrollId]) => crudServiceAuth.get(ApiEndpoints.GetPayrollSlipKaryawanById(payrollId)),
-    {
-      revalidateOnFocus: false,
-    },
-  );
+  } = useSWR(activePayrollId ? [PAYROLL_SLIP_SWR_KEY, activePayrollId] : null, ([, payrollId]) => crudServiceAuth.get(ApiEndpoints.GetPayrollSlipKaryawanById(payrollId)), {
+    revalidateOnFocus: false,
+  });
 
   useEffect(() => {
     if (!slipError) return;
@@ -233,6 +222,9 @@ export default function usePayslipViewModel() {
   }, [slipError]);
 
   const slip = useMemo(() => slipResponse?.data || null, [slipResponse]);
+
+  const payslipEmailTo = useMemo(() => normalizeText(slip?.payroll?.user?.email), [slip]);
+  const canSendPayslipEmail = Boolean(activePayrollId && payslipEmailTo);
 
   useEffect(() => {
     let objectUrl = '';
@@ -338,6 +330,65 @@ export default function usePayslipViewModel() {
     window.open(pdfPreviewUrl, '_blank', 'noopener,noreferrer');
   }, [pdfPreviewUrl]);
 
+  const openEmailModal = useCallback(() => {
+    if (!canSendPayslipEmail) {
+      AppMessage.error('Email karyawan tidak tersedia, payslip belum bisa dikirim.');
+      return;
+    }
+
+    setEmailModalOpen(true);
+  }, [canSendPayslipEmail]);
+
+  const closeEmailModal = useCallback(() => {
+    if (emailSending) return;
+    setEmailModalOpen(false);
+  }, [emailSending]);
+
+  const updateEmailForm = useCallback((field, value) => {
+    setEmailForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }, []);
+
+  const resetEmailForm = useCallback(() => {
+    setEmailForm({
+      cc: '',
+      message: '',
+    });
+  }, []);
+
+  const sendPayslipEmail = useCallback(async () => {
+    if (!activePayrollId) {
+      AppMessage.error('Payroll belum dipilih.');
+      return false;
+    }
+
+    if (!payslipEmailTo) {
+      AppMessage.error('Email karyawan tidak tersedia, payslip belum bisa dikirim.');
+      return false;
+    }
+
+    setEmailSending(true);
+
+    try {
+      await sendPayslipEmailRequest(activePayrollId, {
+        cc: emailForm.cc,
+        message: emailForm.message,
+      });
+
+      AppMessage.success('Payslip berhasil dikirim ke email karyawan.');
+      resetEmailForm();
+      setEmailModalOpen(false);
+      return true;
+    } catch (error) {
+      AppMessage.error(error?.message || 'Gagal mengirim payslip.');
+      return false;
+    } finally {
+      setEmailSending(false);
+    }
+  }, [activePayrollId, emailForm.cc, emailForm.message, payslipEmailTo, resetEmailForm]);
+
   return {
     slip,
     payrollList,
@@ -348,6 +399,12 @@ export default function usePayslipViewModel() {
     pdfPreviewError,
     pdfPreviewLoading,
 
+    emailModalOpen,
+    emailForm,
+    emailSending,
+    payslipEmailTo,
+    canSendPayslipEmail,
+
     loading: isPayrollListLoading || isSlipLoading,
     validating: isPayrollListValidating || isSlipValidating,
     hasFilters: Boolean(requestedPeriodeId || requestedPayrollId),
@@ -356,5 +413,9 @@ export default function usePayslipViewModel() {
     reloadData,
     buildItemKomponenHref,
     openPdfPreview,
+    openEmailModal,
+    closeEmailModal,
+    updateEmailForm,
+    sendPayslipEmail,
   };
 }

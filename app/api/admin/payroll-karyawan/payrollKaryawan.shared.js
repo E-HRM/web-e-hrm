@@ -385,7 +385,10 @@ export function buildSelect() {
         decision: true,
         decided_at: true,
         note: true,
-        ttd_approval_url: true,
+        otp_requested_at: true,
+        otp_expires_at: true,
+        otp_verified_at: true,
+        otp_attempts: true,
         created_at: true,
         updated_at: true,
         deleted_at: true,
@@ -396,6 +399,7 @@ export function buildSelect() {
             email: true,
             role: true,
             foto_profil_user: true,
+            ttd_url: true,
             deleted_at: true,
           },
         },
@@ -530,6 +534,33 @@ function toDecimalNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function formatSlipTypeLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const shouldNormalizeCase = /[_-]/.test(raw) || raw === raw.toUpperCase() || raw === raw.toLowerCase();
+  if (!shouldNormalizeCase) return raw;
+
+  const acronymMap = new Map([
+    ['bpjs', 'BPJS'],
+    ['pph', 'PPh'],
+    ['pph21', 'PPh 21'],
+    ['pkwt', 'PKWT'],
+    ['pkwtt', 'PKWTT'],
+  ]);
+
+  return raw
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((word) => {
+      const normalizedWord = word.toLowerCase();
+      return acronymMap.get(normalizedWord) || `${normalizedWord.charAt(0).toUpperCase()}${normalizedWord.slice(1)}`;
+    })
+    .join(' ');
+}
+
 function sortSlipItems(items = []) {
   return [...items].sort((left, right) => {
     const leftOrder = Number.isFinite(Number(left?.urutan_tampil)) ? Number(left.urutan_tampil) : Number.MAX_SAFE_INTEGER;
@@ -553,9 +584,7 @@ function sortSlipItems(items = []) {
 function normalizeSlipItem(item) {
   if (!item) return null;
 
-  const tipeKomponenLabel = String(item?.definisi_komponen?.tipe_komponen?.nama_tipe_komponen || item?.tipe_komponen || '')
-    .trim()
-    .toUpperCase();
+  const tipeKomponenLabel = formatSlipTypeLabel(item?.definisi_komponen?.tipe_komponen?.nama_tipe_komponen || item?.tipe_komponen || '');
 
   return {
     ...item,
@@ -785,7 +814,11 @@ export async function resolveApprovalSteps(rawSteps) {
       decision: 'pending',
       decided_at: null,
       note: null,
-      ttd_approval_url: null,
+      kode_otp_hash: null,
+      otp_requested_at: null,
+      otp_expires_at: null,
+      otp_verified_at: null,
+      otp_attempts: 0,
       deleted_at: null,
     };
   });

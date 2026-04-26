@@ -451,6 +451,7 @@ model User {
   nomor_rekening            String?       @db.VarChar(50)
   jenis_bank                String?       @db.VarChar(50)
   catatan_delete            String?       @db.LongText
+  ttd_url                   String?       @db.LongText
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1731,8 +1732,11 @@ model ApprovalPayrollKaryawan {
   decided_at DateTime?     @db.DateTime(0)
   note       String?       @db.LongText
 
-  // sesuai permintaan: image ttd longtext
-  ttd_approval_url String? @db.LongText
+  kode_otp_hash    String?   @db.VarChar(255)
+  otp_requested_at DateTime? @db.DateTime(0)
+  otp_expires_at   DateTime? @db.DateTime(0)
+  otp_verified_at  DateTime? @db.DateTime(0)
+  otp_attempts     Int       @default(0)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1745,6 +1749,7 @@ model ApprovalPayrollKaryawan {
   @@index([id_payroll_karyawan])
   @@index([approver_user_id])
   @@index([decision])
+  @@index([otp_verified_at])
   @@index([deleted_at])
   @@map("approval_payroll_karyawan")
 }
@@ -1800,7 +1805,6 @@ model CicilanPinjamanKaryawan {
   @@index([deleted_at])
   @@map("cicilan_pinjaman_karyawan")
 }
-
 
 model PeriodeKonsultan {
   id_periode_konsultan String                 @id @default(uuid()) @db.Char(36)

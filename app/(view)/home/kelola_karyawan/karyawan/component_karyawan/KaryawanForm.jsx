@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CameraOutlined, EditOutlined, SaveOutlined, UserOutlined } from '@ant-design/icons';
+import { CameraOutlined, DeleteOutlined, EditOutlined, EyeOutlined, SaveOutlined, UploadOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import 'dayjs/locale/id';
 import useSWR from 'swr';
@@ -19,6 +19,8 @@ import AppForm from '../../../../component_shared/AppForm';
 import AppUpload from '../../../../component_shared/AppUpload';
 import AppAlert from '../../../../component_shared/AppAlert';
 import AppSpace from '../../../../component_shared/AppSpace';
+import AppModal from '../../../../component_shared/AppModal';
+import AppTooltip from '../../../../component_shared/AppTooltip';
 import { useAppMessage } from '../../../../component_shared/AppMessage';
 
 import { ApiEndpoints } from '@/constrainst/endpoints';
@@ -114,6 +116,21 @@ function appendDateOnly(fd, key, val) {
   append(fd, key, toDateOnly(val));
 }
 
+function revokeBlobUrl(url) {
+  if (!url || !String(url).startsWith('blob:')) return;
+  try {
+    URL.revokeObjectURL(url);
+  } catch {}
+}
+
+function getUploadFileObject(uploadFile) {
+  if (!uploadFile) return null;
+  const originFile = uploadFile.originFileObj;
+  if (originFile && typeof originFile.arrayBuffer === 'function') return originFile;
+  if (typeof uploadFile.arrayBuffer === 'function') return uploadFile;
+  return null;
+}
+
 function mapDetailToInitialValues(detail) {
   return {
     nama_pengguna: nz(detail?.nama_pengguna),
@@ -162,6 +179,18 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
   const [saving, setSaving] = useState(false);
   const [fileList, setFileList] = useState([]);
   const [previewImage, setPreviewImage] = useState('');
+  const [ttdFileList, setTtdFileList] = useState([]);
+  const [ttdFile, setTtdFile] = useState(null);
+  const [ttdPreviewUrl, setTtdPreviewUrl] = useState('');
+  const [savedTtdUrl, setSavedTtdUrl] = useState('');
+  const [ttdUploadOpen, setTtdUploadOpen] = useState(false);
+  const [ttdDetailOpen, setTtdDetailOpen] = useState(false);
+  const [ttdDraftFileList, setTtdDraftFileList] = useState([]);
+  const [ttdDraftFile, setTtdDraftFile] = useState(null);
+  const [ttdDraftPreviewUrl, setTtdDraftPreviewUrl] = useState('');
+  const [removeTtd, setRemoveTtd] = useState(false);
+  const ttdFileRef = useRef(null);
+  const ttdDraftFileRef = useRef(null);
   const [formKey, setFormKey] = useState(0);
   const [initialValues, setInitialValues] = useState(() => (mode === 'add' ? { status_cuti: 'aktif' } : {}));
 
@@ -174,7 +203,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
   const jabOpts = useMemo(() => (jabRes?.data || []).map((j) => ({ value: j.id_jabatan, label: j.nama_jabatan })), [jabRes]);
 
   const detailKey = mode !== 'add' && id ? ApiEndpoints.GetUserById(id) : null;
-  const { data: detailRes, isLoading: loadingDetail } = useSWR(detailKey, swrFetcher);
+  const { data: detailRes, isLoading: loadingDetail, mutate: mutateDetail } = useSWR(detailKey, swrFetcher);
   const detail = detailRes?.data;
 
   useEffect(() => {
@@ -183,8 +212,26 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
         URL.revokeObjectURL(previewImage);
       } catch {}
     }
+    if (ttdPreviewUrl && String(ttdPreviewUrl).startsWith('blob:')) {
+      try {
+        URL.revokeObjectURL(ttdPreviewUrl);
+      } catch {}
+    }
+    revokeBlobUrl(ttdDraftPreviewUrl);
     setPreviewImage('');
     setFileList([]);
+    setTtdPreviewUrl('');
+    setSavedTtdUrl('');
+    setTtdFileList([]);
+    setTtdFile(null);
+    ttdFileRef.current = null;
+    setTtdUploadOpen(false);
+    setTtdDetailOpen(false);
+    setTtdDraftPreviewUrl('');
+    setTtdDraftFileList([]);
+    setTtdDraftFile(null);
+    ttdDraftFileRef.current = null;
+    setRemoveTtd(false);
   }, [mode, id]);
 
   useEffect(() => {
@@ -197,6 +244,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
   useEffect(() => {
     if (detail && (mode === 'edit' || mode === 'view')) {
       setInitialValues(mapDetailToInitialValues(detail));
+      setSavedTtdUrl(detail?.ttd_url || '');
       setFormKey((k) => k + 1);
     }
   }, [detail, mode]);
@@ -208,14 +256,20 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           URL.revokeObjectURL(previewImage);
         } catch {}
       }
+      if (ttdPreviewUrl && String(ttdPreviewUrl).startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(ttdPreviewUrl);
+        } catch {}
+      }
+      revokeBlobUrl(ttdDraftPreviewUrl);
     };
-  }, [previewImage]);
+  }, [previewImage, ttdPreviewUrl, ttdDraftPreviewUrl]);
 
   const handleUploadChange = (info) => {
     const newList = info?.fileList || [];
     setFileList(newList);
 
-    const nextFile = newList?.[0]?.originFileObj;
+    const nextFile = getUploadFileObject(newList?.[0]);
     if (!nextFile) {
       if (previewImage && String(previewImage).startsWith('blob:')) {
         try {
@@ -234,6 +288,92 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
 
     const url = URL.createObjectURL(nextFile);
     setPreviewImage(url);
+  };
+
+  const handleOpenTtdUploadModal = () => {
+    revokeBlobUrl(ttdDraftPreviewUrl);
+    setTtdDraftPreviewUrl('');
+    setTtdDraftFileList([]);
+    setTtdDraftFile(null);
+    ttdDraftFileRef.current = null;
+    setTtdDetailOpen(false);
+    setTtdUploadOpen(true);
+  };
+
+  const handleCloseTtdUploadModal = () => {
+    revokeBlobUrl(ttdDraftPreviewUrl);
+    setTtdDraftPreviewUrl('');
+    setTtdDraftFileList([]);
+    setTtdDraftFile(null);
+    ttdDraftFileRef.current = null;
+    setTtdUploadOpen(false);
+  };
+
+  const handleTtdUploadChange = (info) => {
+    const newList = info?.fileList || [];
+    setTtdDraftFileList(newList);
+
+    const nextFile = getUploadFileObject(newList?.[0]);
+    if (!nextFile) {
+      revokeBlobUrl(ttdDraftPreviewUrl);
+      setTtdDraftPreviewUrl('');
+      setTtdDraftFile(null);
+      ttdDraftFileRef.current = null;
+      return;
+    }
+
+    revokeBlobUrl(ttdDraftPreviewUrl);
+    setTtdDraftFile(nextFile);
+    ttdDraftFileRef.current = nextFile;
+    setTtdDraftPreviewUrl(URL.createObjectURL(nextFile));
+  };
+
+  const handleUseTtdDraft = () => {
+    const nextFile = ttdDraftFileRef.current || ttdDraftFile || getUploadFileObject(ttdDraftFileList?.[0]);
+    if (!nextFile || !ttdDraftPreviewUrl) {
+      message.warning('Pilih gambar tanda tangan terlebih dahulu.');
+      return false;
+    }
+
+    revokeBlobUrl(ttdPreviewUrl);
+    setTtdFileList(ttdDraftFileList);
+    setTtdFile(nextFile);
+    ttdFileRef.current = nextFile;
+    setTtdPreviewUrl(URL.createObjectURL(nextFile));
+    setTtdDraftFileList([]);
+    setTtdDraftFile(null);
+    ttdDraftFileRef.current = null;
+    setTtdDraftPreviewUrl('');
+    setRemoveTtd(false);
+    setTtdUploadOpen(false);
+    message.success('Tanda tangan baru siap disimpan.');
+    return false;
+  };
+
+  const handleClearTtd = () => {
+    revokeBlobUrl(ttdPreviewUrl);
+    setTtdPreviewUrl('');
+    setTtdFileList([]);
+    setTtdFile(null);
+    ttdFileRef.current = null;
+    setTtdDetailOpen(false);
+    setRemoveTtd(Boolean(savedTtdUrl));
+    message.info(savedTtdUrl ? 'Tanda tangan akan dihapus setelah perubahan disimpan.' : 'Tanda tangan baru dibatalkan.');
+  };
+
+  const syncSavedTtdUrl = (nextUrl) => {
+    revokeBlobUrl(ttdPreviewUrl);
+    setTtdPreviewUrl('');
+    setTtdFileList([]);
+    setTtdFile(null);
+    ttdFileRef.current = null;
+    setRemoveTtd(false);
+    if (nextUrl !== undefined) setSavedTtdUrl(nextUrl || '');
+  };
+
+  const syncDetailResponse = (data) => {
+    if (!data) return;
+    mutateDetail?.({ data }, false);
   };
 
   const onFinish = async (values) => {
@@ -266,9 +406,12 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           return;
         }
 
-        const hasFile = fileList?.length > 0;
+        const photoFile = getUploadFileObject(fileList?.[0]);
+        const selectedTtdFile = ttdFileRef.current || ttdFile || getUploadFileObject(ttdFileList?.[0]);
+        const hasFile = Boolean(photoFile);
+        const hasTtdFile = Boolean(selectedTtdFile);
 
-        if (hasFile) {
+        if (hasFile || hasTtdFile) {
           const fd = new FormData();
 
           append(fd, 'id_jabatan', values.id_jabatan);
@@ -297,9 +440,16 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           append(fd, 'nama_kontak_darurat', values.nama_kontak_darurat);
           append(fd, 'kontak_darurat', values.kontak_darurat);
 
-          fd.append('file', fileList[0].originFileObj);
+          if (hasFile) {
+            fd.append('file', photoFile);
+          }
+          if (hasTtdFile) {
+            fd.append('ttd', selectedTtdFile, selectedTtdFile.name || 'ttd.png');
+          }
 
-          await crudService.put(ApiEndpoints.UpdateUser(newId), fd);
+          const putRes = await crudService.put(ApiEndpoints.UpdateUser(newId), fd);
+          syncSavedTtdUrl(putRes?.data?.ttd_url);
+          syncDetailResponse(putRes?.data);
         } else {
           const putPayload = {
             id_jabatan: values.id_jabatan ?? null,
@@ -328,7 +478,9 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
             nama_kontak_darurat: values.nama_kontak_darurat ?? null,
             kontak_darurat: values.kontak_darurat ?? null,
           };
-          await crudService.put(ApiEndpoints.UpdateUser(newId), putPayload);
+          const putRes = await crudService.put(ApiEndpoints.UpdateUser(newId), putPayload);
+          syncSavedTtdUrl(putRes?.data?.ttd_url);
+          syncDetailResponse(putRes?.data);
         }
 
         message.success('Karyawan berhasil ditambahkan.');
@@ -336,9 +488,12 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
         return;
       }
 
-      const hasFile = fileList?.length > 0;
+      const photoFile = getUploadFileObject(fileList?.[0]);
+      const selectedTtdFile = ttdFileRef.current || ttdFile || getUploadFileObject(ttdFileList?.[0]);
+      const hasFile = Boolean(photoFile);
+      const hasTtdFile = Boolean(selectedTtdFile);
 
-      if (hasFile) {
+      if (hasFile || hasTtdFile || removeTtd) {
         const fd = new FormData();
         append(fd, 'nama_pengguna', values.nama_pengguna);
         append(fd, 'email', String(values.email).toLowerCase());
@@ -373,9 +528,18 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
         append(fd, 'nama_kontak_darurat', values.nama_kontak_darurat);
         append(fd, 'kontak_darurat', values.kontak_darurat);
 
-        fd.append('file', fileList[0].originFileObj);
+        if (hasFile) {
+          fd.append('file', photoFile);
+        }
+        if (hasTtdFile) {
+          fd.append('ttd', selectedTtdFile, selectedTtdFile.name || 'ttd.png');
+        } else if (removeTtd) {
+          fd.append('remove_ttd', 'true');
+        }
 
         const res = await crudService.put(ApiEndpoints.UpdateUser(id), fd);
+        syncSavedTtdUrl(res?.data?.ttd_url);
+        syncDetailResponse(res?.data);
         message.success(res?.message || 'Perubahan disimpan.');
         onSuccess?.(res?.data);
       } else {
@@ -415,6 +579,8 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
         };
 
         const res = await crudService.put(ApiEndpoints.UpdateUser(id), put);
+        syncSavedTtdUrl(res?.data?.ttd_url);
+        syncDetailResponse(res?.data);
         message.success(res?.message || 'Perubahan disimpan.');
         onSuccess?.(res?.data);
       }
@@ -426,6 +592,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
   };
 
   const photoUrl = previewImage || detail?.foto_profil_user || '/avatar-placeholder.png';
+  const activeTtdUrl = ttdPreviewUrl || (!removeTtd ? savedTtdUrl : '');
 
   const headerTitle = mode === 'add' ? 'Tambah Karyawan Baru' : 'Profil Karyawan';
   const headerSubtitle = mode === 'add' ? 'Lengkapi data karyawan baru' : readOnly ? 'Lihat detail informasi karyawan' : 'Edit data karyawan';
@@ -583,7 +750,50 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           },
           { name: 'jurusan', label: 'Jurusan', type: 'text', placeholder: 'Masukkan jurusan', col: { xs: 24, md: 12 }, controlProps: { size: 'large' } },
           { name: 'nama_institusi_pendidikan', label: 'Nama Institusi Pendidikan', type: 'text', placeholder: 'Masukkan nama institusi', col: { xs: 24, md: 12 }, controlProps: { size: 'large' } },
-          { name: 'tahun_lulus', label: 'Tahun Lulus', type: 'number', placeholder: 'Masukkan tahun lulus', col: { xs: 24, md: 12 }, controlProps: { size: 'large', min: 1900, max: 3000, className: 'w-full' } },
+          { name: 'tahun_lulus', label: 'Tahun Lulus', type: 'number', placeholder: 'Tahun', col: { xs: 24, md: 6 }, controlProps: { size: 'large', min: 1900, max: 3000, className: 'w-full' } },
+          {
+            type: 'custom',
+            noItem: true,
+            col: { xs: 24, md: 6 },
+            component: () => {
+              return (
+                <div>
+                  <AppTypography.Text
+                    size={13}
+                    weight={600}
+                    className='block text-slate-700'
+                  >
+                    TTD
+                  </AppTypography.Text>
+                  <div className='mt-1 flex h-10 items-center gap-2'>
+                    <AppButton
+                      variant='outline'
+                      size='small'
+                      icon={<UploadOutlined />}
+                      className='h-10 px-3'
+                      onClick={handleOpenTtdUploadModal}
+                    >
+                      Upload
+                    </AppButton>
+
+                    <AppTooltip
+                      content={activeTtdUrl ? 'Lihat detail tanda tangan' : 'Belum ada tanda tangan'}
+                      size='sm'
+                    >
+                      <AppButton
+                        variant='text'
+                        size='small'
+                        icon={<EyeOutlined />}
+                        className='h-10 w-10 !border-0 !p-0 !shadow-none'
+                        disabled={!activeTtdUrl}
+                        onClick={() => setTtdDetailOpen(true)}
+                      />
+                    </AppTooltip>
+                  </div>
+                </div>
+              );
+            },
+          },
         ],
       },
       { type: 'divider', text: null, props: { className: 'my-4' } },
@@ -705,7 +915,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
         ],
       },
     ];
-  }, [deptOpts, jabOpts, locOpts, fileList, photoUrl, initialValues, detail, mode]);
+  }, [deptOpts, jabOpts, locOpts, fileList, activeTtdUrl, ttdDraftPreviewUrl, photoUrl, initialValues, detail, mode]);
 
   const ViewBox = ({ label, value, span = 8 }) => (
     <AppGrid.Col span={span}>
@@ -925,7 +1135,12 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
                       <ViewBox
                         label='Tahun Lulus'
                         value={displayOrDash(detail?.tahun_lulus)}
-                        span={12}
+                        span={6}
+                      />
+                      <ViewBox
+                        label='TTD'
+                        value={savedTtdUrl ? 'Tersimpan' : DASH}
+                        span={6}
                       />
                     </AppGrid.Row>
                   </div>
@@ -1025,6 +1240,122 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           )}
         </AppCard>
       </div>
+
+      <AppModal
+        open={ttdUploadOpen}
+        onClose={handleCloseTtdUploadModal}
+        title='Unggah Tanda Tangan'
+        subtitle='Pilih gambar tanda tangan yang akan digunakan pada dokumen persetujuan.'
+        width={460}
+        okText='Gunakan Tanda Tangan'
+        okDisabled={!ttdDraftPreviewUrl}
+        closeOnOk={false}
+        onOk={handleUseTtdDraft}
+      >
+        <div className='space-y-4'>
+          <div className='flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3'>
+            <div className='min-w-0'>
+              <AppTypography.Text
+                weight={700}
+                className='block text-slate-800'
+              >
+                Gambar tanda tangan
+              </AppTypography.Text>
+              <AppTypography.Text
+                size={12}
+                className='block text-slate-500'
+              >
+                Format JPG, PNG, atau WebP. Maksimal 2MB.
+              </AppTypography.Text>
+            </div>
+            <AppUpload
+              fileList={ttdDraftFileList}
+              maxCount={1}
+              onChange={handleTtdUploadChange}
+              beforeUpload={() => false}
+              showUploadList={false}
+              accept='.jpg,.jpeg,.png,.webp'
+              maxSizeMB={2}
+            >
+              <AppButton
+                variant='outline'
+                icon={<UploadOutlined />}
+              >
+                Pilih Gambar
+              </AppButton>
+            </AppUpload>
+          </div>
+
+          <div className='flex min-h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white p-4'>
+            {ttdDraftPreviewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={ttdDraftPreviewUrl}
+                alt='Preview tanda tangan'
+                className='max-h-40 w-full object-contain'
+              />
+            ) : (
+              <AppTypography.Text
+                size={13}
+                className='text-center text-slate-500'
+              >
+                Belum ada gambar dipilih.
+              </AppTypography.Text>
+            )}
+          </div>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={ttdDetailOpen}
+        onClose={() => setTtdDetailOpen(false)}
+        title='Detail Tanda Tangan'
+        width={460}
+        footer={
+          <div className='flex w-full flex-wrap justify-end gap-2'>
+            <AppButton
+              variant='secondary'
+              className='min-w-20'
+              onClick={() => setTtdDetailOpen(false)}
+            >
+              Tutup
+            </AppButton>
+            {!readOnly ? (
+              <>
+                <AppButton
+                  variant='outline'
+                  icon={<UploadOutlined />}
+                  className='min-w-0'
+                  onClick={handleOpenTtdUploadModal}
+                >
+                  Ganti TTD
+                </AppButton>
+                <AppButton
+                  variant='danger'
+                  icon={<DeleteOutlined />}
+                  className='min-w-0'
+                  onClick={handleClearTtd}
+                >
+                  Hapus TTD
+                </AppButton>
+              </>
+            ) : null}
+          </div>
+        }
+      >
+        <div className='flex min-h-44 items-center justify-center rounded-xl border border-slate-200 bg-white p-4'>
+          {activeTtdUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={activeTtdUrl}
+              alt='Tanda tangan'
+              className='max-h-44 w-full object-contain'
+            />
+          ) : (
+            <AppTypography.Text className='text-center text-slate-500'>Belum ada tanda tangan.</AppTypography.Text>
+          )}
+        </div>
+      </AppModal>
     </div>
   );
 }

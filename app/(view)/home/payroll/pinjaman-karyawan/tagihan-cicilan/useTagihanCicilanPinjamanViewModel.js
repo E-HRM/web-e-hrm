@@ -13,6 +13,7 @@ import {
   buildSearchHaystack,
   calculateOutstandingAmount,
   canPostToPayroll,
+  canUnpostFromPayroll,
   createPostPayrollPayload,
   formatCurrency,
   formatDate,
@@ -59,6 +60,10 @@ function buildPayrollEndpoint(query = {}) {
 
 function buildCicilanByIdEndpoint(id) {
   return `/api/admin/cicilan-pinjaman-karyawan/${id}`;
+}
+
+function buildCicilanUnpostEndpoint(id) {
+  return `${buildCicilanByIdEndpoint(id)}/unpost`;
 }
 
 async function fetchAllPages(fetcher) {
@@ -209,6 +214,36 @@ function getCicilanPostBlockedMessage(cicilan) {
   return {
     title: 'Cicilan belum bisa dimasukkan ke payroll',
     description: 'Cicilan hanya bisa dimasukkan ke payroll jika statusnya Menunggu atau Dilewati dan belum masuk payroll.',
+  };
+}
+
+function getCicilanUnpostBlockedMessage(cicilan) {
+  const status = normalizeText(cicilan?.status_cicilan).toUpperCase();
+
+  if (status === STATUS_CICILAN.DIBAYAR || cicilan?.business_state?.sudah_dibayar) {
+    return {
+      title: 'Cicilan sudah dibayar',
+      description: 'Cicilan yang sudah dibayar tidak bisa dilepas dari payroll.',
+    };
+  }
+
+  if (!cicilan?.id_payroll_karyawan && !cicilan?.business_state?.linked_payroll) {
+    return {
+      title: 'Cicilan belum masuk payroll',
+      description: 'Cicilan ini belum memiliki posting payroll untuk dilepas.',
+    };
+  }
+
+  if (cicilan?.business_state?.bisa_diubah === false) {
+    return {
+      title: 'Posting tidak dapat dilepas',
+      description: 'Payroll terkait sudah tidak bisa diubah, sehingga posting cicilan tidak dapat dilepas.',
+    };
+  }
+
+  return {
+    title: 'Posting tidak dapat dilepas',
+    description: 'Hanya cicilan berstatus Diposting ke Payroll yang dapat dilepas.',
   };
 }
 
@@ -542,6 +577,43 @@ export default function useTagihanCicilanPinjamanViewModel() {
     }
   }, [closePostModal, mutate, mutatePayrollTargets, postFormData.catatan_item_payroll, postFormData.id_payroll_karyawan, postFormData.urutan_tampil, selectedCicilan, selectedPostCicilan]);
 
+  const handleUnpostFromPayroll = useCallback(
+    async (cicilan) => {
+      if (!cicilan?.id_cicilan_pinjaman_karyawan) return false;
+
+      if (!canUnpostFromPayroll(cicilan)) {
+        AppMessage.warning(getCicilanUnpostBlockedMessage(cicilan));
+        return false;
+      }
+
+      const id = cicilan.id_cicilan_pinjaman_karyawan;
+
+      try {
+        setActionLoadingId(id);
+
+        const response = await crudServiceAuth.post(buildCicilanUnpostEndpoint(id));
+
+        AppMessage.success({
+          title: 'Posting cicilan berhasil dilepas',
+          description: response?.message || 'Cicilan kembali ke status menunggu dan dapat diposting ulang.',
+        });
+
+        await Promise.all([mutate(), mutatePayrollTargets()]);
+
+        return true;
+      } catch (err) {
+        AppMessage.error({
+          title: 'Gagal melepas posting cicilan',
+          description: err?.message || 'Terjadi kesalahan saat melepas posting cicilan dari payroll.',
+        });
+        return false;
+      } finally {
+        setActionLoadingId(null);
+      }
+    },
+    [mutate, mutatePayrollTargets],
+  );
+
   const selectedStatusMeta = useMemo(() => getStatusCicilanMeta(selectedCicilan?.status_cicilan), [selectedCicilan]);
 
   return {
@@ -583,9 +655,11 @@ export default function useTagihanCicilanPinjamanViewModel() {
     closePostModal,
     reloadData,
     handlePostToPayroll,
+    handleUnpostFromPayroll,
     setPostFormValue,
 
     canPostToPayroll,
+    canUnpostFromPayroll,
     getStatusCicilanMeta,
     getUserDisplayName,
     getUserIdentity,

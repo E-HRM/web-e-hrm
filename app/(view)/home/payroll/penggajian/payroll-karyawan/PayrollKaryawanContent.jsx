@@ -87,9 +87,11 @@ export default function PayrollKaryawanContent() {
         open={vm.isApproveModalOpen}
         onClose={vm.closeApproveModal}
         onSubmit={vm.handleApprove}
+        onRequestOtp={vm.handleRequestApprovalOtp}
         payroll={vm.approvalTargetPayroll}
         getApprovalStep={vm.getActionableApprovalStep}
         submitting={vm.isSubmitting}
+        requestingOtp={vm.isRequestingApprovalOtp}
       />
       <CreatePayrollKaryawanModal vm={vm} />
       <EditPayrollKaryawanModal vm={vm} />

@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { findFileInBody, isNullLike, parseRequestBody } from '@/app/api/_utils/requestBody';
-import { markPostedCicilanAsPaidForPayroll } from '@/app/api/admin/cicilan-pinjaman-karyawan/payrollPosting.shared';
+import { markPostedCicilanAsPaidForPayroll, recalculateLoanSnapshot } from '@/app/api/admin/cicilan-pinjaman-karyawan/payrollPosting.shared';
 
 import {
   EDIT_ROLES,
@@ -304,6 +304,42 @@ async function resolveUpdatePayload(existing, body = {}) {
       ...statusFields,
     },
   };
+}
+
+async function detachPostedCicilanFromPayroll(tx, id_payroll_karyawan) {
+  const cicilanRows = await tx.cicilanPinjamanKaryawan.findMany({
+    where: {
+      id_payroll_karyawan,
+      deleted_at: null,
+      status_cicilan: 'DIPOSTING',
+    },
+    select: {
+      id_pinjaman_karyawan: true,
+    },
+  });
+
+  const loanIds = [...new Set(cicilanRows.map((item) => item.id_pinjaman_karyawan).filter(Boolean))];
+
+  const affected = await tx.cicilanPinjamanKaryawan.updateMany({
+    where: {
+      id_payroll_karyawan,
+      deleted_at: null,
+      status_cicilan: 'DIPOSTING',
+    },
+    data: {
+      id_payroll_karyawan: null,
+      status_cicilan: 'MENUNGGU',
+      nominal_terbayar: '0.00',
+      diposting_pada: null,
+      dibayar_pada: null,
+    },
+  });
+
+  for (const loanId of loanIds) {
+    await recalculateLoanSnapshot(tx, loanId);
+  }
+
+  return affected;
 }
 
 export async function GET(req, { params }) {
@@ -618,15 +654,16 @@ export async function DELETE(req, { params }) {
 
       const deletedAt = new Date();
 
-      const [deleted, affectedItems, affectedCicilan, affectedApprovals] = await db.$transaction([
-        db.payrollKaryawan.update({
+      const { deleted, affectedItems, affectedCicilan, affectedApprovals } = await db.$transaction(async (tx) => {
+        const deletedRecord = await tx.payrollKaryawan.update({
           where: { id_payroll_karyawan: id },
           data: {
             deleted_at: deletedAt,
           },
           select: buildSelect(),
-        }),
-        db.itemKomponenPayroll.updateMany({
+        });
+
+        const affectedPayrollItems = await tx.itemKomponenPayroll.updateMany({
           where: {
             id_payroll_karyawan: id,
             deleted_at: null,
@@ -634,20 +671,11 @@ export async function DELETE(req, { params }) {
           data: {
             deleted_at: deletedAt,
           },
-        }),
-        db.cicilanPinjamanKaryawan.updateMany({
-          where: {
-            id_payroll_karyawan: id,
-            deleted_at: null,
-            status_cicilan: 'DIPOSTING',
-          },
-          data: {
-            id_payroll_karyawan: null,
-            status_cicilan: 'MENUNGGU',
-            diposting_pada: null,
-          },
-        }),
-        db.approvalPayrollKaryawan.updateMany({
+        });
+
+        const affectedLoanInstallments = await detachPostedCicilanFromPayroll(tx, id);
+
+        const affectedApprovalSteps = await tx.approvalPayrollKaryawan.updateMany({
           where: {
             id_payroll_karyawan: id,
             deleted_at: null,
@@ -655,8 +683,15 @@ export async function DELETE(req, { params }) {
           data: {
             deleted_at: deletedAt,
           },
-        }),
-      ]);
+        });
+
+        return {
+          deleted: deletedRecord,
+          affectedItems: affectedPayrollItems,
+          affectedCicilan: affectedLoanInstallments,
+          affectedApprovals: affectedApprovalSteps,
+        };
+      });
 
       return NextResponse.json({
         message: 'Payroll karyawan berhasil dihapus (soft delete).',
@@ -675,18 +710,7 @@ export async function DELETE(req, { params }) {
     }
 
     const detachedCicilan = await db.$transaction(async (tx) => {
-      const affectedCicilan = await tx.cicilanPinjamanKaryawan.updateMany({
-        where: {
-          id_payroll_karyawan: id,
-          deleted_at: null,
-          status_cicilan: 'DIPOSTING',
-        },
-        data: {
-          id_payroll_karyawan: null,
-          status_cicilan: 'MENUNGGU',
-          diposting_pada: null,
-        },
-      });
+      const affectedCicilan = await detachPostedCicilanFromPayroll(tx, id);
 
       await tx.payrollKaryawan.delete({
         where: { id_payroll_karyawan: id },

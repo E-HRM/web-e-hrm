@@ -1139,3 +1139,58 @@ export async function detachPayrollItemForPayout(tx, payout) {
     payrolls,
   };
 }
+
+export async function unpostPayoutPayrollPosting(tx, id_payout_konsultan) {
+  const existing = await getExistingPayout(id_payout_konsultan, {
+    includeDetails: true,
+    client: tx,
+  });
+
+  if (!existing) {
+    throw createHttpError(404, 'Payout konsultan tidak ditemukan.');
+  }
+
+  if (existing.deleted_at) {
+    throw createHttpError(409, 'Payout konsultan ini sudah dihapus.');
+  }
+
+  if (existing.periode_konsultan?.deleted_at) {
+    throw createHttpError(409, 'Periode konsultan payout ini sudah dihapus.');
+  }
+
+  if (existing.periode_konsultan?.status_periode === STATUS_PERIODE_KONSULTAN_TERKUNCI) {
+    throw createHttpError(409, 'Periode konsultan payout ini sudah terkunci.');
+  }
+
+  const posted = existing.status_payout === 'DIPOSTING_KE_PAYROLL' || Boolean(existing.diposting_pada);
+  if (!posted) {
+    throw createHttpError(409, 'Payout konsultan ini belum diposting ke payroll.');
+  }
+
+  if (!existing.id_periode_payroll) {
+    throw createHttpError(409, 'Payout konsultan ini tidak memiliki relasi periode payroll aktif untuk dilepas posting.');
+  }
+
+  const detachSummary = await detachPayrollItemForPayout(tx, existing);
+  const transaksiReleased = await setTransaksiPostingStatusByPayout(tx, id_payout_konsultan, false);
+
+  await tx.payoutKonsultan.update({
+    where: {
+      id_payout_konsultan,
+    },
+    data: buildPayoutUnpostState(),
+  });
+
+  const refreshed = await tx.payoutKonsultan.findUnique({
+    where: {
+      id_payout_konsultan,
+    },
+    select: buildSelect({ includeDetails: true }),
+  });
+
+  return {
+    data: enrichPayout(refreshed),
+    detachSummary,
+    transaksiReleased,
+  };
+}

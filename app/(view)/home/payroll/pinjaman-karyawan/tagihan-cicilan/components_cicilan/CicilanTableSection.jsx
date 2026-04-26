@@ -1,6 +1,6 @@
 'use client';
 
-import { EyeOutlined, LinkOutlined } from '@ant-design/icons';
+import { EyeOutlined, LinkOutlined, RollbackOutlined } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppEmpty from '@/app/(view)/component_shared/AppEmpty';
@@ -333,6 +333,20 @@ export default function CicilanTableSection({ vm }) {
                 className='!rounded-lg !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
               >
                 Masukkan ke Payroll
+              </AppButton>
+            ) : null}
+
+            {vm.canUnpostFromPayroll(record) ? (
+              <AppButton
+                size='small'
+                variant='outline'
+                icon={<RollbackOutlined />}
+                loading={isActionLoading}
+                disabled={isActionLoading}
+                onClick={() => vm.handleUnpostFromPayroll(record)}
+                className='!rounded-lg'
+              >
+                Lepas Posting
               </AppButton>
             ) : null}
           </div>

@@ -315,7 +315,11 @@ export default function usePeriodeKonsultanViewModel() {
         const transaksiAffected = response?.cascade_summary?.transaksi_konsultan_soft_deleted ?? 0;
         const payoutAffected = response?.cascade_summary?.payout_konsultan_soft_deleted ?? 0;
 
-        AppMessage.success(transaksiAffected || payoutAffected ? `Periode berhasil dihapus. ${transaksiAffected} transaksi dan ${payoutAffected} payout terkait ikut di-soft delete.` : 'Periode konsultan berhasil dihapus.');
+        AppMessage.success(
+          transaksiAffected || payoutAffected
+            ? `Periode berhasil dihapus dari daftar aktif. ${transaksiAffected} transaksi dan ${payoutAffected} pencairan terkait ikut dinonaktifkan.`
+            : 'Periode konsultan berhasil dihapus dari daftar aktif.',
+        );
 
         if (selectedPeriode?.id_periode_konsultan === periode.id_periode_konsultan) {
           setIsDetailModalOpen(false);

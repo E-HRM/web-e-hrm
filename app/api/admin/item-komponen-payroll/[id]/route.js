@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import db from "@/lib/prisma";
 
 import {
+  resolveCicilanIdFromPayrollItemKey,
+  unpostCicilanPayrollPosting,
+} from "../../cicilan-pinjaman-karyawan/payrollPosting.shared";
+import { unpostPayoutPayrollPosting } from "../../payout-konsultan/_helper";
+import {
   ARAH_KOMPONEN_VALUES,
   DECIMAL_MAX_INTEGER_DIGITS,
   DECIMAL_SCALE,
@@ -29,6 +34,23 @@ import {
   recalculatePayrollTotals,
   resolveItemPayload,
 } from "../_shared";
+
+function resolvePostingSource(kunci_idempoten) {
+  const normalized = String(kunci_idempoten || "").trim();
+  const payoutPrefix = "payout-konsultan:";
+  const cicilanId = resolveCicilanIdFromPayrollItemKey(normalized);
+
+  if (normalized.startsWith(payoutPrefix)) {
+    const id = normalized.slice(payoutPrefix.length).trim();
+    return id ? { type: "payout_konsultan", id } : null;
+  }
+
+  if (cicilanId) {
+    return { type: "cicilan_pinjaman", id: cicilanId };
+  }
+
+  return null;
+}
 
 export async function GET(req, { params }) {
   const auth = await ensureAuth(req);
@@ -333,6 +355,63 @@ export async function DELETE(req, { params }) {
 
       const result = await db.$transaction(async (tx) => {
         await ensurePayrollEditable(tx, existing.id_payroll_karyawan);
+
+        const postingSource = resolvePostingSource(existing.kunci_idempoten);
+
+        if (postingSource?.type === "payout_konsultan") {
+          const unpostResult = await unpostPayoutPayrollPosting(
+            tx,
+            postingSource.id,
+          );
+          const deleted = await tx.itemKomponenPayroll.findUnique({
+            where: {
+              id_item_komponen_payroll: id,
+            },
+            select: buildSelect(),
+          });
+
+          return {
+            data: enrichItem(deleted),
+            source_unpost_summary: {
+              type: postingSource.type,
+              payout: unpostResult.data,
+              payroll_items_soft_deleted: unpostResult.detachSummary.item
+                ? 1
+                : 0,
+              payroll_snapshots: unpostResult.detachSummary.payrolls,
+              transaksi_dilepas_dari_posting:
+                unpostResult.transaksiReleased,
+            },
+          };
+        }
+
+        if (postingSource?.type === "cicilan_pinjaman") {
+          const unpostResult = await unpostCicilanPayrollPosting(
+            tx,
+            postingSource.id,
+            {
+              payrollItemId: id,
+              requirePosted: true,
+            },
+          );
+          const deleted = await tx.itemKomponenPayroll.findUnique({
+            where: {
+              id_item_komponen_payroll: id,
+            },
+            select: buildSelect(),
+          });
+
+          return {
+            data: enrichItem(deleted),
+            source_unpost_summary: {
+              type: postingSource.type,
+              cicilan: unpostResult.cicilan,
+              item_komponen_payroll: unpostResult.item,
+              loan_snapshot: unpostResult.loan_snapshot,
+              payroll_snapshots: unpostResult.payrolls,
+            },
+          };
+        }
 
         const deleted = await tx.itemKomponenPayroll.update({
           where: {

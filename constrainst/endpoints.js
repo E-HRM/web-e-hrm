@@ -27,21 +27,20 @@ const API_AGENDA_KERJA_IMPORT = '/api/admin/agenda-kerja-admin/import';
 const API_AGENDA_KERJA_IMPORT_TEMPLATE = '/api/admin/agenda-kerja-admin/import/template';
 
 // === NEW: Jabatan
-const API_JABATAN = "/api/admin/jabatans";
-const API_KPI_PLANS = "/api/admin/kpi-plans";
+const API_JABATAN = '/api/admin/jabatans';
+const API_KPI_PLANS = '/api/admin/kpi-plans';
 
 // POLA & SHIFT KERJA
-const API_POLA_KERJA = "/api/admin/pola-kerja";
-const API_SHIFT_KERJA = "/api/admin/shift-kerja";
-const API_SHIFT_KERJA_USER = "/api/admin/shift-kerja/user";
-const API_REPORT_SALES_WEEKLY = "/api/admin/reports/sales-weekly";
-const API_REPORT_FREELANCE_WEEKLY = "/api/admin/reports/freelance-weekly";
-
+const API_POLA_KERJA = '/api/admin/pola-kerja';
+const API_SHIFT_KERJA = '/api/admin/shift-kerja';
+const API_SHIFT_KERJA_USER = '/api/admin/shift-kerja/user';
+const API_REPORT_SALES_WEEKLY = '/api/admin/reports/sales-weekly';
+const API_REPORT_FREELANCE_WEEKLY = '/api/admin/reports/freelance-weekly';
 
 // === NEW: Absensi
-const API_ABSENSI_RECORDS = "/api/admin/absensi/history";
-const API_ABSENSI_APPROVALS = "/api/admin/absensi";
-const API_LEMBUR = "/api/admin/lembur";
+const API_ABSENSI_RECORDS = '/api/admin/absensi/history';
+const API_ABSENSI_APPROVALS = '/api/admin/absensi';
+const API_LEMBUR = '/api/admin/lembur';
 
 // === Kunjungan
 const API_KUNJUNGAN = '/api/admin/kunjungan-klien-admin';
@@ -109,10 +108,10 @@ const API_PAYOUT_KONSULTAN = '/api/admin/payout-konsultan';
 const API_PAYOUT_KONSULTAN_DETAIL = '/api/admin/payout-konsultan-detail';
 
 // ===== Finance: Kategori Keperluan (Admin)
-const API_KATEGORI_KEPERLUAN = "/api/admin/kategori-keperluan";
-const API_FREELANCE = "/api/admin/freelance";
-const API_PUBLIC_FREELANCE_FORM = "/api/public/freelance-form";
-const API_FREELANCE_FORM_ADMIN = "/api/admin/freelance/forms";
+const API_KATEGORI_KEPERLUAN = '/api/admin/kategori-keperluan';
+const API_FREELANCE = '/api/admin/freelance';
+const API_PUBLIC_FREELANCE_FORM = '/api/public/freelance-form';
+const API_FREELANCE_FORM_ADMIN = '/api/admin/freelance/forms';
 
 export const ApiEndpoints = {
   // Location
@@ -399,10 +398,12 @@ export const ApiEndpoints = {
   GetPayrollKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   GetPayrollSlipKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip`,
   GetPayrollSlipPdfKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip/pdf`,
+  SendPayrollSlipEmailKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip/email`,
   UpdatePayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   UploadBuktiBayarPayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   DeletePayrollKaryawan: (id, qsObj = {}) => `${API_PAYROLL_KARYAWAN}/${id}${buildQS(qsObj)}`,
   ApprovePayrollKaryawan: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}`,
+  RequestPayrollKaryawanApprovalOtp: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}/otp`,
 
   GetPersetujuanPeriodePayroll: (qsObj = {}) => `${API_PERSETUJUAN_PERIODE_PAYROLL}${buildQS(qsObj)}`,
   CreatePersetujuanPeriodePayroll: () => API_PERSETUJUAN_PERIODE_PAYROLL,

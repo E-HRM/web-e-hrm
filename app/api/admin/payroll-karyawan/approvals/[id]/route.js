@@ -1,9 +1,9 @@
 export const runtime = 'nodejs';
 
-import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 
-import { findFileInBody, isNullLike, parseRequestBody } from '@/app/api/_utils/requestBody';
+import { isNullLike, parseRequestBody } from '@/app/api/_utils/requestBody';
 import db from '@/lib/prisma';
 
 import { buildSelect, deriveApprovalState, ensureAuth, enrichPayroll, normRole } from '../../payrollKaryawan.shared';
@@ -11,7 +11,7 @@ import { buildSelect, deriveApprovalState, ensureAuth, enrichPayroll, normRole }
 const APPROVE_DECISIONS = new Set(['disetujui']);
 const PENDING_DECISIONS = new Set(['pending']);
 const SUPER_ROLES = new Set(['SUPERADMIN']);
-const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
+const MAX_OTP_ATTEMPTS = 5;
 
 function createHttpError(message, status = 400) {
   const err = new Error(message);
@@ -19,98 +19,21 @@ function createHttpError(message, status = 400) {
   return err;
 }
 
-function getSupabase() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !key) {
-    throw createHttpError('Supabase env tidak lengkap.', 500);
-  }
-
-  return createClient(url, key);
-}
-
-function extractBucketPath(publicUrl) {
-  if (!publicUrl) return null;
-
-  try {
-    const url = new URL(publicUrl);
-    const match = url.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
-    if (match) {
-      return {
-        bucket: match[1],
-        path: decodeURIComponent(match[2]),
-      };
-    }
-  } catch (_) {
-    const fallback = String(publicUrl).match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
-    if (fallback) {
-      return {
-        bucket: fallback[1],
-        path: decodeURIComponent(fallback[2]),
-      };
-    }
-  }
-
-  return null;
-}
-
-function sanitizePathPart(part) {
-  const safe = String(part || '')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .replace(/_+/g, '_')
-    .slice(0, 120);
-
-  return safe || 'unknown';
-}
-
-async function uploadTtdToSupabase(actorId, approvalId, file) {
-  if (!file) return null;
-
-  const supabase = getSupabase();
-  const arrayBuffer = await file.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  const extCandidate = (file.name?.split('.').pop() || '').toLowerCase();
-  const ext = extCandidate && /^[a-z0-9]+$/.test(extCandidate) ? extCandidate : 'bin';
-  const timestamp = Date.now();
-  const safeActorId = sanitizePathPart(actorId);
-  const safeApprovalId = sanitizePathPart(approvalId);
-  const path = `payroll/approval_ttd/${safeActorId}/${safeApprovalId}-${timestamp}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, buffer, {
-    upsert: true,
-    contentType: file.type || 'application/octet-stream',
-  });
-
-  if (uploadError) {
-    throw createHttpError(`Gagal upload TTD approval: ${uploadError.message}`, 502);
-  }
-
-  const { data: publicData, error: publicError } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
-  if (publicError) {
-    throw createHttpError(`Gagal membuat URL TTD approval: ${publicError.message}`, 502);
-  }
-
-  return publicData?.publicUrl || null;
-}
-
-async function deleteTtdFromSupabase(publicUrl) {
-  const info = extractBucketPath(publicUrl);
-  if (!info) return;
-
-  try {
-    const supabase = getSupabase();
-    const { error } = await supabase.storage.from(info.bucket).remove([info.path]);
-    if (error) {
-      console.warn('Gagal hapus TTD approval lama:', error.message);
-    }
-  } catch (err) {
-    console.warn('Gagal hapus TTD approval lama:', err?.message || err);
-  }
-}
-
 function isSuperAdmin(role) {
   return SUPER_ROLES.has(normRole(role));
+}
+
+function hashOtp(value) {
+  return crypto.createHash('sha256').update(String(value || '').trim()).digest('hex');
+}
+
+function isOtpMatch(rawOtp, storedHash) {
+  const rawHash = hashOtp(rawOtp);
+  const left = Buffer.from(rawHash, 'hex');
+  const right = Buffer.from(String(storedHash || ''), 'hex');
+
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
 }
 
 async function syncPayrollApprovalState(id_payroll_karyawan) {
@@ -177,48 +100,14 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ message: "decision wajib 'disetujui'." }, { status: 400 });
   }
 
-  const note = !isNullLike(body?.note) ? String(body.note).trim() : null;
-  const ttdFile = findFileInBody(body, ['ttd_approval', 'ttd', 'file']);
-  const directUrl = Object.prototype.hasOwnProperty.call(body || {}, 'ttd_approval_url') && !isNullLike(body?.ttd_approval_url) ? String(body.ttd_approval_url).trim() : null;
-
-  if (!ttdFile && !directUrl) {
-    return NextResponse.json({ message: 'TTD approval wajib diisi.' }, { status: 400 });
+  const kodeOtp = !isNullLike(body?.kode_otp) ? String(body.kode_otp).trim() : !isNullLike(body?.otp) ? String(body.otp).trim() : '';
+  if (!kodeOtp) {
+    return NextResponse.json({ message: 'Kode OTP wajib diisi.' }, { status: 400 });
   }
 
-  let uploadedUrl = null;
-  let approvalPersisted = false;
+  const note = !isNullLike(body?.note) ? String(body.note).trim() : null;
 
   try {
-    const initialApproval = await db.approvalPayrollKaryawan.findUnique({
-      where: { id_approval_payroll_karyawan: approvalId },
-      select: {
-        id_approval_payroll_karyawan: true,
-        id_payroll_karyawan: true,
-        approver_user_id: true,
-        approver_role: true,
-        ttd_approval_url: true,
-        deleted_at: true,
-      },
-    });
-
-    if (!initialApproval || initialApproval.deleted_at) {
-      return NextResponse.json({ message: 'Approval payroll tidak ditemukan.' }, { status: 404 });
-    }
-
-    const matchesAssignedUser = String(initialApproval.approver_user_id || '').trim() === actorId;
-    const matchesRoleFallback = !initialApproval.approver_user_id && normRole(initialApproval.approver_role) === actorRole;
-
-    if (!matchesAssignedUser && !matchesRoleFallback && !isSuperAdmin(actorRole)) {
-      return NextResponse.json({ message: 'Anda tidak memiliki akses untuk approval payroll ini.' }, { status: 403 });
-    }
-
-    if (ttdFile) {
-      uploadedUrl = await uploadTtdToSupabase(actorId, approvalId, ttdFile);
-    }
-
-    const nextTtdUrl = uploadedUrl || directUrl;
-    const oldTtdUrl = initialApproval.ttd_approval_url;
-
     const result = await db.$transaction(async (tx) => {
       const approvalRecord = await tx.approvalPayrollKaryawan.findUnique({
         where: { id_approval_payroll_karyawan: approvalId },
@@ -229,6 +118,9 @@ export async function PATCH(req, { params }) {
           approver_user_id: true,
           approver_role: true,
           decision: true,
+          kode_otp_hash: true,
+          otp_expires_at: true,
+          otp_attempts: true,
           deleted_at: true,
           payroll_karyawan: {
             select: {
@@ -258,23 +150,47 @@ export async function PATCH(req, { params }) {
         throw createHttpError('Approval payroll sudah memiliki keputusan.', 409);
       }
 
+      if (!approvalRecord.kode_otp_hash || !approvalRecord.otp_expires_at) {
+        throw createHttpError('Kode OTP belum diminta atau sudah tidak tersedia.', 400);
+      }
+
+      if (Number(approvalRecord.otp_attempts || 0) >= MAX_OTP_ATTEMPTS) {
+        throw createHttpError('Percobaan OTP sudah melebihi batas. Kirim ulang kode OTP.', 429);
+      }
+
+      if (new Date(approvalRecord.otp_expires_at).getTime() <= Date.now()) {
+        throw createHttpError('Kode OTP sudah kedaluwarsa. Kirim ulang kode OTP.', 400);
+      }
+
+      if (!isOtpMatch(kodeOtp, approvalRecord.kode_otp_hash)) {
+        await tx.approvalPayrollKaryawan.update({
+          where: { id_approval_payroll_karyawan: approvalId },
+          data: {
+            otp_attempts: {
+              increment: 1,
+            },
+          },
+        });
+        throw createHttpError('Kode OTP tidak valid.', 400);
+      }
+
       await tx.approvalPayrollKaryawan.update({
         where: { id_approval_payroll_karyawan: approvalId },
         data: {
           decision,
           decided_at: new Date(),
           note,
-          ttd_approval_url: nextTtdUrl,
+          kode_otp_hash: null,
+          otp_expires_at: null,
+          otp_verified_at: new Date(),
+          otp_attempts: 0,
         },
       });
 
       return {
         id_payroll_karyawan: approvalRecord.id_payroll_karyawan,
-        oldTtdUrl,
-        nextTtdUrl,
       };
     });
-    approvalPersisted = true;
 
     let refreshedPayroll = null;
     try {
@@ -291,19 +207,11 @@ export async function PATCH(req, { params }) {
       throw createHttpError('Payroll karyawan tidak ditemukan setelah approval disimpan.', 404);
     }
 
-    if (result.oldTtdUrl && result.oldTtdUrl !== result.nextTtdUrl) {
-      await deleteTtdFromSupabase(result.oldTtdUrl);
-    }
-
     return NextResponse.json({
       message: 'Approval payroll karyawan berhasil disimpan.',
       data: enrichPayroll(refreshedPayroll),
     });
   } catch (err) {
-    if (uploadedUrl && !approvalPersisted) {
-      await deleteTtdFromSupabase(uploadedUrl);
-    }
-
     if (err instanceof Error) {
       return NextResponse.json({ message: err.message }, { status: err.status || 500 });
     }

@@ -31,7 +31,7 @@ export const BULAN_NUMBER_MAP = BULAN_ENTRIES.reduce((acc, [value, _label, numbe
 
 export const STATUS_PERIODE_OPTIONS = [
   { value: 'DRAFT', label: 'Draft' },
-  { value: 'DIREVIEW', label: 'Direview' },
+  { value: 'DIREVIEW', label: 'Dalam Review' },
   { value: 'DISETUJUI', label: 'Disetujui' },
   { value: 'TERKUNCI', label: 'Terkunci' },
 ];

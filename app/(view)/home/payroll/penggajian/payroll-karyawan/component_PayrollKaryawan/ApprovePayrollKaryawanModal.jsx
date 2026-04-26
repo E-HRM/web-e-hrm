@@ -2,59 +2,65 @@
 
 import { useEffect, useState } from 'react';
 
+import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppInput from '@/app/(view)/component_shared/AppInput';
 import AppMessage from '@/app/(view)/component_shared/AppMessage';
 import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
-import AppUpload from '@/app/(view)/component_shared/AppUpload';
 
-export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, payroll, getApprovalStep, submitting = false }) {
+export default function ApprovePayrollKaryawanModal({
+  open,
+  onClose,
+  onSubmit,
+  onRequestOtp,
+  payroll,
+  getApprovalStep,
+  submitting = false,
+  requestingOtp = false,
+}) {
   const [note, setNote] = useState('');
-  const [fileList, setFileList] = useState([]);
-  const [previewSrc, setPreviewSrc] = useState('');
+  const [kodeOtp, setKodeOtp] = useState('');
 
   useEffect(() => {
     if (!open) return;
 
     setNote('');
-    setFileList([]);
-    setPreviewSrc('');
+    setKodeOtp('');
   }, [open, payroll?.id_payroll_karyawan]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-
-    const fileObj = fileList?.[0]?.originFileObj;
-    if (fileObj && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-      const objectUrl = URL.createObjectURL(fileObj);
-      setPreviewSrc(objectUrl);
-
-      return () => {
-        URL.revokeObjectURL(objectUrl);
-      };
-    }
-
-    setPreviewSrc('');
-    return undefined;
-  }, [fileList, open]);
-
-  const handleSubmit = async () => {
+  const resolveApprovalStep = () => {
     const approvalStep = getApprovalStep?.(payroll);
 
     if (!approvalStep?.id_approval_payroll_karyawan) {
       AppMessage.error('Persetujuan Anda tidak ditemukan atau sudah diproses.');
-      return false;
+      return null;
     }
 
-    if (!Array.isArray(fileList) || fileList.length === 0) {
-      AppMessage.error('Tanda tangan persetujuan wajib diunggah.');
+    return approvalStep;
+  };
+
+  const handleRequestOtp = async () => {
+    const approvalStep = resolveApprovalStep();
+    if (!approvalStep) return false;
+
+    if (typeof onRequestOtp !== 'function') return false;
+    return onRequestOtp();
+  };
+
+  const handleSubmit = async () => {
+    const approvalStep = resolveApprovalStep();
+    if (!approvalStep) return false;
+
+    const normalizedOtp = String(kodeOtp || '').trim();
+    if (!/^\d{6}$/.test(normalizedOtp)) {
+      AppMessage.error('Kode OTP wajib 6 digit.');
       return false;
     }
 
     if (typeof onSubmit !== 'function') return true;
 
     return onSubmit({
-      ttdFiles: fileList,
+      kodeOtp: normalizedOtp,
       note,
     });
   };
@@ -65,54 +71,50 @@ export default function ApprovePayrollKaryawanModal({ open, onClose, onSubmit, p
       onClose={onClose}
       onCancel={onClose}
       title='Setujui Penggajian Karyawan'
-      okText='Simpan Persetujuan'
+      okText='Verifikasi & Setujui'
       cancelText='Batal'
       onOk={handleSubmit}
       okLoading={submitting}
-      width={560}
+      width={520}
     >
       <div className='flex flex-col gap-5'>
-        <div className='flex flex-col gap-3'>
-          <AppUpload
-            label='Tanda Tangan Persetujuan'
-            required
-            maxCount={1}
-            listType='picture'
-            fileList={fileList}
-            onChange={(info) => setFileList(info?.fileList || [])}
-            beforeUpload={() => false}
-            accept='.jpg,.jpeg,.png,.webp'
-            hint='Unggah gambar tanda tangan.'
-          />
-
-          <div className='space-y-2'>
-            <AppTypography.Text
-              size={12}
-              weight={600}
-              className='block text-gray-700'
-            >
-              Pratinjau:
-            </AppTypography.Text>
-
-            <div className='flex h-[160px] items-center justify-center overflow-hidden rounded-2xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3'>
-              {previewSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewSrc}
-                  alt='Pratinjau tanda tangan'
-                  className='max-h-full max-w-full object-contain'
-                />
-              ) : (
-                <AppTypography.Text
-                  size={12}
-                  className='text-gray-400'
-                >
-                  Belum ada gambar tanda tangan.
-                </AppTypography.Text>
-              )}
+        <div className='rounded-xl border border-slate-200 bg-slate-50 px-4 py-3'>
+          <div className='flex items-center justify-between gap-3'>
+            <div className='min-w-0'>
+              <AppTypography.Text
+                weight={700}
+                className='block text-slate-800'
+              >
+                Kode OTP Approval
+              </AppTypography.Text>
+              <AppTypography.Text
+                size={12}
+                className='block text-slate-500'
+              >
+                Kode dikirim ke email approver yang dipilih.
+              </AppTypography.Text>
             </div>
+            <AppButton
+              variant='outline'
+              size='small'
+              loading={requestingOtp}
+              disabled={submitting}
+              onClick={handleRequestOtp}
+            >
+              Kirim OTP
+            </AppButton>
           </div>
         </div>
+
+        <AppInput
+          label='Kode OTP'
+          value={kodeOtp}
+          onChange={(event) => setKodeOtp(String(event?.target?.value || '').replace(/\D/g, '').slice(0, 6))}
+          placeholder='6 digit'
+          maxLength={6}
+          inputMode='numeric'
+          size='large'
+        />
 
         <AppInput.TextArea
           label='Catatan Persetujuan'

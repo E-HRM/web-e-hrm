@@ -57,7 +57,7 @@ export default function SummarySection({ vm }) {
         iconClassName='text-blue-600'
         value={vm.summary.totalPeriode}
         label='Total Periode'
-        helper='Jumlah keseluruhan periode konsultan aktif yang tercatat pada sistem.'
+        helper='Jumlah keseluruhan periode konsultan aktif yang tersedia.'
       />
 
       <SummaryCard
@@ -83,8 +83,8 @@ export default function SummarySection({ vm }) {
         iconWrapClassName='bg-amber-100'
         iconClassName='text-amber-600'
         value={vm.formatCurrency(vm.summary.totalNominalPayout)}
-        label='Total Dibayarkan'
-        helper='Akumulasi nominal payout konsultan yang sudah tercatat dari seluruh batch payout.'
+        label='Total Pencairan'
+        helper='Akumulasi nominal pencairan konsultan yang sudah tercatat.'
       />
     </div>
   );

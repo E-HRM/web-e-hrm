@@ -13,25 +13,25 @@ function getStatusMeta(status) {
       label: 'Draft',
       tone: 'warning',
       icon: <FileTextOutlined />,
-      helper: 'Periode masih dalam tahap persiapan dan belum dipakai sebagai acuan final.',
+      helper: 'Periode masih disiapkan dan belum digunakan untuk proses transaksi.',
     },
     DIREVIEW: {
-      label: 'Direview',
+      label: 'Dalam Review',
       tone: 'info',
       icon: <InfoCircleOutlined />,
-      helper: 'Periode sedang ditinjau sebelum dikunci atau disetujui untuk proses berikutnya.',
+      helper: 'Periode sedang diperiksa sebelum disetujui atau dikunci.',
     },
     DISETUJUI: {
       label: 'Disetujui',
       tone: 'success',
       icon: <CheckCircleOutlined />,
-      helper: 'Periode siap digunakan sebagai acuan transaksi dan payout konsultan.',
+      helper: 'Periode sudah siap digunakan untuk transaksi dan pencairan konsultan.',
     },
     TERKUNCI: {
       label: 'Terkunci',
       tone: 'neutral',
       icon: <LockOutlined />,
-      helper: 'Periode sudah dikunci untuk menjaga konsistensi data payroll konsultan.',
+      helper: 'Periode sudah dikunci agar data tidak berubah setelah proses selesai.',
     },
   };
 
@@ -120,7 +120,7 @@ export default function PeriodeTableSection({ vm }) {
             size={12}
             className='block text-gray-500 mt-0.5'
           >
-            {record?._count?.payout_konsultan || 0} payout batch
+            {record?._count?.payout_konsultan || 0} proses pencairan
           </AppTypography.Text>
         </div>
       ),
@@ -195,7 +195,7 @@ export default function PeriodeTableSection({ vm }) {
             loading={vm.actionLoadingId === record.id_periode_konsultan}
             confirm={{
               title: 'Hapus periode konsultan',
-              content: `Periode ${vm.formatPeriodeLabel(record)} akan di-soft delete. ${record?._count?.transaksi_konsultan || 0} transaksi dan ${record?._count?.payout_konsultan || 0} payout terkait juga akan ikut terdampak. Lanjutkan?`,
+              content: `Periode ${vm.formatPeriodeLabel(record)} akan dihapus dari daftar aktif. ${record?._count?.transaksi_konsultan || 0} transaksi dan ${record?._count?.payout_konsultan || 0} pencairan yang terhubung juga akan ikut dinonaktifkan. Lanjutkan?`,
               okText: 'Hapus',
               cancelText: 'Batal',
               okType: 'danger',
@@ -210,14 +210,14 @@ export default function PeriodeTableSection({ vm }) {
   return (
     <AppTable
       title='Daftar Periode Konsultan'
-      subtitle='Pantau status, rentang tanggal, dan aktivitas transaksi maupun payout konsultan dalam satu tampilan.'
+      subtitle='Pantau status periode, rentang tanggal, transaksi, dan pencairan konsultan dalam satu tampilan.'
       columns={columns}
       dataSource={vm.dataSource}
       loading={vm.loading}
       rowKey='id_periode_konsultan'
       totalLabel='periode'
       emptyTitle='Belum ada periode konsultan'
-      emptyDescription='Buat periode baru untuk mulai mengelompokkan transaksi dan payout konsultan.'
+      emptyDescription='Buat periode baru untuk mulai mengelola transaksi dan pencairan konsultan.'
       pagination={{
         pageSize: 10,
         showSizeChanger: true,

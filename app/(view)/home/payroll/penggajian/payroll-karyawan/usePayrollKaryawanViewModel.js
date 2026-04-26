@@ -428,6 +428,7 @@ export default function usePayrollKaryawanViewModel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState(buildDefaultForm(periodeFilterFromQuery || 'ALL'));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRequestingApprovalOtp, setIsRequestingApprovalOtp] = useState(false);
 
   useEffect(() => {
     if (!periodeFilterFromQuery) return;
@@ -837,11 +838,11 @@ export default function usePayrollKaryawanViewModel() {
   );
 
   const closeApproveModal = useCallback(() => {
-    if (isSubmitting) return;
+    if (isSubmitting || isRequestingApprovalOtp) return;
 
     setIsApproveModalOpen(false);
     setApprovalTargetPayroll(null);
-  }, [isSubmitting]);
+  }, [isRequestingApprovalOtp, isSubmitting]);
 
   const openDeleteDialog = useCallback((payroll) => {
     if (!payroll) return;
@@ -931,8 +932,38 @@ export default function usePayrollKaryawanViewModel() {
     }
   }, [isSubmitting, mutatePayroll, resolvedSelectedPayroll]);
 
+  const handleRequestApprovalOtp = useCallback(async () => {
+    if (isRequestingApprovalOtp) return false;
+
+    const payroll = resolvedApprovalTargetPayroll;
+    if (!payroll?.id_payroll_karyawan) {
+      AppMessage.warning('Data persetujuan tidak ditemukan.');
+      return false;
+    }
+
+    const approvalStep = getActionableApprovalStep(payroll);
+    if (!approvalStep?.id_approval_payroll_karyawan) {
+      AppMessage.warning('Persetujuan Anda tidak ditemukan atau sudah diproses.');
+      return false;
+    }
+
+    setIsRequestingApprovalOtp(true);
+    try {
+      const response = await crudServiceAuth.post(ApiEndpoints.RequestPayrollKaryawanApprovalOtp(approvalStep.id_approval_payroll_karyawan), {});
+
+      AppMessage.success(response?.message || 'Kode OTP approval telah dikirim.');
+      await mutatePayroll();
+      return true;
+    } catch (err) {
+      AppMessage.error(err?.message || 'Gagal mengirim kode OTP approval.');
+      return false;
+    } finally {
+      setIsRequestingApprovalOtp(false);
+    }
+  }, [getActionableApprovalStep, isRequestingApprovalOtp, mutatePayroll, resolvedApprovalTargetPayroll]);
+
   const handleApprove = useCallback(
-    async ({ ttdFiles = [], note = '' } = {}) => {
+    async ({ kodeOtp = '', note = '' } = {}) => {
       if (isSubmitting) return false;
 
       const payroll = resolvedApprovalTargetPayroll;
@@ -947,26 +978,21 @@ export default function usePayrollKaryawanViewModel() {
         return false;
       }
 
-      const fileObj = ttdFiles?.[0]?.originFileObj;
+      const normalizedOtp = String(kodeOtp || '').trim();
       const normalizedNote = String(note || '').trim();
 
-      if (!fileObj) {
-        AppMessage.warning('Tanda tangan persetujuan wajib diunggah.');
+      if (!/^\d{6}$/.test(normalizedOtp)) {
+        AppMessage.warning('Kode OTP wajib 6 digit.');
         return false;
       }
 
       setIsSubmitting(true);
       try {
-        const formData = new FormData();
-        formData.append('decision', 'disetujui');
-
-        formData.append('ttd_approval', fileObj);
-
-        if (normalizedNote) {
-          formData.append('note', normalizedNote);
-        }
-
-        const response = await crudServiceAuth.patchForm(ApiEndpoints.ApprovePayrollKaryawan(approvalStep.id_approval_payroll_karyawan), formData);
+        const response = await crudServiceAuth.patch(ApiEndpoints.ApprovePayrollKaryawan(approvalStep.id_approval_payroll_karyawan), {
+          decision: 'disetujui',
+          kode_otp: normalizedOtp,
+          ...(normalizedNote ? { note: normalizedNote } : {}),
+        });
 
         AppMessage.success(response?.message || 'Persetujuan penggajian karyawan berhasil disimpan.');
         setIsApproveModalOpen(false);
@@ -1216,6 +1242,7 @@ export default function usePayrollKaryawanViewModel() {
     validating: isPayrollValidating || isPeriodeValidating || isProfilPayrollValidating || isUsersValidating || isTarifPajakValidating,
     isTarifPajakLoading,
     isSubmitting,
+    isRequestingApprovalOtp,
     error: payrollError || periodeError || profilPayrollError || usersError || tarifPajakError,
 
     formatCurrency,
@@ -1255,6 +1282,7 @@ export default function usePayrollKaryawanViewModel() {
     approvalTargetPayroll: resolvedApprovalTargetPayroll,
     openApproveModal,
     closeApproveModal,
+    handleRequestApprovalOtp,
     handleApprove,
     getActionableApprovalStep,
     handleUploadBuktiBayar,

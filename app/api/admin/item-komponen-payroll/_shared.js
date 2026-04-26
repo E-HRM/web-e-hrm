@@ -908,6 +908,11 @@ export function buildItemValidationMessage(err) {
     "Payroll karyawan",
     "Periode payroll",
     "Definisi komponen payroll",
+    "payout",
+    "cicilan",
+    "pinjaman",
+    "diposting",
+    "dibayar",
   ];
 
   return knownPatterns.some((pattern) => message.includes(pattern))

@@ -61,7 +61,7 @@ export default function FilterSection({ vm }) {
           size={13}
           className='text-gray-500'
         >
-          Total nominal payout terhubung: {vm.formatCurrency(vm.summary.totalNominalPayout)}
+          Total pencairan terhubung: {vm.formatCurrency(vm.summary.totalNominalPayout)}
         </AppTypography.Text>
       </div>
     </AppCard>

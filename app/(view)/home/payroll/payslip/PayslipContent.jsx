@@ -1,10 +1,12 @@
 'use client';
 
-import { ArrowLeftOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, FileTextOutlined, MailOutlined, ReloadOutlined } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppCard from '@/app/(view)/component_shared/AppCard';
 import AppEmpty from '@/app/(view)/component_shared/AppEmpty';
+import AppInput from '@/app/(view)/component_shared/AppInput';
+import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
 import usePayslipViewModel from './usePayslipViewModel';
@@ -90,6 +92,19 @@ export default function PayslipContent() {
               className='!rounded-lg'
             >
               Buka PDF
+            </AppButton>
+          ) : null}
+
+          {vm.slip ? (
+            <AppButton
+              variant='primary'
+              icon={<MailOutlined />}
+              onClick={vm.openEmailModal}
+              disabled={!vm.canSendPayslipEmail}
+              loading={vm.emailSending}
+              className='!rounded-lg'
+            >
+              Kirim Payslip
             </AppButton>
           ) : null}
         </div>
@@ -243,6 +258,50 @@ export default function PayslipContent() {
           ) : null}
         </div>
       </div>
+
+      <AppModal
+        open={vm.emailModalOpen}
+        title='Kirim Payslip'
+        subtitle='Payslip akan dikirim ke email karyawan sebagai PDF attachment.'
+        okText='Kirim Payslip'
+        cancelText='Batal'
+        okLoading={vm.emailSending}
+        okDisabled={!vm.canSendPayslipEmail}
+        cancelDisabled={vm.emailSending}
+        onClose={vm.closeEmailModal}
+        onOk={vm.sendPayslipEmail}
+        width={560}
+      >
+        <div className='space-y-4'>
+          <AppInput
+            label='To'
+            value={vm.payslipEmailTo || '-'}
+            disabled
+            hint='Penerima utama otomatis memakai email karyawan dari data user.'
+          />
+
+          <AppInput
+            label='CC'
+            value={vm.emailForm.cc}
+            onChange={(event) => vm.updateEmailForm('cc', event.target.value)}
+            placeholder='contoh: hrd@company.com, direktur@company.com'
+            allowClear
+            hint='Opsional. Pisahkan beberapa email dengan koma, titik koma, atau baris baru.'
+            disabled={vm.emailSending}
+          />
+
+          <AppInput.TextArea
+            label='Pesan tambahan'
+            value={vm.emailForm.message}
+            onChange={(event) => vm.updateEmailForm('message', event.target.value)}
+            placeholder='Tambahkan pesan singkat bila diperlukan.'
+            allowClear
+            autoSize={{ minRows: 4, maxRows: 7 }}
+            disabled={vm.emailSending}
+            hint='Opsional. Detail nominal tetap hanya berada di PDF attachment.'
+          />
+        </div>
+      </AppModal>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { LinkOutlined } from '@ant-design/icons';
+import { LinkOutlined, RollbackOutlined } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppModal from '@/app/(view)/component_shared/AppModal';
@@ -146,6 +146,21 @@ export default function DetailCicilanModalSection({ vm }) {
               className='!bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
             >
               Masukkan ke Payroll
+            </AppButton>
+          ) : null}
+
+          {vm.canUnpostFromPayroll(cicilan) ? (
+            <AppButton
+              variant='outline'
+              icon={<RollbackOutlined />}
+              loading={vm.actionLoadingId === cicilan?.id_cicilan_pinjaman_karyawan}
+              onClick={async () => {
+                const unposted = await vm.handleUnpostFromPayroll(cicilan);
+                if (unposted) close();
+              }}
+              className='!rounded-lg'
+            >
+              Lepas Posting
             </AppButton>
           ) : null}
         </div>

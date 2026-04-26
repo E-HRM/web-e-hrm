@@ -189,6 +189,15 @@ export function canPostToPayroll(item) {
 
   return status === STATUS_CICILAN.MENUNGGU || status === STATUS_CICILAN.DILEWATI;
 }
+
+export function canUnpostFromPayroll(item) {
+  const status = normalizeText(item?.status_cicilan).toUpperCase();
+  const linkedPayroll = Boolean(item?.id_payroll_karyawan || item?.business_state?.linked_payroll);
+  const isMutable = item?.business_state?.bisa_diubah !== false;
+  const alreadyPaid = item?.business_state?.sudah_dibayar || status === STATUS_CICILAN.DIBAYAR;
+
+  return status === STATUS_CICILAN.DIPOSTING && linkedPayroll && isMutable && !alreadyPaid;
+}
  
 
 export function createPostPayrollPayload({ payrollId, urutanTampil = 920, catatan = '' }) {

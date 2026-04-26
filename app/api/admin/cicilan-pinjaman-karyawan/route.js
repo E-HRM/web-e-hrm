@@ -420,11 +420,11 @@ function validateLifecycleState({ nominal_tagihan, nominal_terbayar, status_cici
     if (!diposting_pada) {
       throw new Error("Status cicilan 'DIPOSTING' mensyaratkan field 'diposting_pada' terisi.");
     }
-    if (dibayar_pada) {
-      throw new Error("Status cicilan 'DIPOSTING' tidak boleh memiliki 'dibayar_pada'.");
+    if (!dibayar_pada) {
+      throw new Error("Status cicilan 'DIPOSTING' mensyaratkan field 'dibayar_pada' terisi.");
     }
-    if (nominalTerbayar !== 0n) {
-      throw new Error("Status cicilan 'DIPOSTING' mensyaratkan 'nominal_terbayar' bernilai 0.");
+    if (nominalTerbayar !== nominalTagihan) {
+      throw new Error("Status cicilan 'DIPOSTING' mensyaratkan 'nominal_terbayar' sama dengan 'nominal_tagihan'.");
     }
     if (payroll?.status_payroll === 'DIBAYAR') {
       throw new Error("Payroll yang dipilih sudah berstatus 'DIBAYAR'. Gunakan status cicilan 'DIBAYAR'.");
@@ -668,8 +668,11 @@ async function resolveBusinessState(tx, input, existing = null) {
   let diposting_pada = hasDefinedField(input, 'diposting_pada') ? input.diposting_pada : (existing?.diposting_pada ?? null);
   let dibayar_pada = hasDefinedField(input, 'dibayar_pada') ? input.dibayar_pada : (existing?.dibayar_pada ?? null);
 
-  if (status_cicilan === 'DIPOSTING' && !diposting_pada) {
-    diposting_pada = new Date();
+  if (status_cicilan === 'DIPOSTING') {
+    const postedAt = diposting_pada || new Date();
+    nominal_terbayar = nominal_tagihan;
+    diposting_pada = postedAt;
+    dibayar_pada = dibayar_pada || postedAt;
   }
 
   if (status_cicilan === 'DIBAYAR') {
