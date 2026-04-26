@@ -72,11 +72,6 @@ export default function ItemKomponenPayrollDetailModal({ vm }) {
               value={vm.selectedItem.urutan_tampil ?? 0}
             />
             <DetailField
-              label="Kode Referensi"
-              value={vm.selectedItem.kunci_idempoten || "-"}
-              weight={500}
-            />
-            <DetailField
               label="Dibuat Oleh"
               value={
                 vm.selectedItem.pembuat?.nama_pengguna ||

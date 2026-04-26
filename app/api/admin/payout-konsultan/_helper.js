@@ -13,7 +13,7 @@ export const MONEY_SCALE = 2;
 
 export const STATUS_PAYOUT_VALUES = new Set(['DRAFT', 'DISETUJUI', 'DIPOSTING_KE_PAYROLL', 'DITAHAN']);
 export const STATUS_PERIODE_KONSULTAN_TERKUNCI = 'TERKUNCI';
-export const STATUS_PERIODE_PAYROLL_IMMUTABLE = new Set(['FINAL', 'TERKUNCI']);
+export const STATUS_PERIODE_PAYROLL_IMMUTABLE = new Set(['TERKUNCI']);
 export const STATUS_PAYROLL_IMMUTABLE = new Set(['DISETUJUI', 'DIBAYAR']);
 
 export const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'total_share', 'nominal_ditahan', 'nominal_penyesuaian', 'nominal_dibayarkan', 'status_payout', 'disetujui_pada', 'diposting_pada']);
@@ -889,7 +889,7 @@ async function ensurePayrollPostingTarget(tx, { id_periode_payroll, id_user }) {
   }
 
   if (payroll.periode?.status_periode && STATUS_PERIODE_PAYROLL_IMMUTABLE.has(payroll.periode.status_periode)) {
-    throw new Error('Periode payroll tujuan sudah final atau terkunci.');
+    throw new Error('Periode payroll tujuan sudah terkunci.');
   }
 
   return payroll;
@@ -926,7 +926,7 @@ async function ensurePayrollMutableById(tx, id_payroll_karyawan) {
   }
 
   if (payroll.periode?.status_periode && STATUS_PERIODE_PAYROLL_IMMUTABLE.has(payroll.periode.status_periode)) {
-    throw new Error('Periode payroll tujuan sudah final atau terkunci.');
+    throw new Error('Periode payroll tujuan sudah terkunci.');
   }
 
   return payroll;

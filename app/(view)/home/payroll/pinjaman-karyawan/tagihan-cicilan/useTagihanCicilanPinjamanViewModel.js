@@ -265,7 +265,7 @@ function getPayrollTargetUnavailableMessage(userPayrollTargets = []) {
     reasons.push('payroll sudah disetujui atau dibayar');
   }
 
-  if (userPayrollTargets.some((item) => item.business_state?.periode_immutable || ['FINAL', 'TERKUNCI'].includes(item.periode_status))) {
+  if (userPayrollTargets.some((item) => item.business_state?.periode_immutable || String(item.periode_status || '').toUpperCase() === 'TERKUNCI')) {
     reasons.push('periode payroll sudah terkunci');
   }
 

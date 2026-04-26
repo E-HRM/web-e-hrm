@@ -8,7 +8,7 @@ const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const BULAN_VALUES = new Set(['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']);
-const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']);
+const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'TERKUNCI']);
 const ALLOWED_ORDER_BY = new Set(['created_at', 'updated_at', 'tahun', 'bulan', 'tanggal_mulai', 'tanggal_selesai', 'status_periode']);
 
 const normRole = (role) =>

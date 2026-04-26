@@ -107,7 +107,7 @@
  *     summary: Buat item komponen payroll
  *     description: |
  *       Membuat item komponen payroll baru. Logic bisnis yang diterapkan:
- *       - item hanya boleh dibuat pada payroll yang masih mutable (`DRAFT` / `TERSIMPAN`) dan periodenya belum `FINAL` / `TERKUNCI`.
+ *       - item hanya boleh dibuat pada payroll yang masih mutable (`DRAFT`) dan periodenya belum `TERKUNCI`.
  *       - `id_definisi_komponen_payroll` bersifat opsional. Jika dikirim, snapshot `tipe_komponen`, `arah_komponen`, dan `nama_komponen` mengikuti definisi.
  *       - jika item dibuat manual tanpa definisi, `tipe_komponen` harus ada pada master `TipeKomponenPayroll` aktif.
  *       - `kunci_idempoten` boleh dikirim manual; jika tidak dikirim untuk item manual, sistem akan membuatkannya otomatis.

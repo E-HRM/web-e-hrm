@@ -182,23 +182,23 @@ const MENU = [
       {
         href: '/home/payroll',
         match: ['/home/payroll'],
-        label: 'Dashboard',
+        label: 'Dashboard Payroll',
         exact: true,
       },
       {
         href: '/home/payroll/master-data',
         match: ['/home/payroll/master-data'],
-        label: 'Master Data (Pengaturan)',
+        label: 'Pengaturan Payroll',
       },
       {
         href: '/home/payroll/manajemen-karyawan',
         match: ['/home/payroll/manajemen-karyawan'],
-        label: 'Manajemen Karyawan',
+        label: 'Profile Payroll',
       },
       {
         href: '/home/payroll/penggajian',
         match: ['/home/payroll/penggajian'],
-        label: 'Penggajian (Payroll)',
+        label: 'Penggajian',
       },
       {
         href: '/home/payroll/pinjaman-karyawan',
@@ -208,7 +208,7 @@ const MENU = [
       {
         href: '/home/payroll/manajemen-konsultan',
         match: ['/home/payroll/manajemen-konsultan'],
-        label: 'Manajemen Konsultan',
+        label: 'Manajemen Transaksi Konsultan',
       },
     ],
   },

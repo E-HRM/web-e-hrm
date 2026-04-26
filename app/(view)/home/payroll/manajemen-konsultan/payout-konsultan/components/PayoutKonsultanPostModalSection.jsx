@@ -4,6 +4,18 @@ import AppModal from '@/app/(view)/component_shared/AppModal';
 import AppSelect from '@/app/(view)/component_shared/AppSelect';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
+function formatEnumLabel(value) {
+  const raw = String(value || '').trim();
+
+  if (!raw) return '-';
+
+  return raw
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function ReadonlyField({ label, value, accentClassName = 'text-gray-900' }) {
   return (
     <div>
@@ -44,7 +56,7 @@ export default function PayoutKonsultanPostModalSection({
     <AppModal
       open={open}
       onClose={onClose}
-      title='Posting ke Payroll'
+      title='Masukkan ke Penggajian'
       footer={null}
       width={680}
     >
@@ -55,7 +67,7 @@ export default function PayoutKonsultanPostModalSection({
             weight={700}
             className='block text-gray-900 mb-3'
           >
-            Sumber Payout
+            Data Pembayaran
           </AppTypography.Text>
 
           <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
@@ -70,18 +82,18 @@ export default function PayoutKonsultanPostModalSection({
             />
 
             <ReadonlyField
-              label='Jumlah Transaksi Diposting'
+              label='Transaksi yang Akan Masuk Penggajian'
               value={`${postingSummary?.detailPostingCount || 0} transaksi`}
             />
 
             <ReadonlyField
-              label='Jumlah Transaksi Ditahan'
+              label='Transaksi yang Tetap Ditahan'
               value={`${postingSummary?.detailDitahanCount || 0} transaksi`}
               accentClassName={postingSummary?.detailDitahanCount ? 'text-red-700' : 'text-gray-900'}
             />
 
             <ReadonlyField
-              label='Nominal Dibayarkan'
+              label='Nominal yang Akan Dibayarkan'
               value={formatCurrency(postingSummary?.nominalDibayarkan ?? selectedPayout?.nominal_dibayarkan)}
               accentClassName='text-green-700'
             />
@@ -94,30 +106,30 @@ export default function PayoutKonsultanPostModalSection({
             weight={700}
             className='block text-gray-900 mb-3'
           >
-            Pengaturan Posting
+            Pengaturan Penggajian
           </AppTypography.Text>
 
           <div className='space-y-4'>
             <AppSelect
-              label='Periode Payroll'
+              label='Periode Penggajian'
               required
               value={postFormData.id_periode_payroll || undefined}
               options={payrollOptions}
               onChange={(value) => setPostFormValue('id_periode_payroll', value || '')}
-              placeholder='Pilih periode payroll tujuan'
-              hint='Menentukan payroll tujuan tempat item komponen hasil posting payout akan ditempelkan.'
+              placeholder='Pilih periode penggajian tujuan'
+              hint='Pilih periode penggajian tempat pembayaran ini akan dimasukkan.'
               selectClassName='!rounded-lg'
             />
 
             <AppSelect
-              label='Definisi Komponen'
+              label='Jenis Komponen Penggajian'
               required
               value={postFormData.id_definisi_komponen_payroll || undefined}
               options={definisiKomponenOptions}
               onChange={(value) => setPostFormValue('id_definisi_komponen_payroll', value || '')}
-              placeholder='Pilih definisi komponen payroll'
+              placeholder='Pilih jenis komponen penggajian'
               loading={isDefinisiKomponenLoading}
-              hint='Nama komponen, tipe komponen, dan arah komponen akan mengikuti definisi yang dipilih.'
+              hint='Nama dan jenis komponen akan mengikuti pilihan ini.'
               selectClassName='!rounded-lg'
             />
 
@@ -128,36 +140,36 @@ export default function PayoutKonsultanPostModalSection({
                   weight={600}
                   className='block text-blue-700'
                 >
-                  Snapshot item mengikuti definisi terpilih
+                  Rincian komponen yang akan digunakan
                 </AppTypography.Text>
 
                 <AppTypography.Text
                   size={12}
                   className='block text-blue-600 mt-1'
                 >
-                  {selectedDefinition.nama_komponen} - {selectedDefinition.tipe_komponen} - {selectedDefinition.arah_komponen}
+                  {selectedDefinition.nama_komponen} - {formatEnumLabel(selectedDefinition.tipe_komponen)} - {formatEnumLabel(selectedDefinition.arah_komponen)}
                 </AppTypography.Text>
               </div>
             ) : null}
 
             <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
               <AppInput.Number
-                label='Nominal'
+                label='Nominal Pembayaran'
                 value={postingSummary?.nominalDibayarkan ?? selectedPayout?.nominal_dibayarkan ?? 0}
                 disabled
-                hint='Nilai otomatis mengikuti nominal dibayarkan dari payout konsultan.'
+                hint='Nilai ini otomatis mengikuti nominal pembayaran konsultan.'
                 inputClassName='!rounded-lg'
               />
 
               <AppInput.Number
-                label='Urutan Tampil'
+                label='Urutan Tampilan'
                 required
                 value={postFormData.urutan_tampil}
                 onChange={(value) => setPostFormValue('urutan_tampil', value ?? 0)}
                 min={0}
                 step={1}
                 precision={0}
-                hint='Nilai ini akan disimpan ke field urutan_tampil pada item komponen payroll hasil posting payout.'
+                hint='Angka ini menentukan posisi komponen saat ditampilkan di penggajian.'
                 inputClassName='!rounded-lg'
               />
             </div>
@@ -180,7 +192,7 @@ export default function PayoutKonsultanPostModalSection({
           loading={isSubmitting}
           className='!rounded-lg !px-4 !h-10 !bg-green-600 hover:!bg-green-700 !border-green-600 hover:!border-green-700 !text-white'
         >
-          Posting Sekarang
+          Masukkan Sekarang
         </AppButton>
       </div>
     </AppModal>

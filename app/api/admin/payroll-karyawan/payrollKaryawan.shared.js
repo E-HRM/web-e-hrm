@@ -9,12 +9,12 @@ export const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 export const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 export const STATUS_PAYROLL_VALUES = new Set(['DRAFT', 'DISETUJUI', 'DIBAYAR']);
-export const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']);
+export const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'TERKUNCI']);
 export const STATUS_APPROVAL_VALUES = new Set(['pending', 'disetujui', 'ditolak']);
 export const JENIS_HUBUNGAN_KERJA_VALUES = new Set(['FREELANCE', 'INTERNSHIP', 'PKWT', 'PKWTT']);
 
 export const IMMUTABLE_PAYROLL_STATUS = new Set(['DISETUJUI', 'DIBAYAR']);
-export const IMMUTABLE_PERIODE_STATUS = new Set(['FINAL', 'TERKUNCI']);
+export const IMMUTABLE_PERIODE_STATUS = new Set(['TERKUNCI']);
 
 export const ALLOWED_ORDER_BY = new Set([
   'created_at',

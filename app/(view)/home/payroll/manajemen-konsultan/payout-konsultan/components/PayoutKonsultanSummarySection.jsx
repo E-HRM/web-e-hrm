@@ -44,7 +44,7 @@ export default function PayoutKonsultanSummarySection({ summary, formatCurrency 
         iconWrapClassName='bg-blue-100'
         iconClassName='text-blue-600 text-2xl'
         value={formatCurrency(summary.totalShare)}
-        label='Total Share Konsultan'
+        label='Total Hak Konsultan'
       />
 
       <SummaryCard
@@ -52,7 +52,7 @@ export default function PayoutKonsultanSummarySection({ summary, formatCurrency 
         iconWrapClassName='bg-red-100'
         iconClassName='text-red-600 text-2xl'
         value={formatCurrency(summary.totalDitahan)}
-        label='Total Ditahan'
+        label='Total yang Ditahan'
       />
 
       <SummaryCard
@@ -60,7 +60,7 @@ export default function PayoutKonsultanSummarySection({ summary, formatCurrency 
         iconWrapClassName='bg-green-100'
         iconClassName='text-green-600 text-2xl'
         value={formatCurrency(summary.totalDibayarkan)}
-        label='Total Dibayarkan'
+        label='Total yang Akan Dibayarkan'
       />
     </div>
   );

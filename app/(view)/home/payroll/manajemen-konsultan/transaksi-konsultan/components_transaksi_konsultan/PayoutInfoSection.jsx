@@ -28,28 +28,28 @@ export default function PayoutInfoSection() {
           number='1'
           tone='purple'
         >
-          Transaksi konsultan dicatat beserta income, share, dan bagian OSS
+          Transaksi konsultan dicatat bersama total pendapatan, bagian konsultan, dan bagian OSS
         </StepItem>
 
         <StepItem
           number='2'
           tone='purple'
         >
-          Sistem mengakumulasi share konsultan pada periode yang dipilih
+          Sistem menjumlahkan bagian konsultan pada periode yang dipilih
         </StepItem>
 
         <StepItem
           number='3'
           tone='purple'
         >
-          Share yang sudah final dapat diproses ke payout dan diposting ke payroll
+          Bagian konsultan yang sudah final dapat diproses ke payout dan dimasukkan ke payroll
         </StepItem>
 
         <StepItem
           number='4'
           tone='purple'
         >
-          Transaksi yang sudah diposting atau periodenya terkunci tidak dapat diubah dari UI ini
+          Transaksi yang sudah masuk payroll atau periodenya terkunci tidak dapat diubah dari halaman ini
         </StepItem>
       </div>
     </AppCard>

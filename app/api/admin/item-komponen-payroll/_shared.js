@@ -26,13 +26,11 @@ export const STATUS_PAYROLL_VALUES = new Set([
 export const STATUS_PERIODE_VALUES = new Set([
   "DRAFT",
   "DIPROSES",
-  "DIREVIEW",
-  "FINAL",
   "TERKUNCI",
 ]);
 
 export const IMMUTABLE_PAYROLL_STATUS = new Set(["DISETUJUI", "DIBAYAR"]);
-export const IMMUTABLE_PERIODE_STATUS = new Set(["FINAL", "TERKUNCI"]);
+export const IMMUTABLE_PERIODE_STATUS = new Set(["TERKUNCI"]);
 
 export const ALLOWED_ORDER_BY = new Set([
   "created_at",
@@ -559,7 +557,7 @@ export async function ensurePayrollEditable(
   if (
     IMMUTABLE_PERIODE_STATUS.has(statusPeriode)
   ) {
-    throw new Error("Periode payroll untuk data induk sudah final/terkunci.");
+    throw new Error("Periode payroll untuk data induk sudah terkunci.");
   }
 
   return payroll;

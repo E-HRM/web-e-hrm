@@ -34,7 +34,7 @@
  *         description: Terjadi kesalahan server.
  *   put:
  *     summary: Perbarui periode payroll
- *     description: Memperbarui periode payroll berdasarkan ID. Jika `tahun` dan `bulan` diubah, kombinasi tersebut tidak boleh bentrok dengan data lain. Endpoint ini juga memvalidasi hubungan status dengan `diproses_pada` dan `difinalkan_pada`.
+ *     description: Memperbarui periode payroll berdasarkan ID. Jika `tahun` dan `bulan` diubah, kombinasi tersebut tidak boleh bentrok dengan data lain.
  *     tags: [Admin - Periode Payroll]
  *     security:
  *       - BearerAuth: []
@@ -67,15 +67,7 @@
  *                 format: date
  *               status_periode:
  *                 type: string
- *                 enum: [DRAFT, DIPROSES, DIREVIEW, FINAL, TERKUNCI]
- *               diproses_pada:
- *                 type: string
- *                 format: date-time
- *                 nullable: true
- *               difinalkan_pada:
- *                 type: string
- *                 format: date-time
- *                 nullable: true
+ *                 enum: [DRAFT, DIPROSES, TERKUNCI]
  *               catatan:
  *                 type: string
  *                 nullable: true

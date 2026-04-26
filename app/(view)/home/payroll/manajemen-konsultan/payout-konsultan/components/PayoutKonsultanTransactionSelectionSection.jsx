@@ -36,14 +36,14 @@ export default function PayoutKonsultanTransactionSelectionSection({ transaction
           weight={700}
           className='block text-gray-900'
         >
-          Transaksi Payout
+          Daftar Transaksi Konsultan
         </AppTypography.Text>
 
         <AppTypography.Text
           size={12}
           className='block text-gray-500 mt-1'
         >
-          Centang transaksi yang ingin ditahan. Daftar ini juga memuat transaksi ditahan dari periode sebelumnya.
+          Centang transaksi yang pembayarannya ingin ditahan. Transaksi yang ditahan dari periode sebelumnya juga muncul di daftar ini.
         </AppTypography.Text>
       </div>
 
@@ -51,8 +51,8 @@ export default function PayoutKonsultanTransactionSelectionSection({ transaction
         <div className='px-4 py-6'>
           <AppEmpty
             image={AppEmpty.Simple}
-            title='Memuat transaksi eligible'
-            description='Daftar transaksi untuk payout sedang disiapkan.'
+            title='Memuat transaksi yang siap dibayar'
+            description='Sistem sedang menyiapkan daftar transaksi konsultan.'
             centered
           />
         </div>
@@ -60,8 +60,8 @@ export default function PayoutKonsultanTransactionSelectionSection({ transaction
         <div className='px-4 py-6'>
           <AppEmpty
             image={AppEmpty.Simple}
-            title='Belum ada transaksi eligible'
-            description='Pilih konsultan dan periode yang memiliki transaksi aktif untuk menahan transaksi.'
+            title='Belum ada transaksi yang siap dibayar'
+            description='Pilih konsultan dan periode yang memiliki transaksi aktif.'
             centered
           />
         </div>
@@ -114,7 +114,7 @@ export default function PayoutKonsultanTransactionSelectionSection({ transaction
                             variant='soft'
                             size='sm'
                           >
-                            Transaksi Tertahan
+                            Dibawa dari Periode Sebelumnya
                           </AppTag>
                         ) : null}
                       </div>
@@ -136,13 +136,13 @@ export default function PayoutKonsultanTransactionSelectionSection({ transaction
 
                     <div className='grid grid-cols-2 gap-3 sm:min-w-[260px]'>
                       <TransactionMeta
-                        label='Total Income'
+                        label='Total Pendapatan'
                         value={formatCurrency(item.total_income)}
                         accentClassName='text-slate-700'
                       />
 
                       <TransactionMeta
-                        label='Total Share'
+                        label='Hak Konsultan'
                         value={formatCurrency(item.nominal_share)}
                         accentClassName={isHeld ? 'text-rose-700' : 'text-blue-700'}
                       />

@@ -15,8 +15,8 @@ const BULAN_LABEL_MAP = {
 };
 
 const STATUS_PERIODE_LABEL_MAP = {
-  DRAFT: 'Draft',
-  DIREVIEW: 'Direview',
+  DRAFT: 'Dalam Penyusunan',
+  DIREVIEW: 'Sedang Dicek',
   DISETUJUI: 'Disetujui',
   TERKUNCI: 'Terkunci',
 };

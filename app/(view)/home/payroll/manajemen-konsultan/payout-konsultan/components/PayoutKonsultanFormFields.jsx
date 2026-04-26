@@ -40,8 +40,8 @@ export default function PayoutKonsultanFormFields({
   readOnlyIdentity = false,
 }) {
   const consultantHint = readOnlyIdentity
-    ? 'Konsultan dan periode tidak dapat diubah setelah payout dibuat.'
-    : 'Konsultan dengan transaksi eligible pada periode terpilih, termasuk carry-forward ditahan dari periode sebelumnya, akan ditampilkan.';
+    ? 'Konsultan dan periode tidak dapat diubah setelah data pembayaran dibuat.'
+    : 'Pilih konsultan yang memiliki transaksi siap dibayarkan pada periode ini. Transaksi yang ditahan dari periode sebelumnya juga akan ditampilkan.';
 
   return (
     <div className='space-y-4'>
@@ -72,15 +72,15 @@ export default function PayoutKonsultanFormFields({
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppInput.Number
-          label='Nominal Ditahan'
+          label='Nominal yang Ditahan'
           value={formSummary.totalDitahan}
           disabled
-          hint='Dihitung otomatis dari total share transaksi yang ditahan.'
+          hint='Dihitung otomatis dari hak konsultan yang dipilih untuk ditahan.'
           inputClassName='!rounded-lg'
         />
 
         <AppInput.Number
-          label='Nominal Penyesuaian'
+          label='Nominal yang Akan Dibayarkan'
           value={formData.nominal_penyesuaian}
           onChange={(value) => setFormValue('nominal_penyesuaian', value ?? 0)}
           inputClassName='!rounded-lg'
@@ -90,36 +90,36 @@ export default function PayoutKonsultanFormFields({
       <div className='rounded-lg border border-gray-200 bg-gray-50 p-4'>
         <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4'>
           <PreviewItem
-            label='Transaksi Eligible'
+            label='Transaksi Siap Dibayar'
             value={isPreviewLoading ? 'Memuat...' : `${formSummary.detailCount} transaksi`}
           />
 
           <PreviewItem
-            label='Transaksi Ditahan'
+            label='Transaksi yang Ditahan'
             value={isPreviewLoading ? 'Memuat...' : `${formSummary.detailDitahanCount} transaksi`}
             accentClassName={formSummary.detailDitahanCount > 0 ? 'text-red-700' : 'text-gray-900'}
           />
 
           <PreviewItem
-            label='Total Income'
+            label='Total Pendapatan'
             value={formatCurrency(formSummary.totalIncome)}
             accentClassName='text-blue-700'
           />
 
           <PreviewItem
-            label='Total Share Otomatis'
+            label='Hak Konsultan Otomatis'
             value={formatCurrency(formSummary.totalShare)}
             accentClassName='text-blue-700'
           />
 
           <PreviewItem
-            label='Nominal Ditahan'
+            label='Nominal yang Ditahan'
             value={formatCurrency(formSummary.totalDitahan)}
             accentClassName={formSummary.totalDitahan > 0 ? 'text-red-700' : 'text-gray-900'}
           />
 
           <PreviewItem
-            label='Nominal Dibayarkan'
+            label='Nominal yang Akan Dibayarkan'
             value={formatCurrency(nominalDibayarkanPreview)}
             accentClassName={nominalDibayarkanPreview >= 0 ? 'text-green-700' : 'text-red-700'}
           />

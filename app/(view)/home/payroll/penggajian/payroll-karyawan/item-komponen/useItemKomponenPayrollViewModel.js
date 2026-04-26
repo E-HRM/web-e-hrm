@@ -14,7 +14,7 @@ const TIPE_KOMPONEN_SWR_KEY = "payroll:tipe-komponen-payroll:options";
 const FETCH_PAGE_SIZE = 100;
 
 const STATUS_PAYROLL_IMMUTABLE = new Set(["DISETUJUI", "DIBAYAR"]);
-const STATUS_PERIODE_IMMUTABLE = new Set(["FINAL", "TERKUNCI"]);
+const STATUS_PERIODE_IMMUTABLE = new Set(["TERKUNCI"]);
 
 const ARAH_KOMPONEN_OPTIONS = [
   { value: "PEMASUKAN", label: "Pemasukan" },

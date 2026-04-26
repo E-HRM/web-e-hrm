@@ -116,6 +116,59 @@ async function apiJson(url, { method = 'GET', body } = {}) {
   return data;
 }
 
+function getFriendlyErrorMessage(error, fallback = 'Terjadi kendala pada sistem. Silakan coba lagi.') {
+  const rawMessage = typeof error === 'string' ? error : error?.message;
+  const message = String(rawMessage || fallback || '').trim();
+
+  if (!message) return fallback;
+
+  const lowerMessage = message.toLowerCase();
+
+  if (lowerMessage.includes('forbidden')) {
+    return 'Anda belum memiliki akses untuk melakukan tindakan ini.';
+  }
+
+  if (lowerMessage.includes('payload json')) {
+    return 'Data yang dikirim belum sesuai. Silakan muat ulang halaman lalu coba lagi.';
+  }
+
+  if (lowerMessage.includes('request gagal')) {
+    return fallback;
+  }
+
+  if (lowerMessage.includes('server error')) {
+    return 'Terjadi kendala pada sistem. Silakan coba lagi.';
+  }
+
+  if (lowerMessage.includes('endpoint crud')) {
+    return 'Status payroll tidak dapat diubah dari halaman ini.';
+  }
+
+  return message
+    .replace(/backend/gi, 'sistem')
+    .replace(/server/gi, 'sistem')
+    .replace(/soft delete/gi, 'disembunyikan dari daftar')
+    .replace(/field/gi, 'kolom')
+    .replace(/mapping/gi, 'pencocokan data')
+    .replace(/validasi/gi, 'pemeriksaan')
+    .replace(/diimport/gi, 'diimpor')
+    .replace(/import/gi, 'impor')
+    .replace(/diexport/gi, 'diekspor')
+    .replace(/export/gi, 'ekspor')
+    .replace(/posted/gi, 'sudah masuk payroll')
+    .replace(/posting/gi, 'masuk payroll')
+    .replace(/total_income/gi, 'total pendapatan')
+    .replace(/nominal_debit/gi, 'pemasukan')
+    .replace(/nominal_kredit/gi, 'pengeluaran')
+    .replace(/nominal_share/gi, 'bagian konsultan')
+    .replace(/nominal_oss/gi, 'bagian OSS')
+    .replace(/persen_share_default/gi, 'persentase share standar')
+    .replace(/persen_share_override/gi, 'persentase share khusus')
+    .replace(/id_user_konsultan/gi, 'konsultan')
+    .replace(/id_periode_konsultan/gi, 'periode')
+    .replace(/id_jenis_produk_konsultan/gi, 'layanan atau produk');
+}
+
 async function fetchAllPages(fetcher) {
   const merged = [];
   let page = 1;
@@ -194,7 +247,7 @@ function buildActionLockReason(transaksi) {
   if (!transaksi) return 'Transaksi tidak ditemukan.';
 
   if (transaksi?.business_state?.sudah_posting_payroll) {
-    return 'Transaksi sudah diposting ke payroll dan tidak dapat diubah.';
+    return 'Transaksi sudah masuk payroll dan tidak dapat diubah.';
   }
 
   if (transaksi?.business_state?.periode_terkunci) {
@@ -205,7 +258,7 @@ function buildActionLockReason(transaksi) {
     return 'Periode transaksi ini sudah dihapus.';
   }
 
-  return 'Transaksi ini tidak dapat diproses.';
+  return 'Transaksi ini tidak dapat diubah.';
 }
 
 const KONSULTAN_MAPPING_ERROR_CODES = new Set(['KONSULTAN_EMPTY', 'KONSULTAN_NOT_FOUND', 'KONSULTAN_AMBIGUOUS']);
@@ -213,8 +266,8 @@ const PRODUK_MAPPING_WARNING_CODES = new Set(['PRODUK_NOT_FOUND']);
 
 function getIssueMessage(issue) {
   if (!issue) return '';
-  if (typeof issue === 'string') return issue;
-  return issue.message || '';
+  if (typeof issue === 'string') return getFriendlyErrorMessage(issue, issue);
+  return getFriendlyErrorMessage(issue.message || '', issue.message || '');
 }
 
 function resolveImportRowIssues(row) {
@@ -229,24 +282,20 @@ function resolveImportRowIssues(row) {
   const idUserKonsultan = String(row?.id_user_konsultan || '').trim();
   const idProdukKonsultan = String(row?.id_jenis_produk_konsultan || '').trim();
 
-  const errors = Array.isArray(row?.errors)
-    ? row.errors.filter((item) => !KONSULTAN_MAPPING_ERROR_CODES.has(item?.code))
-    : [];
-  const warnings = Array.isArray(row?.warnings)
-    ? row.warnings.filter((item) => !PRODUK_MAPPING_WARNING_CODES.has(item?.code))
-    : [];
+  const errors = Array.isArray(row?.errors) ? row.errors.filter((item) => !KONSULTAN_MAPPING_ERROR_CODES.has(item?.code)) : [];
+  const warnings = Array.isArray(row?.warnings) ? row.warnings.filter((item) => !PRODUK_MAPPING_WARNING_CODES.has(item?.code)) : [];
 
   if (!row?.is_oss && !idUserKonsultan) {
     errors.push({
       code: 'KONSULTAN_NOT_SELECTED',
-      message: 'Konsultan wajib dipilih, kecuali untuk baris OSS.',
+      message: 'Mohon pilih konsultan, kecuali untuk baris OSS.',
     });
   }
 
   if (!idProdukKonsultan) {
     warnings.push({
       code: 'PRODUK_NOT_SELECTED',
-      message: 'Kategori/produk belum dipilih. Baris tetap bisa diimpor tanpa produk.',
+      message: 'Layanan atau produk belum dipilih. Baris tetap bisa disimpan tanpa produk.',
     });
   }
 
@@ -358,7 +407,7 @@ export default function useTransaksiKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'transaksi-konsultan-periode-error',
-      content: periodeError?.message || 'Gagal memuat data periode konsultan.',
+      content: getFriendlyErrorMessage(periodeError, 'Data periode konsultan belum berhasil dimuat.'),
     });
   }, [periodeError]);
 
@@ -368,7 +417,7 @@ export default function useTransaksiKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'transaksi-konsultan-users-error',
-      content: usersError?.message || 'Gagal memuat data konsultan.',
+      content: getFriendlyErrorMessage(usersError, 'Data konsultan belum berhasil dimuat.'),
     });
   }, [usersError]);
 
@@ -378,7 +427,7 @@ export default function useTransaksiKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'transaksi-konsultan-produk-error',
-      content: produkError?.message || 'Gagal memuat data produk konsultan.',
+      content: getFriendlyErrorMessage(produkError, 'Data layanan atau produk belum berhasil dimuat.'),
     });
   }, [produkError]);
 
@@ -388,7 +437,7 @@ export default function useTransaksiKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: `transaksi-konsultan-list-error:${filterPeriode || 'none'}`,
-      content: transaksiError?.message || 'Gagal memuat transaksi konsultan.',
+      content: getFriendlyErrorMessage(transaksiError, 'Data transaksi konsultan belum berhasil dimuat.'),
     });
   }, [filterPeriode, transaksiError]);
 
@@ -562,7 +611,7 @@ export default function useTransaksiKonsultanViewModel() {
 
   const openCreateModal = useCallback(() => {
     if (!filterPeriode) {
-      AppMessage.warning('Pilih periode konsultan terlebih dahulu.');
+      AppMessage.warning('Mohon pilih periode konsultan terlebih dahulu.');
       return;
     }
 
@@ -597,12 +646,12 @@ export default function useTransaksiKonsultanViewModel() {
 
   const openImportModal = useCallback(() => {
     if (!filterPeriode) {
-      AppMessage.warning('Pilih periode konsultan terlebih dahulu.');
+      AppMessage.warning('Mohon pilih periode konsultan terlebih dahulu.');
       return;
     }
 
     if (!canCreateInActivePeriode) {
-      AppMessage.warning('Periode yang dipilih belum bisa digunakan untuk import transaksi.');
+      AppMessage.warning('Periode yang dipilih belum bisa digunakan untuk impor transaksi.');
       return;
     }
 
@@ -699,22 +748,22 @@ export default function useTransaksiKonsultanViewModel() {
 
   const validateForm = useCallback(() => {
     if (!String(formData.id_user_konsultan || '').trim()) {
-      AppMessage.warning('Konsultan wajib dipilih.');
+      AppMessage.warning('Mohon pilih konsultan terlebih dahulu.');
       return false;
     }
 
     if (!String(formData.id_periode_konsultan || '').trim()) {
-      AppMessage.warning('Periode konsultan wajib dipilih.');
+      AppMessage.warning('Mohon pilih periode terlebih dahulu.');
       return false;
     }
 
     if (!String(formData.tanggal_transaksi || '').trim()) {
-      AppMessage.warning('Tanggal transaksi wajib diisi.');
+      AppMessage.warning('Mohon isi tanggal transaksi.');
       return false;
     }
 
     if (!String(formData.deskripsi || '').trim()) {
-      AppMessage.warning('Deskripsi transaksi wajib diisi.');
+      AppMessage.warning('Mohon isi keterangan transaksi.');
       return false;
     }
 
@@ -723,12 +772,12 @@ export default function useTransaksiKonsultanViewModel() {
     const totalIncome = nominalDebit - nominalKredit;
 
     if (nominalDebit < 0) {
-      AppMessage.warning('Nominal debit tidak boleh kurang dari 0.');
+      AppMessage.warning('Nominal pemasukan minimal 0.');
       return false;
     }
 
     if (nominalKredit < 0) {
-      AppMessage.warning('Nominal kredit tidak boleh kurang dari 0.');
+      AppMessage.warning('Nominal pengeluaran minimal 0.');
       return false;
     }
 
@@ -741,7 +790,7 @@ export default function useTransaksiKonsultanViewModel() {
 
     if (!overrideManual || !hasManualNominal) {
       if (persenShareDefault === null && persenShareOverride === null) {
-        AppMessage.warning('Persen share default atau override wajib diisi.');
+        AppMessage.warning('Mohon isi persentase share, atau aktifkan pengaturan nominal manual.');
         return false;
       }
     }
@@ -749,7 +798,7 @@ export default function useTransaksiKonsultanViewModel() {
     if (persenShareDefault !== null) {
       const parsedDefault = Number(persenShareDefault);
       if (!Number.isFinite(parsedDefault) || parsedDefault < 0 || parsedDefault > 100) {
-        AppMessage.warning('Persen share default harus berada pada rentang 0 sampai 100.');
+        AppMessage.warning('Masukkan persentase share standar antara 0 sampai 100.');
         return false;
       }
     }
@@ -757,7 +806,7 @@ export default function useTransaksiKonsultanViewModel() {
     if (persenShareOverride !== null) {
       const parsedOverride = Number(persenShareOverride);
       if (!Number.isFinite(parsedOverride) || parsedOverride < 0 || parsedOverride > 100) {
-        AppMessage.warning('Persen share override harus berada pada rentang 0 sampai 100.');
+        AppMessage.warning('Masukkan persentase share khusus antara 0 sampai 100.');
         return false;
       }
     }
@@ -765,7 +814,7 @@ export default function useTransaksiKonsultanViewModel() {
     if (overrideManual && nominalShareManual !== null) {
       const parsedNominalShare = Number(nominalShareManual);
       if (!Number.isFinite(parsedNominalShare)) {
-        AppMessage.warning('Nominal share manual harus berupa angka valid.');
+        AppMessage.warning('Masukkan bagian konsultan dengan angka yang benar.');
         return false;
       }
     }
@@ -773,7 +822,7 @@ export default function useTransaksiKonsultanViewModel() {
     if (overrideManual && nominalOssManual !== null) {
       const parsedNominalOss = Number(nominalOssManual);
       if (!Number.isFinite(parsedNominalOss)) {
-        AppMessage.warning('Nominal OSS manual harus berupa angka valid.');
+        AppMessage.warning('Masukkan bagian OSS dengan angka yang benar.');
         return false;
       }
     }
@@ -781,13 +830,25 @@ export default function useTransaksiKonsultanViewModel() {
     if (overrideManual && nominalShareManual !== null && nominalOssManual !== null) {
       const manualTotal = Number(nominalShareManual) + Number(nominalOssManual);
       if (Math.abs(manualTotal - totalIncome) > 0.009) {
-        AppMessage.warning('Total nominal share manual dan nominal OSS manual harus sama dengan total income.');
+        AppMessage.warning('Total bagian konsultan dan bagian OSS harus sama dengan total pendapatan.');
         return false;
       }
     }
 
     return true;
-  }, [formData.deskripsi, formData.id_periode_konsultan, formData.id_user_konsultan, formData.nominal_debit, formData.nominal_kredit, formData.nominal_oss, formData.nominal_share, formData.override_manual, formData.persen_share_default, formData.persen_share_override, formData.tanggal_transaksi]);
+  }, [
+    formData.deskripsi,
+    formData.id_periode_konsultan,
+    formData.id_user_konsultan,
+    formData.nominal_debit,
+    formData.nominal_kredit,
+    formData.nominal_oss,
+    formData.nominal_share,
+    formData.override_manual,
+    formData.persen_share_default,
+    formData.persen_share_override,
+    formData.tanggal_transaksi,
+  ]);
 
   const buildPayload = useCallback(() => {
     const overrideManual = Boolean(formData.override_manual);
@@ -820,7 +881,7 @@ export default function useTransaksiKonsultanViewModel() {
     setIsSubmitting(true);
 
     try {
-      const response = await apiJson(ApiEndpoints.CreateTransaksiKonsultan(), {
+      await apiJson(ApiEndpoints.CreateTransaksiKonsultan(), {
         method: 'POST',
         body: payload,
       });
@@ -835,9 +896,9 @@ export default function useTransaksiKonsultanViewModel() {
 
       setIsCreateModalOpen(false);
       resetForm(targetPeriode);
-      AppMessage.success(response?.message || 'Transaksi konsultan berhasil ditambahkan.');
+      AppMessage.success('Transaksi konsultan berhasil ditambahkan.');
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal menambahkan transaksi konsultan.');
+      AppMessage.error(getFriendlyErrorMessage(err, 'Transaksi konsultan belum berhasil ditambahkan.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -861,7 +922,7 @@ export default function useTransaksiKonsultanViewModel() {
     setIsSubmitting(true);
 
     try {
-      const response = await apiJson(ApiEndpoints.UpdateTransaksiKonsultan(resolvedSelectedTransaksi.id_transaksi_konsultan), {
+      await apiJson(ApiEndpoints.UpdateTransaksiKonsultan(resolvedSelectedTransaksi.id_transaksi_konsultan), {
         method: 'PUT',
         body: buildPayload(),
       });
@@ -870,9 +931,9 @@ export default function useTransaksiKonsultanViewModel() {
       setIsEditModalOpen(false);
       setSelectedTransaksi(null);
       resetForm();
-      AppMessage.success(response?.message || 'Transaksi konsultan berhasil diperbarui.');
+      AppMessage.success('Transaksi konsultan berhasil diperbarui.');
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal memperbarui transaksi konsultan.');
+      AppMessage.error(getFriendlyErrorMessage(err, 'Transaksi konsultan belum berhasil diperbarui.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -894,16 +955,16 @@ export default function useTransaksiKonsultanViewModel() {
     setIsSubmitting(true);
 
     try {
-      const response = await apiJson(ApiEndpoints.DeleteTransaksiKonsultan(resolvedSelectedTransaksi.id_transaksi_konsultan), {
+      await apiJson(ApiEndpoints.DeleteTransaksiKonsultan(resolvedSelectedTransaksi.id_transaksi_konsultan), {
         method: 'DELETE',
       });
 
       await mutateTransaksi();
       setIsDeleteDialogOpen(false);
       setSelectedTransaksi(null);
-      AppMessage.success(response?.message || 'Transaksi konsultan berhasil dihapus.');
+      AppMessage.success('Transaksi berhasil disembunyikan dari daftar.');
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal menghapus transaksi konsultan.');
+      AppMessage.error(getFriendlyErrorMessage(err, 'Transaksi konsultan belum berhasil dihapus.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -913,12 +974,12 @@ export default function useTransaksiKonsultanViewModel() {
     if (isImportPreviewing) return;
 
     if (!filterPeriode) {
-      AppMessage.warning('Pilih periode konsultan terlebih dahulu.');
+      AppMessage.warning('Mohon pilih periode konsultan terlebih dahulu.');
       return;
     }
 
     if (!importFile) {
-      AppMessage.warning('Pilih file Excel terlebih dahulu.');
+      AppMessage.warning('Mohon pilih file Excel terlebih dahulu.');
       return;
     }
 
@@ -938,11 +999,11 @@ export default function useTransaksiKonsultanViewModel() {
       setImportPreview(data);
       setImportRows(Array.isArray(data?.rows) ? data.rows : []);
       setImportPreviewPage(1);
-      AppMessage.success(response?.message || 'Preview import berhasil dibuat.');
+      AppMessage.success('File berhasil dibaca. Silakan cek datanya sebelum disimpan.');
     } catch (err) {
       setImportPreview(null);
       setImportRows([]);
-      AppMessage.error(err?.message || 'Gagal membaca file Excel transaksi konsultan.');
+      AppMessage.error(getFriendlyErrorMessage(err, 'File Excel belum berhasil dibaca.'));
     } finally {
       setIsImportPreviewing(false);
     }
@@ -952,14 +1013,14 @@ export default function useTransaksiKonsultanViewModel() {
     if (isImportCommitting) return;
 
     if (!canCommitImport) {
-      AppMessage.warning('Selesaikan error mapping dan validasi sebelum import.');
+      AppMessage.warning('Periksa kembali baris yang bermasalah sebelum menyimpan data impor.');
       return;
     }
 
     setIsImportCommitting(true);
 
     try {
-      const response = await apiJson(ApiEndpoints.CommitImportTransaksiKonsultan(), {
+      await apiJson(ApiEndpoints.CommitImportTransaksiKonsultan(), {
         method: 'POST',
         body: {
           id_periode_konsultan: filterPeriode,
@@ -973,7 +1034,7 @@ export default function useTransaksiKonsultanViewModel() {
       setImportPreview(null);
       setImportRows([]);
       setImportPreviewPage(1);
-      AppMessage.success(response?.message || 'Import transaksi konsultan selesai.');
+      AppMessage.success('Data transaksi berhasil diimpor.');
     } catch (err) {
       const details = Array.isArray(err?.payload?.errors)
         ? ` ${err.payload.errors
@@ -981,7 +1042,7 @@ export default function useTransaksiKonsultanViewModel() {
             .map((item) => `Baris ${item.row || '-'}: ${item.message}`)
             .join(' ')}`
         : '';
-      AppMessage.error(`${err?.message || 'Gagal menyimpan import transaksi konsultan.'}${details}`);
+      AppMessage.error(`${getFriendlyErrorMessage(err, 'Data transaksi belum berhasil diimpor.')}${details}`);
     } finally {
       setIsImportCommitting(false);
     }
@@ -991,7 +1052,7 @@ export default function useTransaksiKonsultanViewModel() {
     if (isExporting) return;
 
     if (transaksiList.length === 0) {
-      AppMessage.warning('Tidak ada transaksi konsultan untuk diexport.');
+      AppMessage.warning('Belum ada transaksi yang bisa diekspor.');
       return;
     }
 
@@ -1005,19 +1066,19 @@ export default function useTransaksiKonsultanViewModel() {
         Tanggal: toDateInputValue(transaksi.tanggal_transaksi) || transaksi.tanggal_transaksi || '',
         Konsultan: transaksi.konsultan_display_name || '-',
         'Identitas Konsultan': transaksi.konsultan_identity || '-',
-        Produk: transaksi.produk_display_name || getProdukDisplayName(transaksi.jenis_produk),
+        'Layanan / Produk': transaksi.produk_display_name || getProdukDisplayName(transaksi.jenis_produk),
         Klien: transaksi.nama_klien || '-',
-        Deskripsi: transaksi.deskripsi || '-',
-        'Nominal Debit': toNumber(transaksi.nominal_debit),
-        'Nominal Kredit': toNumber(transaksi.nominal_kredit),
-        'Total Income': toNumber(transaksi.total_income),
-        'Persen Share Efektif (%)': toNumber(getPersenShare(transaksi)),
-        'Persen Share Default (%)': transaksi.persen_share_default == null ? '' : toNumber(transaksi.persen_share_default),
-        'Persen Share Override (%)': transaksi.persen_share_override == null ? '' : toNumber(transaksi.persen_share_override),
-        'Nominal Share': toNumber(transaksi.nominal_share),
-        'Nominal OSS': toNumber(transaksi.nominal_oss),
-        'Override Manual': transaksi.override_manual ? 'Ya' : 'Tidak',
-        'Status Posting': transaksi.sudah_posting_payroll ? 'Sudah Posting' : 'Belum Posting',
+        Keterangan: transaksi.deskripsi || '-',
+        Pemasukan: toNumber(transaksi.nominal_debit),
+        Pengeluaran: toNumber(transaksi.nominal_kredit),
+        'Total Pendapatan': toNumber(transaksi.total_income),
+        'Persentase Share yang Dipakai (%)': toNumber(getPersenShare(transaksi)),
+        'Persentase Share Standar (%)': transaksi.persen_share_default == null ? '' : toNumber(transaksi.persen_share_default),
+        'Persentase Share Khusus (%)': transaksi.persen_share_override == null ? '' : toNumber(transaksi.persen_share_override),
+        'Bagian Konsultan': toNumber(transaksi.nominal_share),
+        'Bagian OSS': toNumber(transaksi.nominal_oss),
+        'Nominal Diatur Manual': transaksi.override_manual ? 'Ya' : 'Tidak',
+        'Status Payroll': transaksi.sudah_posting_payroll ? 'Sudah Masuk Payroll' : 'Belum Masuk Payroll',
       }));
 
       rows.push({
@@ -1026,19 +1087,19 @@ export default function useTransaksiKonsultanViewModel() {
         Tanggal: '',
         Konsultan: '',
         'Identitas Konsultan': '',
-        Produk: '',
+        'Layanan / Produk': '',
         Klien: '',
-        Deskripsi: '',
-        'Nominal Debit': transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_debit), 0),
-        'Nominal Kredit': transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_kredit), 0),
-        'Total Income': totalIncome,
-        'Persen Share Efektif (%)': '',
-        'Persen Share Default (%)': '',
-        'Persen Share Override (%)': '',
-        'Nominal Share': totalShare,
-        'Nominal OSS': totalOSS,
-        'Override Manual': '',
-        'Status Posting': '',
+        Keterangan: '',
+        Pemasukan: transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_debit), 0),
+        Pengeluaran: transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_kredit), 0),
+        'Total Pendapatan': totalIncome,
+        'Persentase Share yang Dipakai (%)': '',
+        'Persentase Share Standar (%)': '',
+        'Persentase Share Khusus (%)': '',
+        'Bagian Konsultan': totalShare,
+        'Bagian OSS': totalOSS,
+        'Nominal Diatur Manual': '',
+        'Status Payroll': '',
       });
 
       const workbook = XLSX.utils.book_new();
@@ -1080,9 +1141,9 @@ export default function useTransaksiKonsultanViewModel() {
       link.remove();
       URL.revokeObjectURL(url);
 
-      AppMessage.success(`Export Excel periode ${activePeriodeLabel} berhasil dibuat.`);
+      AppMessage.success(`File Excel periode ${activePeriodeLabel} berhasil dibuat.`);
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal membuat file Excel transaksi konsultan.');
+      AppMessage.error(getFriendlyErrorMessage(err, 'File Excel transaksi konsultan belum berhasil dibuat.'));
     } finally {
       setIsExporting(false);
     }
@@ -1178,6 +1239,7 @@ export default function useTransaksiKonsultanViewModel() {
     handlePreviewImport,
     handleCommitImport,
     getIssueMessage,
+    getFriendlyErrorMessage,
 
     getPersenShare,
     getDisabledActionReason,

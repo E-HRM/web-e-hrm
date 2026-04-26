@@ -25,6 +25,7 @@ import {
   computePendapatanBersihFromTotals,
   replaceApprovalSteps,
   resolveApprovalSteps,
+  STATUS_PERIODE_VALUES,
   STATUS_APPROVAL_VALUES,
   STATUS_PAYROLL_VALUES,
   VIEW_ROLES,
@@ -108,7 +109,7 @@ async function resolveCreatePayload(body = {}) {
 
   if (IMMUTABLE_PERIODE_STATUS.has(String(periode.status_periode || '').toUpperCase())) {
     return {
-      error: NextResponse.json({ message: 'Periode payroll sudah final/terkunci dan tidak bisa menerima payroll baru.' }, { status: 409 }),
+      error: NextResponse.json({ message: 'Periode payroll sudah terkunci dan tidak bisa menerima payroll baru.' }, { status: 409 }),
     };
   }
 
@@ -237,7 +238,7 @@ export async function GET(req) {
     const status_payroll = searchParams.get('status_payroll') ? normalizeEnum(searchParams.get('status_payroll'), STATUS_PAYROLL_VALUES, 'status_payroll') : undefined;
     const status_approval = normalizeOptionalApprovalStatus(searchParams.get('status_approval'));
 
-    if (periode_status && !new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']).has(periode_status)) {
+    if (periode_status && !STATUS_PERIODE_VALUES.has(periode_status)) {
       return NextResponse.json({ message: 'periode_status tidak valid.' }, { status: 400 });
     }
 

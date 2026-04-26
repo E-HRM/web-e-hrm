@@ -19,7 +19,7 @@ export default function PayoutKonsultanInfoSection() {
           weight={700}
           className='text-blue-900'
         >
-          Status Payout Konsultan
+          Status Pembayaran Konsultan
         </AppTypography.Text>
       </div>
 
@@ -30,21 +30,21 @@ export default function PayoutKonsultanInfoSection() {
             weight={700}
             className='block text-blue-900 mb-3'
           >
-            Alur Status:
+            Arti Status:
           </AppTypography.Text>
 
           <ol className='space-y-2 ml-4 list-decimal'>
             <li>
-              <strong>DRAFT:</strong> Payout dibuat dari akumulasi transaksi konsultan aktif yang belum terhubung ke payout lain
+              <strong>Belum Disetujui:</strong> Data pembayaran masih disiapkan dan belum disetujui.
             </li>
             <li>
-              <strong>DISETUJUI:</strong> Payout telah direview dan disetujui oleh manajemen
+              <strong>Disetujui:</strong> Pembayaran sudah diperiksa dan disetujui oleh manajemen.
             </li>
             <li>
-              <strong>DIPOSTING_KE_PAYROLL:</strong> Payout telah diposting sebagai komponen insentif konsultan di payroll
+              <strong>Sudah Masuk Penggajian:</strong> Pembayaran sudah dimasukkan ke proses penggajian.
             </li>
             <li>
-              <strong>DITAHAN:</strong> Pembayaran ditahan sementara dengan alasan tertentu
+              <strong>Ditahan:</strong> Pembayaran belum dilanjutkan karena masih perlu ditahan sementara.
             </li>
           </ol>
         </div>
@@ -55,21 +55,21 @@ export default function PayoutKonsultanInfoSection() {
             weight={700}
             className='block text-blue-900 mb-3'
           >
-            Komponen Payout:
+            Rincian Pembayaran:
           </AppTypography.Text>
 
           <ul className='space-y-2 ml-4 list-disc'>
             <li>
-              <strong>Total Share:</strong> Dihitung otomatis dari nominal share transaksi eligible, bukan diinput manual
+              <strong>Hak Konsultan:</strong> Dihitung otomatis dari transaksi yang siap dibayarkan.
             </li>
             <li>
-              <strong>Nominal Ditahan:</strong> Jumlah yang ditahan dari pembayaran
+              <strong>Nominal yang Ditahan:</strong> Jumlah pembayaran yang belum akan dibayarkan.
             </li>
             <li>
-              <strong>Nominal Penyesuaian:</strong> Nominal akhir payout yang diinput manual pada modal buat atau edit payout
+              <strong>Nominal yang Akan Dibayarkan:</strong> Nominal akhir yang akan dibayarkan kepada konsultan.
             </li>
             <li>
-              <strong>Nominal Dibayarkan:</strong> Mengikuti nilai nominal penyesuaian yang disimpan
+              <strong>Nominal Dibayarkan:</strong> Mengikuti nominal akhir yang sudah disimpan.
             </li>
           </ul>
         </div>

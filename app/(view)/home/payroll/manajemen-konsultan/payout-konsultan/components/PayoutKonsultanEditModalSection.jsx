@@ -25,7 +25,7 @@ export default function PayoutKonsultanEditModalSection({
     <AppModal
       open={open}
       onClose={onClose}
-      title='Edit Payout'
+      title='Ubah Pembayaran Konsultan'
       footer={null}
       width={920}
     >

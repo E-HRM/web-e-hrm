@@ -64,9 +64,9 @@ export default function PeriodePayrollSummarySection({ vm }) {
       />
 
       <SummaryCard
-        title='Selesai Diproses'
-        subtitle='Periode final atau terkunci'
-        value={vm.summary.totalFinal}
+        title='Terkunci'
+        subtitle='Periode yang sudah dikunci'
+        value={vm.summary.totalTerkunci}
         icon={<CheckCircleOutlined />}
         iconClassName='text-green-500 text-xl'
       />

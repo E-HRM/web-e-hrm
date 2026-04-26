@@ -22,8 +22,6 @@ export const BULAN_OPTIONS = BULAN_ENTRIES.map(([value, label, number]) => ({
 export const STATUS_PERIODE_PAYROLL_OPTIONS = [
   { value: 'DRAFT', label: 'Dalam Persiapan' },
   { value: 'DIPROSES', label: 'Sedang Diproses' },
-  { value: 'DIREVIEW', label: 'Menunggu Review' },
-  { value: 'FINAL', label: 'Selesai' },
   { value: 'TERKUNCI', label: 'Dikunci' },
 ];
 
@@ -113,16 +111,6 @@ export function getPeriodePayrollStatusMeta(status) {
       label: 'Sedang Diproses',
       tone: 'info',
       helper: 'Data penggajian untuk periode ini sedang diproses.',
-    },
-    DIREVIEW: {
-      label: 'Menunggu Review',
-      tone: 'info',
-      helper: 'Data periode ini sedang diperiksa sebelum diselesaikan.',
-    },
-    FINAL: {
-      label: 'Selesai',
-      tone: 'success',
-      helper: 'Periode sudah selesai diproses dan tidak menerima perubahan baru.',
     },
     TERKUNCI: {
       label: 'Dikunci',

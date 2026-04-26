@@ -631,7 +631,7 @@ async function resolveBusinessState(tx, input, existing = null) {
   }
 
   if (payroll?.periode && IMMUTABLE_PERIODE_STATUS.has(String(payroll.periode.status_periode || '').toUpperCase())) {
-    throw new Error('Periode payroll yang terkait dengan payroll karyawan sudah final atau terkunci.');
+    throw new Error('Periode payroll yang terkait dengan payroll karyawan sudah terkunci.');
   }
 
   const defaultNominalTagihan = hasDefinedField(input, 'nominal_tagihan') || (existing?.nominal_tagihan !== undefined && existing?.nominal_tagihan !== null)

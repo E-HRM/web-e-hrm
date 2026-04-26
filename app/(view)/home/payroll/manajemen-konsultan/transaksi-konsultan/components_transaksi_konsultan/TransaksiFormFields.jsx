@@ -45,7 +45,7 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
       ) : null}
 
       <AppSelect
-        label='Produk Konsultan'
+        label='Layanan / Produk Konsultan'
         value={formData.id_jenis_produk_konsultan || undefined}
         onChange={(value) => {
           if (typeof setProdukValue === 'function') {
@@ -56,7 +56,7 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
           setFormValue('id_jenis_produk_konsultan', value || '');
         }}
         options={produkOptions}
-        placeholder='Pilih produk konsultan'
+        placeholder='Pilih layanan atau produk'
         allowClear
         disabled={disabled}
         selectClassName='!rounded-lg'
@@ -72,11 +72,11 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
       />
 
       <AppInput.TextArea
-        label='Deskripsi'
+        label='Keterangan'
         required
         value={formData.deskripsi}
         onChange={(e) => setFormValue('deskripsi', e.target.value)}
-        placeholder='Detail transaksi...'
+        placeholder='Tulis keterangan transaksi'
         autoSize={{ minRows: 2, maxRows: 4 }}
         inputClassName='!rounded-lg'
         disabled={disabled}
@@ -84,7 +84,7 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppInput
-          label='Nominal Debit (Pemasukan)'
+          label='Pemasukan'
           type='number'
           value={formData.nominal_debit}
           onChange={(e) => setFormValue('nominal_debit', e.target.value)}
@@ -94,7 +94,7 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
         />
 
         <AppInput
-          label='Nominal Kredit (Pengeluaran)'
+          label='Pengeluaran'
           type='number'
           value={formData.nominal_kredit}
           onChange={(e) => setFormValue('nominal_kredit', e.target.value)}
@@ -106,7 +106,7 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppInput
-          label='Persen Share Default (%)'
+          label='Persentase Share Standar (%)'
           type='number'
           value={formData.persen_share_default}
           onChange={(e) => setFormValue('persen_share_default', e.target.value)}
@@ -116,11 +116,11 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
         />
 
         <AppInput
-          label='Persen Share Override (%)'
+          label='Persentase Share Khusus (%)'
           type='number'
           value={formData.persen_share_override}
           onChange={(e) => setFormValue('persen_share_override', e.target.value)}
-          placeholder='Kosongkan jika tidak ada override'
+          placeholder='Kosongkan jika memakai persentase standar'
           inputClassName='!rounded-lg'
           disabled={disabled}
         />
@@ -128,7 +128,7 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
 
       <div className='border border-gray-300 rounded-lg p-4 hover:bg-gray-50 transition-colors'>
         <AppSwitch
-          label='Override Manual'
+          label='Atur Nominal Manual'
           checked={Boolean(formData.override_manual)}
           onChange={(checked) => {
             setFormValue('override_manual', checked);
@@ -138,7 +138,7 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
               setFormValue('nominal_oss', '');
             }
           }}
-          description='Aktifkan bila nominal share atau nominal OSS perlu disesuaikan manual.'
+          description='Aktifkan jika bagian konsultan atau bagian OSS perlu diisi langsung.'
           showStateLabel={false}
           tone='primary'
           disabled={disabled}
@@ -148,21 +148,21 @@ export default function TransaksiFormFields({ formData, setFormValue, setProdukV
       {formData.override_manual ? (
         <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
           <AppInput
-            label='Nominal Share (Manual)'
+            label='Bagian Konsultan'
             type='number'
             value={formData.nominal_share}
             onChange={(e) => setFormValue('nominal_share', e.target.value)}
-            placeholder='Kosongkan jika ingin dihitung dari sisa total income'
+            placeholder='Kosongkan jika ingin dihitung otomatis'
             inputClassName='!rounded-lg'
             disabled={disabled}
           />
 
           <AppInput
-            label='Nominal OSS (Manual)'
+            label='Bagian OSS'
             type='number'
             value={formData.nominal_oss}
             onChange={(e) => setFormValue('nominal_oss', e.target.value)}
-            placeholder='Kosongkan jika ingin dihitung dari sisa total income'
+            placeholder='Kosongkan jika ingin dihitung otomatis'
             inputClassName='!rounded-lg'
             disabled={disabled}
           />

@@ -18,7 +18,8 @@ export default function PayoutKonsultanDeleteModalSection({ open, onClose, selec
         size={14}
         className='text-gray-700 leading-relaxed'
       >
-        Apakah Anda yakin ingin menghapus payout untuk <strong>{selectedPayout?.user_display_name || selectedPayout?.id_user || '-'}</strong> pada periode <strong>{selectedPayout?.periode_label || selectedPayout?.id_periode_konsultan || '-'}</strong>? Tindakan ini tidak dapat dibatalkan.
+        Apakah Anda yakin ingin menghapus payout untuk <strong>{selectedPayout?.user_display_name || selectedPayout?.id_user || '-'}</strong> pada periode{' '}
+        <strong>{selectedPayout?.periode_label || selectedPayout?.id_periode_konsultan || '-'}</strong>? Tindakan ini tidak dapat dibatalkan.
       </AppTypography.Text>
 
       <div className='flex items-center justify-end gap-3 pt-6'>

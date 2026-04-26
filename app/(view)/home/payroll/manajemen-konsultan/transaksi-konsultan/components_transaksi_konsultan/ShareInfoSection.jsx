@@ -20,24 +20,24 @@ export default function ShareInfoSection() {
         className='flex items-center gap-2 text-blue-900 mb-4'
       >
         <RiseOutlined />
-        Sistem Pembagian Hasil (Share)
+        Panduan Pembagian Hasil
       </AppTypography.Text>
 
       <div className='space-y-3'>
         <StepItem number='1'>
-          <strong>Persen Share Default:</strong> Persentase bagi hasil standar sesuai kontrak atau kebijakan yang berlaku
+          <strong>Persentase Share Standar:</strong> Persentase bagi hasil yang biasa digunakan sesuai kontrak atau kebijakan yang berlaku
         </StepItem>
 
         <StepItem number='2'>
-          <strong>Persen Share Override:</strong> Persentase alternatif bila transaksi memerlukan penyesuaian khusus
+          <strong>Persentase Share Khusus:</strong> Persentase pengganti jika transaksi memerlukan penyesuaian khusus
         </StepItem>
 
         <StepItem number='3'>
-          <strong>Nominal Share:</strong> Bagian konsultan dihitung ulang oleh server dari total income dan persentase share
+          <strong>Bagian Konsultan:</strong> Dihitung otomatis dari total pendapatan dan persentase share yang digunakan
         </StepItem>
 
         <StepItem number='4'>
-          <strong>Nominal OSS:</strong> Bagian office/perusahaan dari transaksi
+          <strong>Bagian OSS:</strong> Bagian office atau perusahaan dari transaksi
         </StepItem>
       </div>
     </AppCard>

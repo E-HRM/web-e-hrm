@@ -9,7 +9,7 @@ const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const BULAN_VALUES = new Set(['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']);
-const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']);
+const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'TERKUNCI']);
 
 const normRole = (role) =>
   String(role || '')

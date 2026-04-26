@@ -25,7 +25,7 @@ export default function PayoutKonsultanCreateModalSection({
     <AppModal
       open={open}
       onClose={onClose}
-      title='Buat Payout Baru'
+      title='Buat Pembayaran Konsultan'
       footer={null}
       width={920}
     >
@@ -59,7 +59,7 @@ export default function PayoutKonsultanCreateModalSection({
           loading={isSubmitting}
           className='!rounded-lg !px-4 !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
         >
-          Buat Payout
+          Simpan Pembayaran
         </AppButton>
       </div>
     </AppModal>

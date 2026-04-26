@@ -11,7 +11,7 @@ import { STATUS_PAYOUT_KONSULTAN, getInitials } from '../data/payoutKonsultanSha
 function getStatusMeta(status) {
   const statusMap = {
     [STATUS_PAYOUT_KONSULTAN.DRAFT]: {
-      label: 'Draft',
+      label: 'Belum Disetujui',
       icon: <FileTextOutlined />,
       tone: 'neutral',
       className: '!text-gray-700',
@@ -23,7 +23,7 @@ function getStatusMeta(status) {
       className: '!text-blue-700',
     },
     [STATUS_PAYOUT_KONSULTAN.DIPOSTING_KE_PAYROLL]: {
-      label: 'Diposting ke Payroll',
+      label: 'Sudah Masuk Penggajian',
       icon: <CheckCircleOutlined />,
       tone: 'success',
       className: '!text-green-700',
@@ -39,19 +39,7 @@ function getStatusMeta(status) {
   return statusMap[status] || statusMap[STATUS_PAYOUT_KONSULTAN.DRAFT];
 }
 
-function PayoutKonsultanListCard({
-  payout,
-  pendingActionId,
-  formatCurrency,
-  formatDate,
-  onApprovePayout,
-  onEditPayout,
-  onDeletePayout,
-  onPostToPayroll,
-  onUnpostPayout,
-  onHoldPayment,
-  onReleaseHold,
-}) {
+function PayoutKonsultanListCard({ payout, pendingActionId, formatCurrency, formatDate, onApprovePayout, onEditPayout, onDeletePayout, onPostToPayroll, onUnpostPayout, onHoldPayment, onReleaseHold }) {
   const statusMeta = getStatusMeta(payout.status_payout);
   const isRowLoading = pendingActionId === payout.id_payout_konsultan;
 
@@ -65,9 +53,7 @@ function PayoutKonsultanListCard({
     >
       <div className='flex items-start justify-between gap-6 flex-wrap xl:flex-nowrap'>
         <div className='flex items-start gap-4 flex-1 min-w-0'>
-          <div className='w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0'>
-            {getInitials(payout.user_display_name)}
-          </div>
+          <div className='w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shrink-0'>{getInitials(payout.user_display_name)}</div>
 
           <div className='flex-1 min-w-0'>
             <div className='flex items-center gap-3 mb-1 flex-wrap'>
@@ -140,7 +126,7 @@ function PayoutKonsultanListCard({
                     size={12}
                     className='block text-gray-500 mb-1'
                   >
-                    Periode Payroll
+                    Periode Penggajian
                   </AppTypography.Text>
 
                   <AppTypography.Text
@@ -159,7 +145,7 @@ function PayoutKonsultanListCard({
                     size={12}
                     className='block text-gray-500 mb-1'
                   >
-                    Disetujui Pada
+                    Tanggal Disetujui
                   </AppTypography.Text>
 
                   <AppTypography.Text
@@ -178,7 +164,7 @@ function PayoutKonsultanListCard({
                     size={12}
                     className='block text-gray-500 mb-1'
                   >
-                    Diposting Pada
+                    Tanggal Masuk Penggajian
                   </AppTypography.Text>
 
                   <AppTypography.Text
@@ -199,7 +185,7 @@ function PayoutKonsultanListCard({
                     size={12}
                     className='block text-gray-600 mb-1'
                   >
-                    Total Share
+                    Hak Konsultan
                   </AppTypography.Text>
 
                   <AppTypography.Text
@@ -216,7 +202,7 @@ function PayoutKonsultanListCard({
                     size={12}
                     className='block text-gray-600 mb-1'
                   >
-                    Ditahan
+                    Nominal Ditahan
                   </AppTypography.Text>
 
                   <AppTypography.Text
@@ -233,7 +219,7 @@ function PayoutKonsultanListCard({
                     size={12}
                     className='block text-gray-600 mb-1'
                   >
-                    Total Dibayarkan
+                    Nominal Dibayarkan
                   </AppTypography.Text>
 
                   <AppTypography.Text
@@ -270,7 +256,7 @@ function PayoutKonsultanListCard({
                 loading={isRowLoading}
                 className='!rounded-lg !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
               >
-                Setujui Payout
+                Setujui Pembayaran
               </AppButton>
 
               <AppButton
@@ -280,7 +266,7 @@ function PayoutKonsultanListCard({
                 disabled={isRowLoading}
                 className='!rounded-lg !h-10'
               >
-                Edit Detail
+                Ubah Rincian
               </AppButton>
 
               <AppButton
@@ -290,7 +276,7 @@ function PayoutKonsultanListCard({
                 disabled={isRowLoading}
                 className='!rounded-lg !h-10'
               >
-                Hapus Payout
+                Hapus Pembayaran
               </AppButton>
             </>
           ) : null}
@@ -302,7 +288,7 @@ function PayoutKonsultanListCard({
                 disabled={isRowLoading}
                 className='!rounded-lg !h-10 !bg-green-600 hover:!bg-green-700 !border-green-600 hover:!border-green-700 !text-white'
               >
-                Posting ke Payroll
+                Masukkan ke Penggajian
               </AppButton>
 
               <AppButton
@@ -325,7 +311,7 @@ function PayoutKonsultanListCard({
                 disabled={isRowLoading || !payout?.business_state?.bisa_lepas_posting}
                 className='!rounded-lg !h-10'
               >
-                Lepas Posting
+                Batalkan dari Penggajian
               </AppButton>
 
               <AppButton
@@ -333,7 +319,7 @@ function PayoutKonsultanListCard({
                 disabled
                 className='!rounded-lg !h-10'
               >
-                Sudah Diposting
+                Sudah Masuk Penggajian
               </AppButton>
             </>
           ) : null}
@@ -345,7 +331,7 @@ function PayoutKonsultanListCard({
                 loading={isRowLoading}
                 className='!rounded-lg !h-10 !bg-orange-600 hover:!bg-orange-700 !border-orange-600 hover:!border-orange-700 !text-white'
               >
-                Lepas Penahanan
+                Lanjutkan Pembayaran
               </AppButton>
 
               <AppButton
@@ -355,7 +341,7 @@ function PayoutKonsultanListCard({
                 disabled={isRowLoading}
                 className='!rounded-lg !h-10'
               >
-                Edit Detail
+                Ubah Rincian
               </AppButton>
 
               <AppButton
@@ -365,13 +351,12 @@ function PayoutKonsultanListCard({
                 disabled={isRowLoading}
                 className='!rounded-lg !h-10'
               >
-                Hapus Payout
+                Hapus Pembayaran
               </AppButton>
             </>
           ) : null}
         </div>
       </div>
-
     </AppCard>
   );
 }
@@ -380,8 +365,8 @@ export default function PayoutKonsultanListSection({ payoutWithMeta, loading = f
   if (loading && payoutWithMeta.length === 0) {
     return (
       <AppEmpty.Card
-        title='Memuat payout konsultan'
-        description='Sedang mengambil data payout dan detail transaksi dari backend.'
+        title='Memuat pembayaran konsultan'
+        description='Sistem sedang mengambil data pembayaran dan rincian transaksi.'
       />
     );
   }
@@ -389,8 +374,8 @@ export default function PayoutKonsultanListSection({ payoutWithMeta, loading = f
   if (payoutWithMeta.length === 0) {
     return (
       <AppEmpty.Card
-        title='Belum ada payout konsultan'
-        description='Buat payout baru untuk mulai memproses pembayaran share konsultan.'
+        title='Belum ada pembayaran konsultan'
+        description='Buat pembayaran baru untuk mulai memproses hak konsultan.'
       />
     );
   }

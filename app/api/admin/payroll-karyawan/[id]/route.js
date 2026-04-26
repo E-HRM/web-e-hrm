@@ -188,7 +188,7 @@ async function resolveUpdatePayload(existing, body = {}) {
   }
 
   if (IMMUTABLE_PERIODE_STATUS.has(String(periode.status_periode || '').toUpperCase())) {
-    return { error: NextResponse.json({ message: 'Periode payroll tujuan sudah final/terkunci.' }, { status: 409 }) };
+    return { error: NextResponse.json({ message: 'Periode payroll tujuan sudah terkunci.' }, { status: 409 }) };
   }
 
   const requestedTarifId = hasOwn(body, 'id_tarif_pajak_ter') ? normalizeNullableString(body?.id_tarif_pajak_ter, 'id_tarif_pajak_ter', 36) : undefined;

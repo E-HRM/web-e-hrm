@@ -21,7 +21,7 @@ export default function PayoutKonsultanContent() {
       <div className='p-8'>
         <AppEmpty.Card
           title='Akses Ditolak'
-          description='Modul payout konsultan hanya tersedia untuk HR, Direktur, dan Superadmin.'
+          description='Halaman pembayaran konsultan hanya dapat diakses oleh HR, Direktur, dan Superadmin.'
         />
       </div>
     );

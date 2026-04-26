@@ -47,7 +47,7 @@ export function StatusTag({ posted }) {
         icon={<CheckCircleOutlined />}
         className='!font-medium'
       >
-        Posted
+        Sudah Masuk Payroll
       </AppTag>
     );
   }
@@ -60,7 +60,7 @@ export function StatusTag({ posted }) {
       icon={<ClockCircleOutlined />}
       className='!font-medium'
     >
-      Pending
+      Belum Masuk Payroll
     </AppTag>
   );
 }
@@ -102,7 +102,7 @@ export function ShareTag({ persenShare, overrideManual, vm }) {
           size={12}
           className='text-orange-600'
         >
-          (Manual)
+          (Diatur Manual)
         </AppTypography.Text>
       ) : null}
     </div>

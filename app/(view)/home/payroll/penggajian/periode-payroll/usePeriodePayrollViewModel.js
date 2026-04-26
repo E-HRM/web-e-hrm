@@ -364,14 +364,14 @@ export default function usePeriodePayrollViewModel() {
   const summary = useMemo(() => {
     const totalPeriode = periodeList.length;
     const totalDraft = periodeList.filter((item) => item?.status_periode === 'DRAFT').length;
-    const totalFinal = periodeList.filter((item) => ['FINAL', 'TERKUNCI'].includes(String(item?.status_periode || '').toUpperCase())).length;
+    const totalTerkunci = periodeList.filter((item) => String(item?.status_periode || '').toUpperCase() === 'TERKUNCI').length;
     const totalPayrollKaryawan = periodeList.reduce((sum, item) => sum + toNumber(item?._count?.payroll_karyawan), 0);
     const totalPayoutKonsultan = periodeList.reduce((sum, item) => sum + toNumber(item?._count?.payout_konsultan ?? item?._count?.payoutKonsultans), 0);
 
     return {
       totalPeriode,
       totalDraft,
-      totalFinal,
+      totalTerkunci,
       totalPayrollKaryawan,
       totalPayoutKonsultan,
     };

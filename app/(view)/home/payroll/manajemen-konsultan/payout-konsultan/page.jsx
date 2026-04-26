@@ -1,4 +1,4 @@
-// app/(view)/home/payroll/payout-konsultan/page.jsx
+// app/(view)/home/payroll/manajemen-konsultan/payout-konsultan/page.jsx
 'use client';
 
 import { Suspense, lazy } from 'react';
@@ -13,7 +13,7 @@ export default function Page() {
       fallback={
         <div className='grid place-items-center min-h-[calc(100dvh-64px-56px)]'>
           <LoadingSplash
-            label='Menyiapkan payout konsultan...'
+            label='Menyiapkan data pembayaran konsultan...'
             brand='#003A6F'
             size={124}
             fullscreen={false}

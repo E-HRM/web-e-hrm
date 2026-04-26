@@ -36,7 +36,7 @@ const DEFINISI_KOMPONEN_SWR_KEY = 'payroll:payout-konsultan:definisi-komponen';
 
 const ALLOWED_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const LOCKED_PERIODE_KONSULTAN_STATUS = 'TERKUNCI';
-const IMMUTABLE_PERIODE_PAYROLL_STATUS = new Set(['FINAL', 'TERKUNCI']);
+const IMMUTABLE_PERIODE_PAYROLL_STATUS = new Set(['TERKUNCI']);
 
 function normalizeRole(value) {
   return String(value || '')
@@ -71,10 +71,7 @@ function normalizeDefinition(item) {
   const id = normalizeText(item.id_definisi_komponen_payroll);
   if (!id) return null;
 
-  const tipeKomponen =
-    typeof item.tipe_komponen === 'string'
-      ? item.tipe_komponen
-      : item.tipe_komponen?.nama_tipe_komponen;
+  const tipeKomponen = typeof item.tipe_komponen === 'string' ? item.tipe_komponen : item.tipe_komponen?.nama_tipe_komponen;
 
   return {
     id_definisi_komponen_payroll: id,
@@ -108,24 +105,24 @@ function isReleasedHeldDetail(detail) {
 }
 
 function getPayoutMutationBlockedReason(payout) {
-  if (!payout) return 'Data payout tidak ditemukan.';
-  if (payout?.business_state?.payout_posted) return 'Payout konsultan sudah diposting ke payroll dan tidak dapat diubah.';
-  if (payout?.business_state?.periode_terkunci) return 'Periode konsultan payout ini sudah terkunci.';
-  if (payout?.business_state?.periode_deleted) return 'Periode konsultan payout ini sudah dihapus.';
-  if (payout?.business_state?.payout_deleted) return 'Payout konsultan ini sudah dihapus.';
-  return 'Payout konsultan ini tidak dapat diproses.';
+  if (!payout) return 'Data pembayaran konsultan tidak ditemukan.';
+  if (payout?.business_state?.payout_posted) return 'Pembayaran konsultan sudah masuk penggajian dan tidak dapat diubah.';
+  if (payout?.business_state?.periode_terkunci) return 'Periode konsultan untuk pembayaran ini sudah terkunci.';
+  if (payout?.business_state?.periode_deleted) return 'Periode konsultan untuk pembayaran ini sudah dihapus.';
+  if (payout?.business_state?.payout_deleted) return 'Data pembayaran konsultan ini sudah dihapus.';
+  return 'Pembayaran konsultan ini tidak dapat diproses.';
 }
 
 function getPayoutUnpostBlockedReason(payout) {
-  if (!payout) return 'Data payout tidak ditemukan.';
-  if (!payout?.business_state?.payout_posted) return 'Payout konsultan ini belum diposting ke payroll.';
-  if (payout?.business_state?.payout_deleted) return 'Payout konsultan ini sudah dihapus.';
-  if (payout?.business_state?.periode_deleted) return 'Periode konsultan payout ini sudah dihapus.';
-  if (payout?.business_state?.periode_terkunci) return 'Periode konsultan payout ini sudah terkunci.';
-  if (!payout?.business_state?.payroll_attached) return 'Payout konsultan ini belum memiliki payroll tujuan aktif.';
-  if (payout?.business_state?.payroll_deleted) return 'Payroll tujuan payout ini sudah dihapus.';
-  if (payout?.business_state?.payroll_immutable) return 'Periode payroll tujuan sudah final atau terkunci.';
-  return 'Posting payout konsultan ini belum dapat dilepas.';
+  if (!payout) return 'Data pembayaran konsultan tidak ditemukan.';
+  if (!payout?.business_state?.payout_posted) return 'Pembayaran konsultan ini belum masuk penggajian.';
+  if (payout?.business_state?.payout_deleted) return 'Data pembayaran konsultan ini sudah dihapus.';
+  if (payout?.business_state?.periode_deleted) return 'Periode konsultan untuk pembayaran ini sudah dihapus.';
+  if (payout?.business_state?.periode_terkunci) return 'Periode konsultan untuk pembayaran ini sudah terkunci.';
+  if (!payout?.business_state?.payroll_attached) return 'Pembayaran konsultan ini belum memiliki periode penggajian tujuan yang aktif.';
+  if (payout?.business_state?.payroll_deleted) return 'Periode penggajian tujuan pembayaran ini sudah dihapus.';
+  if (payout?.business_state?.payroll_immutable) return 'Periode penggajian tujuan sudah terkunci.';
+  return 'Pembayaran konsultan ini belum dapat dibatalkan dari penggajian.';
 }
 
 async function fetchAllPages(fetcher) {
@@ -352,7 +349,7 @@ export default function usePayoutKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payout-konsultan-list-error',
-      content: payoutError?.message || 'Gagal memuat daftar payout konsultan.',
+      content: payoutError?.message || 'Gagal memuat daftar pembayaran konsultan.',
     });
   }, [payoutError]);
 
@@ -362,7 +359,7 @@ export default function usePayoutKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payout-konsultan-detail-error',
-      content: payoutDetailError?.message || 'Gagal memuat detail payout konsultan.',
+      content: payoutDetailError?.message || 'Gagal memuat rincian pembayaran konsultan.',
     });
   }, [payoutDetailError]);
 
@@ -392,7 +389,7 @@ export default function usePayoutKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payout-konsultan-periode-payroll-error',
-      content: periodePayrollError?.message || 'Gagal memuat periode payroll.',
+      content: periodePayrollError?.message || 'Gagal memuat periode penggajian.',
     });
   }, [periodePayrollError]);
 
@@ -402,7 +399,7 @@ export default function usePayoutKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: 'payout-konsultan-definisi-komponen-error',
-      content: definisiKomponenError?.message || 'Gagal memuat definisi komponen payroll.',
+      content: definisiKomponenError?.message || 'Gagal memuat jenis komponen penggajian.',
     });
   }, [definisiKomponenError]);
 
@@ -412,7 +409,7 @@ export default function usePayoutKonsultanViewModel() {
     AppMessage.once({
       type: 'error',
       onceKey: `payout-konsultan-preview-transaksi-error:${formPeriodeId || 'none'}`,
-      content: previewTransaksiError?.message || 'Gagal memuat transaksi konsultan untuk preview payout.',
+      content: previewTransaksiError?.message || 'Gagal memuat ringkasan transaksi konsultan.',
     });
   }, [formPeriodeId, previewTransaksiError]);
 
@@ -443,9 +440,7 @@ export default function usePayoutKonsultanViewModel() {
 
   const definisiKomponenData = useMemo(() => {
     const rawItems = Array.isArray(definisiKomponenResponse) ? definisiKomponenResponse : [];
-    return rawItems
-      .map(normalizeDefinition)
-      .filter((item) => item && !item.deleted_at && item.aktif);
+    return rawItems.map(normalizeDefinition).filter((item) => item && !item.deleted_at && item.aktif);
   }, [definisiKomponenResponse]);
 
   const previewTransaksiData = useMemo(() => {
@@ -579,7 +574,7 @@ export default function usePayoutKonsultanViewModel() {
   const periodeKonsultanOptions = useMemo(() => {
     return periodeKonsultanData.map((item) => ({
       value: item.id_periode_konsultan,
-      label: `${formatPeriodeKonsultanLabel(item)} - ${item.status_periode || 'DRAFT'}`,
+      label: `${formatPeriodeKonsultanLabel(item)} - ${formatEnumLabel(item.status_periode || 'BELUM_DIATUR')}`,
       disabled: Boolean(item.deleted_at) || item.status_periode === LOCKED_PERIODE_KONSULTAN_STATUS,
     }));
   }, [periodeKonsultanData]);
@@ -587,7 +582,7 @@ export default function usePayoutKonsultanViewModel() {
   const filterPeriodeOptions = useMemo(() => {
     return periodeKonsultanData.map((item) => ({
       value: item.id_periode_konsultan,
-      label: `${formatPeriodeKonsultanLabel(item)} - ${item.status_periode || 'DRAFT'}`,
+      label: `${formatPeriodeKonsultanLabel(item)} - ${formatEnumLabel(item.status_periode || 'BELUM_DIATUR')}`,
       disabled: Boolean(item.deleted_at),
     }));
   }, [periodeKonsultanData]);
@@ -623,7 +618,7 @@ export default function usePayoutKonsultanViewModel() {
   const payrollOptions = useMemo(() => {
     return periodePayrollData.map((item) => ({
       value: item.id_periode_payroll,
-      label: `${formatPeriodePayrollLabel(item)} - ${item.status_periode || 'DRAFT'}`,
+      label: `${formatPeriodePayrollLabel(item)} - ${formatEnumLabel(item.status_periode || 'BELUM_DIATUR')}`,
       disabled: IMMUTABLE_PERIODE_PAYROLL_STATUS.has(String(item.status_periode || '').toUpperCase()),
     }));
   }, [periodePayrollData]);
@@ -640,18 +635,13 @@ export default function usePayoutKonsultanViewModel() {
   }, [definisiKomponenData]);
 
   const defaultPostingDefinitionId = useMemo(() => {
-    const preferred = definisiKomponenData.find(
-      (item) => item.tipe_komponen === 'INSENTIF_KONSULTAN' && item.arah_komponen === 'PEMASUKAN',
-    );
+    const preferred = definisiKomponenData.find((item) => item.tipe_komponen === 'INSENTIF_KONSULTAN' && item.arah_komponen === 'PEMASUKAN');
 
     return preferred?.id_definisi_komponen_payroll || definisiKomponenData[0]?.id_definisi_komponen_payroll || '';
   }, [definisiKomponenData]);
 
   const selectedPostingDefinition = useMemo(() => {
-    return (
-      definisiKomponenMap.get(normalizeText(postFormData.id_definisi_komponen_payroll)) ||
-      null
-    );
+    return definisiKomponenMap.get(normalizeText(postFormData.id_definisi_komponen_payroll)) || null;
   }, [definisiKomponenMap, postFormData.id_definisi_komponen_payroll]);
 
   const previewTransactions = useMemo(() => {
@@ -748,11 +738,7 @@ export default function usePayoutKonsultanViewModel() {
         ...overrides,
         id_transaksi_konsultan: transaksiId,
         id_periode_konsultan: sourcePeriodeId,
-        is_carry_forward: Boolean(
-          targetPeriodeId &&
-            sourcePeriodeId &&
-            sourcePeriodeId !== targetPeriodeId,
-        ),
+        is_carry_forward: Boolean(targetPeriodeId && sourcePeriodeId && sourcePeriodeId !== targetPeriodeId),
       });
     };
 
@@ -770,38 +756,21 @@ export default function usePayoutKonsultanViewModel() {
       if (!transaksi) return;
       if (normalizeText(transaksi.id_user_konsultan) !== selectedUserId) return;
 
-      appendRow(
-        transaksi,
-        {
-          id_transaksi_konsultan: detail.id_transaksi_konsultan,
-          nominal_share: detail.nominal_share,
-          nominal_oss: detail.nominal_oss,
-          ditahan: Boolean(detail.ditahan),
-          konsultan: transaksi.konsultan || usersMap.get(selectedUserId) || null,
-          periode_konsultan:
-            transaksi.periode_konsultan ||
-            periodeKonsultanMap.get(normalizeText(transaksi.id_periode_konsultan)) ||
-            null,
-        },
-      );
+      appendRow(transaksi, {
+        id_transaksi_konsultan: detail.id_transaksi_konsultan,
+        nominal_share: detail.nominal_share,
+        nominal_oss: detail.nominal_oss,
+        ditahan: Boolean(detail.ditahan),
+        konsultan: transaksi.konsultan || usersMap.get(selectedUserId) || null,
+        periode_konsultan: transaksi.periode_konsultan || periodeKonsultanMap.get(normalizeText(transaksi.id_periode_konsultan)) || null,
+      });
     });
 
     return rows;
-  }, [
-    formData.id_periode_konsultan,
-    formData.id_user,
-    linkedTransactionMap,
-    periodeKonsultanMap,
-    previewExcludePayoutId,
-    previewTransactions,
-    selectedPayoutDetailRows,
-    usersMap,
-  ]);
+  }, [formData.id_periode_konsultan, formData.id_user, linkedTransactionMap, periodeKonsultanMap, previewExcludePayoutId, previewTransactions, selectedPayoutDetailRows, usersMap]);
 
   const formSummary = useMemo(() => {
-    const heldTransactionIds = new Set(
-      normalizeIdArray(formData.id_transaksi_konsultan_ditahan),
-    );
+    const heldTransactionIds = new Set(normalizeIdArray(formData.id_transaksi_konsultan_ditahan));
 
     return selectedEligibleTransactions.reduce(
       (acc, item) => {
@@ -858,13 +827,9 @@ export default function usePayoutKonsultanViewModel() {
     };
   }, [filteredPayoutWithMeta]);
 
-  const loading =
-    auth.isLoading ||
-    (shouldFetch &&
-      (isPayoutLoading || isPayoutDetailLoading || isUsersLoading || isPeriodeKonsultanLoading || isPeriodePayrollLoading || isDefinisiKomponenLoading));
+  const loading = auth.isLoading || (shouldFetch && (isPayoutLoading || isPayoutDetailLoading || isUsersLoading || isPeriodeKonsultanLoading || isPeriodePayrollLoading || isDefinisiKomponenLoading));
 
-  const refreshing =
-    isPayoutValidating || isPayoutDetailValidating || isUsersValidating || isPeriodeKonsultanValidating || isPeriodePayrollValidating || isDefinisiKomponenValidating;
+  const refreshing = isPayoutValidating || isPayoutDetailValidating || isUsersValidating || isPeriodeKonsultanValidating || isPeriodePayrollValidating || isDefinisiKomponenValidating;
 
   const isPreviewLoading = Boolean(formPeriodeId) && (isPreviewTransaksiLoading || isPreviewTransaksiValidating);
 
@@ -916,17 +881,14 @@ export default function usePayoutKonsultanViewModel() {
     [createModalPeriodeId],
   );
 
-  const resetPostForm = useCallback(
-    (periodePayrollId = '', definisiKomponenId = '') => {
-      setPostFormData(
-        createInitialPostPayrollForm({
-          id_periode_payroll: periodePayrollId,
-          id_definisi_komponen_payroll: definisiKomponenId,
-        }),
-      );
-    },
-    [],
-  );
+  const resetPostForm = useCallback((periodePayrollId = '', definisiKomponenId = '') => {
+    setPostFormData(
+      createInitialPostPayrollForm({
+        id_periode_payroll: periodePayrollId,
+        id_definisi_komponen_payroll: definisiKomponenId,
+      }),
+    );
+  }, []);
 
   useEffect(() => {
     if (!isCreateModalOpen || isPreviewLoading) return;
@@ -946,9 +908,7 @@ export default function usePayoutKonsultanViewModel() {
   useEffect(() => {
     if (!isCreateModalOpen && !isEditModalOpen) return;
 
-    const allowedIds = new Set(
-      selectedEligibleTransactions.map((item) => normalizeText(item.id_transaksi_konsultan)),
-    );
+    const allowedIds = new Set(selectedEligibleTransactions.map((item) => normalizeText(item.id_transaksi_konsultan)));
 
     setFormData((prev) => {
       const currentIds = normalizeIdArray(prev.id_transaksi_konsultan_ditahan);
@@ -994,30 +954,18 @@ export default function usePayoutKonsultanViewModel() {
   }, [defaultPostingDefinitionId, isPostModalOpen, postFormData.id_definisi_komponen_payroll]);
 
   const refreshPayoutCollections = useCallback(async () => {
-    await Promise.all([
-      mutatePayout(),
-      mutatePayoutDetail(),
-      previewTransaksiKey ? mutatePreviewTransaksi() : Promise.resolve(),
-    ]);
+    await Promise.all([mutatePayout(), mutatePayoutDetail(), previewTransaksiKey ? mutatePreviewTransaksi() : Promise.resolve()]);
   }, [mutatePayout, mutatePayoutDetail, mutatePreviewTransaksi, previewTransaksiKey]);
 
   const reloadData = useCallback(async () => {
     if (!shouldFetch) return;
 
-    await Promise.all([
-      mutatePayout(),
-      mutatePayoutDetail(),
-      mutateUsers(),
-      mutatePeriodeKonsultan(),
-      mutatePeriodePayroll(),
-      mutateDefinisiKomponen(),
-      previewTransaksiKey ? mutatePreviewTransaksi() : Promise.resolve(),
-    ]);
+    await Promise.all([mutatePayout(), mutatePayoutDetail(), mutateUsers(), mutatePeriodeKonsultan(), mutatePeriodePayroll(), mutateDefinisiKomponen(), previewTransaksiKey ? mutatePreviewTransaksi() : Promise.resolve()]);
   }, [mutateDefinisiKomponen, mutatePeriodeKonsultan, mutatePeriodePayroll, mutatePayout, mutatePayoutDetail, mutatePreviewTransaksi, mutateUsers, previewTransaksiKey, shouldFetch]);
 
   const openCreateModal = useCallback(() => {
     if (!createModalPeriodeId) {
-      AppMessage.warning('Belum ada periode konsultan aktif yang bisa digunakan untuk payout.');
+      AppMessage.warning('Belum ada periode konsultan aktif yang bisa digunakan untuk pembayaran.');
       return;
     }
 
@@ -1034,37 +982,34 @@ export default function usePayoutKonsultanViewModel() {
     resetForm(createModalPeriodeId);
   }, [createModalPeriodeId, isSubmitting, resetForm]);
 
-  const openEditModal = useCallback((payout) => {
-    if (!payout) return;
+  const openEditModal = useCallback(
+    (payout) => {
+      if (!payout) return;
 
-    if (!payout?.business_state?.bisa_diubah) {
-      AppMessage.warning(getPayoutMutationBlockedReason(payout));
-      return;
-    }
+      if (!payout?.business_state?.bisa_diubah) {
+        AppMessage.warning(getPayoutMutationBlockedReason(payout));
+        return;
+      }
 
-    const heldTransactionIds = normalizeIdArray(
-      payoutDetailData
-        .filter(
-          (detail) =>
-            normalizeText(detail.id_payout_konsultan) === normalizeText(payout.id_payout_konsultan) &&
-            detail.ditahan,
-        )
-        .map((detail) => detail.id_transaksi_konsultan),
-    );
+      const heldTransactionIds = normalizeIdArray(
+        payoutDetailData.filter((detail) => normalizeText(detail.id_payout_konsultan) === normalizeText(payout.id_payout_konsultan) && detail.ditahan).map((detail) => detail.id_transaksi_konsultan),
+      );
 
-    setSelectedPayout(payout);
-    setIsNominalPenyesuaianManual(true);
-    setFormData(
-      createInitialPayoutKonsultanForm({
-        id_user: payout.id_user,
-        id_periode_konsultan: payout.id_periode_konsultan,
-        nominal_penyesuaian: payout.nominal_dibayarkan,
-        id_transaksi_konsultan_ditahan: heldTransactionIds,
-        catatan: payout.catatan,
-      }),
-    );
-    setIsEditModalOpen(true);
-  }, [payoutDetailData]);
+      setSelectedPayout(payout);
+      setIsNominalPenyesuaianManual(true);
+      setFormData(
+        createInitialPayoutKonsultanForm({
+          id_user: payout.id_user,
+          id_periode_konsultan: payout.id_periode_konsultan,
+          nominal_penyesuaian: payout.nominal_dibayarkan,
+          id_transaksi_konsultan_ditahan: heldTransactionIds,
+          catatan: payout.catatan,
+        }),
+      );
+      setIsEditModalOpen(true);
+    },
+    [payoutDetailData],
+  );
 
   const closeEditModal = useCallback(() => {
     if (isSubmitting) return;
@@ -1103,20 +1048,17 @@ export default function usePayoutKonsultanViewModel() {
       }
 
       if (payout.status_payout !== STATUS_PAYOUT_KONSULTAN.DISETUJUI) {
-        AppMessage.warning('Hanya payout berstatus disetujui yang dapat diposting ke payroll.');
+        AppMessage.warning('Hanya pembayaran yang sudah disetujui yang dapat dimasukkan ke penggajian.');
         return;
       }
 
       if (!selectablePayrollOptions.length) {
-        AppMessage.warning('Belum ada periode payroll yang dapat dipilih untuk posting.');
+        AppMessage.warning('Belum ada periode penggajian yang dapat dipilih.');
         return;
       }
 
       setSelectedPayout(payout);
-      resetPostForm(
-        payout.id_periode_payroll || selectablePayrollOptions[0]?.value || '',
-        defaultPostingDefinitionId,
-      );
+      resetPostForm(payout.id_periode_payroll || selectablePayrollOptions[0]?.value || '', defaultPostingDefinitionId);
       setIsPostModalOpen(true);
     },
     [defaultPostingDefinitionId, resetPostForm, selectablePayrollOptions],
@@ -1136,7 +1078,7 @@ export default function usePayoutKonsultanViewModel() {
     const periode = periodeKonsultanMap.get(periodeId) || resolvedSelectedPayout?.periode_konsultan || null;
 
     if (!periodeId) {
-      AppMessage.warning('Periode konsultan wajib dipilih.');
+      AppMessage.warning('Pilih periode konsultan terlebih dahulu.');
       return false;
     }
 
@@ -1151,22 +1093,22 @@ export default function usePayoutKonsultanViewModel() {
     }
 
     if (!userId) {
-      AppMessage.warning('Konsultan wajib dipilih.');
+      AppMessage.warning('Pilih konsultan terlebih dahulu.');
       return false;
     }
 
     if (isPreviewLoading) {
-      AppMessage.warning('Data transaksi eligible masih dimuat. Coba sebentar lagi.');
+      AppMessage.warning('Transaksi yang siap dibayar masih dimuat. Coba lagi sebentar lagi.');
       return false;
     }
 
     if (formSummary.detailCount <= 0 || formSummary.totalShareBruto <= 0) {
-      AppMessage.warning('Belum ada transaksi konsultan aktif atau carry-forward ditahan yang siap dipayout untuk kombinasi user dan periode ini.');
+      AppMessage.warning('Belum ada transaksi konsultan yang siap dibayarkan untuk konsultan dan periode ini.');
       return false;
     }
 
     if (nominalDibayarkanPreview < 0) {
-      AppMessage.warning('Nominal penyesuaian tidak boleh bernilai negatif.');
+      AppMessage.warning('Nominal yang akan dibayarkan tidak boleh kurang dari nol.');
       return false;
     }
 
@@ -1198,9 +1140,9 @@ export default function usePayoutKonsultanViewModel() {
       setSelectedPayout(null);
       resetForm(createModalPeriodeId);
 
-      AppMessage.success(response?.message || 'Payout konsultan berhasil dibuat.');
+      AppMessage.success(response?.message || 'Pembayaran konsultan berhasil dibuat.');
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal membuat payout konsultan.');
+      AppMessage.error(err?.message || 'Gagal membuat pembayaran konsultan.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1210,7 +1152,7 @@ export default function usePayoutKonsultanViewModel() {
     if (isSubmitting) return;
 
     if (!resolvedSelectedPayout?.id_payout_konsultan) {
-      AppMessage.warning('Data payout konsultan tidak ditemukan.');
+      AppMessage.warning('Data pembayaran konsultan tidak ditemukan.');
       return;
     }
 
@@ -1232,9 +1174,9 @@ export default function usePayoutKonsultanViewModel() {
       setSelectedPayout(null);
       resetForm(createModalPeriodeId);
 
-      AppMessage.success(response?.message || 'Payout konsultan berhasil diperbarui.');
+      AppMessage.success(response?.message || 'Pembayaran konsultan berhasil diperbarui.');
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal memperbarui payout konsultan.');
+      AppMessage.error(err?.message || 'Gagal memperbarui pembayaran konsultan.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1244,7 +1186,7 @@ export default function usePayoutKonsultanViewModel() {
     if (isSubmitting) return;
 
     if (!resolvedSelectedPayout?.id_payout_konsultan) {
-      AppMessage.warning('Data payout konsultan tidak ditemukan.');
+      AppMessage.warning('Data pembayaran konsultan tidak ditemukan.');
       return;
     }
 
@@ -1263,9 +1205,9 @@ export default function usePayoutKonsultanViewModel() {
       setIsDeleteDialogOpen(false);
       setSelectedPayout(null);
 
-      AppMessage.success(response?.message || 'Payout konsultan berhasil dihapus.');
+      AppMessage.success(response?.message || 'Pembayaran konsultan berhasil dihapus.');
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal menghapus payout konsultan.');
+      AppMessage.error(err?.message || 'Gagal menghapus pembayaran konsultan.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1290,7 +1232,7 @@ export default function usePayoutKonsultanViewModel() {
 
         AppMessage.success(response?.message || fallbackMessage);
       } catch (err) {
-        AppMessage.error(err?.message || 'Gagal memperbarui status payout konsultan.');
+        AppMessage.error(err?.message || 'Gagal memperbarui status pembayaran konsultan.');
       } finally {
         setPendingActionId('');
       }
@@ -1300,21 +1242,21 @@ export default function usePayoutKonsultanViewModel() {
 
   const handleApprovePayout = useCallback(
     async (payout) => {
-      await updatePayoutStatus(payout, { status_payout: STATUS_PAYOUT_KONSULTAN.DISETUJUI }, 'Payout konsultan berhasil disetujui.');
+      await updatePayoutStatus(payout, { status_payout: STATUS_PAYOUT_KONSULTAN.DISETUJUI }, 'Pembayaran konsultan berhasil disetujui.');
     },
     [updatePayoutStatus],
   );
 
   const handleHoldPayment = useCallback(
     async (payout) => {
-      await updatePayoutStatus(payout, { status_payout: STATUS_PAYOUT_KONSULTAN.DITAHAN }, 'Pembayaran payout berhasil ditahan.');
+      await updatePayoutStatus(payout, { status_payout: STATUS_PAYOUT_KONSULTAN.DITAHAN }, 'Pembayaran konsultan berhasil ditahan.');
     },
     [updatePayoutStatus],
   );
 
   const handleReleaseHold = useCallback(
     async (payout) => {
-      await updatePayoutStatus(payout, { status_payout: STATUS_PAYOUT_KONSULTAN.DISETUJUI }, 'Penahanan payout berhasil dilepas.');
+      await updatePayoutStatus(payout, { status_payout: STATUS_PAYOUT_KONSULTAN.DISETUJUI }, 'Pembayaran konsultan siap dilanjutkan.');
     },
     [updatePayoutStatus],
   );
@@ -1332,23 +1274,14 @@ export default function usePayoutKonsultanViewModel() {
       setPendingActionId(payout.id_payout_konsultan);
 
       try {
-        const response = await crudServiceAuth.post(
-          ApiEndpoints.UnpostPayoutKonsultan(payout.id_payout_konsultan),
-        );
+        const response = await crudServiceAuth.post(ApiEndpoints.UnpostPayoutKonsultan(payout.id_payout_konsultan));
 
         await refreshPayoutCollections();
-        setSelectedPayout((prev) =>
-          normalizeText(prev?.id_payout_konsultan) === normalizeText(payout.id_payout_konsultan)
-            ? null
-            : prev,
-        );
+        setSelectedPayout((prev) => (normalizeText(prev?.id_payout_konsultan) === normalizeText(payout.id_payout_konsultan) ? null : prev));
 
-        AppMessage.success(
-          response?.message ||
-            'Posting payout konsultan berhasil dilepas. Payout kembali ke draft dan dapat diedit lagi.',
-        );
+        AppMessage.success(response?.message || 'Pembayaran berhasil dibatalkan dari penggajian. Statusnya kembali menjadi belum disetujui dan bisa diubah lagi.');
       } catch (err) {
-        AppMessage.error(err?.message || 'Gagal melepas posting payout konsultan.');
+        AppMessage.error(err?.message || 'Gagal membatalkan pembayaran dari penggajian.');
       } finally {
         setPendingActionId('');
       }
@@ -1360,7 +1293,7 @@ export default function usePayoutKonsultanViewModel() {
     if (isSubmitting) return;
 
     if (!resolvedSelectedPayout?.id_payout_konsultan) {
-      AppMessage.warning('Data payout konsultan tidak ditemukan.');
+      AppMessage.warning('Data pembayaran konsultan tidak ditemukan.');
       return;
     }
 
@@ -1370,27 +1303,27 @@ export default function usePayoutKonsultanViewModel() {
     }
 
     if (resolvedSelectedPayout.status_payout !== STATUS_PAYOUT_KONSULTAN.DISETUJUI) {
-      AppMessage.warning('Payout harus berstatus disetujui sebelum diposting ke payroll.');
+      AppMessage.warning('Pembayaran harus disetujui sebelum dimasukkan ke penggajian.');
       return;
     }
 
     if (!normalizeText(postFormData.id_periode_payroll)) {
-      AppMessage.warning('Periode payroll wajib dipilih sebelum posting.');
+      AppMessage.warning('Pilih periode penggajian sebelum melanjutkan.');
       return;
     }
 
     if (!normalizeText(postFormData.id_definisi_komponen_payroll)) {
-      AppMessage.warning('Definisi komponen wajib dipilih sebelum posting.');
+      AppMessage.warning('Pilih jenis komponen penggajian sebelum melanjutkan.');
       return;
     }
 
     if (!selectedPostingDefinition) {
-      AppMessage.warning('Definisi komponen payroll yang dipilih tidak valid.');
+      AppMessage.warning('Jenis komponen penggajian yang dipilih tidak valid.');
       return;
     }
 
     if (!Number.isInteger(Number(postFormData.urutan_tampil)) || Number(postFormData.urutan_tampil) < 0) {
-      AppMessage.warning('Urutan tampil wajib berupa bilangan bulat 0 atau lebih.');
+      AppMessage.warning('Urutan tampilan harus berupa angka 0 atau lebih.');
       return;
     }
 
@@ -1410,9 +1343,9 @@ export default function usePayoutKonsultanViewModel() {
       setSelectedPayout(null);
       resetPostForm();
 
-      AppMessage.success(response?.message || 'Payout konsultan berhasil diposting ke payroll.');
+      AppMessage.success(response?.message || 'Pembayaran konsultan berhasil dimasukkan ke penggajian.');
     } catch (err) {
-      AppMessage.error(err?.message || 'Gagal memposting payout konsultan ke payroll.');
+      AppMessage.error(err?.message || 'Gagal memasukkan pembayaran konsultan ke penggajian.');
     } finally {
       setIsSubmitting(false);
     }

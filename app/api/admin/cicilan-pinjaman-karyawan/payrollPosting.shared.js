@@ -3,7 +3,7 @@ import { recalculatePayrollTotals } from '@/app/api/admin/payroll-karyawan/payro
 const MONEY_SCALE = 2;
 
 export const IMMUTABLE_PAYROLL_STATUS = new Set(['DISETUJUI', 'DIBAYAR']);
-export const IMMUTABLE_PERIODE_STATUS = new Set(['FINAL', 'TERKUNCI']);
+export const IMMUTABLE_PERIODE_STATUS = new Set(['TERKUNCI']);
 
 function stripLeadingZeros(numStr) {
   const stripped = String(numStr || '0').replace(/^0+(?=\d)/, '');
@@ -114,7 +114,7 @@ export async function ensurePayrollPostingTarget(tx, { id_payroll_karyawan, id_u
   }
 
   if (IMMUTABLE_PERIODE_STATUS.has(String(payroll.periode?.status_periode || '').toUpperCase())) {
-    throw new Error('Periode payroll tujuan sudah final atau terkunci.');
+    throw new Error('Periode payroll tujuan sudah terkunci.');
   }
 
   return payroll;

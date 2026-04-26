@@ -53,7 +53,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: 'PRODUK',
+      title: 'LAYANAN / PRODUK',
       key: 'produk',
       width: 220,
       render: (_, transaksi) => (
@@ -81,7 +81,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: 'KLIEN / DESKRIPSI',
+      title: 'KLIEN / KETERANGAN',
       key: 'klien_deskripsi',
       width: 280,
       render: (_, transaksi) => (
@@ -104,7 +104,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: 'DEBIT',
+      title: 'PEMASUKAN',
       dataIndex: 'nominal_debit',
       key: 'nominal_debit',
       width: 160,
@@ -120,7 +120,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: 'KREDIT',
+      title: 'PENGELUARAN',
       dataIndex: 'nominal_kredit',
       key: 'nominal_kredit',
       width: 160,
@@ -136,7 +136,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: 'TOTAL INCOME',
+      title: 'TOTAL PENDAPATAN',
       dataIndex: 'total_income',
       key: 'total_income',
       width: 180,
@@ -152,7 +152,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: '% SHARE',
+      title: '% BAGIAN',
       key: 'persen_share',
       width: 150,
       align: 'center',
@@ -165,7 +165,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: 'NOMINAL SHARE',
+      title: 'BAGIAN KONSULTAN',
       dataIndex: 'nominal_share',
       key: 'nominal_share',
       width: 180,
@@ -181,7 +181,7 @@ export default function TransaksiTableSection({ vm }) {
       ),
     },
     {
-      title: 'NOMINAL OSS',
+      title: 'BAGIAN OSS',
       dataIndex: 'nominal_oss',
       key: 'nominal_oss',
       width: 180,
@@ -235,8 +235,8 @@ export default function TransaksiTableSection({ vm }) {
   if (hasFetchError) {
     return (
       <AppEmpty.Card
-        title='Gagal memuat transaksi konsultan'
-        description={vm.error?.message || 'Terjadi kesalahan saat mengambil data dari server.'}
+        title='Data transaksi belum berhasil dimuat'
+        description={vm.getFriendlyErrorMessage(vm.error, 'Data belum berhasil dimuat. Silakan coba lagi.')}
         action={
           <AppButton
             onClick={vm.reloadData}
@@ -285,7 +285,7 @@ export default function TransaksiTableSection({ vm }) {
         scroll={{ x: 'max-content' }}
         tableClassName='transaksi-konsultan-table'
         emptyTitle='Belum ada transaksi konsultan'
-        emptyDescription='Silakan tambah transaksi baru untuk periode ini.'
+        emptyDescription='Tambahkan transaksi baru untuk mulai mencatat pembagian hasil pada periode ini.'
         summary={() =>
           vm.transaksiList.length > 0 ? (
             <Table.Summary fixed>

@@ -37,7 +37,7 @@ export default function PayoutKonsultanStatusCountSection({ statusCounts }) {
         icon={<FileTextOutlined />}
         iconClassName='text-gray-600 text-xl'
         count={statusCounts.draft}
-        label='Draft'
+        label='Belum Disetujui'
         countClassName='text-gray-900'
         labelClassName='text-gray-600'
       />
@@ -57,7 +57,7 @@ export default function PayoutKonsultanStatusCountSection({ statusCounts }) {
         icon={<CheckCircleOutlined />}
         iconClassName='text-green-600 text-xl'
         count={statusCounts.diposting}
-        label='Diposting'
+        label='Masuk Penggajian'
         countClassName='text-green-900'
         labelClassName='text-green-700'
       />

@@ -10,7 +10,7 @@ export default function SummarySection({ vm }) {
         iconWrapClassName='bg-blue-100'
         iconClassName='text-blue-600 text-2xl'
         value={vm.formatCompactCurrency(vm.totalIncome)}
-        label='Total Income'
+        label='Total Pendapatan'
       />
 
       <SummaryCard
@@ -18,7 +18,7 @@ export default function SummarySection({ vm }) {
         iconWrapClassName='bg-green-100'
         iconClassName='text-green-600 text-2xl'
         value={vm.formatCompactCurrency(vm.totalShare)}
-        label='Total Share Konsultan'
+        label='Total Bagian Konsultan'
       />
 
       <SummaryCard
@@ -34,7 +34,7 @@ export default function SummarySection({ vm }) {
         iconWrapClassName='bg-green-100'
         iconClassName='text-green-600 text-2xl'
         value={vm.sudahPosting}
-        label='Sudah Posting'
+        label='Sudah Masuk Payroll'
       />
 
       <SummaryCard
@@ -42,7 +42,7 @@ export default function SummarySection({ vm }) {
         iconWrapClassName='bg-orange-100'
         iconClassName='text-orange-600 text-2xl'
         value={vm.belumPosting}
-        label='Belum Posting'
+        label='Belum Masuk Payroll'
       />
     </div>
   );

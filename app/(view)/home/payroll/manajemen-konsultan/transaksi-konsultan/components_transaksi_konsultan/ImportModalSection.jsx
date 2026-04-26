@@ -11,9 +11,9 @@ import AppUpload from '@/app/(view)/component_shared/AppUpload';
 
 function StatusTag({ status }) {
   const config = {
-    valid: { tone: 'success', label: 'Valid' },
-    warning: { tone: 'warning', label: 'Warning' },
-    error: { tone: 'danger', label: 'Error' },
+    valid: { tone: 'success', label: 'Siap Disimpan' },
+    warning: { tone: 'warning', label: 'Perlu Dicek' },
+    error: { tone: 'danger', label: 'Bermasalah' },
     ignored: { tone: 'neutral', label: 'Diabaikan' },
   }[status] || { tone: 'neutral', label: status || '-' };
 
@@ -56,7 +56,7 @@ function IssueList({ row, vm }) {
         size={12}
         className='text-gray-500'
       >
-        Baris ini tidak ikut dihitung dan tidak akan diimport.
+        Baris ini akan dilewati dan tidak akan disimpan.
       </AppTypography.Text>
     );
   }
@@ -147,7 +147,7 @@ export default function ImportModalSection({ vm }) {
       ),
     },
     {
-      title: 'SHARING',
+      title: 'PEMBAGIAN',
       key: 'sharing',
       width: 260,
       render: (_, row) => (
@@ -156,7 +156,7 @@ export default function ImportModalSection({ vm }) {
             size={12}
             className='block text-gray-500'
           >
-            Excel: {row.sharing_income_raw || '-'}
+            Dari Excel: {row.sharing_income_raw || '-'}
           </AppTypography.Text>
 
           {row.is_oss ? (
@@ -199,7 +199,7 @@ export default function ImportModalSection({ vm }) {
       ),
     },
     {
-      title: 'NOMINAL',
+      title: 'RINCIAN NOMINAL',
       key: 'nominal',
       width: 260,
       align: 'right',
@@ -209,20 +209,20 @@ export default function ImportModalSection({ vm }) {
             size={12}
             className='block text-gray-500'
           >
-            Debit {vm.formatCurrency(row.nominal_debit)} / Kredit {vm.formatCurrency(row.nominal_kredit)}
+            Pemasukan {vm.formatCurrency(row.nominal_debit)} / Pengeluaran {vm.formatCurrency(row.nominal_kredit)}
           </AppTypography.Text>
           <AppTypography.Text
             size={13}
             weight={700}
             className='block text-gray-900'
           >
-            Income {vm.formatCurrency(row.total_income)}
+            Pendapatan {vm.formatCurrency(row.total_income)}
           </AppTypography.Text>
           <AppTypography.Text
             size={12}
             className='block text-blue-600'
           >
-            Share {vm.formatCurrency(row.nominal_share)}
+            Bagian Konsultan {vm.formatCurrency(row.nominal_share)}
           </AppTypography.Text>
           <AppTypography.Text
             size={12}
@@ -234,7 +234,7 @@ export default function ImportModalSection({ vm }) {
       ),
     },
     {
-      title: 'VALIDASI',
+      title: 'CATATAN',
       key: 'issues',
       width: 320,
       render: (_, row) => (
@@ -279,7 +279,7 @@ export default function ImportModalSection({ vm }) {
     <AppModal
       open={vm.isImportModalOpen}
       onClose={vm.closeImportModal}
-      title='Import Transaksi Konsultan'
+      title='Impor Transaksi Konsultan'
       subtitle={`Periode aktif: ${vm.activePeriodeLabel}`}
       footer={null}
       width={1180}
@@ -289,8 +289,8 @@ export default function ImportModalSection({ vm }) {
       <div className='space-y-4'>
         <AppAlert
           type='info'
-          message='Import mengikuti bentuk Excel'
-          description='Baris yang punya tanggal valid akan dibaca sebagai transaksi. Baris rekap seperti TOTAL dan kategori income hanya dipakai untuk validasi total, tidak ikut disimpan.'
+          message='Pastikan isi Excel sudah sesuai'
+          description='Baris dengan tanggal transaksi akan disiapkan untuk disimpan. Baris rekap seperti TOTAL hanya digunakan sebagai pembanding dan tidak akan disimpan.'
         />
 
         <div className='rounded-xl border border-gray-200 bg-gray-50 p-4'>
@@ -343,7 +343,7 @@ export default function ImportModalSection({ vm }) {
               disabled={!vm.importFile || vm.isImportCommitting}
               className='!rounded-lg !px-4 !h-10 !bg-indigo-600 hover:!bg-indigo-700 !border-indigo-600 hover:!border-indigo-700 !text-white'
             >
-              Preview
+              Cek File
             </AppButton>
           </div>
         </div>
@@ -361,22 +361,22 @@ export default function ImportModalSection({ vm }) {
                 tone='text-gray-600'
               />
               <SummaryItem
-                label='Valid'
+                label='Siap Disimpan'
                 value={vm.importSummary.valid_rows}
                 tone='text-green-700'
               />
               <SummaryItem
-                label='Warning'
+                label='Perlu Dicek'
                 value={vm.importSummary.warning_rows}
                 tone='text-orange-700'
               />
               <SummaryItem
-                label='Error'
+                label='Bermasalah'
                 value={vm.importSummary.error_rows}
                 tone='text-red-700'
               />
               <SummaryItem
-                label='Total Income'
+                label='Total Pendapatan'
                 value={vm.formatCurrency(vm.importSummary.total_income)}
               />
               <SummaryItem
@@ -410,7 +410,7 @@ export default function ImportModalSection({ vm }) {
                 onChange: vm.setImportPreviewPage,
               }}
               scroll={{ x: 'max-content', y: 430 }}
-              emptyTitle='Belum ada data preview'
+              emptyTitle='Belum ada data yang dicek'
             />
 
             <div className='flex items-center justify-end gap-3 pt-2'>
@@ -429,7 +429,7 @@ export default function ImportModalSection({ vm }) {
                 disabled={!vm.canCommitImport}
                 className='!rounded-lg !px-4 !h-10 !bg-blue-600 hover:!bg-blue-700 !border-blue-600 hover:!border-blue-700 !text-white'
               >
-                Import Transaksi
+                Simpan Data Impor
               </AppButton>
             </div>
           </>

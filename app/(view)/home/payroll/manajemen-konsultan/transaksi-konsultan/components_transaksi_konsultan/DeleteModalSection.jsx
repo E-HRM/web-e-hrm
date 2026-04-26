@@ -16,7 +16,7 @@ export default function DeleteModalSection({ vm }) {
         size={14}
         className='text-gray-700 leading-relaxed'
       >
-        Apakah Anda yakin ingin menghapus transaksi "<strong>{vm.selectedTransaksi?.deskripsi || '-'}</strong>"? Penghapusan dari UI ini menggunakan soft delete sehingga data masih dapat dipulihkan melalui proses backend.
+        Apakah Anda yakin ingin menghapus transaksi "<strong>{vm.selectedTransaksi?.deskripsi || '-'}</strong>"? Transaksi ini akan disembunyikan dari daftar. Jika diperlukan, admin sistem masih dapat memulihkannya.
       </AppTypography.Text>
 
       <div className='flex items-center justify-end gap-3 pt-6'>

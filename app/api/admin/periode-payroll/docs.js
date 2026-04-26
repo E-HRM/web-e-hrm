@@ -9,7 +9,7 @@ const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 
 const BULAN_VALUES = new Set(['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']);
 
-const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI']);
+const STATUS_PERIODE_VALUES = new Set(['DRAFT', 'DIPROSES', 'TERKUNCI']);
 
 const normRole = (role) =>
   String(role || '')
@@ -101,11 +101,11 @@ function validatePeriodeState({ tahun, bulan, tanggal_mulai, tanggal_selesai, st
     throw new Error("Field 'difinalkan_pada' tidak boleh lebih kecil dari 'diproses_pada'.");
   }
 
-  if (['DIPROSES', 'DIREVIEW', 'FINAL', 'TERKUNCI'].includes(status_periode) && !diproses_pada) {
+  if (['DIPROSES', 'TERKUNCI'].includes(status_periode) && !diproses_pada) {
     throw new Error(`Status periode '${status_periode}' mensyaratkan field 'diproses_pada' terisi.`);
   }
 
-  if (['FINAL', 'TERKUNCI'].includes(status_periode) && !difinalkan_pada) {
+  if (status_periode === 'TERKUNCI' && !difinalkan_pada) {
     throw new Error(`Status periode '${status_periode}' mensyaratkan field 'difinalkan_pada' terisi.`);
   }
 
