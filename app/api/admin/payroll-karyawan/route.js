@@ -5,6 +5,7 @@ import {
   ALLOWED_ORDER_BY,
   buildSearchClauses,
   buildSelect,
+  buildTarifPajakTerSnapshot,
   CREATE_ROLES,
   deriveApprovalState,
   ensureCanMarkPayrollAsPaid,
@@ -127,10 +128,10 @@ async function resolveCreatePayload(body = {}) {
 
   const requestedJenisHubungan = body?.jenis_hubungan_kerja ? normalizeEnum(body.jenis_hubungan_kerja, JENIS_HUBUNGAN_KERJA_VALUES, 'jenis_hubungan_kerja') : '';
 
-  const id_tarif_pajak_ter = normalizeRequiredId(body?.id_tarif_pajak_ter, 'id_tarif_pajak_ter');
-  const tarifPajakTer = await ensureTarifPajakTerExists(id_tarif_pajak_ter);
+  const requestedTarifPajakTerId = normalizeNullableString(body?.id_tarif_pajak_ter, 'id_tarif_pajak_ter', 36);
+  const tarifPajakTer = requestedTarifPajakTerId ? await ensureTarifPajakTerExists(requestedTarifPajakTerId) : null;
 
-  if (!tarifPajakTer) {
+  if (requestedTarifPajakTerId && !tarifPajakTer) {
     return {
       error: NextResponse.json({ message: 'Tarif pajak TER tidak ditemukan atau sudah dihapus.' }, { status: 404 }),
     };
@@ -155,7 +156,8 @@ async function resolveCreatePayload(body = {}) {
 
   const gajiPokokSnapshot = parseNonNegativeDecimal(body?.gaji_pokok_snapshot ?? profilPayroll?.gaji_pokok ?? '0', 'gaji_pokok_snapshot');
   const tunjanganBpjsSnapshot = parseNonNegativeDecimal(body?.tunjangan_bpjs_snapshot ?? profilPayroll?.tunjangan_bpjs ?? '0', 'tunjangan_bpjs_snapshot');
-  const persenTarifSnapshot = parseNonNegativeDecimal(tarifPajakTer.persen_tarif, 'persen_tarif_snapshot', { scale: 4 });
+  const tarifSnapshot = buildTarifPajakTerSnapshot(tarifPajakTer, periode);
+  const persenTarifSnapshot = tarifSnapshot.persen_tarif_snapshot;
 
   const totals = resolveDraftDecimalStrings({
     ...body,
@@ -172,15 +174,15 @@ async function resolveCreatePayload(body = {}) {
       id_periode_payroll,
       id_user,
       id_profil_payroll: profilPayroll.id_profil_payroll,
-      id_tarif_pajak_ter: tarifPajakTer.id_tarif_pajak_ter,
+      id_tarif_pajak_ter: tarifSnapshot.id_tarif_pajak_ter,
       nama_karyawan: normalizeNullableString(body?.nama_karyawan, 'nama_karyawan', 255) || normalizeNullableString(body?.nama_karyawan_snapshot, 'nama_karyawan_snapshot', 255) || user.nama_pengguna,
       jenis_hubungan_kerja,
-      kode_kategori_pajak_snapshot: String(tarifPajakTer.kode_kategori_pajak || ''),
-      persen_tarif_snapshot: persenTarifSnapshot,
-      penghasilan_dari_snapshot: parseNonNegativeDecimal(tarifPajakTer.penghasilan_dari, 'penghasilan_dari_snapshot'),
-      penghasilan_sampai_snapshot: tarifPajakTer.penghasilan_sampai == null ? null : parseNonNegativeDecimal(tarifPajakTer.penghasilan_sampai, 'penghasilan_sampai_snapshot', { allowNull: true }),
-      berlaku_mulai_tarif_snapshot: tarifPajakTer.berlaku_mulai,
-      berlaku_sampai_tarif_snapshot: tarifPajakTer.berlaku_sampai,
+      kode_kategori_pajak_snapshot: tarifSnapshot.kode_kategori_pajak_snapshot,
+      persen_tarif_snapshot: tarifSnapshot.persen_tarif_snapshot,
+      penghasilan_dari_snapshot: tarifSnapshot.penghasilan_dari_snapshot,
+      penghasilan_sampai_snapshot: tarifSnapshot.penghasilan_sampai_snapshot,
+      berlaku_mulai_tarif_snapshot: tarifSnapshot.berlaku_mulai_tarif_snapshot,
+      berlaku_sampai_tarif_snapshot: tarifSnapshot.berlaku_sampai_tarif_snapshot,
       gaji_pokok_snapshot: gajiPokokSnapshot,
       tunjangan_bpjs_snapshot: tunjanganBpjsSnapshot,
       bank_name: normalizeNullableString(body?.bank_name, 'bank_name', 50) || normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) || normalizeNullableString(user.jenis_bank, 'jenis_bank', 50) || null,

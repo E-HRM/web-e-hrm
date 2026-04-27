@@ -342,6 +342,71 @@ function buildImportSummary(rows) {
   );
 }
 
+function getExportSheetName(activePeriodeLabel) {
+  const normalized = String(activePeriodeLabel || 'Transaksi')
+    .replace(/[\\/?*[\]:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return (normalized.split(' ')[0] || normalized || 'Transaksi').slice(0, 31);
+}
+
+function getExportDateValue(value) {
+  const ymd = toDateInputValue(value);
+  if (!ymd) return value || '';
+
+  const [year, month, day] = ymd.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function getConsultantExportLabel(transaksi) {
+  if (!transaksi?.id_user_konsultan) return null;
+
+  const name = String(transaksi.konsultan_display_name || transaksi.konsultan?.nama_pengguna || '').trim();
+  if (!name) return transaksi.id_user_konsultan;
+
+  return name.split(/\s+/)[0] || name;
+}
+
+function buildConsultantExportColumns(transaksiList) {
+  const byUser = new Map();
+
+  transaksiList.forEach((transaksi) => {
+    if (!transaksi?.id_user_konsultan || byUser.has(transaksi.id_user_konsultan)) return;
+
+    byUser.set(transaksi.id_user_konsultan, {
+      id: transaksi.id_user_konsultan,
+      shortLabel: getConsultantExportLabel(transaksi),
+      fullLabel: String(transaksi.konsultan_display_name || transaksi.konsultan?.nama_pengguna || transaksi.id_user_konsultan).trim(),
+    });
+  });
+
+  const shortCounts = new Map();
+  Array.from(byUser.values()).forEach((item) => {
+    shortCounts.set(item.shortLabel, (shortCounts.get(item.shortLabel) || 0) + 1);
+  });
+
+  return Array.from(byUser.values()).map((item) => ({
+    id: item.id,
+    label: shortCounts.get(item.shortLabel) > 1 ? item.fullLabel : item.shortLabel,
+  }));
+}
+
+function addExportAmount(map, key, amount) {
+  map.set(key, (map.get(key) || 0) + toNumber(amount));
+}
+
+function classifyIncomeCategory(transaksi) {
+  const source = `${transaksi?.produk_display_name || ''} ${transaksi?.jenis_produk?.nama_produk || ''} ${transaksi?.deskripsi || ''}`.toLowerCase();
+
+  if (source.includes('english') || source.includes('ielts') || source.includes('course')) return 'Income English Course';
+  if (source.includes('service fee')) return 'Income Service Fee';
+  if (source.includes('commission') && (source.includes('study') || source.includes('school') || source.includes('college') || source.includes('university'))) return 'Income Commission Study';
+  if (source.includes('commission') && (source.includes('work') || source.includes('job') || source.includes('career'))) return 'Income Commission Work';
+
+  return 'Income Lainnya (Translate Dokumen, Selisih Kurs Pembayaran, Event, Expo)';
+}
+
 export default function useTransaksiKonsultanViewModel() {
   const [filterPeriode, setFilterPeriode] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -1060,72 +1125,108 @@ export default function useTransaksiKonsultanViewModel() {
 
     try {
       const XLSX = await import('xlsx');
-      const rows = transaksiList.map((transaksi, index) => ({
-        No: index + 1,
-        Periode: transaksi.periode_label || activePeriodeLabel,
-        Tanggal: toDateInputValue(transaksi.tanggal_transaksi) || transaksi.tanggal_transaksi || '',
-        Konsultan: transaksi.konsultan_display_name || '-',
-        'Identitas Konsultan': transaksi.konsultan_identity || '-',
-        'Layanan / Produk': transaksi.produk_display_name || getProdukDisplayName(transaksi.jenis_produk),
-        Klien: transaksi.nama_klien || '-',
-        Keterangan: transaksi.deskripsi || '-',
-        Pemasukan: toNumber(transaksi.nominal_debit),
-        Pengeluaran: toNumber(transaksi.nominal_kredit),
-        'Total Pendapatan': toNumber(transaksi.total_income),
-        'Persentase Share yang Dipakai (%)': toNumber(getPersenShare(transaksi)),
-        'Persentase Share Standar (%)': transaksi.persen_share_default == null ? '' : toNumber(transaksi.persen_share_default),
-        'Persentase Share Khusus (%)': transaksi.persen_share_override == null ? '' : toNumber(transaksi.persen_share_override),
-        'Bagian Konsultan': toNumber(transaksi.nominal_share),
-        'Bagian OSS': toNumber(transaksi.nominal_oss),
-        'Nominal Diatur Manual': transaksi.override_manual ? 'Ya' : 'Tidak',
-        'Status Payroll': transaksi.sudah_posting_payroll ? 'Sudah Masuk Payroll' : 'Belum Masuk Payroll',
-      }));
+      const consultantColumns = buildConsultantExportColumns(transaksiList);
+      const consultantIdToColumnIndex = new Map(consultantColumns.map((item, index) => [item.id, index]));
+      const consultantTotals = new Map(consultantColumns.map((item) => [item.id, 0]));
+      const categoryTotals = new Map([
+        ['Income English Course', 0],
+        ['Income Service Fee', 0],
+        ['Income Commission Study', 0],
+        ['Income Commission Work', 0],
+        ['Income Lainnya (Translate Dokumen, Selisih Kurs Pembayaran, Event, Expo)', 0],
+      ]);
 
-      rows.push({
-        No: '',
-        Periode: 'TOTAL',
-        Tanggal: '',
-        Konsultan: '',
-        'Identitas Konsultan': '',
-        'Layanan / Produk': '',
-        Klien: '',
-        Keterangan: '',
-        Pemasukan: transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_debit), 0),
-        Pengeluaran: transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_kredit), 0),
-        'Total Pendapatan': totalIncome,
-        'Persentase Share yang Dipakai (%)': '',
-        'Persentase Share Standar (%)': '',
-        'Persentase Share Khusus (%)': '',
-        'Bagian Konsultan': totalShare,
-        'Bagian OSS': totalOSS,
-        'Nominal Diatur Manual': '',
-        'Status Payroll': '',
+      const fixedHeader = ['Tanggal', 'Nama', 'Keterangan', 'Debet', 'Kredit', 'Total Income', 'Sharing income', '', '', ''];
+      const subHeader = ['', 'Student', '', '', '', '', 'Consultant', 'Income 25% (Kecuali Service Fee I Tetap 50%)', 'OSS - 75% (Kecuali Service Fee I Tetap 50%)', ''];
+      const rows = [
+        [...fixedHeader, ...consultantColumns.map((item) => item.label), 'OSS'],
+        [...subHeader, ...consultantColumns.map((item) => item.label), 'OSS'],
+      ];
+
+      transaksiList.forEach((transaksi) => {
+        const consultantValues = consultantColumns.map(() => '');
+        const consultantColumnIndex = consultantIdToColumnIndex.get(transaksi.id_user_konsultan);
+        const nominalShare = toNumber(transaksi.nominal_share);
+        const nominalOss = toNumber(transaksi.nominal_oss);
+
+        if (consultantColumnIndex !== undefined) {
+          consultantValues[consultantColumnIndex] = nominalShare || '';
+          addExportAmount(consultantTotals, transaksi.id_user_konsultan, nominalShare);
+        }
+
+        addExportAmount(categoryTotals, classifyIncomeCategory(transaksi), transaksi.total_income);
+
+        rows.push([
+          getExportDateValue(transaksi.tanggal_transaksi),
+          transaksi.nama_klien || '',
+          transaksi.deskripsi || '',
+          toNumber(transaksi.nominal_debit) || '',
+          toNumber(transaksi.nominal_kredit) || '',
+          toNumber(transaksi.total_income) || '',
+          transaksi.id_user_konsultan ? getConsultantExportLabel(transaksi) : 'OSS',
+          nominalShare || '',
+          nominalOss || '',
+          '',
+          ...consultantValues,
+          nominalOss || '',
+        ]);
       });
 
+      rows.push([]);
+      rows.push([
+        'TOTAL',
+        '',
+        '',
+        transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_debit), 0),
+        transaksiList.reduce((sum, item) => sum + toNumber(item.nominal_kredit), 0),
+        totalIncome,
+        '',
+        totalShare,
+        totalOSS,
+        '',
+        ...consultantColumns.map((item) => consultantTotals.get(item.id) || ''),
+        totalOSS,
+      ]);
+
+      rows.push([]);
+      rows.push([]);
+
+      categoryTotals.forEach((amount, label) => {
+        rows.push(['', '', label, amount, '', '', '', '', '', '', ...consultantColumns.map(() => ''), '']);
+      });
+
+      rows.push(['', '', 'TOTAL INCOME', totalIncome, '', '', '', '', '', '', ...consultantColumns.map(() => ''), '']);
+
       const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const worksheet = XLSX.utils.aoa_to_sheet(rows, { cellDates: true });
+      const lastColumnIndex = 10 + consultantColumns.length;
       worksheet['!cols'] = [
-        { wch: 6 },
-        { wch: 18 },
         { wch: 14 },
-        { wch: 28 },
         { wch: 26 },
-        { wch: 28 },
-        { wch: 26 },
-        { wch: 36 },
+        { wch: 58 },
         { wch: 16 },
         { wch: 16 },
         { wch: 16 },
-        { wch: 22 },
-        { wch: 22 },
+        { wch: 18 },
         { wch: 24 },
-        { wch: 16 },
-        { wch: 16 },
-        { wch: 16 },
+        { wch: 26 },
+        { wch: 3 },
+        ...consultantColumns.map(() => ({ wch: 14 })),
         { wch: 18 },
       ];
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Transaksi Konsultan');
+      const range = XLSX.utils.decode_range(worksheet['!ref']);
+      for (let rowIndex = 2; rowIndex <= range.e.r; rowIndex += 1) {
+        const dateCell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: 0 })];
+        if (dateCell && dateCell.v instanceof Date) dateCell.z = 'dd/mm/yyyy';
+
+        for (let colIndex = 3; colIndex <= lastColumnIndex; colIndex += 1) {
+          const cell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: colIndex })];
+          if (cell && typeof cell.v === 'number') cell.z = '#,##0';
+        }
+      }
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, getExportSheetName(activePeriodeLabel));
 
       const workbookOutput = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
       const blob = new Blob([workbookOutput], {
@@ -1147,7 +1248,7 @@ export default function useTransaksiKonsultanViewModel() {
     } finally {
       setIsExporting(false);
     }
-  }, [activePeriodeLabel, getPersenShare, isExporting, totalIncome, totalOSS, totalShare, transaksiList]);
+  }, [activePeriodeLabel, isExporting, totalIncome, totalOSS, totalShare, transaksiList]);
 
   const loading = isPeriodeLoading || isUsersLoading || isProdukLoading || (Boolean(filterPeriode) && isTransaksiLoading);
   const validating = isPeriodeValidating || isUsersValidating || isProdukValidating || (Boolean(filterPeriode) && isTransaksiValidating);

@@ -607,7 +607,7 @@ export async function recalculatePayoutSummary(tx, id_payout_konsultan) {
   const nominalDibayarkan = getDecimalString(payout.nominal_penyesuaian, MONEY_SCALE);
 
   if (decimalToScaledBigInt(nominalDibayarkan, MONEY_SCALE) < 0n) {
-    throw createHttpError(409, "Field 'nominal_penyesuaian' pada payout tidak boleh bernilai negatif.");
+    throw createHttpError(409, "Nominal Penyesesuain pada payout tidak boleh bernilai negatif.");
   }
 
   return tx.payoutKonsultan.update({

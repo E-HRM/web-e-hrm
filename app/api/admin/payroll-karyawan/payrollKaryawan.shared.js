@@ -151,6 +151,41 @@ export function parseDateTime(value, fieldName) {
   return parsed;
 }
 
+function resolveTarifSnapshotStartDate(periode = null) {
+  const parsed = periode?.tanggal_mulai ? new Date(periode.tanggal_mulai) : new Date();
+
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+  }
+
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+export function buildTarifPajakTerSnapshot(tarifPajakTer = null, periode = null) {
+  if (!tarifPajakTer) {
+    return {
+      id_tarif_pajak_ter: null,
+      kode_kategori_pajak_snapshot: '',
+      persen_tarif_snapshot: parseNonNegativeDecimal(0, 'persen_tarif_snapshot', { scale: 4 }),
+      penghasilan_dari_snapshot: parseNonNegativeDecimal(0, 'penghasilan_dari_snapshot'),
+      penghasilan_sampai_snapshot: null,
+      berlaku_mulai_tarif_snapshot: resolveTarifSnapshotStartDate(periode),
+      berlaku_sampai_tarif_snapshot: null,
+    };
+  }
+
+  return {
+    id_tarif_pajak_ter: tarifPajakTer.id_tarif_pajak_ter,
+    kode_kategori_pajak_snapshot: String(tarifPajakTer.kode_kategori_pajak || ''),
+    persen_tarif_snapshot: parseNonNegativeDecimal(tarifPajakTer.persen_tarif, 'persen_tarif_snapshot', { scale: 4 }),
+    penghasilan_dari_snapshot: parseNonNegativeDecimal(tarifPajakTer.penghasilan_dari, 'penghasilan_dari_snapshot'),
+    penghasilan_sampai_snapshot: tarifPajakTer.penghasilan_sampai == null ? null : parseNonNegativeDecimal(tarifPajakTer.penghasilan_sampai, 'penghasilan_sampai_snapshot', { allowNull: true }),
+    berlaku_mulai_tarif_snapshot: tarifPajakTer.berlaku_mulai,
+    berlaku_sampai_tarif_snapshot: tarifPajakTer.berlaku_sampai,
+  };
+}
+
 export function parseNonNegativeDecimal(value, fieldName, options = {}) {
   const { allowNull = false, scale = 2 } = options;
 
@@ -704,6 +739,8 @@ export async function ensurePeriodeExists(id_periode_payroll) {
       status_periode: true,
       tahun: true,
       bulan: true,
+      tanggal_mulai: true,
+      tanggal_selesai: true,
     },
   });
 }

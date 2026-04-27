@@ -53,6 +53,7 @@ function EditPayrollForm({ vm }) {
           placeholder='Pilih tarif TER'
           loading={vm.isTarifPajakLoading}
           disabled={vm.isTarifPajakLoading}
+          allowClear
           selectClassName='!rounded-lg'
           hint={vm.tarifPajakSelectionHint}
         />

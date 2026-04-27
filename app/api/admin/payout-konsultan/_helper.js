@@ -582,7 +582,7 @@ async function collectEligibleTransactions(tx, { id_periode_konsultan, id_user, 
   });
 
   if (!transactions.length) {
-    throw new Error('Belum ada transaksi konsultan aktif atau carry-forward yang siap dipayout untuk user dan periode tersebut.');
+    throw new Error('Belum ada transaksi konsultan aktif atau transaksi tertahan yang siap dipayout untuk user dan periode tersebut.');
   }
 
   const transactionIds = transactions.map((item) => item.id_transaksi_konsultan);

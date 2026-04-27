@@ -11,6 +11,7 @@ import {
   DELETE_ROLES,
   VIEW_ROLES,
   buildSelect,
+  buildTarifPajakTerSnapshot,
   deriveApprovalState,
   ensureCanMarkPayrollAsPaid,
   ensureAuth,
@@ -191,7 +192,8 @@ async function resolveUpdatePayload(existing, body = {}) {
     return { error: NextResponse.json({ message: 'Periode payroll tujuan sudah terkunci.' }, { status: 409 }) };
   }
 
-  const requestedTarifId = hasOwn(body, 'id_tarif_pajak_ter') ? normalizeNullableString(body?.id_tarif_pajak_ter, 'id_tarif_pajak_ter', 36) : undefined;
+  const hasTarifPajakTerField = hasOwn(body, 'id_tarif_pajak_ter');
+  const requestedTarifId = hasTarifPajakTerField ? normalizeNullableString(body?.id_tarif_pajak_ter, 'id_tarif_pajak_ter', 36) : undefined;
   const requestedJenisHubungan = hasOwn(body, 'jenis_hubungan_kerja') ? normalizeEnum(body?.jenis_hubungan_kerja, JENIS_HUBUNGAN_KERJA_VALUES, 'jenis_hubungan_kerja') : undefined;
 
   const shouldRefreshSnapshot =
@@ -217,14 +219,16 @@ async function resolveUpdatePayload(existing, body = {}) {
       return { error: NextResponse.json({ message: 'Profil payroll aktif untuk user ini belum tersedia.' }, { status: 404 }) };
     }
 
-    tarifPajakTer = requestedTarifId
-      ? await ensureTarifPajakTerExists(requestedTarifId)
+    tarifPajakTer = hasTarifPajakTerField
+      ? requestedTarifId
+        ? await ensureTarifPajakTerExists(requestedTarifId)
+        : null
       : existing.id_tarif_pajak_ter
         ? await ensureTarifPajakTerExists(existing.id_tarif_pajak_ter)
         : null;
 
-    if (!tarifPajakTer) {
-      return { error: NextResponse.json({ message: 'Tarif pajak TER wajib dipilih untuk payroll karyawan ini.' }, { status: 400 }) };
+    if (requestedTarifId && !tarifPajakTer) {
+      return { error: NextResponse.json({ message: 'Tarif pajak TER tidak ditemukan atau sudah dihapus.' }, { status: 404 }) };
     }
 
     id_profil_payroll = profilPayroll?.id_profil_payroll || existing.id_profil_payroll;
@@ -241,14 +245,15 @@ async function resolveUpdatePayload(existing, body = {}) {
       };
     }
 
-    id_tarif_pajak_ter = tarifPajakTer.id_tarif_pajak_ter;
-    kode_kategori_pajak_snapshot = tarifPajakTer.kode_kategori_pajak;
-    persen_tarif_snapshot = parseNonNegativeDecimal(tarifPajakTer.persen_tarif, 'persen_tarif_snapshot', { scale: 4 });
-    penghasilan_dari_snapshot = parseNonNegativeDecimal(tarifPajakTer.penghasilan_dari, 'penghasilan_dari_snapshot');
-    penghasilan_sampai_snapshot =
-      tarifPajakTer.penghasilan_sampai == null ? null : parseNonNegativeDecimal(tarifPajakTer.penghasilan_sampai, 'penghasilan_sampai_snapshot', { allowNull: true });
-    berlaku_mulai_tarif_snapshot = tarifPajakTer.berlaku_mulai;
-    berlaku_sampai_tarif_snapshot = tarifPajakTer.berlaku_sampai;
+    const tarifSnapshot = buildTarifPajakTerSnapshot(tarifPajakTer, periode);
+
+    id_tarif_pajak_ter = tarifSnapshot.id_tarif_pajak_ter;
+    kode_kategori_pajak_snapshot = tarifSnapshot.kode_kategori_pajak_snapshot;
+    persen_tarif_snapshot = tarifSnapshot.persen_tarif_snapshot;
+    penghasilan_dari_snapshot = tarifSnapshot.penghasilan_dari_snapshot;
+    penghasilan_sampai_snapshot = tarifSnapshot.penghasilan_sampai_snapshot;
+    berlaku_mulai_tarif_snapshot = tarifSnapshot.berlaku_mulai_tarif_snapshot;
+    berlaku_sampai_tarif_snapshot = tarifSnapshot.berlaku_sampai_tarif_snapshot;
     gaji_pokok_snapshot = parseNonNegativeDecimal(profilPayroll?.gaji_pokok ?? existing.gaji_pokok_snapshot ?? '0', 'gaji_pokok_snapshot');
     tunjangan_bpjs_snapshot = parseNonNegativeDecimal(profilPayroll?.tunjangan_bpjs ?? existing.tunjangan_bpjs_snapshot ?? '0', 'tunjangan_bpjs_snapshot');
   }

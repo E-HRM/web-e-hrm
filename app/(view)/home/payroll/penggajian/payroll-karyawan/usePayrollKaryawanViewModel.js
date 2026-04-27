@@ -721,11 +721,6 @@ export default function usePayrollKaryawanViewModel() {
       return false;
     }
 
-    if (!String(formData.id_tarif_pajak_ter || '').trim()) {
-      AppMessage.warning('Tarif pajak TER wajib dipilih.');
-      return false;
-    }
-
     const approvalSteps = Array.isArray(formData.approval_steps) ? formData.approval_steps : [];
 
     if (approvalSteps.length === 0) {
@@ -746,7 +741,7 @@ export default function usePayrollKaryawanViewModel() {
     }
 
     return true;
-  }, [formData.approval_steps, formData.id_periode_payroll, formData.id_tarif_pajak_ter, formData.id_user, formData.nama_karyawan_snapshot]);
+  }, [formData.approval_steps, formData.id_periode_payroll, formData.id_user, formData.nama_karyawan_snapshot]);
 
   const openCreateModal = useCallback(() => {
     setSelectedPayroll(null);
@@ -1154,10 +1149,10 @@ export default function usePayrollKaryawanViewModel() {
     }
 
     if (tarifPajakOptions.length === 0) {
-      return 'Belum ada tarif pajak TER aktif. Lengkapi master tarif terlebih dahulu.';
+      return 'Belum ada tarif pajak TER aktif. Payroll tetap bisa disimpan tanpa tarif TER.';
     }
 
-    return 'Pilih tarif pajak TER untuk payroll karyawan periode ini.';
+    return 'Opsional. Jika dikosongkan, PPh 21 dihitung 0.';
   }, [isTarifPajakLoading, tarifPajakOptions.length]);
 
   const employeeSelectionHint = useMemo(() => {

@@ -30,6 +30,13 @@ function formatCurrency(value) {
   }).format(toNumber(value));
 }
 
+function formatPercent(value) {
+  return toNumber(value).toLocaleString('id-ID', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 4,
+  });
+}
+
 function formatDate(value) {
   if (!value) return '-';
 
@@ -122,7 +129,8 @@ function buildDetailRows(slip) {
   const detailItems = buildDetailItems(slip?.groups);
   const gajiPokokSnapshot = Number(slip?.payroll?.gaji_pokok_snapshot || 0);
   const tunjanganBpjsSnapshot = Number(slip?.payroll?.tunjangan_bpjs_snapshot || 0);
-  const pph21Nominal = Number(slip?.summary?.pph21_nominal ?? slip?.payroll?.pph21_nominal ?? 0);
+  const pph21Nominal = toNumber(slip?.summary?.pph21_nominal ?? slip?.payroll?.pph21_nominal ?? 0);
+  const pph21Percent = toNumber(slip?.payroll?.persen_tarif_snapshot ?? 0);
 
   const snapshotRows = [
     ...(gajiPokokSnapshot > 0
@@ -143,15 +151,11 @@ function buildDetailRows(slip) {
           },
         ]
       : []),
-    ...(pph21Nominal > 0
-      ? [
-          {
-            snapshotKey: 'pph21',
-            label: 'PPh %',
-            value: `-${formatCurrency(pph21Nominal)}`,
-          },
-        ]
-      : []),
+    {
+      snapshotKey: 'pph21',
+      label: `PPh 21 (${formatPercent(pph21Percent)}%)`,
+      value: pph21Nominal > 0 ? `-${formatCurrency(pph21Nominal)}` : formatCurrency(0),
+    },
   ];
 
   const filteredDetailItems = detailItems.filter((item) => !snapshotRows.some((row) => isSnapshotBackedDetail(item, row.snapshotKey)));

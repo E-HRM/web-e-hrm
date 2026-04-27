@@ -534,8 +534,10 @@ model Freelance {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  supervisor     User?           @relation("SupervisorForFreelance", fields: [id_supervisor], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
-  form_freelance FormFreelance[]
+  supervisor       User?             @relation("SupervisorForFreelance", fields: [id_supervisor], references: [id_user], onDelete: SetNull, onUpdate: Cascade)
+  form_freelance   FormFreelance[]
+  profil_payroll   ProfilPayroll?
+  payroll_karyawan PayrollKaryawan[]
 
   @@index([id_supervisor])
   @@map("freelance")
@@ -1520,7 +1522,8 @@ model MasterTemplate {
 
 model ProfilPayroll {
   id_profil_payroll     String             @id @default(uuid()) @db.Char(36)
-  id_user               String             @db.Char(36)
+  id_user               String?            @db.Char(36)
+  id_freelance          String?            @db.Char(36)
   jenis_hubungan_kerja  JenisHubunganKerja
   gaji_pokok            Decimal            @default(0) @db.Decimal(15, 2)
   tunjangan_bpjs        Decimal            @default(0) @db.Decimal(15, 2)
@@ -1532,11 +1535,14 @@ model ProfilPayroll {
   updated_at DateTime  @updatedAt @db.DateTime(0)
   deleted_at DateTime? @db.DateTime(0)
 
-  user             User              @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  user             User?             @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  freelance        Freelance?        @relation(fields: [id_freelance], references: [id_freelance], onDelete: Restrict, onUpdate: Cascade)
   payroll_karyawan PayrollKaryawan[]
 
   @@unique([id_user], name: "uniq_profil_payroll_user")
+  @@unique([id_freelance], name: "uniq_profil_payroll_freelance")
   @@index([jenis_hubungan_kerja])
+  @@index([id_freelance])
   @@index([deleted_at])
   @@map("profil_payroll")
 }
@@ -1624,7 +1630,8 @@ model PeriodePayroll {
 model PayrollKaryawan {
   id_payroll_karyawan String  @id @default(uuid()) @db.Char(36)
   id_periode_payroll  String  @db.Char(36)
-  id_user             String  @db.Char(36)
+  id_user             String? @db.Char(36)
+  id_freelance        String? @db.Char(36)
   id_profil_payroll   String? @db.Char(36)
   id_tarif_pajak_ter  String? @db.Char(36)
 
@@ -1662,7 +1669,8 @@ model PayrollKaryawan {
   deleted_at DateTime? @db.DateTime(0)
 
   periode         PeriodePayroll @relation(fields: [id_periode_payroll], references: [id_periode_payroll], onDelete: Cascade, onUpdate: Cascade)
-  user            User           @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  user            User?          @relation(fields: [id_user], references: [id_user], onDelete: Restrict, onUpdate: Cascade)
+  freelance       Freelance?     @relation(fields: [id_freelance], references: [id_freelance], onDelete: Restrict, onUpdate: Cascade)
   profil_payroll  ProfilPayroll? @relation(fields: [id_profil_payroll], references: [id_profil_payroll], onDelete: SetNull, onUpdate: Cascade)
   tarif_pajak_ter TarifPajakTER? @relation(fields: [id_tarif_pajak_ter], references: [id_tarif_pajak_ter], onDelete: SetNull, onUpdate: Cascade)
 
@@ -1675,8 +1683,10 @@ model PayrollKaryawan {
 
   approvals ApprovalPayrollKaryawan[]
 
-  @@unique([id_periode_payroll, id_user], name: "uniq_payroll_karyawan_per_periode")
+  @@unique([id_periode_payroll, id_user], name: "uniq_payroll_user_per_periode")
+  @@unique([id_periode_payroll, id_freelance], name: "uniq_payroll_freelance_per_periode")
   @@index([id_user])
+  @@index([id_freelance])
   @@index([id_profil_payroll])
   @@index([id_tarif_pajak_ter])
   @@index([status_payroll])
