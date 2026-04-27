@@ -94,6 +94,14 @@ function toOpenConfig(type, a, b, c) {
   if (isPlainObject(a)) {
     const cfg = { ...a };
     if (type && !cfg.type) cfg.type = type;
+    if ((cfg.title || cfg.description) && cfg.content === undefined) {
+      cfg.content = {
+        title: cfg.title,
+        description: cfg.description,
+      };
+      delete cfg.title;
+      delete cfg.description;
+    }
     return cfg;
   }
 
@@ -112,11 +120,22 @@ function toOpenConfig(type, a, b, c) {
 function openInternal(api, config) {
   if (!config) return;
 
+  const content =
+    config.content === undefined && (config.title || config.description)
+      ? {
+          title: config.title,
+          description: config.description,
+        }
+      : config.content;
+
   const merged = {
     ...config,
-    content: normalizeContent(config.content),
+    content: normalizeContent(content),
     style: withFontStyle(config.style),
   };
+
+  delete merged.title;
+  delete merged.description;
 
   if (merged.duration == null && merged.type && DEFAULT_DURATIONS[merged.type] != null) {
     merged.duration = DEFAULT_DURATIONS[merged.type];

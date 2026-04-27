@@ -25,6 +25,8 @@
  *                   type: boolean
  *                 data:
  *                   $ref: '#/components/schemas/MobileAgendaKerja'
+ *       '401':
+ *         description: Tidak terautentikasi.
  *       '404':
  *         description: Agenda kerja tidak ditemukan.
  *       '500':

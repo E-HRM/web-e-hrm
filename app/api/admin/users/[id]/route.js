@@ -22,6 +22,7 @@ const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const EDIT_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const DELETE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 const STATUS_CUTI_VALUES = new Set(['aktif', 'nonaktif']);
+const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? 'e-hrm';
 
 async function getAdminActor(req) {
   const auth = req.headers.get('authorization') || '';
@@ -61,6 +62,31 @@ async function deleteOldFotoFromSupabase(publicUrl) {
   const { error } = await supabase.storage.from(info.bucket).remove([info.path]);
   if (error) console.warn('Gagal hapus foto lama:', error.message);
 }
+async function deleteOldTtdFromSupabase(publicUrl) {
+  if (!publicUrl) return;
+  const info = extractBucketPath(publicUrl);
+  if (!info) return;
+  const supabase = getSupabase();
+  const { error } = await supabase.storage.from(info.bucket).remove([info.path]);
+  if (error) console.warn('Gagal hapus TTD lama:', error.message);
+}
+function sanitizePathPart(part) {
+  return (
+    String(part || '')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/_+/g, '_')
+      .slice(0, 120) || 'unknown'
+  );
+}
+function isFileLike(value) {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof value.arrayBuffer === 'function' &&
+      typeof value.name === 'string' &&
+      typeof value.size === 'number'
+  );
+}
 async function uploadFotoToSupabase(nama_pengguna, file) {
   if (!file) return null;
   const supabase = getSupabase();
@@ -77,6 +103,22 @@ async function uploadFotoToSupabase(nama_pengguna, file) {
   const { data: pub } = supabase.storage.from('e-hrm').getPublicUrl(path);
   return pub?.publicUrl || null;
 }
+async function uploadTtdToSupabase(userId, file) {
+  if (!file) return null;
+  const supabase = getSupabase();
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  const ext = (file.name?.split('.').pop() || 'bin').toLowerCase();
+  const filename = `${Date.now()}.${ext}`;
+  const path = `ttd_user/${sanitizePathPart(userId)}/${filename}`;
+  const { error: upErr } = await supabase.storage.from(SUPABASE_BUCKET).upload(path, buffer, {
+    upsert: true,
+    contentType: file.type || 'application/octet-stream',
+  });
+  if (upErr) throw new Error(`Gagal upload TTD: ${upErr.message}`);
+  const { data: pub } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
+  return pub?.publicUrl || null;
+}
 
 /* ========== Safe body parser (no crash on empty) ========== */
 async function parseBody(req) {
@@ -85,7 +127,7 @@ async function parseBody(req) {
     const form = await req.formData();
     const obj = {};
     for (const [key, val] of form.entries()) {
-      if (val instanceof File) obj[key] = val;
+      if (isFileLike(val)) obj[key] = val;
       else obj[key] = String(val);
     }
     return { type: 'form', body: obj };
@@ -128,6 +170,7 @@ export async function GET(_req, { params }) {
 
         agama: true,
         foto_profil_user: true,
+        ttd_url: true,
         tanggal_lahir: true,
         tempat_lahir: true,
         jenis_kelamin: true,
@@ -189,12 +232,13 @@ export async function PUT(req, { params }) {
 
     const current = await db.user.findUnique({
       where: { id_user: id },
-      select: { nama_pengguna: true, foto_profil_user: true },
+      select: { nama_pengguna: true, foto_profil_user: true, ttd_url: true },
     });
     if (!current) return NextResponse.json({ message: 'User tidak ditemukan' }, { status: 404 });
 
     const { type, body } = await parseBody(req);
     const wantsRemove = body.remove_foto === true || body.remove_foto === 'true';
+    const wantsRemoveTtd = body.remove_ttd === true || body.remove_ttd === 'true';
 
     const { value: tanggalLahirValue, error: tanggalLahirError } = normalizeOptionalDate(body.tanggal_lahir, 'tanggal_lahir');
     if (tanggalLahirError) return NextResponse.json({ message: tanggalLahirError }, { status: 400 });
@@ -246,15 +290,25 @@ export async function PUT(req, { params }) {
     const kontakDarurat = normalizeNullableString(body.kontak_darurat);
 
     let uploadedUrl = null;
+    let uploadedTtdUrl = null;
     if (type === 'form') {
       const file = body.file || body.foto || body.foto_profil_user;
-      if (file instanceof File) {
+      if (isFileLike(file)) {
         await deleteOldFotoFromSupabase(current.foto_profil_user);
         uploadedUrl = await uploadFotoToSupabase(current.nama_pengguna, file);
+      }
+
+      const ttdFile = body.ttd || body.ttd_file || body.tanda_tangan || body.ttd_url;
+      if (isFileLike(ttdFile)) {
+        await deleteOldTtdFromSupabase(current.ttd_url);
+        uploadedTtdUrl = await uploadTtdToSupabase(id, ttdFile);
       }
     }
     if (!uploadedUrl && wantsRemove && current.foto_profil_user) {
       await deleteOldFotoFromSupabase(current.foto_profil_user);
+    }
+    if (!uploadedTtdUrl && wantsRemoveTtd && current.ttd_url) {
+      await deleteOldTtdFromSupabase(current.ttd_url);
     }
 
     const data = {
@@ -293,6 +347,8 @@ export async function PUT(req, { params }) {
       ...(body.role !== undefined && { role: String(body.role) }),
       ...(uploadedUrl && { foto_profil_user: uploadedUrl }),
       ...(!uploadedUrl && wantsRemove ? { foto_profil_user: null } : {}),
+      ...(uploadedTtdUrl && { ttd_url: uploadedTtdUrl }),
+      ...(!uploadedTtdUrl && wantsRemoveTtd ? { ttd_url: null } : {}),
     };
 
     if (Object.keys(data).length === 0) {
@@ -336,6 +392,7 @@ export async function PUT(req, { params }) {
         kontak_darurat: true,
         agama: true,
         foto_profil_user: true,
+        ttd_url: true,
         tanggal_lahir: true,
         tempat_lahir: true,
         jenis_kelamin: true,
@@ -396,7 +453,7 @@ export async function DELETE(req, { params }) {
     // Cek kondisi sekarang
     const current = await db.user.findUnique({
       where: { id_user: id },
-      select: { id_user: true, deleted_at: true, foto_profil_user: true, nama_pengguna: true },
+      select: { id_user: true, deleted_at: true, foto_profil_user: true, ttd_url: true, nama_pengguna: true },
     });
     if (!current) {
       return NextResponse.json({ message: 'User tidak ditemukan.' }, { status: 404 });
@@ -413,6 +470,7 @@ export async function DELETE(req, { params }) {
 
     // Sudah soft-deleted → hapus permanen
     await deleteOldFotoFromSupabase(current.foto_profil_user);
+    await deleteOldTtdFromSupabase(current.ttd_url);
     try {
       await db.user.delete({ where: { id_user: id } });
       return NextResponse.json({ message: 'User dihapus permanen.', mode: 'hard' });

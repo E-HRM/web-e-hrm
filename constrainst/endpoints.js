@@ -4,99 +4,115 @@ function buildQS(obj = {}) {
   Object.entries(obj).forEach(([k, v]) => {
     if (v === undefined || v === null) return;
     const s = String(v).trim();
-    if (s !== "") p.set(k, s);
+    if (s !== '') p.set(k, s);
   });
   const qs = p.toString();
-  return qs ? `?${qs}` : "";
+  return qs ? `?${qs}` : '';
 }
 
 // Location
-const API_LOCATION = "/api/admin/location";
+const API_LOCATION = '/api/admin/location';
 // Departement
-const API_DEPARTEMENT = "/api/admin/departements";
+const API_DEPARTEMENT = '/api/admin/departements';
 // Users & Auth
-const API_USERS = "/api/admin/users";
-const API_RESET_PASSWORD_REQUEST = "/api/mobile/auth/reset-password/request-token";
-const API_RESET_PASSWORD_CONFIRM = "/api/mobile/auth/reset-password";
-const API_REGISTER = "/api/mobile/auth/register";
+const API_USERS = '/api/admin/users';
+const API_RESET_PASSWORD_REQUEST = '/api/mobile/auth/reset-password/request-token';
+const API_RESET_PASSWORD_CONFIRM = '/api/mobile/auth/reset-password';
+const API_REGISTER = '/api/mobile/auth/register';
 
 // NEW: Agenda (master aktivitas) & Agenda Kerja
-const API_AGENDA = "/api/admin/agenda";
-const API_AGENDA_KERJA = "/api/admin/agenda-kerja-admin";
-const API_AGENDA_KERJA_IMPORT = "/api/admin/agenda-kerja-admin/import";
-const API_AGENDA_KERJA_IMPORT_TEMPLATE = "/api/admin/agenda-kerja-admin/import/template";
+const API_AGENDA = '/api/admin/agenda';
+const API_AGENDA_KERJA = '/api/admin/agenda-kerja-admin';
+const API_AGENDA_KERJA_IMPORT = '/api/admin/agenda-kerja-admin/import';
+const API_AGENDA_KERJA_IMPORT_TEMPLATE = '/api/admin/agenda-kerja-admin/import/template';
 
 // === NEW: Jabatan
-const API_JABATAN = "/api/admin/jabatans";
-const API_KPI_PLANS = "/api/admin/kpi-plans";
+const API_JABATAN = '/api/admin/jabatans';
+const API_KPI_PLANS = '/api/admin/kpi-plans';
 
 // POLA & SHIFT KERJA
-const API_POLA_KERJA = "/api/admin/pola-kerja";
-const API_SHIFT_KERJA = "/api/admin/shift-kerja";
-const API_SHIFT_KERJA_USER = "/api/admin/shift-kerja/user";
-const API_REPORT_SALES_WEEKLY = "/api/admin/reports/sales-weekly";
-const API_REPORT_FREELANCE_WEEKLY = "/api/admin/reports/freelance-weekly";
-
+const API_POLA_KERJA = '/api/admin/pola-kerja';
+const API_SHIFT_KERJA = '/api/admin/shift-kerja';
+const API_SHIFT_KERJA_USER = '/api/admin/shift-kerja/user';
+const API_REPORT_SALES_WEEKLY = '/api/admin/reports/sales-weekly';
+const API_REPORT_FREELANCE_WEEKLY = '/api/admin/reports/freelance-weekly';
 
 // === NEW: Absensi
-const API_ABSENSI_RECORDS = "/api/admin/absensi/history";
-const API_ABSENSI_APPROVALS = "/api/admin/absensi";
-const API_LEMBUR = "/api/admin/lembur";
+const API_ABSENSI_RECORDS = '/api/admin/absensi/history';
+const API_ABSENSI_APPROVALS = '/api/admin/absensi';
+const API_LEMBUR = '/api/admin/lembur';
 
 // === Kunjungan
-const API_KUNJUNGAN = "/api/admin/kunjungan-klien-admin";
+const API_KUNJUNGAN = '/api/admin/kunjungan-klien-admin';
 
 // === Kategori Kunjungan
-const API_KATEGORI_KUNJUNGAN = "/api/admin/kategori-kunjungan";
+const API_KATEGORI_KUNJUNGAN = '/api/admin/kategori-kunjungan';
 
 /* === BARU: KATEGORI CUTI & KATEGORI SAKIT === */
-const API_KATEGORI_CUTI = "/api/admin/kategori-cuti";
-const API_KATEGORI_SAKIT = "/api/admin/kategori-sakit";
+const API_KATEGORI_CUTI = '/api/admin/kategori-cuti';
+const API_KATEGORI_SAKIT = '/api/admin/kategori-sakit';
 
-const API_CUTI_KONFIG = "/api/admin/cuti-konfigurasi";
-const API_CUTI_KONFIG_MATRIX = "/api/admin/cuti-konfigurasi/matrix";
+const API_CUTI_KONFIG = '/api/admin/cuti-konfigurasi';
+const API_CUTI_KONFIG_MATRIX = '/api/admin/cuti-konfigurasi/matrix';
 
-const API_KATEGORI_IZIN_JAM = "/api/admin/kategori-izin-jam";
+const API_KATEGORI_IZIN_JAM = '/api/admin/kategori-izin-jam';
 
 // === Mobile: CUTI
-const API_MOBILE_PENGAJUAN_CUTI = "/api/mobile/pengajuan-cuti";
-const API_MOBILE_PENGAJUAN_CUTI_APPROVALS = "/api/mobile/pengajuan-cuti/approvals";
+const API_MOBILE_PENGAJUAN_CUTI = '/api/mobile/pengajuan-cuti';
+const API_MOBILE_PENGAJUAN_CUTI_APPROVALS = '/api/mobile/pengajuan-cuti/approvals';
 
 // === Mobile: IZIN JAM
-const API_MOBILE_IZIN_JAM = "/api/mobile/pengajuan-izin-jam";
-const API_MOBILE_IZIN_JAM_APPROVALS = "/api/mobile/pengajuan-izin-jam/approvals";
+const API_MOBILE_IZIN_JAM = '/api/mobile/pengajuan-izin-jam';
+const API_MOBILE_IZIN_JAM_APPROVALS = '/api/mobile/pengajuan-izin-jam/approvals';
 
 // === Mobile: SAKIT
-const API_MOBILE_IZIN_SAKIT = "/api/mobile/pengajuan-izin-sakit";
-const API_MOBILE_IZIN_SAKIT_APPROVALS = "/api/mobile/pengajuan-izin-sakit/approvals";
+const API_MOBILE_IZIN_SAKIT = '/api/mobile/pengajuan-izin-sakit';
+const API_MOBILE_IZIN_SAKIT_APPROVALS = '/api/mobile/pengajuan-izin-sakit/approvals';
 
 // === Mobile: TUKAR HARI
-const API_MOBILE_TUKAR_HARI = "/api/mobile/pengajuan-izin-tukar-hari";
-const API_MOBILE_TUKAR_HARI_APPROVALS = "/api/mobile/pengajuan-izin-tukar-hari/approvals";
+const API_MOBILE_TUKAR_HARI = '/api/mobile/pengajuan-izin-tukar-hari';
+const API_MOBILE_TUKAR_HARI_APPROVALS = '/api/mobile/pengajuan-izin-tukar-hari/approvals';
 
 // base path
-const API_NOTIFICATIONS = "/api/notifications";
-const API_NOTIFICATIONS_RECENT = "/api/notifications/recent";
-const API_NOTIFICATIONS_MARK_ALL = "/api/notifications/mark-all-as-read";
+const API_NOTIFICATIONS = '/api/notifications';
+const API_NOTIFICATIONS_RECENT = '/api/notifications/recent';
+const API_NOTIFICATIONS_MARK_ALL = '/api/notifications/mark-all-as-read';
 
 // === Story Planner
-const API_STORY_PLANNER = "/api/admin/story-planner";
+const API_STORY_PLANNER = '/api/admin/story-planner';
 
 // === Finance Mobile
-const API_MOBILE_POCKET_MONEY = "/api/mobile/pocket-money";
-const API_MOBILE_REIMBURSE = "/api/mobile/reimburse";
-const API_MOBILE_PAYMENT = "/api/mobile/payment";
+const API_MOBILE_POCKET_MONEY = '/api/mobile/pocket-money';
+const API_MOBILE_REIMBURSE = '/api/mobile/reimburse';
+const API_MOBILE_PAYMENT = '/api/mobile/payment';
 
 // === SOP Admin
-const API_SOP_PERUSAHAAN = "/api/admin/sop-perusahaan";
+const API_SOP_PERUSAHAAN = '/api/admin/sop-perusahaan';
 
 const API_KATEGORI_SOP = '/api/admin/kategori-sop';
 
+// === Payroll Admin
+const API_MASTER_TEMPLATE = '/api/admin/master-template';
+const API_TARIF_PAJAK_TER = '/api/admin/tarif-pajak-ter';
+const API_PROFIL_PAYROLL = '/api/admin/profil-payroll';
+const API_TIPE_KOMPONEN_PAYROLL = '/api/admin/tipe-komponen-payroll';
+const API_DEFINISI_KOMPONEN_PAYROLL = '/api/admin/definisi-komponen-payroll';
+const API_PRODUK_KONSULTAN = '/api/admin/produk-konsultan';
+const API_RIWAYAT_KOMPENSASI_KARYAWAN = '/api/admin/riwayat-kompensasi-karyawan';
+const API_PERIODE_KONSULTAN = '/api/admin/periode-konsultan';
+const API_PERIODE_PAYROLL = '/api/admin/periode-payroll';
+const API_PAYROLL_KARYAWAN = '/api/admin/payroll-karyawan';
+const API_PAYROLL_DASHBOARD = '/api/admin/payroll-dashboard';
+const API_PERSETUJUAN_PERIODE_PAYROLL = '/api/admin/persetujuan-periode-payroll';
+const API_TRANSAKSI_KONSULTAN = '/api/admin/transaksi-konsultan';
+const API_PAYOUT_KONSULTAN = '/api/admin/payout-konsultan';
+const API_PAYOUT_KONSULTAN_DETAIL = '/api/admin/payout-konsultan-detail';
+
 // ===== Finance: Kategori Keperluan (Admin)
-const API_KATEGORI_KEPERLUAN = "/api/admin/kategori-keperluan";
-const API_FREELANCE = "/api/admin/freelance";
-const API_PUBLIC_FREELANCE_FORM = "/api/public/freelance-form";
-const API_FREELANCE_FORM_ADMIN = "/api/admin/freelance/forms";
+const API_KATEGORI_KEPERLUAN = '/api/admin/kategori-keperluan';
+const API_FREELANCE = '/api/admin/freelance';
+const API_PUBLIC_FREELANCE_FORM = '/api/public/freelance-form';
+const API_FREELANCE_FORM_ADMIN = '/api/admin/freelance/forms';
 
 export const ApiEndpoints = {
   // Location
@@ -262,35 +278,31 @@ export const ApiEndpoints = {
   // ===== TUKAR HARI (Mobile)
   GetPengajuanTukarHariMobile: (qsObj = {}) => `${API_MOBILE_TUKAR_HARI}${buildQS(qsObj)}`,
   CreatePengajuanTukarHariMobile: API_MOBILE_TUKAR_HARI,
-  GetPengajuanTukarHariDetail: (id) => `${API_MOBILE_TUKAR_HARI}/${id}`,           // <— dipakai FE fallback
+  GetPengajuanTukarHariDetail: (id) => `${API_MOBILE_TUKAR_HARI}/${id}`, // <— dipakai FE fallback
   UpdatePengajuanTukarHariMobile: (id) => `${API_MOBILE_TUKAR_HARI}/${id}`,
   DeletePengajuanTukarHariMobile: (id) => `${API_MOBILE_TUKAR_HARI}/${id}`,
   DecidePengajuanTukarHariMobile: (approvalId) => `${API_MOBILE_TUKAR_HARI_APPROVALS}/${approvalId}`,
 
   // ===== NOTIFICATIONS (user/mobile) =====
   GetNotifications: (qsObj = {}) => `${API_NOTIFICATIONS}${buildQS(qsObj)}`,
-  GetNotificationsRecent: (qsObj = {}) =>
-    `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
+  GetNotificationsRecent: (qsObj = {}) => `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
   MarkAllNotificationsRead: API_NOTIFICATIONS_MARK_ALL,
   MarkNotificationRead: (id) => `${API_NOTIFICATIONS}/${id}`,
 
   // ===== NOTIFICATIONS ADMIN (alias ke yang sama) =====
-  GetAdminNotifications: (qsObj = {}) =>
-    `${API_NOTIFICATIONS}${buildQS(qsObj)}`,
-  GetAdminNotificationsRecent: (qsObj = {}) =>
-    `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
+  GetAdminNotifications: (qsObj = {}) => `${API_NOTIFICATIONS}${buildQS(qsObj)}`,
+  GetAdminNotificationsRecent: (qsObj = {}) => `${API_NOTIFICATIONS_RECENT}${buildQS(qsObj)}`,
   MarkAllAdminNotificationsRead: API_NOTIFICATIONS_MARK_ALL,
   MarkAdminNotificationRead: (id) => `${API_NOTIFICATIONS}/${id}`,
 
-
-    // Story Planner
+  // Story Planner
   GetStoryPlanner: API_STORY_PLANNER,
   CreateStoryPlanner: API_STORY_PLANNER,
   GetStoryPlannerById: (id) => `${API_STORY_PLANNER}/${id}`,
   UpdateStoryPlanner: (id) => `${API_STORY_PLANNER}/${id}`,
   DeleteStoryPlanner: (id) => `${API_STORY_PLANNER}/${id}`,
 
-    // ===== FINANCE (Mobile) =====
+  // ===== FINANCE (Mobile) =====
   GetPocketMoneyMobile: (qsObj = {}) => `${API_MOBILE_POCKET_MONEY}${buildQS(qsObj)}`,
   DecidePocketMoneyMobile: (approvalId) => `${API_MOBILE_POCKET_MONEY}/approvals/${approvalId}`,
 
@@ -314,10 +326,111 @@ export const ApiEndpoints = {
   UpdateKategoriSOP: (id) => `${API_KATEGORI_SOP}/${id}`,
   DeleteKategoriSOP: (id) => `${API_KATEGORI_SOP}/${id}`,
 
+  // ===== MASTER TEMPLATE (Admin) =====
+  GetMasterTemplate: (qsObj = {}) => `${API_MASTER_TEMPLATE}${buildQS(qsObj)}`,
+  CreateMasterTemplate: () => API_MASTER_TEMPLATE,
+  GetMasterTemplateById: (id) => `${API_MASTER_TEMPLATE}/${id}`,
+  UpdateMasterTemplate: (id) => `${API_MASTER_TEMPLATE}/${id}`,
+  DeleteMasterTemplate: (id) => `${API_MASTER_TEMPLATE}/${id}`,
+
   /* ===== KATEGORI FINANCE (ADMIN) ===== */
   GetKategoriKeperluan: (qsObj = {}) => `${API_KATEGORI_KEPERLUAN}${buildQS(qsObj)}`,
   CreateKategoriKeperluan: API_KATEGORI_KEPERLUAN,
   GetKategoriKeperluanById: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
   UpdateKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
   DeleteKategoriKeperluan: (id) => `${API_KATEGORI_KEPERLUAN}/${id}`,
+
+  // ===== TARIF PAJAK TER (Admin) =====
+  GetTarifPajakTER: (qsObj = {}) => `${API_TARIF_PAJAK_TER}${buildQS(qsObj)}`,
+  CreateTarifPajakTER: () => API_TARIF_PAJAK_TER,
+  GetTarifPajakTERById: (id) => `${API_TARIF_PAJAK_TER}/${id}`,
+  UpdateTarifPajakTER: (id) => `${API_TARIF_PAJAK_TER}/${id}`,
+  DeleteTarifPajakTER: (id) => `${API_TARIF_PAJAK_TER}/${id}`,
+
+  // ===== PROFIL PAYROLL (Admin) =====
+  GetProfilPayroll: (qsObj = {}) => `${API_PROFIL_PAYROLL}${buildQS(qsObj)}`,
+  CreateProfilPayroll: () => API_PROFIL_PAYROLL,
+  GetProfilPayrollById: (id) => `${API_PROFIL_PAYROLL}/${id}`,
+  UpdateProfilPayroll: (id) => `${API_PROFIL_PAYROLL}/${id}`,
+  DeleteProfilPayroll: (id) => `${API_PROFIL_PAYROLL}/${id}`,
+
+  // ===== DEFINISI KOMPONEN PAYROLL (Admin) =====
+  GetDefinisiKomponenPayroll: (qsObj = {}) => `${API_DEFINISI_KOMPONEN_PAYROLL}${buildQS(qsObj)}`,
+  CreateDefinisiKomponenPayroll: () => API_DEFINISI_KOMPONEN_PAYROLL,
+  GetDefinisiKomponenPayrollById: (id) => `${API_DEFINISI_KOMPONEN_PAYROLL}/${id}`,
+  UpdateDefinisiKomponenPayroll: (id) => `${API_DEFINISI_KOMPONEN_PAYROLL}/${id}`,
+  DeleteDefinisiKomponenPayroll: (id) => `${API_DEFINISI_KOMPONEN_PAYROLL}/${id}`,
+
+  // ===== TIPE KOMPONEN PAYROLL (Admin) =====
+  GetTipeKomponenPayroll: (qsObj = {}) => `${API_TIPE_KOMPONEN_PAYROLL}${buildQS(qsObj)}`,
+  CreateTipeKomponenPayroll: () => API_TIPE_KOMPONEN_PAYROLL,
+  GetTipeKomponenPayrollById: (id) => `${API_TIPE_KOMPONEN_PAYROLL}/${id}`,
+  UpdateTipeKomponenPayroll: (id) => `${API_TIPE_KOMPONEN_PAYROLL}/${id}`,
+  DeleteTipeKomponenPayroll: (id) => `${API_TIPE_KOMPONEN_PAYROLL}/${id}`,
+
+  // ===== PRODUK KONSULTAN (Admin) =====
+  GetProdukKonsultan: (qsObj = {}) => `${API_PRODUK_KONSULTAN}${buildQS(qsObj)}`,
+  CreateProdukKonsultan: () => API_PRODUK_KONSULTAN,
+  GetProdukKonsultanById: (id) => `${API_PRODUK_KONSULTAN}/${id}`,
+  UpdateProdukKonsultan: (id) => `${API_PRODUK_KONSULTAN}/${id}`,
+  DeleteProdukKonsultan: (id, qsObj = {}) => `${API_PRODUK_KONSULTAN}/${id}${buildQS(qsObj)}`,
+
+  // ===== RIWAYAT KOMPENSASI KARYAWAN (Admin) =====
+  GetRiwayatKompensasiKaryawan: (qsObj = {}) => `${API_RIWAYAT_KOMPENSASI_KARYAWAN}${buildQS(qsObj)}`,
+  CreateRiwayatKompensasiKaryawan: () => API_RIWAYAT_KOMPENSASI_KARYAWAN,
+  GetRiwayatKompensasiKaryawanById: (id) => `${API_RIWAYAT_KOMPENSASI_KARYAWAN}/${id}`,
+  UpdateRiwayatKompensasiKaryawan: (id) => `${API_RIWAYAT_KOMPENSASI_KARYAWAN}/${id}`,
+  DeleteRiwayatKompensasiKaryawan: (id) => `${API_RIWAYAT_KOMPENSASI_KARYAWAN}/${id}`,
+
+  GetPeriodeKonsultan: (qsObj = {}) => `${API_PERIODE_KONSULTAN}${buildQS(qsObj)}`,
+  CreatePeriodeKonsultan: () => API_PERIODE_KONSULTAN,
+  GetPeriodeKonsultanById: (id) => `${API_PERIODE_KONSULTAN}/${id}`,
+  UpdatePeriodeKonsultan: (id) => `${API_PERIODE_KONSULTAN}/${id}`,
+  DeletePeriodeKonsultan: (id, qsObj = {}) => `${API_PERIODE_KONSULTAN}/${id}${buildQS(qsObj)}`,
+
+  GetPeriodePayroll: (qsObj = {}) => `${API_PERIODE_PAYROLL}${buildQS(qsObj)}`,
+  CreatePeriodePayroll: () => API_PERIODE_PAYROLL,
+  GetPeriodePayrollById: (id) => `${API_PERIODE_PAYROLL}/${id}`,
+  UpdatePeriodePayroll: (id) => `${API_PERIODE_PAYROLL}/${id}`,
+  DeletePeriodePayroll: (id, qsObj = {}) => `${API_PERIODE_PAYROLL}/${id}${buildQS(qsObj)}`,
+
+  GetPayrollKaryawan: (qsObj = {}) => `${API_PAYROLL_KARYAWAN}${buildQS(qsObj)}`,
+  CreatePayrollKaryawan: () => API_PAYROLL_KARYAWAN,
+  GetPayrollKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
+  GetPayrollSlipKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip`,
+  GetPayrollSlipPdfKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip/pdf`,
+  SendPayrollSlipEmailKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip/email`,
+  UpdatePayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
+  UploadBuktiBayarPayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
+  DeletePayrollKaryawan: (id, qsObj = {}) => `${API_PAYROLL_KARYAWAN}/${id}${buildQS(qsObj)}`,
+  ApprovePayrollKaryawan: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}`,
+  RequestPayrollKaryawanApprovalOtp: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}/otp`,
+  GetPayrollDashboard: () => API_PAYROLL_DASHBOARD,
+
+  GetPersetujuanPeriodePayroll: (qsObj = {}) => `${API_PERSETUJUAN_PERIODE_PAYROLL}${buildQS(qsObj)}`,
+  CreatePersetujuanPeriodePayroll: () => API_PERSETUJUAN_PERIODE_PAYROLL,
+  GetPersetujuanPeriodePayrollById: (id) => `${API_PERSETUJUAN_PERIODE_PAYROLL}/${id}`,
+  UpdatePersetujuanPeriodePayroll: (id) => `${API_PERSETUJUAN_PERIODE_PAYROLL}/${id}`,
+  DeletePersetujuanPeriodePayroll: (id, qsObj = {}) => `${API_PERSETUJUAN_PERIODE_PAYROLL}/${id}${buildQS(qsObj)}`,
+
+  GetTransaksiKonsultan: (qsObj = {}) => `${API_TRANSAKSI_KONSULTAN}${buildQS(qsObj)}`,
+  CreateTransaksiKonsultan: () => API_TRANSAKSI_KONSULTAN,
+  GetTransaksiKonsultanById: (id) => `${API_TRANSAKSI_KONSULTAN}/${id}`,
+  UpdateTransaksiKonsultan: (id) => `${API_TRANSAKSI_KONSULTAN}/${id}`,
+  DeleteTransaksiKonsultan: (id, qsObj = {}) => `${API_TRANSAKSI_KONSULTAN}/${id}${buildQS(qsObj)}`,
+  PreviewImportTransaksiKonsultan: () => `${API_TRANSAKSI_KONSULTAN}/import/preview`,
+  CommitImportTransaksiKonsultan: () => `${API_TRANSAKSI_KONSULTAN}/import/commit`,
+
+  GetPayoutKonsultan: (qsObj = {}) => `${API_PAYOUT_KONSULTAN}${buildQS(qsObj)}`,
+  CreatePayoutKonsultan: () => API_PAYOUT_KONSULTAN,
+  GetPayoutKonsultanById: (id) => `${API_PAYOUT_KONSULTAN}/${id}`,
+  UpdatePayoutKonsultan: (id) => `${API_PAYOUT_KONSULTAN}/${id}`,
+  UnpostPayoutKonsultan: (id) => `${API_PAYOUT_KONSULTAN}/${id}/unpost`,
+  DeletePayoutKonsultan: (id, qsObj = {}) => `${API_PAYOUT_KONSULTAN}/${id}${buildQS(qsObj)}`,
+
+  GetPayoutKonsultanDetail: (qsObj = {}) => `${API_PAYOUT_KONSULTAN_DETAIL}${buildQS(qsObj)}`,
+  CreatePayoutKonsultanDetail: () => API_PAYOUT_KONSULTAN_DETAIL,
+  GetPayoutKonsultanDetailById: (id) => `${API_PAYOUT_KONSULTAN_DETAIL}/${id}`,
+  UpdatePayoutKonsultanDetail: (id) => `${API_PAYOUT_KONSULTAN_DETAIL}/${id}`,
+  DeletePayoutKonsultanDetail: (id, qsObj = {}) => `${API_PAYOUT_KONSULTAN_DETAIL}/${id}${buildQS(qsObj)}`,
 };

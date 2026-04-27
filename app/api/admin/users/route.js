@@ -82,6 +82,7 @@ export async function GET(req) {
 
           agama: true,
           foto_profil_user: true,
+          ttd_url: true,
           tanggal_lahir: true,
           tempat_lahir: true,
           jenis_kelamin: true,
