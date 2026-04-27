@@ -1,6 +1,8 @@
 // app/(view)/home/payroll/payroll-karyawan/component_PayrollKaryawan/CreatePayrollKaryawanModal.jsx
 'use client';
 
+import { useEffect } from 'react';
+
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppInput from '@/app/(view)/component_shared/AppInput';
 import AppModal from '@/app/(view)/component_shared/AppModal';
@@ -9,6 +11,8 @@ import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
 import ApprovalStepsSection from './ApprovalStepsSection';
 import { EDITABLE_STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
+
+const DEFAULT_COMPANY_NAME = 'CV One Step Solution Bali International';
 
 function CreatePayrollForm({ vm }) {
   return (
@@ -42,7 +46,6 @@ function CreatePayrollForm({ vm }) {
 
         <AppSelect
           label='Tarif Pajak TER'
-          required
           value={vm.formData.id_tarif_pajak_ter || undefined}
           onChange={(value) => vm.handleTarifPajakChange(value)}
           options={vm.tarifPajakOptions}
@@ -201,6 +204,13 @@ function CreatePayrollForm({ vm }) {
 }
 
 export default function CreatePayrollKaryawanModal({ vm }) {
+  useEffect(() => {
+    if (!vm.isCreateModalOpen) return;
+    if (vm.formData.company_name_snapshot) return;
+
+    vm.setFormValue('company_name_snapshot', DEFAULT_COMPANY_NAME);
+  }, [vm.isCreateModalOpen, vm.formData.company_name_snapshot, vm.setFormValue]);
+
   return (
     <AppModal
       open={vm.isCreateModalOpen}

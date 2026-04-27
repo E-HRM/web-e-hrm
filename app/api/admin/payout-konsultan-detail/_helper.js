@@ -108,6 +108,24 @@ export function normalizeOptionalId(value, fieldName = 'id') {
   return normalized;
 }
 
+export function normalizeBoolean(value, fieldName = 'boolean') {
+  if (typeof value === 'boolean') return value;
+
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+
+    if (['true', '1', 'ya', 'yes'].includes(normalized)) return true;
+    if (['false', '0', 'tidak', 'no'].includes(normalized)) return false;
+  }
+
+  throw new Error(`Field '${fieldName}' harus bernilai boolean.`);
+}
+
 function stripLeadingZeros(numStr) {
   const stripped = numStr.replace(/^0+(?=\d)/, '');
   return stripped || '0';
@@ -324,8 +342,7 @@ export function enrichPayoutDetail(data) {
       periode_terkunci: periodeTerkunci,
       transaksi_deleted: transaksiDeleted,
       transaksi_posted_payroll: transaksiPosted,
-      transaksi_match_payout:
-        data.payout?.id_periode_konsultan === data.transaksi?.id_periode_konsultan && data.payout?.id_user === data.transaksi?.id_user_konsultan,
+      transaksi_match_payout: data.payout?.id_periode_konsultan === data.transaksi?.id_periode_konsultan && data.payout?.id_user === data.transaksi?.id_user_konsultan,
       bisa_diubah: !Boolean(data.deleted_at) && !payoutDeleted && !periodeTerkunci && !payoutPosted,
       bisa_dihapus: !Boolean(data.deleted_at) && !payoutDeleted && !periodeTerkunci && !payoutPosted,
     },
@@ -522,20 +539,10 @@ export async function resolvePayoutAndTransaksi(tx, { id_payout_konsultan, id_tr
     take: 5,
   });
 
-  const conflictingLinkedDetail =
-    conflictingLinkedDetails.find(
-      (item) =>
-        !(
-          item.ditahan &&
-          item.payout?.status_payout === STATUS_PAYOUT_MUTATION_BLOCKED
-        ),
-    ) || null;
+  const conflictingLinkedDetail = conflictingLinkedDetails.find((item) => !(item.ditahan && item.payout?.status_payout === STATUS_PAYOUT_MUTATION_BLOCKED)) || null;
 
   if (conflictingLinkedDetail) {
-    throw createHttpError(
-      409,
-      "Transaksi konsultan sudah terhubung ke payout lain. Lepaskan dari payout sebelumnya terlebih dahulu.",
-    );
+    throw createHttpError(409, 'Transaksi konsultan sudah terhubung ke payout lain. Lepaskan dari payout sebelumnya terlebih dahulu.');
   }
 
   return {
@@ -593,10 +600,7 @@ export async function recalculatePayoutSummary(tx, id_payout_konsultan) {
 
   const totalShare = scaledBigIntToDecimalString(sumDetailField(details, 'nominal_share', MONEY_SCALE), MONEY_SCALE);
   const nominalDitahan = scaledBigIntToDecimalString(
-    details.reduce(
-      (acc, item) => acc + (item?.ditahan ? decimalToScaledBigInt(String(item?.nominal_share || '0'), MONEY_SCALE) : 0n),
-      0n,
-    ),
+    details.reduce((acc, item) => acc + (item?.ditahan ? decimalToScaledBigInt(String(item?.nominal_share || '0'), MONEY_SCALE) : 0n), 0n),
     MONEY_SCALE,
   );
 
@@ -644,6 +648,6 @@ export function buildCreateOrUpdatePayload(input, transaksi, options = {}) {
     nominal_share: nominalShare,
     nominal_oss: nominalOss,
     ditahan: hasOwn(input, 'ditahan') ? Boolean(input.ditahan) : Boolean(existing?.ditahan),
-    catatan: hasOwn(input, 'catatan') ? input.catatan : existing?.catatan ?? null,
+    catatan: hasOwn(input, 'catatan') ? input.catatan : (existing?.catatan ?? null),
   };
 }

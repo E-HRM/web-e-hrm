@@ -102,6 +102,7 @@ const API_RIWAYAT_KOMPENSASI_KARYAWAN = '/api/admin/riwayat-kompensasi-karyawan'
 const API_PERIODE_KONSULTAN = '/api/admin/periode-konsultan';
 const API_PERIODE_PAYROLL = '/api/admin/periode-payroll';
 const API_PAYROLL_KARYAWAN = '/api/admin/payroll-karyawan';
+const API_PAYROLL_DASHBOARD = '/api/admin/payroll-dashboard';
 const API_PERSETUJUAN_PERIODE_PAYROLL = '/api/admin/persetujuan-periode-payroll';
 const API_TRANSAKSI_KONSULTAN = '/api/admin/transaksi-konsultan';
 const API_PAYOUT_KONSULTAN = '/api/admin/payout-konsultan';
@@ -404,6 +405,7 @@ export const ApiEndpoints = {
   DeletePayrollKaryawan: (id, qsObj = {}) => `${API_PAYROLL_KARYAWAN}/${id}${buildQS(qsObj)}`,
   ApprovePayrollKaryawan: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}`,
   RequestPayrollKaryawanApprovalOtp: (approvalId) => `${API_PAYROLL_KARYAWAN}/approvals/${approvalId}/otp`,
+  GetPayrollDashboard: () => API_PAYROLL_DASHBOARD,
 
   GetPersetujuanPeriodePayroll: (qsObj = {}) => `${API_PERSETUJUAN_PERIODE_PAYROLL}${buildQS(qsObj)}`,
   CreatePersetujuanPeriodePayroll: () => API_PERSETUJUAN_PERIODE_PAYROLL,

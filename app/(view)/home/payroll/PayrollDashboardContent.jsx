@@ -1,7 +1,7 @@
 // app/(view)/home/payroll/PayrollDashboardContent.jsx
 'use client';
 
-import { CalendarOutlined, CheckCircleOutlined, DollarCircleOutlined, FileTextOutlined, InfoCircleOutlined, RiseOutlined, TeamOutlined } from '@ant-design/icons';
+import { CalendarOutlined, CheckCircleOutlined, DollarCircleOutlined, FileTextOutlined, InfoCircleOutlined, ReloadOutlined, RiseOutlined, TeamOutlined } from '@ant-design/icons';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppCard from '@/app/(view)/component_shared/AppCard';
@@ -77,6 +77,70 @@ function StatCard({ icon, iconWrapClassName, iconClassName, cornerLabel, value, 
 
 export default function PayrollDashboardContent() {
   const vm = usePayrollDashboardViewModel();
+  const payrollStatusDenominator = vm.totalPayrollKaryawan || vm.totalKaryawan;
+
+  if (vm.loading) {
+    return (
+      <div className='p-8'>
+        <AppCard
+          rounded='xl'
+          shadow='none'
+          ring={false}
+          className='border border-gray-200'
+          bodyStyle={{ padding: 24 }}
+        >
+          <AppTypography.Text
+            size={14}
+            className='text-gray-600'
+          >
+            Memuat data dashboard payroll...
+          </AppTypography.Text>
+        </AppCard>
+      </div>
+    );
+  }
+
+  if (vm.error) {
+    return (
+      <div className='p-8'>
+        <AppCard
+          rounded='xl'
+          shadow='none'
+          ring={false}
+          className='border border-red-200 bg-red-50'
+          bodyStyle={{ padding: 24 }}
+        >
+          <div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
+            <div>
+              <AppTypography.Text
+                size={16}
+                weight={600}
+                className='block text-red-900'
+              >
+                Data dashboard payroll gagal dimuat.
+              </AppTypography.Text>
+
+              <AppTypography.Text
+                size={14}
+                className='block mt-1 text-red-700'
+              >
+                {vm.error?.message || 'Silakan coba muat ulang data.'}
+              </AppTypography.Text>
+            </div>
+
+            <AppButton
+              variant='primary'
+              icon={<ReloadOutlined />}
+              onClick={() => vm.reloadData()}
+              loading={vm.refreshing}
+            >
+              Muat Ulang
+            </AppButton>
+          </div>
+        </AppCard>
+      </div>
+    );
+  }
 
   if (!vm.currentPeriod) {
     return (
@@ -92,7 +156,7 @@ export default function PayrollDashboardContent() {
             size={14}
             className='text-gray-600'
           >
-            Data periode payroll belum tersedia.
+            Data periode payroll belum tersedia. Buat periode payroll terlebih dahulu agar dashboard dapat menampilkan ringkasan penggajian.
           </AppTypography.Text>
         </AppCard>
       </div>
@@ -142,7 +206,7 @@ export default function PayrollDashboardContent() {
           iconWrapClassName='bg-purple-100'
           iconClassName='text-purple-600 text-2xl'
           cornerLabel='Status'
-          value={`${vm.payrollDibayar}/${vm.totalKaryawan}`}
+          value={`${vm.payrollDibayar}/${payrollStatusDenominator}`}
           label='Payroll Dibayar'
         />
 
@@ -177,6 +241,17 @@ export default function PayrollDashboardContent() {
           </div>
 
           <div className='space-y-4'>
+            {vm.periodeList.slice(0, 3).length === 0 ? (
+              <div className='p-4 bg-gray-50 rounded-lg'>
+                <AppTypography.Text
+                  size={14}
+                  className='text-gray-500'
+                >
+                  Belum ada periode payroll.
+                </AppTypography.Text>
+              </div>
+            ) : null}
+
             {vm.periodeList.slice(0, 3).map((periode) => {
               const statusFormat = vm.formatStatusPeriode(periode.status_periode);
 
@@ -249,6 +324,17 @@ export default function PayrollDashboardContent() {
           </div>
 
           <div className='space-y-4'>
+            {vm.payrollList.length === 0 ? (
+              <div className='p-4 bg-gray-50 rounded-lg'>
+                <AppTypography.Text
+                  size={14}
+                  className='text-gray-500'
+                >
+                  Belum ada data payroll karyawan untuk periode ini.
+                </AppTypography.Text>
+              </div>
+            ) : null}
+
             {vm.payrollList.map((payroll) => {
               const statusFormat = vm.formatStatusPayroll(payroll.status_payroll);
 
@@ -333,7 +419,7 @@ export default function PayrollDashboardContent() {
               size={14}
               className='block text-blue-800 leading-relaxed'
             >
-              Periode {vm.formatBulan(vm.currentPeriod.bulan)} {vm.currentPeriod.tahun} saat ini dalam status <strong>{vm.currentPeriod.status_periode}</strong>. Terdapat {vm.payrollDraft} payroll yang masih berstatus DRAFT. Silakan review
+              Periode {vm.formatBulan(vm.currentPeriod.bulan)} {vm.currentPeriod.tahun} saat ini dalam status <strong>{vm.formatStatusPeriode(vm.currentPeriod.status_periode).label}</strong>. Terdapat {vm.payrollDraft} payroll yang masih berstatus DRAFT. Silakan review
               dan finalisasi sebelum tanggal {vm.currentPeriod.tanggal_selesai}.
             </AppTypography.Text>
           </div>

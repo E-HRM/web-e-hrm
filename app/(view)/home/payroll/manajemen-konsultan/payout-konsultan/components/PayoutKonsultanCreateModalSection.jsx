@@ -1,7 +1,76 @@
 import AppButton from '@/app/(view)/component_shared/AppButton';
+import AppInput from '@/app/(view)/component_shared/AppInput';
 import AppModal from '@/app/(view)/component_shared/AppModal';
+import AppSelect from '@/app/(view)/component_shared/AppSelect';
+import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
-import PayoutKonsultanFormFields from './PayoutKonsultanFormFields';
+import PayoutKonsultanTransactionSelectionSection from './PayoutKonsultanTransactionSelectionSection';
+
+const formatRupiahInput = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+
+  const rawValue = String(value).replace(',', '.');
+  const isNegative = rawValue.startsWith('-');
+  const stringValue = rawValue.replace(/[^\d.]/g, '');
+  const [integerPart, decimalPart] = stringValue.split('.');
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  if (!formattedInteger) {
+    return '';
+  }
+
+  const prefix = isNegative ? '-Rp ' : 'Rp ';
+
+  if (decimalPart !== undefined) {
+    return `${prefix}${formattedInteger},${decimalPart}`;
+  }
+
+  return `${prefix}${formattedInteger}`;
+};
+
+const parseRupiahInput = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  const stringValue = String(value);
+  const isNegative = stringValue.trim().startsWith('-');
+
+  const numericValue = stringValue
+    .replace(/Rp\s?/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .replace(/[^\d.]/g, '');
+
+  if (!numericValue) {
+    return '';
+  }
+
+  return isNegative ? `-${numericValue}` : numericValue;
+};
+
+function PreviewItem({ label, value, accentClassName = 'text-gray-900' }) {
+  return (
+    <div>
+      <AppTypography.Text
+        size={12}
+        className='block text-gray-500 mb-1'
+      >
+        {label}
+      </AppTypography.Text>
+
+      <AppTypography.Text
+        size={16}
+        weight={700}
+        className={`block ${accentClassName}`}
+      >
+        {value}
+      </AppTypography.Text>
+    </div>
+  );
+}
 
 export default function PayoutKonsultanCreateModalSection({
   open,
@@ -21,6 +90,8 @@ export default function PayoutKonsultanCreateModalSection({
   isSubmitting = false,
   onSubmit,
 }) {
+  const consultantHint = 'Pilih konsultan yang memiliki transaksi siap dibayarkan pada periode ini. Transaksi yang ditahan dari periode sebelumnya juga akan ditampilkan.';
+
   return (
     <AppModal
       open={open}
@@ -29,20 +100,107 @@ export default function PayoutKonsultanCreateModalSection({
       footer={null}
       width={920}
     >
-      <PayoutKonsultanFormFields
-        formData={formData}
-        consultantOptions={consultantOptions}
-        periodeOptions={periodeOptions}
-        setFormValue={setFormValue}
-        formSummary={formSummary}
-        eligibleTransactions={eligibleTransactions}
-        toggleHeldTransaction={toggleHeldTransaction}
-        nominalDibayarkanPreview={nominalDibayarkanPreview}
-        formatCurrency={formatCurrency}
-        formatDate={formatDate}
-        formatPeriodeKonsultanLabel={formatPeriodeKonsultanLabel}
-        isPreviewLoading={isPreviewLoading}
-      />
+      <div className='space-y-4'>
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <AppSelect
+            label='Konsultan'
+            required
+            value={formData.id_user || undefined}
+            options={consultantOptions}
+            onChange={(value) => setFormValue('id_user', value || '')}
+            placeholder='Pilih konsultan'
+            hint={consultantHint}
+            selectClassName='!rounded-lg'
+          />
+
+          <AppSelect
+            label='Periode Konsultan'
+            required
+            value={formData.id_periode_konsultan || undefined}
+            options={periodeOptions}
+            onChange={(value) => setFormValue('id_periode_konsultan', value || '')}
+            placeholder='Pilih periode konsultan'
+            selectClassName='!rounded-lg'
+          />
+        </div>
+
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <AppInput.Number
+            label='Nominal yang Ditahan'
+            value={formSummary.totalDitahan}
+            disabled
+            hint='Dihitung otomatis dari hak konsultan yang dipilih untuk ditahan.'
+            inputClassName='!rounded-lg'
+          />
+
+          <AppInput.Number
+            label='Nominal yang Akan Dibayarkan'
+            value={formData.nominal_penyesuaian}
+            onChange={(value) => setFormValue('nominal_penyesuaian', value ?? 0)}
+            formatter={formatRupiahInput}
+            parser={parseRupiahInput}
+            placeholder='Rp 0'
+            inputClassName='!rounded-lg'
+          />
+        </div>
+
+        <div className='rounded-lg border border-gray-200 bg-gray-50 p-4'>
+          <div className='grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4'>
+            <PreviewItem
+              label='Transaksi Siap Dibayar'
+              value={isPreviewLoading ? 'Memuat...' : `${formSummary.detailCount} transaksi`}
+            />
+
+            <PreviewItem
+              label='Transaksi yang Ditahan'
+              value={isPreviewLoading ? 'Memuat...' : `${formSummary.detailDitahanCount} transaksi`}
+              accentClassName={formSummary.detailDitahanCount > 0 ? 'text-red-700' : 'text-gray-900'}
+            />
+
+            <PreviewItem
+              label='Total Pendapatan'
+              value={formatCurrency(formSummary.totalIncome)}
+              accentClassName='text-blue-700'
+            />
+
+            <PreviewItem
+              label='Hak Konsultan Otomatis'
+              value={formatCurrency(formSummary.totalShare)}
+              accentClassName='text-blue-700'
+            />
+
+            <PreviewItem
+              label='Nominal yang Ditahan'
+              value={formatCurrency(formSummary.totalDitahan)}
+              accentClassName={formSummary.totalDitahan > 0 ? 'text-red-700' : 'text-gray-900'}
+            />
+
+            <PreviewItem
+              label='Nominal yang Akan Dibayarkan'
+              value={formatCurrency(nominalDibayarkanPreview)}
+              accentClassName={nominalDibayarkanPreview >= 0 ? 'text-green-700' : 'text-red-700'}
+            />
+          </div>
+        </div>
+
+        <PayoutKonsultanTransactionSelectionSection
+          transactions={eligibleTransactions}
+          heldTransactionIds={formData.id_transaksi_konsultan_ditahan}
+          onToggleHeldTransaction={toggleHeldTransaction}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          formatPeriodeKonsultanLabel={formatPeriodeKonsultanLabel}
+          isLoading={isPreviewLoading}
+        />
+
+        <AppInput.TextArea
+          label='Catatan'
+          value={formData.catatan}
+          onChange={(event) => setFormValue('catatan', event.target.value)}
+          autoSize={{ minRows: 3, maxRows: 5 }}
+          inputClassName='!rounded-lg'
+        />
+      </div>
 
       <div className='flex items-center justify-end gap-3 pt-4'>
         <AppButton

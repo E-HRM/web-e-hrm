@@ -121,7 +121,8 @@
  *               start_date:
  *                 type: string
  *                 format: date-time
- *                 start_dates:
+ *                 description: Tanggal mulai agenda tunggal (UTC).
+ *               start_dates:
  *                 type: array
  *                 description: Daftar tanggal mulai yang akan dibuat sebagai agenda terpisah (UTC).
  *                 items:
@@ -153,7 +154,7 @@
  *                 message:
  *                   type: string
  *                 data:
- *                    type: array
+ *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/MobileAgendaKerja'
  *                 meta:

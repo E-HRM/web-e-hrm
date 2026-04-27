@@ -2,12 +2,10 @@
 
 import AppAvatar from '@/app/(view)/component_shared/AppAvatar';
 import AppCard from '@/app/(view)/component_shared/AppCard';
-import AppInput from '@/app/(view)/component_shared/AppInput';
-import AppSelect from '@/app/(view)/component_shared/AppSelect';
 import AppTag from '@/app/(view)/component_shared/AppTag';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
-import { PINJAMAN_FORM_STATUS_OPTIONS, STATUS_PINJAMAN } from '../utils/utils';
+import { STATUS_PINJAMAN } from '../utils/utils';
 
 export function SummaryCard({ icon, iconWrapClassName, iconClassName, value, label }) {
   return (
@@ -128,12 +126,6 @@ export function DetailField({ label, value, valueClassName = 'text-gray-900', va
   );
 }
 
-function filterUserOption(input, option) {
-  return String(option?.searchText || '')
-    .toLowerCase()
-    .includes(String(input || '').toLowerCase());
-}
-
 export function UserMeta({ user, vm, compact = false }) {
   const name = vm.getUserDisplayName(user);
   const identity = vm.getUserIdentity(user);
@@ -174,158 +166,6 @@ export function UserMeta({ user, vm, compact = false }) {
           </AppTypography.Text>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-function buildUserSelectOptions(users, vm) {
-  return users.map((user) => {
-    const plainLabel = [vm.getUserDisplayName(user), vm.getUserIdentity(user)].filter(Boolean).join(' • ');
-
-    return {
-      value: user.id_user,
-      label: (
-        <UserMeta
-          user={user}
-          vm={vm}
-          compact
-        />
-      ),
-      plainLabel,
-      title: plainLabel,
-      searchText: [vm.getUserDisplayName(user), vm.getUserIdentity(user), user?.email, vm.getUserRoleOrJob(user), vm.getUserDepartment(user), user?.id_user].filter(Boolean).join(' '),
-    };
-  });
-}
-
-function buildStatusOptions(vm) {
-  return PINJAMAN_FORM_STATUS_OPTIONS.map((option) => ({
-    ...option,
-    disabled: typeof vm.isStatusOptionDisabled === 'function' ? vm.isStatusOptionDisabled(option.value) : false,
-  }));
-}
-
-export function PinjamanForm({ vm, formData, setFormValue, duplicateNameForUser, disableUserField = false }) {
-  const userOptions = buildUserSelectOptions(vm.availableUsers, vm);
-  const statusOptions = buildStatusOptions(vm);
-
-  return (
-    <div className='space-y-4'>
-      {!disableUserField ? (
-        <AppSelect
-          label='Karyawan'
-          required
-          value={formData.id_user || undefined}
-          onChange={(value) => setFormValue('id_user', value || '')}
-          options={userOptions}
-          placeholder='Pilih karyawan'
-          loading={vm.loading}
-          disabled={vm.loading || vm.isSubmitting}
-          filterOption={filterUserOption}
-          optionFilterProp='searchText'
-          optionLabelProp='plainLabel'
-          selectClassName='!rounded-lg'
-          hint='Cari berdasarkan nama, NIK, email, atau jabatan.'
-        />
-      ) : (
-        <div>
-          <AppTypography.Text
-            size={12}
-            weight={600}
-            className='block text-gray-700 mb-1.5'
-          >
-            Karyawan
-          </AppTypography.Text>
-
-          {vm.selectedFormUser ? (
-            <UserMeta
-              user={vm.selectedFormUser}
-              vm={vm}
-            />
-          ) : (
-            <div className='rounded-xl border border-dashed border-gray-200 p-4 bg-gray-50'>
-              <AppTypography.Text
-                size={13}
-                className='text-gray-500'
-              >
-                Data karyawan tidak ditemukan.
-              </AppTypography.Text>
-            </div>
-          )}
-        </div>
-      )}
-
-      <AppInput
-        label='Nama Pinjaman'
-        required
-        value={formData.nama_pinjaman}
-        onChange={(event) => setFormValue('nama_pinjaman', event.target.value)}
-        placeholder='Pinjaman Renovasi Rumah'
-        disabled={vm.isSubmitting}
-        hint={duplicateNameForUser ? 'Nama pinjaman untuk karyawan ini sudah ada.' : undefined}
-        inputClassName='!rounded-lg'
-      />
-
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-        <AppInput.Number
-          label='Nominal Pinjaman'
-          required
-          min={0}
-          value={formData.nominal_pinjaman}
-          onChange={(value) => setFormValue('nominal_pinjaman', value ?? 0)}
-          placeholder='5000000'
-          disabled={vm.isSubmitting}
-          inputClassName='!rounded-lg'
-        />
-
-        <AppInput.Number
-          label='Lama Cicilan'
-          required
-          min={1}
-          precision={0}
-          step={1}
-          value={formData.tenor_bulan}
-          onChange={(value) => setFormValue('tenor_bulan', value ?? 0)}
-          placeholder='Contoh: 20'
-          disabled={vm.isSubmitting}
-          inputClassName='!rounded-lg'
-        />
-      </div>
-
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-        <AppInput
-          label='Tanggal Mulai'
-          required
-          type='date'
-          value={formData.tanggal_mulai}
-          onChange={(event) => setFormValue('tanggal_mulai', event.target.value)}
-          disabled={vm.isSubmitting}
-          inputClassName='!rounded-lg'
-        />
-
-        <AppSelect
-          label='Status Pinjaman'
-          required
-          value={formData.status_pinjaman || undefined}
-          onChange={(value) => setFormValue('status_pinjaman', value || STATUS_PINJAMAN.DRAFT)}
-          options={statusOptions}
-          placeholder='Pilih status pinjaman'
-          disabled={vm.isSubmitting}
-          selectClassName='!rounded-lg'
-          hint={vm.statusFieldHint}
-          showSearch={false}
-        />
-      </div>
-
-      <AppInput.TextArea
-        label='Catatan (Opsional)'
-        value={formData.catatan}
-        onChange={(event) => setFormValue('catatan', event.target.value)}
-        autoSize={{ minRows: 3, maxRows: 5 }}
-        placeholder='Catatan tambahan...'
-        disabled={vm.isSubmitting}
-        inputClassName='!rounded-lg'
-      />
     </div>
   );
 }

@@ -1,11 +1,78 @@
 'use client';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
+import AppInput from '@/app/(view)/component_shared/AppInput';
 import AppModal from '@/app/(view)/component_shared/AppModal';
+import AppSelect from '@/app/(view)/component_shared/AppSelect';
 
-import { PinjamanForm } from './SectionShared';
+import { PINJAMAN_FORM_STATUS_OPTIONS, STATUS_PINJAMAN } from '../utils/utils';
+import { UserMeta } from './SectionShared';
+
+const formatRupiahInput = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return '';
+  }
+
+  const stringValue = String(value).replace(/[^\d.]/g, '');
+  const [integerPart, decimalPart] = stringValue.split('.');
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+  if (decimalPart !== undefined) {
+    return `Rp ${formattedInteger},${decimalPart}`;
+  }
+
+  return `Rp ${formattedInteger}`;
+};
+
+const parseRupiahInput = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/Rp\s?/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .replace(/[^\d.]/g, '');
+};
+
+function filterUserOption(input, option) {
+  return String(option?.searchText || '')
+    .toLowerCase()
+    .includes(String(input || '').toLowerCase());
+}
+
+function buildUserSelectOptions(users, vm) {
+  return users.map((user) => {
+    const plainLabel = [vm.getUserDisplayName(user), vm.getUserIdentity(user)].filter(Boolean).join(' • ');
+
+    return {
+      value: user.id_user,
+      label: (
+        <UserMeta
+          user={user}
+          vm={vm}
+          compact
+        />
+      ),
+      plainLabel,
+      title: plainLabel,
+      searchText: [vm.getUserDisplayName(user), vm.getUserIdentity(user), user?.email, vm.getUserRoleOrJob(user), vm.getUserDepartment(user), user?.id_user].filter(Boolean).join(' '),
+    };
+  });
+}
+
+function buildStatusOptions(vm) {
+  return PINJAMAN_FORM_STATUS_OPTIONS.map((option) => ({
+    ...option,
+    disabled: typeof vm.isStatusOptionDisabled === 'function' ? vm.isStatusOptionDisabled(option.value) : false,
+  }));
+}
 
 export default function CreatePinjamanModalSection({ vm }) {
+  const userOptions = buildUserSelectOptions(vm.availableUsers, vm);
+  const statusOptions = buildStatusOptions(vm);
+
   return (
     <AppModal
       open={vm.isCreateModalOpen}
@@ -14,12 +81,97 @@ export default function CreatePinjamanModalSection({ vm }) {
       footer={null}
       width={680}
     >
-      <PinjamanForm
-        vm={vm}
-        formData={vm.formData}
-        setFormValue={vm.setFormValue}
-        duplicateNameForUser={vm.duplicateNameForUser}
-      />
+      <div className='space-y-4'>
+        <AppSelect
+          label='Karyawan'
+          required
+          value={vm.formData.id_user || undefined}
+          onChange={(value) => vm.setFormValue('id_user', value || '')}
+          options={userOptions}
+          placeholder='Pilih karyawan'
+          loading={vm.loading}
+          disabled={vm.loading || vm.isSubmitting}
+          filterOption={filterUserOption}
+          optionFilterProp='searchText'
+          optionLabelProp='plainLabel'
+          selectClassName='!rounded-lg'
+          hint='Cari berdasarkan nama, NIK, email, atau jabatan.'
+        />
+
+        <AppInput
+          label='Nama Pinjaman'
+          required
+          value={vm.formData.nama_pinjaman}
+          onChange={(event) => vm.setFormValue('nama_pinjaman', event.target.value)}
+          placeholder='Pinjaman Renovasi Rumah'
+          disabled={vm.isSubmitting}
+          hint={vm.duplicateNameForUser ? 'Nama pinjaman untuk karyawan ini sudah ada.' : undefined}
+          inputClassName='!rounded-lg'
+        />
+
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <AppInput.Number
+            label='Nominal Pinjaman'
+            required
+            min={0}
+            value={vm.formData.nominal_pinjaman}
+            onChange={(value) => vm.setFormValue('nominal_pinjaman', value ?? 0)}
+            formatter={formatRupiahInput}
+            parser={parseRupiahInput}
+            placeholder='Rp 0'
+            disabled={vm.isSubmitting}
+            inputClassName='!rounded-lg !w-full'
+          />
+
+          <AppInput.Number
+            label='Lama Cicilan'
+            required
+            min={1}
+            precision={0}
+            step={1}
+            value={vm.formData.tenor_bulan}
+            onChange={(value) => vm.setFormValue('tenor_bulan', value ?? 0)}
+            placeholder='Contoh: 20'
+            disabled={vm.isSubmitting}
+            inputClassName='!rounded-lg'
+          />
+        </div>
+
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <AppInput
+            label='Tanggal Mulai'
+            required
+            type='date'
+            value={vm.formData.tanggal_mulai}
+            onChange={(event) => vm.setFormValue('tanggal_mulai', event.target.value)}
+            disabled={vm.isSubmitting}
+            inputClassName='!rounded-lg'
+          />
+
+          <AppSelect
+            label='Status Pinjaman'
+            required
+            value={vm.formData.status_pinjaman || undefined}
+            onChange={(value) => vm.setFormValue('status_pinjaman', value || STATUS_PINJAMAN.DRAFT)}
+            options={statusOptions}
+            placeholder='Pilih status pinjaman'
+            disabled={vm.isSubmitting}
+            selectClassName='!rounded-lg'
+            hint={vm.statusFieldHint}
+            showSearch={false}
+          />
+        </div>
+
+        <AppInput.TextArea
+          label='Catatan (Opsional)'
+          value={vm.formData.catatan}
+          onChange={(event) => vm.setFormValue('catatan', event.target.value)}
+          autoSize={{ minRows: 3, maxRows: 5 }}
+          placeholder='Catatan tambahan...'
+          disabled={vm.isSubmitting}
+          inputClassName='!rounded-lg'
+        />
+      </div>
 
       <div className='flex items-center justify-end gap-3 pt-4'>
         <AppButton

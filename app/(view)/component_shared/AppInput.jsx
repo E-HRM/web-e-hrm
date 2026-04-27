@@ -171,7 +171,7 @@ function TextAreaInput(props) {
 }
 
 function NumberInput(props) {
-  const { label, required = false, hint, error, extra, size = 'middle', className, inputClassName, labelClassName, messageClassName, style, ...rest } = props;
+  const { label, required = false, hint, error, extra, size = 'large', className, inputClassName, labelClassName, messageClassName, style, ...rest } = props;
 
   const status = rest.status ?? (error ? 'error' : undefined);
   const mergedStyle = useMemo(() => ({ fontFamily, ...(style || {}) }), [style]);
