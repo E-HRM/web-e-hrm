@@ -12,9 +12,11 @@ import {
   VIEW_ROLES,
   buildSelect,
   buildTarifPajakTerSnapshot,
+  buildPayrollSubjectWhere,
   deriveApprovalState,
   ensureCanMarkPayrollAsPaid,
   ensureAuth,
+  ensureFreelanceExists,
   ensurePayrollExists,
   ensurePeriodeExists,
   ensureProfilPayrollExists,
@@ -28,10 +30,12 @@ import {
   normalizeNullableString,
   parseDateTime,
   parseNonNegativeDecimal,
+  resolvePayrollSubjectIds,
   computePph21NominalFromSnapshot,
   computePendapatanBersihFromTotals,
   replaceApprovalSteps,
   resolveApprovalSteps,
+  resolveNextPayrollIssueNumber,
   STATUS_PAYROLL_VALUES,
   addDecimalStrings,
 } from '../payrollKaryawan.shared';
@@ -176,16 +180,20 @@ function normalizeStatusRelatedFields(body = {}, existing = null) {
 
 async function resolveUpdatePayload(existing, body = {}) {
   const nextPeriodeId = normalizeNullableString(body?.id_periode_payroll, 'id_periode_payroll', 36) || existing.id_periode_payroll;
-  const nextUserId = normalizeNullableString(body?.id_user, 'id_user', 36) || existing.id_user;
+  const subject = resolvePayrollSubjectIds(body, existing);
 
-  const [periode, user] = await Promise.all([ensurePeriodeExists(nextPeriodeId), ensureUserExists(nextUserId)]);
+  const [periode, user, freelance] = await Promise.all([ensurePeriodeExists(nextPeriodeId), ensureUserExists(subject.id_user), ensureFreelanceExists(subject.id_freelance)]);
 
   if (!periode) {
     return { error: NextResponse.json({ message: 'Periode payroll tidak ditemukan.' }, { status: 404 }) };
   }
 
-  if (!user) {
+  if (subject.id_user && !user) {
     return { error: NextResponse.json({ message: 'User tidak ditemukan atau sudah dihapus.' }, { status: 404 }) };
+  }
+
+  if (subject.id_freelance && !freelance) {
+    return { error: NextResponse.json({ message: 'Freelance tidak ditemukan atau sudah dihapus.' }, { status: 404 }) };
   }
 
   if (IMMUTABLE_PERIODE_STATUS.has(String(periode.status_periode || '').toUpperCase())) {
@@ -197,7 +205,7 @@ async function resolveUpdatePayload(existing, body = {}) {
   const requestedJenisHubungan = hasOwn(body, 'jenis_hubungan_kerja') ? normalizeEnum(body?.jenis_hubungan_kerja, JENIS_HUBUNGAN_KERJA_VALUES, 'jenis_hubungan_kerja') : undefined;
 
   const shouldRefreshSnapshot =
-    hasOwn(body, 'id_user') || hasOwn(body, 'id_tarif_pajak_ter') || hasOwn(body, 'jenis_hubungan_kerja') || !existing.id_tarif_pajak_ter;
+    hasOwn(body, 'id_user') || hasOwn(body, 'id_freelance') || hasOwn(body, 'id_tarif_pajak_ter') || hasOwn(body, 'jenis_hubungan_kerja') || !existing.id_tarif_pajak_ter;
 
   let tarifPajakTer = null;
   let id_profil_payroll = existing.id_profil_payroll;
@@ -213,10 +221,10 @@ async function resolveUpdatePayload(existing, body = {}) {
   let tunjangan_bpjs_snapshot = existing.tunjangan_bpjs_snapshot;
 
   if (shouldRefreshSnapshot) {
-    const profilPayroll = await ensureProfilPayrollExists(nextUserId);
+    const profilPayroll = await ensureProfilPayrollExists(subject);
 
     if (!profilPayroll) {
-      return { error: NextResponse.json({ message: 'Profil payroll aktif untuk user ini belum tersedia.' }, { status: 404 }) };
+      return { error: NextResponse.json({ message: `Profil payroll aktif untuk ${subject.subjectType} ini belum tersedia.` }, { status: 404 }) };
     }
 
     tarifPajakTer = hasTarifPajakTerField
@@ -232,7 +240,7 @@ async function resolveUpdatePayload(existing, body = {}) {
     }
 
     id_profil_payroll = profilPayroll?.id_profil_payroll || existing.id_profil_payroll;
-    jenis_hubungan_kerja = requestedJenisHubungan || String(profilPayroll?.jenis_hubungan_kerja || existing.jenis_hubungan_kerja || '').trim().toUpperCase();
+    jenis_hubungan_kerja = subject.id_freelance ? 'FREELANCE' : requestedJenisHubungan || String(profilPayroll?.jenis_hubungan_kerja || existing.jenis_hubungan_kerja || '').trim().toUpperCase();
 
     if (!jenis_hubungan_kerja || !JENIS_HUBUNGAN_KERJA_VALUES.has(jenis_hubungan_kerja)) {
       return {
@@ -272,13 +280,15 @@ async function resolveUpdatePayload(existing, body = {}) {
   return {
     payload: {
       id_periode_payroll: nextPeriodeId,
-      id_user: nextUserId,
+      id_user: subject.id_user,
+      id_freelance: subject.id_freelance,
       id_profil_payroll,
       id_tarif_pajak_ter,
       nama_karyawan:
         normalizeNullableString(body?.nama_karyawan, 'nama_karyawan', 255) ||
         normalizeNullableString(body?.nama_karyawan_snapshot, 'nama_karyawan_snapshot', 255) ||
-        user.nama_pengguna ||
+        user?.nama_pengguna ||
+        freelance?.nama ||
         existing.nama_karyawan,
       jenis_hubungan_kerja,
       kode_kategori_pajak_snapshot,
@@ -289,17 +299,13 @@ async function resolveUpdatePayload(existing, body = {}) {
       berlaku_sampai_tarif_snapshot,
       gaji_pokok_snapshot,
       tunjangan_bpjs_snapshot,
-      bank_name:
-        normalizeNullableString(body?.bank_name, 'bank_name', 50) ||
-        normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) ||
-        user.jenis_bank ||
-        existing.bank_name,
-      bank_account:
-        normalizeNullableString(body?.bank_account, 'bank_account', 50) ||
-        normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) ||
-        user.nomor_rekening ||
-        existing.bank_account,
-      issue_number: hasOwn(body, 'issue_number') ? normalizeNullableString(body?.issue_number, 'issue_number', 100) : existing.issue_number,
+      bank_name: subject.id_freelance
+        ? normalizeNullableString(body?.bank_name, 'bank_name', 50) || normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) || null
+        : normalizeNullableString(body?.bank_name, 'bank_name', 50) || normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) || user?.jenis_bank || existing.bank_name,
+      bank_account: subject.id_freelance
+        ? normalizeNullableString(body?.bank_account, 'bank_account', 50) || normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) || null
+        : normalizeNullableString(body?.bank_account, 'bank_account', 50) || normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) || user?.nomor_rekening || existing.bank_account,
+      issue_number: existing.issue_number,
       issued_at: hasOwn(body, 'issued_at') ? parseDateTime(body?.issued_at, 'issued_at') : existing.issued_at,
       company_name_snapshot: hasOwn(body, 'company_name_snapshot')
         ? normalizeNullableString(body?.company_name_snapshot, 'company_name_snapshot', 255)
@@ -308,6 +314,7 @@ async function resolveUpdatePayload(existing, body = {}) {
       ...totals,
       ...statusFields,
     },
+    periode,
   };
 }
 
@@ -409,11 +416,15 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ message: 'Upload bukti bayar wajib dilakukan sebelum payroll ditandai dibayar.' }, { status: 400 });
     }
 
-    if (resolved.payload.id_periode_payroll !== existing.id_periode_payroll || resolved.payload.id_user !== existing.id_user) {
+    if (
+      resolved.payload.id_periode_payroll !== existing.id_periode_payroll ||
+      resolved.payload.id_user !== existing.id_user ||
+      resolved.payload.id_freelance !== existing.id_freelance
+    ) {
       const duplicate = await db.payrollKaryawan.findFirst({
         where: {
           id_periode_payroll: resolved.payload.id_periode_payroll,
-          id_user: resolved.payload.id_user,
+          ...buildPayrollSubjectWhere(resolved.payload),
           NOT: {
             id_payroll_karyawan: existing.id_payroll_karyawan,
           },
@@ -425,13 +436,13 @@ export async function PUT(req, { params }) {
       });
 
       if (duplicate && duplicate.deleted_at === null) {
-        return NextResponse.json({ message: 'Payroll karyawan untuk user dan periode tujuan sudah ada.' }, { status: 409 });
+        return NextResponse.json({ message: 'Payroll karyawan untuk subjek dan periode tujuan sudah ada.' }, { status: 409 });
       }
 
       if (duplicate && duplicate.deleted_at !== null) {
         return NextResponse.json(
           {
-            message: 'Kombinasi user dan periode tujuan sudah digunakan oleh payroll yang di-soft delete. Pulihkan atau hapus permanen data tersebut terlebih dahulu.',
+            message: 'Kombinasi subjek payroll dan periode tujuan sudah digunakan oleh payroll yang di-soft delete. Pulihkan atau hapus permanen data tersebut terlebih dahulu.',
           },
           { status: 409 },
         );
@@ -439,10 +450,21 @@ export async function PUT(req, { params }) {
     }
 
     const result = await db.$transaction(async (tx) => {
+      const shouldRegenerateIssueNumber =
+        resolved.payload.id_periode_payroll !== existing.id_periode_payroll || !String(existing.issue_number || '').trim();
+      const issueNumber = shouldRegenerateIssueNumber
+        ? await resolveNextPayrollIssueNumber(tx, {
+            id_periode_payroll: resolved.payload.id_periode_payroll,
+            periode: resolved.periode,
+            excludePayrollId: existing.id_payroll_karyawan,
+          })
+        : existing.issue_number;
+
       const updated = await tx.payrollKaryawan.update({
         where: { id_payroll_karyawan: existing.id_payroll_karyawan },
         data: {
           ...resolved.payload,
+          issue_number: issueNumber,
           ...(approvalState
             ? {
                 status_approval: approvalState.status_approval,
@@ -488,7 +510,7 @@ export async function PUT(req, { params }) {
     });
   } catch (err) {
     if (err?.code === 'P2002') {
-      return NextResponse.json({ message: 'Payroll karyawan untuk user dan periode tujuan sudah ada.' }, { status: 409 });
+      return NextResponse.json({ message: 'Payroll karyawan untuk subjek dan periode tujuan sudah ada.' }, { status: 409 });
     }
 
     if (

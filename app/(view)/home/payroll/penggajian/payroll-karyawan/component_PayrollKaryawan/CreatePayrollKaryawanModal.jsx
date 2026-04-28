@@ -32,7 +32,7 @@ function CreatePayrollForm({ vm }) {
         <AppSelect
           label='Nama Karyawan'
           required
-          value={vm.formData.id_user || undefined}
+          value={vm.selectedEmployeeValue || undefined}
           onChange={(value) => vm.handleEmployeeChange(value)}
           options={vm.employeeOptions}
           placeholder='Pilih karyawan'
@@ -58,7 +58,7 @@ function CreatePayrollForm({ vm }) {
         />
       </div>
 
-      {vm.formData.id_user ? (
+      {vm.selectedEmployeeValue ? (
         <div className='rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3'>
           <AppTypography.Text
             size={12}
@@ -120,7 +120,7 @@ function CreatePayrollForm({ vm }) {
 
         <AppInput
           label='Gaji Pokok'
-          value={vm.formData.id_user ? vm.formatCurrency(vm.formData.gaji_pokok_snapshot) : ''}
+          value={vm.selectedEmployeeValue ? vm.formatCurrency(vm.formData.gaji_pokok_snapshot) : ''}
           placeholder='Akan terisi otomatis'
           disabled
           inputClassName='!rounded-lg'
@@ -128,7 +128,7 @@ function CreatePayrollForm({ vm }) {
 
         <AppInput
           label='Tunjangan BPJS (Potongan)'
-          value={vm.formData.id_user ? vm.formatCurrency(vm.formData.tunjangan_bpjs_snapshot) : ''}
+          value={vm.selectedEmployeeValue ? vm.formatCurrency(vm.formData.tunjangan_bpjs_snapshot) : ''}
           placeholder='Akan terisi otomatis'
           disabled
           inputClassName='!rounded-lg'
@@ -157,10 +157,10 @@ function CreatePayrollForm({ vm }) {
         <AppInput
           label='Nomor Slip'
           value={vm.formData.issue_number}
-          onChange={(event) => vm.setFormValue('issue_number', event.target.value)}
-          placeholder='Contoh: PAY-APR-2026-001'
-          inputClassName='!rounded-lg'
-          hint='Nomor ini akan tampil pada slip gaji.'
+          placeholder='Contoh: 202604001'
+          readOnly
+          inputClassName='!rounded-lg !bg-gray-50'
+          hint='Nomor dibuat otomatis dari periode dan urutan payroll.'
         />
 
         <AppInput

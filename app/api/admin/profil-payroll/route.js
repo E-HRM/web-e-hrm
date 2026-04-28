@@ -47,12 +47,12 @@ function normalizeEnum(value) {
     .toUpperCase();
 }
 
-function normalizeRequiredId(value, fieldName = 'id') {
-  const normalized = String(value || '').trim();
+function normalizeOptionalId(value, fieldName = 'id') {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
 
-  if (!normalized) {
-    throw new Error(`Field '${fieldName}' wajib diisi.`);
-  }
+  const normalized = String(value).trim();
+  if (!normalized) return null;
 
   if (normalized.length > 36) {
     throw new Error(`Field '${fieldName}' maksimal 36 karakter.`);
@@ -138,10 +138,62 @@ function guardRole(actor, allowedRoles) {
   return null;
 }
 
+function resolveSubject(body = {}) {
+  const id_user = normalizeOptionalId(body?.id_user, 'id_user');
+  const id_freelance = normalizeOptionalId(body?.id_freelance, 'id_freelance');
+
+  if (!id_user && !id_freelance) {
+    throw new Error("Field 'id_user' atau 'id_freelance' wajib diisi salah satu.");
+  }
+
+  if (id_user && id_freelance) {
+    throw new Error("Field 'id_user' dan 'id_freelance' tidak boleh diisi bersamaan.");
+  }
+
+  return {
+    id_user: id_user || null,
+    id_freelance: id_freelance || null,
+    targetLabel: id_freelance ? 'freelance' : 'user',
+  };
+}
+
+async function ensureSubjectExists(subject) {
+  if (subject.id_user) {
+    const user = await db.user.findFirst({
+      where: {
+        id_user: subject.id_user,
+        deleted_at: null,
+      },
+      select: {
+        id_user: true,
+      },
+    });
+
+    return Boolean(user);
+  }
+
+  const freelance = await db.freelance.findFirst({
+    where: {
+      id_freelance: subject.id_freelance,
+      deleted_at: null,
+    },
+    select: {
+      id_freelance: true,
+    },
+  });
+
+  return Boolean(freelance);
+}
+
+function buildSubjectWhere(subject) {
+  return subject.id_freelance ? { id_freelance: subject.id_freelance } : { id_user: subject.id_user };
+}
+
 function buildSelect() {
   return {
     id_profil_payroll: true,
     id_user: true,
+    id_freelance: true,
     jenis_hubungan_kerja: true,
     gaji_pokok: true,
     tunjangan_bpjs: true,
@@ -183,6 +235,24 @@ function buildSelect() {
         },
       },
     },
+    freelance: {
+      select: {
+        id_freelance: true,
+        nama: true,
+        email: true,
+        kontak: true,
+        alamat: true,
+        id_supervisor: true,
+        deleted_at: true,
+        supervisor: {
+          select: {
+            id_user: true,
+            nama_pengguna: true,
+            email: true,
+          },
+        },
+      },
+    },
   };
 }
 
@@ -196,6 +266,9 @@ function buildSearchClauses(search) {
     { user: { is: { nomor_induk_karyawan: { contains: search } } } },
     { user: { is: { jabatan: { is: { nama_jabatan: { contains: search } } } } } },
     { user: { is: { departement: { is: { nama_departement: { contains: search } } } } } },
+    { freelance: { is: { nama: { contains: search } } } },
+    { freelance: { is: { email: { contains: search } } } },
+    { freelance: { is: { kontak: { contains: search } } } },
   ];
 }
 
@@ -214,6 +287,7 @@ export async function GET(req) {
 
     const search = String(searchParams.get('search') || '').trim();
     const id_user = String(searchParams.get('id_user') || '').trim();
+    const id_freelance = String(searchParams.get('id_freelance') || '').trim();
     const includeDeleted = searchParams.get('includeDeleted') === '1';
 
     const jenis_hubungan_kerja = normalizeEnum(searchParams.get('jenis_hubungan_kerja'));
@@ -242,6 +316,7 @@ export async function GET(req) {
     const where = {
       ...(includeDeleted ? {} : { deleted_at: null }),
       ...(id_user ? { id_user } : {}),
+      ...(id_freelance ? { id_freelance } : {}),
       ...(jenis_hubungan_kerja ? { jenis_hubungan_kerja } : {}),
       ...(typeof payroll_aktif === 'boolean' ? { payroll_aktif } : {}),
       ...(searchClauses.length > 0 ? { OR: searchClauses } : {}),
@@ -287,8 +362,8 @@ export async function POST(req) {
   try {
     const body = await req.json();
 
-    const id_user = normalizeRequiredId(body?.id_user, 'id_user');
-    const jenis_hubungan_kerja = normalizeEnum(body?.jenis_hubungan_kerja);
+    const subject = resolveSubject(body);
+    const jenis_hubungan_kerja = subject.id_freelance ? 'FREELANCE' : normalizeEnum(body?.jenis_hubungan_kerja);
 
     if (!jenis_hubungan_kerja) {
       return NextResponse.json({ message: "Field 'jenis_hubungan_kerja' wajib diisi." }, { status: 400 });
@@ -303,24 +378,14 @@ export async function POST(req) {
       );
     }
 
-    const user = await db.user.findFirst({
-      where: {
-        id_user,
-        deleted_at: null,
-      },
-      select: {
-        id_user: true,
-      },
-    });
+    const subjectExists = await ensureSubjectExists(subject);
 
-    if (!user) {
-      return NextResponse.json({ message: 'User tidak ditemukan atau sudah dihapus.' }, { status: 404 });
+    if (!subjectExists) {
+      return NextResponse.json({ message: `${subject.targetLabel === 'freelance' ? 'Freelance' : 'User'} tidak ditemukan atau sudah dihapus.` }, { status: 404 });
     }
 
     const existing = await db.profilPayroll.findFirst({
-      where: {
-        id_user,
-      },
+      where: buildSubjectWhere(subject),
       select: {
         id_profil_payroll: true,
         deleted_at: true,
@@ -328,7 +393,8 @@ export async function POST(req) {
     });
 
     const payload = {
-      id_user,
+      id_user: subject.id_user,
+      id_freelance: subject.id_freelance,
       jenis_hubungan_kerja,
       gaji_pokok: parseNonNegativeDecimal(body?.gaji_pokok ?? '0', 'gaji_pokok'),
       tunjangan_bpjs: parseNonNegativeDecimal(body?.tunjangan_bpjs ?? '0', 'tunjangan_bpjs'),
@@ -338,7 +404,7 @@ export async function POST(req) {
     };
 
     if (existing && existing.deleted_at === null) {
-      return NextResponse.json({ message: 'Profil payroll untuk user ini sudah ada.' }, { status: 409 });
+      return NextResponse.json({ message: `Profil payroll untuk ${subject.targetLabel} ini sudah ada.` }, { status: 409 });
     }
 
     if (existing && existing.deleted_at !== null) {
@@ -371,7 +437,7 @@ export async function POST(req) {
     );
   } catch (err) {
     if (err?.code === 'P2002') {
-      return NextResponse.json({ message: 'Profil payroll untuk user ini sudah ada.' }, { status: 409 });
+      return NextResponse.json({ message: 'Profil payroll untuk subjek ini sudah ada.' }, { status: 409 });
     }
 
     if (err instanceof Error) {

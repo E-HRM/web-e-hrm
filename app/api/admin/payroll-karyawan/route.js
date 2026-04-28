@@ -10,7 +10,9 @@ import {
   deriveApprovalState,
   ensureCanMarkPayrollAsPaid,
   ensureAuth,
+  ensureFreelanceExists,
   ensurePeriodeExists,
+  ensureProfilPayrollExists,
   ensureTarifPajakTerExists,
   ensureUserExists,
   enrichPayroll,
@@ -20,37 +22,21 @@ import {
   normalizeEnum,
   normalizeNullableString,
   normalizeRequiredId,
+  resolvePayrollSubjectIds,
+  buildPayrollSubjectWhere,
   parseDateTime,
   parseNonNegativeDecimal,
   computePph21NominalFromSnapshot,
   computePendapatanBersihFromTotals,
   replaceApprovalSteps,
   resolveApprovalSteps,
+  resolveNextPayrollIssueNumber,
   STATUS_PERIODE_VALUES,
   STATUS_APPROVAL_VALUES,
   STATUS_PAYROLL_VALUES,
   VIEW_ROLES,
   addDecimalStrings,
 } from './payrollKaryawan.shared';
-
-async function ensureProfilPayrollAktifExists(id_user) {
-  return db.profilPayroll.findFirst({
-    where: {
-      id_user,
-      deleted_at: null,
-      payroll_aktif: true,
-    },
-    select: {
-      id_profil_payroll: true,
-      id_user: true,
-      jenis_hubungan_kerja: true,
-      gaji_pokok: true,
-      tunjangan_bpjs: true,
-      payroll_aktif: true,
-      deleted_at: true,
-    },
-  });
-}
 
 function resolveDraftDecimalStrings(body = {}, existing = null, options = {}) {
   const existingPph21 = Number(existing?.pph21_nominal || 0);
@@ -98,9 +84,9 @@ function normalizeStatusRelatedFields(body = {}, existing = null) {
 
 async function resolveCreatePayload(body = {}) {
   const id_periode_payroll = normalizeRequiredId(body?.id_periode_payroll, 'id_periode_payroll');
-  const id_user = normalizeRequiredId(body?.id_user, 'id_user');
+  const subject = resolvePayrollSubjectIds(body);
 
-  const [periode, user, profilPayroll] = await Promise.all([ensurePeriodeExists(id_periode_payroll), ensureUserExists(id_user), ensureProfilPayrollAktifExists(id_user)]);
+  const [periode, user, freelance, profilPayroll] = await Promise.all([ensurePeriodeExists(id_periode_payroll), ensureUserExists(subject.id_user), ensureFreelanceExists(subject.id_freelance), ensureProfilPayrollExists(subject)]);
 
   if (!periode) {
     return {
@@ -114,15 +100,21 @@ async function resolveCreatePayload(body = {}) {
     };
   }
 
-  if (!user) {
+  if (subject.id_user && !user) {
     return {
       error: NextResponse.json({ message: 'User tidak ditemukan atau sudah dihapus.' }, { status: 404 }),
     };
   }
 
+  if (subject.id_freelance && !freelance) {
+    return {
+      error: NextResponse.json({ message: 'Freelance tidak ditemukan atau sudah dihapus.' }, { status: 404 }),
+    };
+  }
+
   if (!profilPayroll) {
     return {
-      error: NextResponse.json({ message: 'Profil payroll aktif untuk user ini belum tersedia.' }, { status: 404 }),
+      error: NextResponse.json({ message: `Profil payroll aktif untuk ${subject.subjectType} ini belum tersedia.` }, { status: 404 }),
     };
   }
 
@@ -137,11 +129,12 @@ async function resolveCreatePayload(body = {}) {
     };
   }
 
-  const jenis_hubungan_kerja =
-    requestedJenisHubungan ||
-    String(profilPayroll?.jenis_hubungan_kerja || '')
-      .trim()
-      .toUpperCase();
+  const jenis_hubungan_kerja = subject.id_freelance
+    ? 'FREELANCE'
+    : requestedJenisHubungan ||
+      String(profilPayroll?.jenis_hubungan_kerja || '')
+        .trim()
+        .toUpperCase();
 
   if (!jenis_hubungan_kerja || !JENIS_HUBUNGAN_KERJA_VALUES.has(jenis_hubungan_kerja)) {
     return {
@@ -172,10 +165,11 @@ async function resolveCreatePayload(body = {}) {
   return {
     payload: {
       id_periode_payroll,
-      id_user,
+      id_user: subject.id_user,
+      id_freelance: subject.id_freelance,
       id_profil_payroll: profilPayroll.id_profil_payroll,
       id_tarif_pajak_ter: tarifSnapshot.id_tarif_pajak_ter,
-      nama_karyawan: normalizeNullableString(body?.nama_karyawan, 'nama_karyawan', 255) || normalizeNullableString(body?.nama_karyawan_snapshot, 'nama_karyawan_snapshot', 255) || user.nama_pengguna,
+      nama_karyawan: normalizeNullableString(body?.nama_karyawan, 'nama_karyawan', 255) || normalizeNullableString(body?.nama_karyawan_snapshot, 'nama_karyawan_snapshot', 255) || user?.nama_pengguna || freelance?.nama,
       jenis_hubungan_kerja,
       kode_kategori_pajak_snapshot: tarifSnapshot.kode_kategori_pajak_snapshot,
       persen_tarif_snapshot: tarifSnapshot.persen_tarif_snapshot,
@@ -185,10 +179,10 @@ async function resolveCreatePayload(body = {}) {
       berlaku_sampai_tarif_snapshot: tarifSnapshot.berlaku_sampai_tarif_snapshot,
       gaji_pokok_snapshot: gajiPokokSnapshot,
       tunjangan_bpjs_snapshot: tunjanganBpjsSnapshot,
-      bank_name: normalizeNullableString(body?.bank_name, 'bank_name', 50) || normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) || normalizeNullableString(user.jenis_bank, 'jenis_bank', 50) || null,
+      bank_name: normalizeNullableString(body?.bank_name, 'bank_name', 50) || normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) || normalizeNullableString(user?.jenis_bank, 'jenis_bank', 50) || null,
       bank_account:
-        normalizeNullableString(body?.bank_account, 'bank_account', 50) || normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) || normalizeNullableString(user.nomor_rekening, 'nomor_rekening', 50) || null,
-      issue_number: normalizeNullableString(body?.issue_number, 'issue_number', 100),
+        normalizeNullableString(body?.bank_account, 'bank_account', 50) || normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) || normalizeNullableString(user?.nomor_rekening, 'nomor_rekening', 50) || null,
+      issue_number: null,
       issued_at: parseDateTime(body?.issued_at, 'issued_at'),
       company_name_snapshot: normalizeNullableString(body?.company_name_snapshot, 'company_name_snapshot', 255),
       catatan: normalizeNullableString(body?.catatan, 'catatan'),
@@ -196,6 +190,7 @@ async function resolveCreatePayload(body = {}) {
       ...statusFields,
       deleted_at: null,
     },
+    periode,
   };
 }
 
@@ -229,6 +224,7 @@ export async function GET(req) {
     const search = String(searchParams.get('search') || '').trim();
     const id_periode_payroll = String(searchParams.get('id_periode_payroll') || '').trim();
     const id_user = String(searchParams.get('id_user') || '').trim();
+    const id_freelance = String(searchParams.get('id_freelance') || '').trim();
     const id_profil_payroll = String(searchParams.get('id_profil_payroll') || '').trim();
     const id_tarif_pajak_ter = String(searchParams.get('id_tarif_pajak_ter') || '').trim();
     const periode_status = String(searchParams.get('periode_status') || '')
@@ -253,6 +249,7 @@ export async function GET(req) {
       ...(!includeDeleted && !deletedOnly ? { deleted_at: null } : {}),
       ...(id_periode_payroll ? { id_periode_payroll } : {}),
       ...(id_user ? { id_user } : {}),
+      ...(id_freelance ? { id_freelance } : {}),
       ...(id_profil_payroll ? { id_profil_payroll } : {}),
       ...(id_tarif_pajak_ter ? { id_tarif_pajak_ter } : {}),
       ...(status_payroll ? { status_payroll } : {}),
@@ -326,26 +323,36 @@ export async function POST(req) {
     const existing = await db.payrollKaryawan.findFirst({
       where: {
         id_periode_payroll: resolved.payload.id_periode_payroll,
-        id_user: resolved.payload.id_user,
+        ...buildPayrollSubjectWhere(resolved.payload),
       },
       select: {
         id_payroll_karyawan: true,
+        issue_number: true,
         deleted_at: true,
       },
     });
 
     if (existing && existing.deleted_at === null) {
-      return NextResponse.json({ message: 'Payroll karyawan untuk user dan periode tersebut sudah ada.' }, { status: 409 });
+      return NextResponse.json({ message: 'Payroll karyawan untuk subjek dan periode tersebut sudah ada.' }, { status: 409 });
     }
 
     if (existing && existing.deleted_at !== null) {
       const restored = await db.$transaction(async (tx) => {
         await replaceApprovalSteps(tx, existing.id_payroll_karyawan, approvalSteps);
 
+        const issueNumber =
+          existing.issue_number ||
+          (await resolveNextPayrollIssueNumber(tx, {
+            id_periode_payroll: resolved.payload.id_periode_payroll,
+            periode: resolved.periode,
+            excludePayrollId: existing.id_payroll_karyawan,
+          }));
+
         await tx.payrollKaryawan.update({
           where: { id_payroll_karyawan: existing.id_payroll_karyawan },
           data: {
             ...resolved.payload,
+            issue_number: issueNumber,
             status_approval: approvalState.status_approval,
             current_level_approval: approvalState.current_level_approval,
           },
@@ -367,9 +374,15 @@ export async function POST(req) {
     }
 
     const created = await db.$transaction(async (tx) => {
+      const issueNumber = await resolveNextPayrollIssueNumber(tx, {
+        id_periode_payroll: resolved.payload.id_periode_payroll,
+        periode: resolved.periode,
+      });
+
       const payroll = await tx.payrollKaryawan.create({
         data: {
           ...resolved.payload,
+          issue_number: issueNumber,
           status_approval: approvalState.status_approval,
           current_level_approval: approvalState.current_level_approval,
         },
@@ -395,7 +408,7 @@ export async function POST(req) {
     );
   } catch (err) {
     if (err?.code === 'P2002') {
-      return NextResponse.json({ message: 'Payroll karyawan untuk user dan periode tersebut sudah ada.' }, { status: 409 });
+      return NextResponse.json({ message: 'Payroll karyawan untuk subjek dan periode tersebut sudah ada.' }, { status: 409 });
     }
 
     if (

@@ -1039,7 +1039,7 @@ export async function upsertPayrollItemForPayout(tx, payout, actor = null, optio
       .toUpperCase(),
     nama_komponen: buildPayoutPayrollItemName(payout, definisi),
     nominal: String(payout.nominal_dibayarkan),
-    urutan_tampil: options?.urutan_tampil ?? existingItem?.urutan_tampil ?? 900,
+    urutan_tampil: options?.urutan_tampil ?? existingItem?.urutan_tampil ?? 0,
     catatan: payout.catatan || buildPayoutPayrollItemNote(payout),
     deleted_at: null,
   };

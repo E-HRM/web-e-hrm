@@ -49,8 +49,8 @@ export default function CreateModalSection({ vm }) {
         <AppSelect
           label='Karyawan'
           required
-          value={vm.formData.id_user || undefined}
-          onChange={(value) => vm.setFormValue('id_user', value || '')}
+          value={vm.formData.subject_key || undefined}
+          onChange={(value) => vm.handleSubjectChange(value)}
           options={userOptions}
           placeholder='Pilih karyawan'
           loading={vm.loadingUsers}
@@ -59,7 +59,7 @@ export default function CreateModalSection({ vm }) {
           optionFilterProp='searchText'
           optionLabelProp='plainLabel'
           selectClassName='!rounded-lg'
-          hint={userOptions.length === 0 ? 'Semua karyawan aktif sudah memiliki profil payroll.' : 'Cari berdasarkan nama, NIK, email, atau jabatan.'}
+          hint={userOptions.length === 0 ? 'Semua karyawan atau freelance aktif sudah memiliki profil payroll.' : 'Cari berdasarkan nama, NIK, email, jabatan, atau freelance.'}
         />
 
         <AppSelect

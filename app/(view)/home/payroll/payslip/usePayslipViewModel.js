@@ -11,10 +11,39 @@ import { ApiEndpoints } from '@/constrainst/endpoints';
 
 const PAYROLL_LIST_SWR_KEY = 'payroll:payslip:list';
 const PAYROLL_SLIP_SWR_KEY = 'payroll:payslip:detail';
+const USER_CC_SWR_KEY = 'payroll:payslip:cc-users';
 const FETCH_PAGE_SIZE = 100;
+const PAYSLIP_EMAIL_TEMPLATE = `Dear [Employee Name],
+
+We would like to inform you that your salary for the period of [Month Year] has been successfully processed and transferred to your registered bank account.
+
+Please find your payslip attached to this email for your reference and record. Kindly review the details, and do not hesitate to reach out if you require any clarification.
+
+We truly appreciate your contribution and commitment. We encourage you to continue giving your best effort and working with dedication, as your performance plays an important role in our collective success.
+
+Thank you for your hard work.
+
+Warm regards,
+HRD CV OSS Bali International`;
 
 function normalizeText(value) {
   return String(value || '').trim();
+}
+
+function buildUrlWithQuery(baseUrl, query = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+
+    const normalized = String(value).trim();
+    if (!normalized) return;
+
+    params.set(key, normalized);
+  });
+
+  const queryString = params.toString();
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
 }
 
 function toNumber(value) {
@@ -41,9 +70,94 @@ function formatBulan(value) {
   return map[normalizeText(value).toUpperCase()] || '-';
 }
 
+function formatBulanEmail(value) {
+  const map = {
+    JANUARI: 'January',
+    FEBRUARI: 'February',
+    MARET: 'March',
+    APRIL: 'April',
+    MEI: 'May',
+    JUNI: 'June',
+    JULI: 'July',
+    AGUSTUS: 'August',
+    SEPTEMBER: 'September',
+    OKTOBER: 'October',
+    NOVEMBER: 'November',
+    DESEMBER: 'December',
+  };
+
+  return map[normalizeText(value).toUpperCase()] || formatBulan(value);
+}
+
 function formatPeriodeLabel(periode) {
   if (!periode) return '-';
   return `${formatBulan(periode.bulan)} ${periode.tahun || '-'}`;
+}
+
+function formatPeriodeEmailLabel(periode) {
+  if (!periode) return '-';
+  return `${formatBulanEmail(periode.bulan)} ${periode.tahun || '-'}`;
+}
+
+function isValidEmail(value) {
+  const email = normalizeText(value).toLowerCase();
+  return Boolean(email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+}
+
+function splitEmailList(value) {
+  const values = Array.isArray(value) ? value : [value];
+
+  return values
+    .flatMap((item) =>
+      normalizeText(item)
+        .split(/[,\n;]/)
+        .map((email) => email.trim()),
+    )
+    .filter(Boolean);
+}
+
+function normalizeCcValues(value) {
+  const seen = new Set();
+
+  return splitEmailList(value).reduce((emails, item) => {
+    const email = normalizeText(item).toLowerCase();
+    if (!email || seen.has(email)) return emails;
+
+    seen.add(email);
+    emails.push(email);
+    return emails;
+  }, []);
+}
+
+function getUserDisplayName(user) {
+  return normalizeText(user?.nama_pengguna || user?.name || user?.email || user?.id_user) || 'User';
+}
+
+function buildCcUserOptions(users) {
+  const seen = new Set();
+
+  return (Array.isArray(users) ? users : []).reduce((options, user) => {
+    const email = normalizeText(user?.email).toLowerCase();
+    if (!isValidEmail(email) || seen.has(email)) return options;
+
+    seen.add(email);
+
+    const name = getUserDisplayName(user);
+    const metadata = [user?.role, user?.jabatan?.nama_jabatan, user?.departement?.nama_departement].filter(Boolean).join(' | ');
+    const label = metadata ? `${name} <${email}> - ${metadata}` : `${name} <${email}>`;
+
+    options.push({
+      value: email,
+      label,
+      title: label,
+    });
+
+    return options;
+  }, []);
+}
+
+function buildPayslipEmailMessage(employeeName = '[Employee Name]', monthYear = '[Month Year]') {
+  return PAYSLIP_EMAIL_TEMPLATE.replaceAll('[Employee Name]', employeeName || '[Employee Name]').replaceAll('[Month Year]', monthYear || '[Month Year]');
 }
 
 async function fetchAllPages(fetcher) {
@@ -79,6 +193,19 @@ async function fetchPayrollByPeriode(idPeriodePayroll) {
   );
 }
 
+async function fetchAllUsers() {
+  return fetchAllPages((page) =>
+    crudServiceAuth.get(
+      buildUrlWithQuery(ApiEndpoints.GetUsers, {
+        page,
+        pageSize: FETCH_PAGE_SIZE,
+        orderBy: 'nama_pengguna',
+        sort: 'asc',
+      }),
+    ),
+  );
+}
+
 async function fetchPdfBlob(url, signal) {
   const token = Cookies.get('token');
   const headers = {};
@@ -107,18 +234,33 @@ async function sendPayslipEmailRequest(payrollId, payload) {
   return crudServiceAuth.post(ApiEndpoints.SendPayrollSlipEmailKaryawanById(payrollId), payload);
 }
 
+async function sendBulkPayslipEmailRequest(payload) {
+  return crudServiceAuth.post(ApiEndpoints.SendPayrollSlipEmailKaryawanBulk(), payload);
+}
+
 function normalizePayrollListItem(item) {
   if (!item) return null;
 
   return {
     id_payroll_karyawan: item.id_payroll_karyawan,
     id_periode_payroll: item.id_periode_payroll,
-    nama_karyawan: item.nama_karyawan || item?.user?.nama_pengguna || '-',
+    nama_karyawan: item.nama_karyawan || item?.user?.nama_pengguna || item?.freelance?.nama || '-',
+    email: normalizeText(item?.user?.email || item?.freelance?.email),
+    has_valid_email: isValidEmail(item?.user?.email || item?.freelance?.email),
     issue_number: item.issue_number || null,
     period_label: item?.periode ? formatPeriodeLabel(item.periode) : '-',
+    email_period_label: item?.periode ? formatPeriodeEmailLabel(item.periode) : '-',
     status_payroll: item.status_payroll || 'DRAFT',
     pendapatan_bersih: toNumber(item.pendapatan_bersih),
   };
+}
+
+function getSlipEmployeeName(slip) {
+  return slip?.employee?.nama_karyawan || slip?.payroll?.user?.nama_pengguna || slip?.payroll?.freelance?.nama || slip?.payroll?.nama_karyawan || 'Karyawan';
+}
+
+function getSlipEmailPeriodLabel(slip) {
+  return formatPeriodeEmailLabel(slip?.period || slip?.payroll?.periode);
 }
 
 function buildSearchParams(searchParams, nextPayrollId) {
@@ -148,10 +290,17 @@ export default function usePayslipViewModel() {
   const [pdfRefreshKey, setPdfRefreshKey] = useState(0);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailForm, setEmailForm] = useState({
-    cc: '',
+    cc: [],
     message: '',
   });
   const [emailSending, setEmailSending] = useState(false);
+  const [selectedPayrollIds, setSelectedPayrollIds] = useState([]);
+  const [bulkEmailModalOpen, setBulkEmailModalOpen] = useState(false);
+  const [bulkEmailForm, setBulkEmailForm] = useState({
+    cc: [],
+    message: buildPayslipEmailMessage(),
+  });
+  const [bulkEmailSending, setBulkEmailSending] = useState(false);
 
   useEffect(() => {
     setSelectedPayrollId(requestedPayrollId);
@@ -171,6 +320,16 @@ export default function usePayslipViewModel() {
     const rows = Array.isArray(payrollListResponse) ? payrollListResponse : [];
     return rows.map(normalizePayrollListItem).filter(Boolean);
   }, [payrollListResponse]);
+
+  useEffect(() => {
+    if (!payrollList.length) {
+      setSelectedPayrollIds([]);
+      return;
+    }
+
+    const selectableIds = new Set(payrollList.filter((item) => item.has_valid_email).map((item) => item.id_payroll_karyawan));
+    setSelectedPayrollIds((current) => current.filter((id) => selectableIds.has(id)));
+  }, [payrollList]);
 
   useEffect(() => {
     if (!payrollListError) return;
@@ -211,6 +370,14 @@ export default function usePayslipViewModel() {
     revalidateOnFocus: false,
   });
 
+  const {
+    data: ccUsersResponse,
+    error: ccUsersError,
+    isLoading: isCcUsersLoading,
+  } = useSWR(emailModalOpen || bulkEmailModalOpen ? USER_CC_SWR_KEY : null, fetchAllUsers, {
+    revalidateOnFocus: false,
+  });
+
   useEffect(() => {
     if (!slipError) return;
 
@@ -221,10 +388,29 @@ export default function usePayslipViewModel() {
     });
   }, [slipError]);
 
+  useEffect(() => {
+    if (!ccUsersError) return;
+
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'payroll-slip-cc-users-error',
+      content: ccUsersError?.message || 'Gagal memuat daftar user untuk CC.',
+    });
+  }, [ccUsersError]);
+
   const slip = useMemo(() => slipResponse?.data || null, [slipResponse]);
 
-  const payslipEmailTo = useMemo(() => normalizeText(slip?.payroll?.user?.email), [slip]);
+  const payslipEmailTo = useMemo(() => normalizeText(slip?.payroll?.user?.email || slip?.payroll?.freelance?.email), [slip]);
   const canSendPayslipEmail = Boolean(activePayrollId && payslipEmailTo);
+  const defaultPayslipEmailMessage = useMemo(() => buildPayslipEmailMessage(getSlipEmployeeName(slip), getSlipEmailPeriodLabel(slip)), [slip]);
+  const ccUserOptions = useMemo(() => buildCcUserOptions(ccUsersResponse), [ccUsersResponse]);
+  const selectedPayrollIdSet = useMemo(() => new Set(selectedPayrollIds), [selectedPayrollIds]);
+  const bulkSelectedPayrolls = useMemo(() => payrollList.filter((item) => selectedPayrollIdSet.has(item.id_payroll_karyawan)), [payrollList, selectedPayrollIdSet]);
+  const bulkEligibleSelectedPayrolls = useMemo(() => bulkSelectedPayrolls.filter((item) => item.has_valid_email), [bulkSelectedPayrolls]);
+  const bulkSelectablePayrollIds = useMemo(() => payrollList.filter((item) => item.has_valid_email).map((item) => item.id_payroll_karyawan), [payrollList]);
+  const allBulkSelectableChecked = bulkSelectablePayrollIds.length > 0 && bulkSelectablePayrollIds.every((id) => selectedPayrollIdSet.has(id));
+  const canOpenBulkEmailModal = bulkEligibleSelectedPayrolls.length > 0;
+  const canSendBulkPayslipEmail = canOpenBulkEmailModal && !bulkEmailSending;
 
   useEffect(() => {
     let objectUrl = '';
@@ -306,10 +492,11 @@ export default function usePayslipViewModel() {
       id_payroll_karyawan: source.id_payroll_karyawan || '',
       id_periode_payroll: source.id_periode_payroll || '',
       id_user: source.id_user || '',
+      id_freelance: source.id_freelance || '',
       id_tarif_pajak_ter: source.id_tarif_pajak_ter || '',
-      nama_karyawan: source.nama_karyawan || '',
+      nama_karyawan: source.nama_karyawan || source?.user?.nama_pengguna || source?.freelance?.nama || '',
       departement: source?.user?.departement?.nama_departement || '',
-      jabatan: source?.user?.jabatan?.nama_jabatan || '',
+      jabatan: source?.user?.jabatan?.nama_jabatan || (source?.id_freelance ? 'Freelance' : ''),
       periode_label: source?.periode ? formatPeriodeLabel(source.periode) : '-',
       jenis_hubungan_kerja: source.jenis_hubungan_kerja || '',
       kode_kategori_pajak_snapshot: source.kode_kategori_pajak_snapshot || '',
@@ -332,12 +519,16 @@ export default function usePayslipViewModel() {
 
   const openEmailModal = useCallback(() => {
     if (!canSendPayslipEmail) {
-      AppMessage.error('Email karyawan tidak tersedia, payslip belum bisa dikirim.');
+      AppMessage.error('Email penerima payroll tidak tersedia, payslip belum bisa dikirim.');
       return;
     }
 
+    setEmailForm({
+      cc: [],
+      message: defaultPayslipEmailMessage,
+    });
     setEmailModalOpen(true);
-  }, [canSendPayslipEmail]);
+  }, [canSendPayslipEmail, defaultPayslipEmailMessage]);
 
   const closeEmailModal = useCallback(() => {
     if (emailSending) return;
@@ -347,14 +538,67 @@ export default function usePayslipViewModel() {
   const updateEmailForm = useCallback((field, value) => {
     setEmailForm((current) => ({
       ...current,
-      [field]: value,
+      [field]: field === 'cc' ? normalizeCcValues(value) : value,
     }));
   }, []);
 
+  const updateBulkEmailForm = useCallback((field, value) => {
+    setBulkEmailForm((current) => ({
+      ...current,
+      [field]: field === 'cc' ? normalizeCcValues(value) : value,
+    }));
+  }, []);
+
+  const togglePayrollSelection = useCallback((payrollId, checked) => {
+    const normalizedId = normalizeText(payrollId);
+    if (!normalizedId) return;
+
+    setSelectedPayrollIds((current) => {
+      if (checked) {
+        if (current.includes(normalizedId)) return current;
+        return [...current, normalizedId];
+      }
+
+      return current.filter((id) => id !== normalizedId);
+    });
+  }, []);
+
+  const toggleAllPayrollSelection = useCallback(
+    (checked) => {
+      setSelectedPayrollIds(checked ? bulkSelectablePayrollIds : []);
+    },
+    [bulkSelectablePayrollIds],
+  );
+
+  const openBulkEmailModal = useCallback(() => {
+    if (!canOpenBulkEmailModal) {
+      AppMessage.error('Centang minimal satu payslip yang memiliki email valid.');
+      return;
+    }
+
+    setBulkEmailForm({
+      cc: [],
+      message: buildPayslipEmailMessage(),
+    });
+    setBulkEmailModalOpen(true);
+  }, [canOpenBulkEmailModal]);
+
+  const closeBulkEmailModal = useCallback(() => {
+    if (bulkEmailSending) return;
+    setBulkEmailModalOpen(false);
+  }, [bulkEmailSending]);
+
   const resetEmailForm = useCallback(() => {
     setEmailForm({
-      cc: '',
+      cc: [],
       message: '',
+    });
+  }, []);
+
+  const resetBulkEmailForm = useCallback(() => {
+    setBulkEmailForm({
+      cc: [],
+      message: buildPayslipEmailMessage(),
     });
   }, []);
 
@@ -365,7 +609,7 @@ export default function usePayslipViewModel() {
     }
 
     if (!payslipEmailTo) {
-      AppMessage.error('Email karyawan tidak tersedia, payslip belum bisa dikirim.');
+      AppMessage.error('Email penerima payroll tidak tersedia, payslip belum bisa dikirim.');
       return false;
     }
 
@@ -377,7 +621,7 @@ export default function usePayslipViewModel() {
         message: emailForm.message,
       });
 
-      AppMessage.success('Payslip berhasil dikirim ke email karyawan.');
+      AppMessage.success('Payslip berhasil dikirim ke email penerima payroll.');
       resetEmailForm();
       setEmailModalOpen(false);
       return true;
@@ -388,6 +632,42 @@ export default function usePayslipViewModel() {
       setEmailSending(false);
     }
   }, [activePayrollId, emailForm.cc, emailForm.message, payslipEmailTo, resetEmailForm]);
+
+  const sendBulkPayslipEmail = useCallback(async () => {
+    if (!bulkEligibleSelectedPayrolls.length) {
+      AppMessage.error('Centang minimal satu payslip yang memiliki email valid.');
+      return false;
+    }
+
+    setBulkEmailSending(true);
+
+    try {
+      const response = await sendBulkPayslipEmailRequest({
+        payroll_ids: bulkEligibleSelectedPayrolls.map((item) => item.id_payroll_karyawan),
+        cc: bulkEmailForm.cc,
+        message: bulkEmailForm.message,
+      });
+
+      const sent = Number(response?.data?.sent || 0);
+      const failed = Number(response?.data?.failed || 0);
+
+      if (failed > 0) {
+        AppMessage.warning(`Payslip massal selesai. Berhasil: ${sent}, gagal: ${failed}.`);
+      } else {
+        AppMessage.success(`Payslip massal berhasil dikirim ke ${sent} penerima.`);
+      }
+
+      resetBulkEmailForm();
+      setSelectedPayrollIds([]);
+      setBulkEmailModalOpen(false);
+      return true;
+    } catch (error) {
+      AppMessage.error(error?.message || 'Gagal mengirim payslip massal.');
+      return false;
+    } finally {
+      setBulkEmailSending(false);
+    }
+  }, [bulkEligibleSelectedPayrolls, bulkEmailForm.cc, bulkEmailForm.message, resetBulkEmailForm]);
 
   return {
     slip,
@@ -404,6 +684,18 @@ export default function usePayslipViewModel() {
     emailSending,
     payslipEmailTo,
     canSendPayslipEmail,
+    ccUserOptions,
+    ccUserOptionsLoading: isCcUsersLoading,
+    selectedPayrollIds,
+    selectedPayrollIdSet,
+    bulkSelectedPayrolls,
+    bulkEligibleSelectedPayrolls,
+    bulkEmailModalOpen,
+    bulkEmailForm,
+    bulkEmailSending,
+    allBulkSelectableChecked,
+    canOpenBulkEmailModal,
+    canSendBulkPayslipEmail,
 
     loading: isPayrollListLoading || isSlipLoading,
     validating: isPayrollListValidating || isSlipValidating,
@@ -416,6 +708,12 @@ export default function usePayslipViewModel() {
     openEmailModal,
     closeEmailModal,
     updateEmailForm,
+    updateBulkEmailForm,
+    togglePayrollSelection,
+    toggleAllPayrollSelection,
+    openBulkEmailModal,
+    closeBulkEmailModal,
     sendPayslipEmail,
+    sendBulkPayslipEmail,
   };
 }

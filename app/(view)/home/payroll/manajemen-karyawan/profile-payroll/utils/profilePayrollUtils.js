@@ -9,7 +9,9 @@ export const JENIS_HUBUNGAN_OPTIONS = [
 
 export function createInitialProfilPayrollForm() {
   return {
+    subject_key: '',
     id_user: '',
+    id_freelance: '',
     jenis_hubungan_kerja: 'PKWTT',
     gaji_pokok: 0,
     tunjangan_bpjs: 0,
@@ -78,22 +80,22 @@ export function formatJenisHubungan(value) {
 }
 
 export function getUserDisplayName(user) {
-  return user?.nama_pengguna || user?.name || user?.email || 'Karyawan';
+  return user?.nama_pengguna || user?.nama || user?.name || user?.email || 'Karyawan';
 }
 
 export function getUserIdentity(user) {
-  return user?.nomor_induk_karyawan || user?.email || user?.id_user || '-';
+  return user?.nomor_induk_karyawan || user?.email || user?.id_user || user?.id_freelance || '-';
 }
 
 export function getUserSelectLabel(user) {
   const name = getUserDisplayName(user);
   const identity = getUserIdentity(user);
 
-  return [name, identity && identity !== '-' ? identity : null].filter(Boolean).join(' • ');
+  return [name, identity && identity !== '-' ? identity : null].filter(Boolean).join(' - ');
 }
 
 export function getUserRoleOrJob(user) {
-  return user?.jabatan?.nama_jabatan || user?.role || '-';
+  return user?.jabatan?.nama_jabatan || user?.role || (user?.id_freelance ? 'Freelance' : '-');
 }
 
 export function getUserDepartment(user) {

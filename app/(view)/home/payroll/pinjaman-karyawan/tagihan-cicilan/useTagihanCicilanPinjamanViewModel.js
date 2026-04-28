@@ -280,7 +280,7 @@ function getPayrollTargetUnavailableMessage(userPayrollTargets = []) {
 function createInitialPostFormData(overrides = {}) {
   return {
     id_payroll_karyawan: '',
-    urutan_tampil: 920,
+    urutan_tampil: 0,
     catatan_item_payroll: '',
     ...overrides,
   };

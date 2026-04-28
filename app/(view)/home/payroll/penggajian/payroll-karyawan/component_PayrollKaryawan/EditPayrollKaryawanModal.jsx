@@ -115,9 +115,10 @@ function EditPayrollForm({ vm }) {
         <AppInput
           label='Nomor Slip'
           value={vm.formData.issue_number}
-          onChange={(event) => vm.setFormValue('issue_number', event.target.value)}
-          placeholder='Nomor slip gaji'
-          inputClassName='!rounded-lg'
+          placeholder='Contoh: 202604001'
+          readOnly
+          inputClassName='!rounded-lg !bg-gray-50'
+          hint='Nomor dibuat otomatis dan akan menyesuaikan jika periode diubah.'
         />
 
         <AppInput

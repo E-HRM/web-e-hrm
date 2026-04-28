@@ -22,7 +22,7 @@ export async function GET(req, { params }) {
     });
 
     if (!payroll || payroll.deleted_at) {
-      return NextResponse.json({ message: 'Slip payroll karyawan tidak ditemukan.' }, { status: 404 });
+      return NextResponse.json({ message: 'Slip payroll tidak ditemukan.' }, { status: 404 });
     }
 
     return NextResponse.json({

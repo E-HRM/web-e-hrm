@@ -1334,7 +1334,7 @@ export default function usePayoutKonsultanViewModel() {
         status_payout: STATUS_PAYOUT_KONSULTAN.DIPOSTING_KE_PAYROLL,
         id_periode_payroll: normalizeText(postFormData.id_periode_payroll),
         id_definisi_komponen_payroll: normalizeText(postFormData.id_definisi_komponen_payroll),
-        urutan_tampil: toNonNegativeInt(postFormData.urutan_tampil, 900),
+        urutan_tampil: toNonNegativeInt(postFormData.urutan_tampil, 0),
       });
 
       await refreshPayoutCollections();
