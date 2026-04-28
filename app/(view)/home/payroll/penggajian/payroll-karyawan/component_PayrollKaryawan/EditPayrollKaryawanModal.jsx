@@ -11,7 +11,7 @@ import AppSelect from '@/app/(view)/component_shared/AppSelect';
 import ApprovalStepsSection from './ApprovalStepsSection';
 import { EDITABLE_STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
 
-const DEFAULT_COMPANY_NAME = 'CV One Step Solution Bali International';
+const DEFAULT_COMPANY_NAME = 'CV OSS International';
 
 function EditPayrollForm({ vm }) {
   return (

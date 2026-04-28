@@ -498,6 +498,18 @@ export function buildSelect() {
             foto_profil_user: true,
             ttd_url: true,
             deleted_at: true,
+            departement: {
+              select: {
+                id_departement: true,
+                nama_departement: true,
+              },
+            },
+            jabatan: {
+              select: {
+                id_jabatan: true,
+                nama_jabatan: true,
+              },
+            },
           },
         },
       },
