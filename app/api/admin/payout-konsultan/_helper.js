@@ -582,7 +582,7 @@ async function collectEligibleTransactions(tx, { id_periode_konsultan, id_user, 
   });
 
   if (!transactions.length) {
-    throw new Error('Belum ada transaksi konsultan aktif atau carry-forward yang siap dipayout untuk user dan periode tersebut.');
+    throw new Error('Belum ada transaksi konsultan aktif atau transaksi tertahan yang siap dipayout untuk user dan periode tersebut.');
   }
 
   const transactionIds = transactions.map((item) => item.id_transaksi_konsultan);
@@ -1039,7 +1039,7 @@ export async function upsertPayrollItemForPayout(tx, payout, actor = null, optio
       .toUpperCase(),
     nama_komponen: buildPayoutPayrollItemName(payout, definisi),
     nominal: String(payout.nominal_dibayarkan),
-    urutan_tampil: options?.urutan_tampil ?? existingItem?.urutan_tampil ?? 900,
+    urutan_tampil: options?.urutan_tampil ?? existingItem?.urutan_tampil ?? 0,
     catatan: payout.catatan || buildPayoutPayrollItemNote(payout),
     deleted_at: null,
   };

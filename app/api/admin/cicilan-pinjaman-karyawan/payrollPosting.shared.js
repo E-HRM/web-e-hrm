@@ -242,7 +242,7 @@ export async function syncCicilanPayrollPosting(tx, cicilan, actor = null, optio
       arah_komponen: 'POTONGAN',
       nama_komponen: buildCicilanPayrollItemName(cicilan),
       nominal: String(cicilan.nominal_tagihan),
-      urutan_tampil: postingOptions.urutan_tampil ?? existingItem?.urutan_tampil ?? 920,
+      urutan_tampil: postingOptions.urutan_tampil ?? existingItem?.urutan_tampil ?? 0,
       catatan: postingOptions.catatan_item_payroll ?? existingItem?.catatan ?? buildCicilanPayrollItemNote(cicilan),
       deleted_at: null,
     };

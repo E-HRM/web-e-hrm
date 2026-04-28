@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/prisma';
 import { verifyAuthToken } from '@/lib/jwt';
 import { authenticateRequest } from '@/app/utils/auth/authUtils';
+import { buildNextPayrollSlipNumber } from '@/helpers/payrollSlipNumber';
 
 export const VIEW_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
 export const CREATE_ROLES = new Set(['HR', 'DIREKTUR', 'SUPERADMIN']);
@@ -48,6 +49,46 @@ export function normalizeRequiredId(value, fieldName = 'id') {
   }
 
   return normalized;
+}
+
+export function normalizeOptionalId(value, fieldName = 'id') {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+
+  if (normalized.length > 36) {
+    throw new Error(`Field '${fieldName}' maksimal 36 karakter.`);
+  }
+
+  return normalized;
+}
+
+export function resolvePayrollSubjectIds(body = {}, existing = null) {
+  const hasUserField = Object.prototype.hasOwnProperty.call(body || {}, 'id_user');
+  const hasFreelanceField = Object.prototype.hasOwnProperty.call(body || {}, 'id_freelance');
+
+  const id_user = hasUserField ? normalizeOptionalId(body.id_user, 'id_user') : existing?.id_user || null;
+  const id_freelance = hasFreelanceField ? normalizeOptionalId(body.id_freelance, 'id_freelance') : existing?.id_freelance || null;
+
+  if (!id_user && !id_freelance) {
+    throw new Error("Field 'id_user' atau 'id_freelance' wajib diisi salah satu.");
+  }
+
+  if (id_user && id_freelance) {
+    throw new Error("Field 'id_user' dan 'id_freelance' tidak boleh diisi bersamaan.");
+  }
+
+  return {
+    id_user: id_user || null,
+    id_freelance: id_freelance || null,
+    subjectType: id_freelance ? 'freelance' : 'user',
+  };
+}
+
+export function buildPayrollSubjectWhere(subject) {
+  return subject.id_freelance ? { id_freelance: subject.id_freelance } : { id_user: subject.id_user };
 }
 
 function normalizeApprovalStatus(value, fieldName = 'status_approval') {
@@ -149,6 +190,41 @@ export function parseDateTime(value, fieldName) {
   }
 
   return parsed;
+}
+
+function resolveTarifSnapshotStartDate(periode = null) {
+  const parsed = periode?.tanggal_mulai ? new Date(periode.tanggal_mulai) : new Date();
+
+  if (!Number.isNaN(parsed.getTime())) {
+    return new Date(Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()));
+  }
+
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+export function buildTarifPajakTerSnapshot(tarifPajakTer = null, periode = null) {
+  if (!tarifPajakTer) {
+    return {
+      id_tarif_pajak_ter: null,
+      kode_kategori_pajak_snapshot: '',
+      persen_tarif_snapshot: parseNonNegativeDecimal(0, 'persen_tarif_snapshot', { scale: 4 }),
+      penghasilan_dari_snapshot: parseNonNegativeDecimal(0, 'penghasilan_dari_snapshot'),
+      penghasilan_sampai_snapshot: null,
+      berlaku_mulai_tarif_snapshot: resolveTarifSnapshotStartDate(periode),
+      berlaku_sampai_tarif_snapshot: null,
+    };
+  }
+
+  return {
+    id_tarif_pajak_ter: tarifPajakTer.id_tarif_pajak_ter,
+    kode_kategori_pajak_snapshot: String(tarifPajakTer.kode_kategori_pajak || ''),
+    persen_tarif_snapshot: parseNonNegativeDecimal(tarifPajakTer.persen_tarif, 'persen_tarif_snapshot', { scale: 4 }),
+    penghasilan_dari_snapshot: parseNonNegativeDecimal(tarifPajakTer.penghasilan_dari, 'penghasilan_dari_snapshot'),
+    penghasilan_sampai_snapshot: tarifPajakTer.penghasilan_sampai == null ? null : parseNonNegativeDecimal(tarifPajakTer.penghasilan_sampai, 'penghasilan_sampai_snapshot', { allowNull: true }),
+    berlaku_mulai_tarif_snapshot: tarifPajakTer.berlaku_mulai,
+    berlaku_sampai_tarif_snapshot: tarifPajakTer.berlaku_sampai,
+  };
 }
 
 export function parseNonNegativeDecimal(value, fieldName, options = {}) {
@@ -271,6 +347,7 @@ export function buildSelect() {
     id_payroll_karyawan: true,
     id_periode_payroll: true,
     id_user: true,
+    id_freelance: true,
     id_profil_payroll: true,
     id_tarif_pajak_ter: true,
     nama_karyawan: true,
@@ -348,9 +425,29 @@ export function buildSelect() {
         },
       },
     },
+    freelance: {
+      select: {
+        id_freelance: true,
+        nama: true,
+        email: true,
+        kontak: true,
+        alamat: true,
+        id_supervisor: true,
+        deleted_at: true,
+        supervisor: {
+          select: {
+            id_user: true,
+            nama_pengguna: true,
+            email: true,
+          },
+        },
+      },
+    },
     profil_payroll: {
       select: {
         id_profil_payroll: true,
+        id_user: true,
+        id_freelance: true,
         gaji_pokok: true,
         tunjangan_bpjs: true,
         jenis_hubungan_kerja: true,
@@ -512,6 +609,7 @@ export function enrichPayroll(item) {
 
   return {
     ...item,
+    subject_type: item.id_freelance ? 'FREELANCE' : 'USER',
     status_approval: resolvedStatusApproval,
     current_level_approval: resolvedCurrentLevelApproval,
     approval_state: {
@@ -628,8 +726,8 @@ export function buildSlipPayload(payroll) {
       company_name_snapshot: enrichedPayroll.company_name_snapshot || null,
     },
     employee: {
-      nama_karyawan: enrichedPayroll.nama_karyawan || enrichedPayroll?.user?.nama_pengguna || null,
-      nama_jabatan: enrichedPayroll?.user?.jabatan?.nama_jabatan || null,
+      nama_karyawan: enrichedPayroll.nama_karyawan || enrichedPayroll?.user?.nama_pengguna || enrichedPayroll?.freelance?.nama || null,
+      nama_jabatan: enrichedPayroll?.user?.jabatan?.nama_jabatan || (enrichedPayroll?.freelance ? 'Freelance' : null),
       nama_departement: enrichedPayroll?.user?.departement?.nama_departement || null,
       jenis_hubungan_kerja: enrichedPayroll.jenis_hubungan_kerja || null,
     },
@@ -680,6 +778,9 @@ export function buildSearchClauses(search) {
     { user: { is: { nomor_induk_karyawan: { contains: search } } } },
     { user: { is: { departement: { is: { nama_departement: { contains: search } } } } } },
     { user: { is: { jabatan: { is: { nama_jabatan: { contains: search } } } } } },
+    { freelance: { is: { nama: { contains: search } } } },
+    { freelance: { is: { email: { contains: search } } } },
+    { freelance: { is: { kontak: { contains: search } } } },
     { periode: { is: { catatan: { contains: search } } } },
     { periode: { is: { master_template: { is: { nama_template: { contains: search } } } } } },
     { tarif_pajak_ter: { is: { kode_kategori_pajak: { contains: search } } } },
@@ -704,11 +805,15 @@ export async function ensurePeriodeExists(id_periode_payroll) {
       status_periode: true,
       tahun: true,
       bulan: true,
+      tanggal_mulai: true,
+      tanggal_selesai: true,
     },
   });
 }
 
 export async function ensureUserExists(id_user) {
+  if (!id_user) return null;
+
   return db.user.findFirst({
     where: {
       id_user,
@@ -739,6 +844,33 @@ export async function ensureUserExists(id_user) {
   });
 }
 
+export async function ensureFreelanceExists(id_freelance) {
+  if (!id_freelance) return null;
+
+  return db.freelance.findFirst({
+    where: {
+      id_freelance,
+      deleted_at: null,
+    },
+    select: {
+      id_freelance: true,
+      nama: true,
+      email: true,
+      kontak: true,
+      alamat: true,
+      id_supervisor: true,
+      deleted_at: true,
+      supervisor: {
+        select: {
+          id_user: true,
+          nama_pengguna: true,
+          email: true,
+        },
+      },
+    },
+  });
+}
+
 export async function ensureTarifPajakTerExists(id_tarif_pajak_ter) {
   return db.tarifPajakTER.findFirst({
     where: {
@@ -758,16 +890,25 @@ export async function ensureTarifPajakTerExists(id_tarif_pajak_ter) {
   });
 }
 
-export async function ensureProfilPayrollExists(id_user) {
+export async function ensureProfilPayrollExists(subjectOrUserId) {
+  const subject =
+    typeof subjectOrUserId === 'string'
+      ? {
+          id_user: subjectOrUserId,
+          id_freelance: null,
+        }
+      : subjectOrUserId || {};
+
   return db.profilPayroll.findFirst({
     where: {
-      id_user,
+      ...buildPayrollSubjectWhere(subject),
       deleted_at: null,
       payroll_aktif: true,
     },
     select: {
       id_profil_payroll: true,
       id_user: true,
+      id_freelance: true,
       jenis_hubungan_kerja: true,
       gaji_pokok: true,
       tunjangan_bpjs: true,
@@ -782,6 +923,23 @@ export async function ensurePayrollExists(id_payroll_karyawan) {
     where: { id_payroll_karyawan },
     select: buildSelect(),
   });
+}
+
+export async function resolveNextPayrollIssueNumber(prismaClient, { id_periode_payroll, periode, excludePayrollId = '' } = {}) {
+  const periodeId = String(id_periode_payroll || '').trim();
+  if (!periodeId) return null;
+
+  const rows = await prismaClient.payrollKaryawan.findMany({
+    where: {
+      id_periode_payroll: periodeId,
+    },
+    select: {
+      id_payroll_karyawan: true,
+      issue_number: true,
+    },
+  });
+
+  return buildNextPayrollSlipNumber(periode, rows, { excludePayrollId }) || null;
 }
 
 export async function resolveApprovalSteps(rawSteps) {

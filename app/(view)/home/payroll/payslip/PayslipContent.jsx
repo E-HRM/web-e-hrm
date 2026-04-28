@@ -1,12 +1,14 @@
 'use client';
 
 import { ArrowLeftOutlined, FileTextOutlined, MailOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Checkbox } from 'antd';
 
 import AppButton from '@/app/(view)/component_shared/AppButton';
 import AppCard from '@/app/(view)/component_shared/AppCard';
 import AppEmpty from '@/app/(view)/component_shared/AppEmpty';
 import AppInput from '@/app/(view)/component_shared/AppInput';
 import AppModal from '@/app/(view)/component_shared/AppModal';
+import AppSelect from '@/app/(view)/component_shared/AppSelect';
 import AppTypography from '@/app/(view)/component_shared/AppTypography';
 
 import usePayslipViewModel from './usePayslipViewModel';
@@ -107,6 +109,19 @@ export default function PayslipContent() {
               Kirim Payslip
             </AppButton>
           ) : null}
+
+          {vm.payrollList.length > 0 ? (
+            <AppButton
+              variant='primary'
+              icon={<MailOutlined />}
+              onClick={vm.openBulkEmailModal}
+              disabled={!vm.canOpenBulkEmailModal}
+              loading={vm.bulkEmailSending}
+              className='!rounded-lg'
+            >
+              Kirim Massal ({vm.bulkEligibleSelectedPayrolls.length})
+            </AppButton>
+          ) : null}
         </div>
       </div>
 
@@ -120,20 +135,33 @@ export default function PayslipContent() {
             bodyStyle={{ padding: 0 }}
           >
             <div className='border-b border-slate-200 px-5 py-4'>
-              <AppTypography.Text
-                size={15}
-                weight={800}
-                className='block text-slate-900'
-              >
-                Slip Per Periode
-              </AppTypography.Text>
+              <div className='flex items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                  <AppTypography.Text
+                    size={15}
+                    weight={800}
+                    className='block text-slate-900'
+                  >
+                    Slip Per Periode
+                  </AppTypography.Text>
 
-              <AppTypography.Text
-                size={12}
-                className='mt-1 block text-slate-500'
-              >
-                Pilih payroll untuk melihat satu preview PDF hasil gabungan template dan data.
-              </AppTypography.Text>
+                  <AppTypography.Text
+                    size={12}
+                    className='mt-1 block text-slate-500'
+                  >
+                    Pilih payroll untuk melihat satu preview PDF hasil gabungan template dan data.
+                  </AppTypography.Text>
+                </div>
+
+                <Checkbox
+                  checked={vm.allBulkSelectableChecked}
+                  indeterminate={vm.selectedPayrollIds.length > 0 && !vm.allBulkSelectableChecked}
+                  onChange={(event) => vm.toggleAllPayrollSelection(event.target.checked)}
+                  disabled={!vm.payrollList.some((item) => item.has_valid_email) || vm.bulkEmailSending}
+                >
+                  <span className='text-xs font-semibold text-slate-600'>Semua</span>
+                </Checkbox>
+              </div>
             </div>
 
             <div className='divide-y divide-slate-100'>
@@ -141,34 +169,54 @@ export default function PayslipContent() {
                 const isActive = vm.activePayrollId === item.id_payroll_karyawan;
 
                 return (
-                  <button
+                  <div
                     key={item.id_payroll_karyawan}
-                    type='button'
-                    onClick={() => vm.selectPayroll(item.id_payroll_karyawan)}
-                    className={`w-full px-5 py-4 text-left transition ${isActive ? 'bg-[#EDF5FF]' : 'bg-white hover:bg-slate-50'}`}
+                    className={`flex items-stretch gap-3 transition ${isActive ? 'bg-[#EDF5FF]' : 'bg-white hover:bg-slate-50'}`}
                   >
-                    <AppTypography.Text
-                      size={14}
-                      weight={800}
-                      className='block truncate text-slate-900'
-                    >
-                      {item.nama_karyawan}
-                    </AppTypography.Text>
+                    <div className='flex items-center pl-5'>
+                      <Checkbox
+                        checked={vm.selectedPayrollIdSet.has(item.id_payroll_karyawan)}
+                        onChange={(event) => vm.togglePayrollSelection(item.id_payroll_karyawan, event.target.checked)}
+                        disabled={!item.has_valid_email || vm.bulkEmailSending}
+                        aria-label={`Pilih payslip ${item.nama_karyawan}`}
+                      />
+                    </div>
 
-                    <AppTypography.Text
-                      size={12}
-                      className='mt-1 block text-slate-500'
+                    <button
+                      type='button'
+                      onClick={() => vm.selectPayroll(item.id_payroll_karyawan)}
+                      className='min-w-0 flex-1 bg-transparent py-4 pr-5 text-left'
                     >
-                      {item.period_label}
-                    </AppTypography.Text>
+                      <AppTypography.Text
+                        size={14}
+                        weight={800}
+                        className='block truncate text-slate-900'
+                      >
+                        {item.nama_karyawan}
+                      </AppTypography.Text>
 
-                    <AppTypography.Text
-                      size={12}
-                      className='mt-1 block text-slate-400'
-                    >
-                      {item.issue_number || 'Nomor slip belum tersedia'}
-                    </AppTypography.Text>
-                  </button>
+                      <AppTypography.Text
+                        size={12}
+                        className='mt-1 block text-slate-500'
+                      >
+                        {item.period_label}
+                      </AppTypography.Text>
+
+                      <AppTypography.Text
+                        size={12}
+                        className={`mt-1 block truncate ${item.has_valid_email ? 'text-slate-400' : 'text-rose-500'}`}
+                      >
+                        {item.has_valid_email ? item.email : 'Email belum tersedia atau tidak valid'}
+                      </AppTypography.Text>
+
+                      <AppTypography.Text
+                        size={12}
+                        className='mt-1 block text-slate-400'
+                      >
+                        {item.issue_number || 'Nomor slip belum tersedia'}
+                      </AppTypography.Text>
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -280,13 +328,19 @@ export default function PayslipContent() {
             hint='Penerima utama otomatis memakai email karyawan dari data user.'
           />
 
-          <AppInput
+          <AppSelect
             label='CC'
+            mode='tags'
             value={vm.emailForm.cc}
-            onChange={(event) => vm.updateEmailForm('cc', event.target.value)}
-            placeholder='contoh: hrd@company.com, direktur@company.com'
+            options={vm.ccUserOptions}
+            onChange={(value) => vm.updateEmailForm('cc', value)}
+            placeholder='Ketik email atau pilih user'
             allowClear
-            hint='Opsional. Pisahkan beberapa email dengan koma, titik koma, atau baris baru.'
+            tokenSeparators={[',', ';', '\n']}
+            maxTagCount='responsive'
+            maxTagTextLength={36}
+            loading={vm.ccUserOptionsLoading}
+            hint='Opsional. Ketik email manual atau pilih user dari dropdown.'
             disabled={vm.emailSending}
           />
 
@@ -296,9 +350,87 @@ export default function PayslipContent() {
             onChange={(event) => vm.updateEmailForm('message', event.target.value)}
             placeholder='Tambahkan pesan singkat bila diperlukan.'
             allowClear
-            autoSize={{ minRows: 4, maxRows: 7 }}
+            autoSize={{ minRows: 8, maxRows: 12 }}
             disabled={vm.emailSending}
             hint='Opsional. Detail nominal tetap hanya berada di PDF attachment.'
+          />
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={vm.bulkEmailModalOpen}
+        title='Kirim Payslip Massal'
+        subtitle='Hanya payslip yang dicentang akan dikirim ke email karyawan.'
+        okText={`Kirim ${vm.bulkEligibleSelectedPayrolls.length} Payslip`}
+        cancelText='Batal'
+        okLoading={vm.bulkEmailSending}
+        okDisabled={!vm.canSendBulkPayslipEmail}
+        cancelDisabled={vm.bulkEmailSending}
+        onClose={vm.closeBulkEmailModal}
+        onOk={vm.sendBulkPayslipEmail}
+        width={680}
+      >
+        <div className='space-y-4'>
+          <div className='rounded-lg border border-slate-200 bg-slate-50'>
+            <div className='border-b border-slate-200 px-4 py-3'>
+              <AppTypography.Text
+                size={13}
+                weight={800}
+                className='block text-slate-900'
+              >
+                Payslip Dicentang ({vm.bulkEligibleSelectedPayrolls.length})
+              </AppTypography.Text>
+            </div>
+
+            <div className='max-h-56 overflow-auto divide-y divide-slate-200'>
+              {vm.bulkSelectedPayrolls.map((item) => (
+                <div
+                  key={item.id_payroll_karyawan}
+                  className='px-4 py-3'
+                >
+                  <AppTypography.Text
+                    size={13}
+                    weight={800}
+                    className='block truncate text-slate-900'
+                  >
+                    {item.nama_karyawan}
+                  </AppTypography.Text>
+
+                  <AppTypography.Text
+                    size={12}
+                    className='mt-1 block text-slate-500'
+                  >
+                    {item.email_period_label} - {item.has_valid_email ? item.email : 'Email tidak valid'}
+                  </AppTypography.Text>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <AppSelect
+            label='CC'
+            value={vm.bulkEmailForm.cc}
+            mode='tags'
+            options={vm.ccUserOptions}
+            onChange={(value) => vm.updateBulkEmailForm('cc', value)}
+            placeholder='Ketik email atau pilih user'
+            allowClear
+            tokenSeparators={[',', ';', '\n']}
+            maxTagCount='responsive'
+            maxTagTextLength={36}
+            loading={vm.ccUserOptionsLoading}
+            hint='Opsional. Ketik email manual atau pilih user dari dropdown.'
+            disabled={vm.bulkEmailSending}
+          />
+
+          <AppInput.TextArea
+            label='Template pesan'
+            value={vm.bulkEmailForm.message}
+            onChange={(event) => vm.updateBulkEmailForm('message', event.target.value)}
+            allowClear
+            autoSize={{ minRows: 8, maxRows: 12 }}
+            disabled={vm.bulkEmailSending}
+            hint='[Employee Name] dan [Month Year] akan otomatis diganti untuk masing-masing penerima.'
           />
         </div>
       </AppModal>

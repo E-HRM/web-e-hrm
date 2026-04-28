@@ -36,6 +36,7 @@ export function createInitialPayrollKaryawanForm(defaultPeriode = '') {
   return {
     id_periode_payroll: defaultPeriode,
     id_user: '',
+    id_freelance: '',
     nama_karyawan_snapshot: '',
     jenis_hubungan_snapshot: 'PKWTT',
     id_tarif_pajak_ter: '',
@@ -314,6 +315,10 @@ function buildPendingApproverSummary(pendingApprovalSteps = []) {
 export function normalizePayrollKaryawanItem(item) {
   if (!item) return null;
 
+  const user = item?.user || null;
+  const freelance = item?.freelance || null;
+  const idUser = String(item?.id_user || '').trim();
+  const idFreelance = String(item?.id_freelance || '').trim();
   const gajiPokokSnapshot = toNumber(item.gaji_pokok_snapshot);
   const tunjanganBpjsSnapshot = toNumber(item.tunjangan_bpjs_snapshot);
   const totalPendapatanBruto = toNumber(item.total_pendapatan_bruto);
@@ -358,12 +363,14 @@ export function normalizePayrollKaryawanItem(item) {
 
   return {
     ...item,
-    nama_karyawan_snapshot: item.nama_karyawan || item?.user?.nama_pengguna || '-',
+    subject_type: idFreelance ? 'FREELANCE' : 'USER',
+    subject_key: idFreelance ? `FREELANCE:${idFreelance}` : idUser ? `USER:${idUser}` : '',
+    nama_karyawan_snapshot: item.nama_karyawan || user?.nama_pengguna || freelance?.nama || '-',
     jenis_hubungan_snapshot: item.jenis_hubungan_kerja || '',
-    nama_departement_snapshot: item?.user?.departement?.nama_departement || '',
-    nama_jabatan_snapshot: item?.user?.jabatan?.nama_jabatan || '',
-    nama_bank_snapshot: item.bank_name || item?.user?.jenis_bank || '',
-    nomor_rekening_snapshot: item.bank_account || item?.user?.nomor_rekening || '',
+    nama_departement_snapshot: user?.departement?.nama_departement || '',
+    nama_jabatan_snapshot: user?.jabatan?.nama_jabatan || (idFreelance ? 'Freelance' : ''),
+    nama_bank_snapshot: item.bank_name || user?.jenis_bank || '',
+    nomor_rekening_snapshot: item.bank_account || user?.nomor_rekening || '',
     total_pendapatan_tetap: totalPendapatanTetap,
     total_pendapatan_variabel: totalPendapatanVariabel,
     total_bruto_kena_pajak: totalPendapatanBruto,
@@ -387,6 +394,13 @@ export function normalizePayrollKaryawanItem(item) {
 }
 
 export function buildPayrollKaryawanPayload(formData) {
+  const idUser = String(formData.id_user || '').trim();
+  const idFreelance = String(formData.id_freelance || '').trim();
+  const jenisHubunganKerja = idFreelance
+    ? 'FREELANCE'
+    : String(formData.jenis_hubungan_snapshot || 'PKWTT')
+        .trim()
+        .toUpperCase();
   const totalPendapatanTetap = toNumber(formData.total_pendapatan_tetap);
   const totalPendapatanVariabel = toNumber(formData.total_pendapatan_variabel);
   const totalPendapatanBruto = toNumber(formData.total_bruto_kena_pajak) || totalPendapatanTetap + totalPendapatanVariabel;
@@ -398,16 +412,14 @@ export function buildPayrollKaryawanPayload(formData) {
 
   return {
     id_periode_payroll: String(formData.id_periode_payroll || '').trim(),
-    id_user: String(formData.id_user || '').trim(),
+    id_user: idUser || null,
+    id_freelance: idFreelance || null,
     id_tarif_pajak_ter: String(formData.id_tarif_pajak_ter || '').trim() || null,
     nama_karyawan: String(formData.nama_karyawan_snapshot || '').trim(),
-    jenis_hubungan_kerja: String(formData.jenis_hubungan_snapshot || 'PKWTT')
-      .trim()
-      .toUpperCase(),
+    jenis_hubungan_kerja: jenisHubunganKerja,
     bank_name: String(formData.nama_bank_snapshot || '').trim() || null,
     bank_account: String(formData.nomor_rekening_snapshot || '').trim() || null,
     tunjangan_bpjs_snapshot: tunjanganBpjs,
-    issue_number: String(formData.issue_number || '').trim() || null,
     issued_at: String(formData.issued_at || '').trim() || null,
     company_name_snapshot: String(formData.company_name_snapshot || '').trim() || null,
     total_pendapatan_bruto: totalPendapatanBruto,

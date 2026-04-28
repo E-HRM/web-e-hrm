@@ -400,6 +400,7 @@ export const ApiEndpoints = {
   GetPayrollSlipKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip`,
   GetPayrollSlipPdfKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip/pdf`,
   SendPayrollSlipEmailKaryawanById: (id) => `${API_PAYROLL_KARYAWAN}/${id}/slip/email`,
+  SendPayrollSlipEmailKaryawanBulk: () => `${API_PAYROLL_KARYAWAN}/slip-email-bulk`,
   UpdatePayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   UploadBuktiBayarPayrollKaryawan: (id) => `${API_PAYROLL_KARYAWAN}/${id}`,
   DeletePayrollKaryawan: (id, qsObj = {}) => `${API_PAYROLL_KARYAWAN}/${id}${buildQS(qsObj)}`,

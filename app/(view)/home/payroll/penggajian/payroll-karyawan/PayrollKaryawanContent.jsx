@@ -33,6 +33,7 @@ export default function PayrollKaryawanContent() {
       id_payroll_karyawan: payroll.id_payroll_karyawan || '',
       id_periode_payroll: payroll.id_periode_payroll || '',
       id_user: payroll.id_user || '',
+      id_freelance: payroll.id_freelance || '',
       id_tarif_pajak_ter: payroll.id_tarif_pajak_ter || '',
       nama_karyawan: payroll.nama_karyawan_snapshot || '',
       departement: payroll.nama_departement_snapshot || '',

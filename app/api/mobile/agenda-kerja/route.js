@@ -229,9 +229,7 @@ export async function POST(request) {
     if (kebutuhanAgenda.error) {
       return NextResponse.json({ ok: false, message: kebutuhanAgenda.error }, { status: 400 });
     }
-    const detailPenyelesaian = normalizeDetailPenyelesaianInput(
-      body.detail_penyelesaian
-    );
+    const detailPenyelesaian = normalizeDetailPenyelesaianInput(body.detail_penyelesaian);
     const detailDitunda = normalizeDetailDitundaInput(body.detail_ditunda);
     if (statusValue === 'selesai' && !detailPenyelesaian.value) {
       return NextResponse.json(
@@ -239,7 +237,7 @@ export async function POST(request) {
           ok: false,
           message: 'detail_penyelesaian wajib diisi saat status pekerjaan selesai.',
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
     if (statusValue === 'ditunda' && !detailDitunda.value) {
@@ -248,7 +246,7 @@ export async function POST(request) {
           ok: false,
           message: 'detail_ditunda wajib diisi saat status pekerjaan ditunda.',
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -313,7 +311,7 @@ export async function POST(request) {
             user: { select: { id_user: true, nama_pengguna: true, email: true, role: true } },
           },
         });
-      })
+      }),
     );
 
     for (const created of createdItems) {
@@ -348,7 +346,7 @@ export async function POST(request) {
         .map((item) => ({
           userId: item.id_user,
           referenceDate: item.end_date || item.start_date || item.updated_at,
-        }))
+        })),
     );
 
     return NextResponse.json({ ok: true, message: 'Anda berhasil menambahkan agenda kerja.', data: createdItems, meta: { created: createdItems.length } }, { status: 201 });

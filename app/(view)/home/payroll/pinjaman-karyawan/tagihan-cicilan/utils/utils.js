@@ -200,14 +200,14 @@ export function canUnpostFromPayroll(item) {
 }
  
 
-export function createPostPayrollPayload({ payrollId, urutanTampil = 920, catatan = '' }) {
+export function createPostPayrollPayload({ payrollId, urutanTampil = 0, catatan = '' }) {
   const parsedUrutan = Number(urutanTampil);
   const normalizedCatatan = normalizeText(catatan);
 
   return {
     status_cicilan: STATUS_CICILAN.DIPOSTING,
     id_payroll_karyawan: normalizeText(payrollId),
-    urutan_tampil_item_payroll: Number.isFinite(parsedUrutan) ? Math.max(Math.trunc(parsedUrutan), 0) : 920,
+    urutan_tampil_item_payroll: Number.isFinite(parsedUrutan) ? Math.max(Math.trunc(parsedUrutan), 0) : 0,
     catatan_item_payroll: normalizedCatatan || null,
   };
 }

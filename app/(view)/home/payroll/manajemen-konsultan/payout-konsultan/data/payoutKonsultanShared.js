@@ -71,7 +71,7 @@ export function createInitialPostPayrollForm(defaults = {}) {
   return {
     id_periode_payroll: normalizeText(defaults.id_periode_payroll),
     id_definisi_komponen_payroll: normalizeText(defaults.id_definisi_komponen_payroll),
-    urutan_tampil: toNonNegativeInt(defaults.urutan_tampil, 900),
+    urutan_tampil: toNonNegativeInt(defaults.urutan_tampil, 0),
   };
 }
 

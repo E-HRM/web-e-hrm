@@ -21,12 +21,12 @@ function normalizeEnum(value) {
     .toUpperCase();
 }
 
-function normalizeRequiredId(value, fieldName = 'id') {
-  const normalized = String(value || '').trim();
+function normalizeOptionalId(value, fieldName = 'id') {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
 
-  if (!normalized) {
-    throw new Error(`Field '${fieldName}' wajib diisi.`);
-  }
+  const normalized = String(value).trim();
+  if (!normalized) return null;
 
   if (normalized.length > 36) {
     throw new Error(`Field '${fieldName}' maksimal 36 karakter.`);
@@ -155,10 +155,68 @@ function guardRole(actor, allowedRoles) {
   return null;
 }
 
+function resolveSubjectForUpdate(body = {}, existing = {}) {
+  const hasUserField = Object.prototype.hasOwnProperty.call(body || {}, 'id_user');
+  const hasFreelanceField = Object.prototype.hasOwnProperty.call(body || {}, 'id_freelance');
+
+  if (!hasUserField && !hasFreelanceField) return null;
+
+  const id_user = hasUserField ? normalizeOptionalId(body.id_user, 'id_user') : existing.id_user || null;
+  const id_freelance = hasFreelanceField ? normalizeOptionalId(body.id_freelance, 'id_freelance') : existing.id_freelance || null;
+
+  if (!id_user && !id_freelance) {
+    throw new Error("Field 'id_user' atau 'id_freelance' wajib diisi salah satu.");
+  }
+
+  if (id_user && id_freelance) {
+    throw new Error("Field 'id_user' dan 'id_freelance' tidak boleh diisi bersamaan.");
+  }
+
+  return {
+    id_user: id_user || null,
+    id_freelance: id_freelance || null,
+    targetLabel: id_freelance ? 'freelance' : 'user',
+  };
+}
+
+async function ensureSubjectExists(subject) {
+  if (subject.id_user) {
+    const user = await db.user.findFirst({
+      where: {
+        id_user: subject.id_user,
+        deleted_at: null,
+      },
+      select: { id_user: true },
+    });
+
+    return Boolean(user);
+  }
+
+  const freelance = await db.freelance.findFirst({
+    where: {
+      id_freelance: subject.id_freelance,
+      deleted_at: null,
+    },
+    select: { id_freelance: true },
+  });
+
+  return Boolean(freelance);
+}
+
+function buildSubjectWhere(subject, existingId) {
+  return {
+    ...(subject.id_freelance ? { id_freelance: subject.id_freelance } : { id_user: subject.id_user }),
+    NOT: {
+      id_profil_payroll: existingId,
+    },
+  };
+}
+
 function buildSelect() {
   return {
     id_profil_payroll: true,
     id_user: true,
+    id_freelance: true,
     jenis_hubungan_kerja: true,
     gaji_pokok: true,
     tunjangan_bpjs: true,
@@ -196,6 +254,24 @@ function buildSelect() {
           select: {
             id_location: true,
             nama_kantor: true,
+          },
+        },
+      },
+    },
+    freelance: {
+      select: {
+        id_freelance: true,
+        nama: true,
+        email: true,
+        kontak: true,
+        alamat: true,
+        id_supervisor: true,
+        deleted_at: true,
+        supervisor: {
+          select: {
+            id_user: true,
+            nama_pengguna: true,
+            email: true,
           },
         },
       },
@@ -245,6 +321,7 @@ export async function PUT(req, { params }) {
       select: {
         id_profil_payroll: true,
         id_user: true,
+        id_freelance: true,
         jenis_hubungan_kerja: true,
         gaji_pokok: true,
         tunjangan_bpjs: true,
@@ -261,29 +338,20 @@ export async function PUT(req, { params }) {
 
     const payload = {};
 
-    if (body?.id_user !== undefined) {
-      const id_user = normalizeRequiredId(body.id_user, 'id_user');
+    const subject = resolveSubjectForUpdate(body, existing);
 
-      const user = await db.user.findFirst({
-        where: {
-          id_user,
-          deleted_at: null,
-        },
-        select: { id_user: true },
-      });
+    if (subject) {
+      const subjectExists = await ensureSubjectExists(subject);
 
-      if (!user) {
-        return NextResponse.json({ message: 'User tidak ditemukan atau sudah dihapus.' }, { status: 404 });
+      if (!subjectExists) {
+        return NextResponse.json({ message: `${subject.targetLabel === 'freelance' ? 'Freelance' : 'User'} tidak ditemukan atau sudah dihapus.` }, { status: 404 });
       }
 
-      if (id_user !== existing.id_user) {
+      const subjectChanged = subject.id_user !== existing.id_user || subject.id_freelance !== existing.id_freelance;
+
+      if (subjectChanged) {
         const duplicate = await db.profilPayroll.findFirst({
-          where: {
-            id_user,
-            NOT: {
-              id_profil_payroll: existing.id_profil_payroll,
-            },
-          },
+          where: buildSubjectWhere(subject, existing.id_profil_payroll),
           select: {
             id_profil_payroll: true,
             deleted_at: true,
@@ -291,24 +359,26 @@ export async function PUT(req, { params }) {
         });
 
         if (duplicate?.deleted_at === null) {
-          return NextResponse.json({ message: 'Profil payroll untuk user tujuan sudah ada.' }, { status: 409 });
+          return NextResponse.json({ message: `Profil payroll untuk ${subject.targetLabel} tujuan sudah ada.` }, { status: 409 });
         }
 
         if (duplicate?.deleted_at !== null) {
           return NextResponse.json(
             {
-              message: 'User tujuan sudah memiliki riwayat profil payroll terhapus. Hapus permanen atau pulihkan data tersebut terlebih dahulu.',
+              message: `${subject.targetLabel === 'freelance' ? 'Freelance' : 'User'} tujuan sudah memiliki riwayat profil payroll terhapus. Hapus permanen atau pulihkan data tersebut terlebih dahulu.`,
             },
             { status: 409 },
           );
         }
       }
 
-      payload.id_user = id_user;
+      payload.id_user = subject.id_user;
+      payload.id_freelance = subject.id_freelance;
     }
 
     if (body?.jenis_hubungan_kerja !== undefined) {
-      const value = normalizeEnum(body.jenis_hubungan_kerja);
+      const effectiveFreelanceId = Object.prototype.hasOwnProperty.call(payload, 'id_freelance') ? payload.id_freelance : existing.id_freelance;
+      const value = effectiveFreelanceId ? 'FREELANCE' : normalizeEnum(body.jenis_hubungan_kerja);
 
       if (!value || !JENIS_HUBUNGAN_KERJA_VALUES.has(value)) {
         return NextResponse.json(
@@ -358,7 +428,7 @@ export async function PUT(req, { params }) {
     });
   } catch (err) {
     if (err?.code === 'P2002') {
-      return NextResponse.json({ message: 'Profil payroll untuk user tujuan sudah ada.' }, { status: 409 });
+      return NextResponse.json({ message: 'Profil payroll untuk subjek tujuan sudah ada.' }, { status: 409 });
     }
 
     if (err instanceof Error) {

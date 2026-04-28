@@ -25,6 +25,7 @@ import {
 const FETCH_PAGE_SIZE = 100;
 const PROFILE_SWR_KEY = 'payroll:profil-payroll:list';
 const USERS_SWR_KEY = 'payroll:profil-payroll:users';
+const FREELANCE_SWR_KEY = 'payroll:profil-payroll:freelance';
 
 function normalizeText(value) {
   return String(value || '')
@@ -93,6 +94,49 @@ async function fetchAllUsers() {
   );
 }
 
+async function fetchAllFreelance() {
+  return fetchAllPages((page) =>
+    crudServiceAuth.get(
+      ApiEndpoints.GetFreelance({
+        page,
+        pageSize: FETCH_PAGE_SIZE,
+        orderBy: 'nama',
+        sort: 'asc',
+      }),
+    ),
+  );
+}
+
+function buildUserSubject(user) {
+  const id = String(user?.id_user || '').trim();
+  return {
+    ...user,
+    subject_key: id ? `USER:${id}` : '',
+    subject_type: 'USER',
+  };
+}
+
+function buildFreelanceSubject(freelance) {
+  const id = String(freelance?.id_freelance || '').trim();
+  return {
+    ...freelance,
+    subject_key: id ? `FREELANCE:${id}` : '',
+    subject_type: 'FREELANCE',
+    nama_pengguna: freelance?.nama,
+    nomor_induk_karyawan: freelance?.email || id,
+    role: 'FREELANCE',
+    foto_profil_user: null,
+  };
+}
+
+function getProfileSubjectKey(profile) {
+  const freelanceId = String(profile?.id_freelance || '').trim();
+  if (freelanceId) return `FREELANCE:${freelanceId}`;
+
+  const userId = String(profile?.id_user || '').trim();
+  return userId ? `USER:${userId}` : '';
+}
+
 export default function useProfilPayrollViewModel() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -124,6 +168,16 @@ export default function useProfilPayrollViewModel() {
     revalidateOnFocus: false,
   });
 
+  const {
+    data: freelanceResponse,
+    error: freelanceError,
+    isLoading: isFreelanceLoading,
+    isValidating: isFreelanceValidating,
+    mutate: mutateFreelance,
+  } = useSWR(FREELANCE_SWR_KEY, fetchAllFreelance, {
+    revalidateOnFocus: false,
+  });
+
   useEffect(() => {
     if (!profilError) return;
 
@@ -144,21 +198,35 @@ export default function useProfilPayrollViewModel() {
     });
   }, [usersError]);
 
-  const usersData = useMemo(() => (Array.isArray(usersResponse) ? usersResponse : []), [usersResponse]);
+  useEffect(() => {
+    if (!freelanceError) return;
 
-  const usersMap = useMemo(() => {
-    return new Map(usersData.map((user) => [String(user.id_user), user]));
-  }, [usersData]);
+    AppMessage.once({
+      type: 'error',
+      onceKey: 'profil-payroll-freelance-fetch-error',
+      content: freelanceError?.message || 'Gagal memuat data freelance.',
+    });
+  }, [freelanceError]);
+
+  const usersData = useMemo(() => (Array.isArray(usersResponse) ? usersResponse.map(buildUserSubject) : []), [usersResponse]);
+  const freelanceData = useMemo(() => (Array.isArray(freelanceResponse) ? freelanceResponse.map(buildFreelanceSubject) : []), [freelanceResponse]);
+  const payrollSubjects = useMemo(() => [...usersData, ...freelanceData], [freelanceData, usersData]);
+
+  const subjectsMap = useMemo(() => {
+    return new Map(payrollSubjects.map((subject) => [String(subject.subject_key), subject]));
+  }, [payrollSubjects]);
 
   const profilData = useMemo(() => {
     const rawData = Array.isArray(profilResponse) ? profilResponse : [];
 
     return rawData.map((item) => {
-      const fallbackUser = usersMap.get(String(item?.id_user || '')) || null;
-      const resolvedUser = item?.user || fallbackUser || null;
+      const subjectKey = getProfileSubjectKey(item);
+      const fallbackUser = subjectsMap.get(subjectKey) || null;
+      const resolvedUser = item?.user ? buildUserSubject(item.user) : item?.freelance ? buildFreelanceSubject(item.freelance) : fallbackUser || null;
 
       return {
         ...item,
+        subject_key: subjectKey,
         tanggal_mulai_payroll: toDateInputValue(item?.tanggal_mulai_payroll),
         user: resolvedUser,
         user_display_name: getUserDisplayName(resolvedUser),
@@ -168,34 +236,34 @@ export default function useProfilPayrollViewModel() {
         foto_profil_user: getUserPhoto(resolvedUser),
       };
     });
-  }, [profilResponse, usersMap]);
+  }, [profilResponse, subjectsMap]);
 
   const resolvedSelectedProfil = useMemo(() => {
     if (!selectedProfil) return null;
 
-    return profilData.find((item) => item.id_profil_payroll === selectedProfil.id_profil_payroll) || profilData.find((item) => item.id_user === selectedProfil.id_user) || selectedProfil;
+    return profilData.find((item) => item.id_profil_payroll === selectedProfil.id_profil_payroll) || profilData.find((item) => item.subject_key === selectedProfil.subject_key) || selectedProfil;
   }, [profilData, selectedProfil]);
 
   const selectedFormUser = useMemo(() => {
-    if (!formData.id_user) return null;
+    if (!formData.subject_key) return null;
 
-    return usersMap.get(String(formData.id_user)) || resolvedSelectedProfil?.user || null;
-  }, [formData.id_user, resolvedSelectedProfil, usersMap]);
+    return subjectsMap.get(String(formData.subject_key)) || resolvedSelectedProfil?.user || null;
+  }, [formData.subject_key, resolvedSelectedProfil, subjectsMap]);
 
   const usedUserIds = useMemo(() => {
-    return new Set(profilData.map((item) => String(item.id_user || '')).filter(Boolean));
+    return new Set(profilData.map((item) => String(item.subject_key || '')).filter(Boolean));
   }, [profilData]);
 
   const availableUsers = useMemo(() => {
-    return usersData.filter((user) => {
-      const id = String(user.id_user || '');
+    return payrollSubjects.filter((user) => {
+      const id = String(user.subject_key || '');
 
       if (!id) return false;
-      if (resolvedSelectedProfil?.id_user && id === String(resolvedSelectedProfil.id_user)) return true;
+      if (resolvedSelectedProfil?.subject_key && id === String(resolvedSelectedProfil.subject_key)) return true;
 
       return !usedUserIds.has(id);
     });
-  }, [resolvedSelectedProfil, usedUserIds, usersData]);
+  }, [payrollSubjects, resolvedSelectedProfil, usedUserIds]);
 
   const setFormValue = useCallback((field, value) => {
     setFormData((prev) => ({
@@ -204,13 +272,29 @@ export default function useProfilPayrollViewModel() {
     }));
   }, []);
 
+  const handleSubjectChange = useCallback(
+    (value) => {
+      const subjectKey = String(value || '').trim();
+      const subject = subjectsMap.get(subjectKey) || null;
+
+      setFormData((prev) => ({
+        ...prev,
+        subject_key: subjectKey,
+        id_user: subject?.subject_type === 'USER' ? String(subject.id_user || '').trim() : '',
+        id_freelance: subject?.subject_type === 'FREELANCE' ? String(subject.id_freelance || '').trim() : '',
+        jenis_hubungan_kerja: subject?.subject_type === 'FREELANCE' ? 'FREELANCE' : prev.jenis_hubungan_kerja === 'FREELANCE' ? 'PKWTT' : prev.jenis_hubungan_kerja,
+      }));
+    },
+    [subjectsMap],
+  );
+
   const resetForm = useCallback(() => {
     setFormData(createInitialProfilPayrollForm());
   }, []);
 
   const reloadData = useCallback(async () => {
-    await Promise.all([mutateProfil(), mutateUsers()]);
-  }, [mutateProfil, mutateUsers]);
+    await Promise.all([mutateProfil(), mutateUsers(), mutateFreelance()]);
+  }, [mutateFreelance, mutateProfil, mutateUsers]);
 
   const closeCreateModal = useCallback(() => {
     if (isSubmitting) return;
@@ -250,7 +334,9 @@ export default function useProfilPayrollViewModel() {
 
     setSelectedProfil(profil);
     setFormData({
+      subject_key: profil.subject_key || getProfileSubjectKey(profil),
       id_user: profil.id_user || '',
+      id_freelance: profil.id_freelance || '',
       jenis_hubungan_kerja: profil.jenis_hubungan_kerja || 'PKWTT',
       gaji_pokok: profil.gaji_pokok ?? 0,
       tunjangan_bpjs: profil.tunjangan_bpjs ?? 0,
@@ -311,8 +397,16 @@ export default function useProfilPayrollViewModel() {
   const inactiveProfil = useMemo(() => profilData.filter((item) => !item.payroll_aktif).length, [profilData]);
 
   const validateForm = useCallback(() => {
-    if (!String(formData.id_user || '').trim()) {
-      AppMessage.warning('Karyawan wajib dipilih.');
+    const hasUser = Boolean(String(formData.id_user || '').trim());
+    const hasFreelance = Boolean(String(formData.id_freelance || '').trim());
+
+    if (!hasUser && !hasFreelance) {
+      AppMessage.warning('Karyawan atau freelance wajib dipilih.');
+      return false;
+    }
+
+    if (hasUser && hasFreelance) {
+      AppMessage.warning('Pilih salah satu antara karyawan atau freelance.');
       return false;
     }
 
@@ -334,12 +428,15 @@ export default function useProfilPayrollViewModel() {
     }
 
     return true;
-  }, [formData.gaji_pokok, formData.id_user, formData.jenis_hubungan_kerja, formData.tunjangan_bpjs]);
+  }, [formData.gaji_pokok, formData.id_freelance, formData.id_user, formData.jenis_hubungan_kerja, formData.tunjangan_bpjs]);
 
   const buildPayload = useCallback(() => {
+    const isFreelance = Boolean(String(formData.id_freelance || '').trim());
+
     return {
-      id_user: String(formData.id_user || '').trim(),
-      jenis_hubungan_kerja: String(formData.jenis_hubungan_kerja || 'PKWTT')
+      id_user: isFreelance ? null : String(formData.id_user || '').trim(),
+      id_freelance: isFreelance ? String(formData.id_freelance || '').trim() : null,
+      jenis_hubungan_kerja: String(isFreelance ? 'FREELANCE' : formData.jenis_hubungan_kerja || 'PKWTT')
         .trim()
         .toUpperCase(),
       gaji_pokok: Number(formData.gaji_pokok || 0),
@@ -439,6 +536,7 @@ export default function useProfilPayrollViewModel() {
     availableUsers,
     formData,
     setFormValue,
+    handleSubjectChange,
     resetForm,
 
     isCreateModalOpen,
@@ -446,11 +544,11 @@ export default function useProfilPayrollViewModel() {
     isDeleteDialogOpen,
     isDetailModalOpen,
 
-    loading: isProfilLoading || isUsersLoading,
-    validating: isProfilValidating || isUsersValidating,
-    loadingUsers: isUsersLoading,
+    loading: isProfilLoading || isUsersLoading || isFreelanceLoading,
+    validating: isProfilValidating || isUsersValidating || isFreelanceValidating,
+    loadingUsers: isUsersLoading || isFreelanceLoading,
     isSubmitting,
-    error: profilError || usersError,
+    error: profilError || usersError || freelanceError,
 
     openCreateModal,
     closeCreateModal,
