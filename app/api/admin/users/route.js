@@ -111,6 +111,7 @@ export async function GET(req) {
           tanggal_mulai_bekerja: true,
           nomor_rekening: true,
           jenis_bank: true,
+          nama_pemilik_rekening: true,
 
           created_at: true,
           updated_at: true,

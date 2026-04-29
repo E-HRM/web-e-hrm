@@ -450,6 +450,7 @@ model User {
   tanggal_mulai_bekerja     DateTime?     @db.Date
   nomor_rekening            String?       @db.VarChar(50)
   jenis_bank                String?       @db.VarChar(50)
+  nama_pemilik_rekening     String?       @db.VarChar(70)
   catatan_delete            String?       @db.LongText
   ttd_url                   String?       @db.LongText
 
@@ -529,6 +530,10 @@ model Freelance {
   kontak        String? @db.VarChar(32)
   email         String? @db.VarChar(255)
   id_supervisor String? @db.Char(36)
+
+  nomor_rekening        String? @db.VarChar(50)
+  jenis_bank            String? @db.VarChar(50)
+  nama_pemilik_rekening String? @db.VarChar(70)
 
   created_at DateTime  @default(now()) @db.DateTime(0)
   updated_at DateTime  @updatedAt @db.DateTime(0)
@@ -1652,8 +1657,10 @@ model PayrollKaryawan {
   pph21_nominal           Decimal @default(0) @db.Decimal(15, 2)
   pendapatan_bersih       Decimal @default(0) @db.Decimal(15, 2)
 
-  bank_name    String? @db.VarChar(50)
-  bank_account String? @db.VarChar(50)
+  bank_name           String? @db.VarChar(50)
+  bank_account        String? @db.VarChar(50)
+  bank_account_holder String? @db.VarChar(70)
+  bca_transaction_id  String? @db.VarChar(18)
 
   status_payroll StatusPayrollKaryawan @default(DRAFT)
 

@@ -366,6 +366,8 @@ export function buildSelect() {
     pendapatan_bersih: true,
     bank_name: true,
     bank_account: true,
+    bank_account_holder: true,
+    bca_transaction_id: true,
     status_payroll: true,
     status_approval: true,
     current_level_approval: true,
@@ -409,6 +411,7 @@ export function buildSelect() {
         status_kerja: true,
         nomor_rekening: true,
         jenis_bank: true,
+        nama_pemilik_rekening: true,
         foto_profil_user: true,
         deleted_at: true,
         departement: {
@@ -432,6 +435,9 @@ export function buildSelect() {
         email: true,
         kontak: true,
         alamat: true,
+        nomor_rekening: true,
+        jenis_bank: true,
+        nama_pemilik_rekening: true,
         id_supervisor: true,
         deleted_at: true,
         supervisor: {
@@ -839,6 +845,7 @@ export async function ensureUserExists(id_user) {
       nomor_induk_karyawan: true,
       nomor_rekening: true,
       jenis_bank: true,
+      nama_pemilik_rekening: true,
       deleted_at: true,
       departement: {
         select: {
@@ -870,6 +877,9 @@ export async function ensureFreelanceExists(id_freelance) {
       email: true,
       kontak: true,
       alamat: true,
+      nomor_rekening: true,
+      jenis_bank: true,
+      nama_pemilik_rekening: true,
       id_supervisor: true,
       deleted_at: true,
       supervisor: {

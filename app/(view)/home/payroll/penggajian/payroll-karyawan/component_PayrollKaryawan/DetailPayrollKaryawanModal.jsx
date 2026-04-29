@@ -101,6 +101,11 @@ export default function DetailPayrollKaryawanModal({ vm, buildItemKomponenHref }
                 label='Nomor Rekening'
                 value={payroll.nomor_rekening_snapshot || '-'}
               />
+
+              <DetailField
+                label='Nama Pemilik Rekening'
+                value={payroll.nama_pemilik_rekening_snapshot || '-'}
+              />
             </div>
           </div>
 

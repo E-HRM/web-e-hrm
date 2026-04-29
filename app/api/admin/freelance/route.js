@@ -99,6 +99,9 @@ export async function GET(req) {
               { email: { contains: search } },
               { kontak: { contains: search } },
               { alamat: { contains: search } },
+              { jenis_bank: { contains: search } },
+              { nomor_rekening: { contains: search } },
+              { nama_pemilik_rekening: { contains: search } },
               {
                 supervisor: {
                   is: {
@@ -124,6 +127,9 @@ export async function GET(req) {
           alamat: true,
           kontak: true,
           email: true,
+          jenis_bank: true,
+          nomor_rekening: true,
+          nama_pemilik_rekening: true,
           id_supervisor: true,
           created_at: true,
           updated_at: true,
@@ -165,6 +171,9 @@ export async function POST(req) {
     const alamat = isNullLike(body?.alamat) ? null : String(body.alamat).trim();
     const kontak = isNullLike(body?.kontak) ? null : String(body.kontak).trim();
     const email = isNullLike(body?.email) ? null : String(body.email).trim();
+    const jenisBank = isNullLike(body?.jenis_bank) ? null : String(body.jenis_bank).trim();
+    const nomorRekening = isNullLike(body?.nomor_rekening) ? null : String(body.nomor_rekening).trim();
+    const namaPemilikRekening = isNullLike(body?.nama_pemilik_rekening) ? null : String(body.nama_pemilik_rekening).trim();
     const supervisorId = await validateSupervisor(body?.id_supervisor);
 
     if (!nama) {
@@ -185,6 +194,9 @@ export async function POST(req) {
         alamat,
         kontak,
         email,
+        jenis_bank: jenisBank,
+        nomor_rekening: nomorRekening,
+        nama_pemilik_rekening: namaPemilikRekening,
         id_supervisor: supervisorId,
       },
       select: {
@@ -193,6 +205,9 @@ export async function POST(req) {
         alamat: true,
         kontak: true,
         email: true,
+        jenis_bank: true,
+        nomor_rekening: true,
+        nama_pemilik_rekening: true,
         id_supervisor: true,
         created_at: true,
         updated_at: true,

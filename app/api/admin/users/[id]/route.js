@@ -200,6 +200,7 @@ export async function GET(_req, { params }) {
         tanggal_mulai_bekerja: true,
         nomor_rekening: true,
         jenis_bank: true,
+        nama_pemilik_rekening: true,
         created_at: true,
         updated_at: true,
         deleted_at: true,
@@ -284,6 +285,7 @@ export async function PUT(req, { params }) {
     const jabatanId = normalizeNullableString(body.id_jabatan);
     const nomorRekening = normalizeNullableString(body.nomor_rekening);
     const jenisBank = normalizeNullableString(body.jenis_bank);
+    const namaPemilikRekening = normalizeNullableString(body.nama_pemilik_rekening);
 
     // NEW: kontak darurat
     const namaKontakDarurat = normalizeNullableString(body.nama_kontak_darurat);
@@ -344,6 +346,7 @@ export async function PUT(req, { params }) {
       ...(tanggalMulaiValue !== undefined && { tanggal_mulai_bekerja: tanggalMulaiValue }),
       ...(nomorRekening.value !== undefined && { nomor_rekening: nomorRekening.value }),
       ...(jenisBank.value !== undefined && { jenis_bank: jenisBank.value }),
+      ...(namaPemilikRekening.value !== undefined && { nama_pemilik_rekening: namaPemilikRekening.value }),
       ...(body.role !== undefined && { role: String(body.role) }),
       ...(uploadedUrl && { foto_profil_user: uploadedUrl }),
       ...(!uploadedUrl && wantsRemove ? { foto_profil_user: null } : {}),
@@ -420,6 +423,7 @@ export async function PUT(req, { params }) {
         tanggal_mulai_bekerja: true,
         nomor_rekening: true,
         jenis_bank: true,
+        nama_pemilik_rekening: true,
         updated_at: true,
         departement: { select: { id_departement: true, nama_departement: true } },
         kantor: { select: { id_location: true, nama_kantor: true } },

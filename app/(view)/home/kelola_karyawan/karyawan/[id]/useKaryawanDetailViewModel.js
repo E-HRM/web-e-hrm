@@ -64,6 +64,7 @@ export default function useKaryawanDetailViewModel({ forceReadOnly = false } = {
         lokasi: user.kantor?.nama_kantor || "—",
         bank: user.jenis_bank || "—",
         norek: user.nomor_rekening || "—",
+        nama_pemilik_rekening: user.nama_pemilik_rekening || "—",
       },
     };
   }, [user]);

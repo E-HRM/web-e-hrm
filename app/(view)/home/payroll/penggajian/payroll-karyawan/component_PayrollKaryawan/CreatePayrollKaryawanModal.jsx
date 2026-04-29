@@ -153,6 +153,14 @@ function CreatePayrollForm({ vm }) {
         />
       </div>
 
+      <AppInput
+        label='Nama Pemilik Rekening'
+        value={vm.formData.nama_pemilik_rekening_snapshot}
+        placeholder='Diambil otomatis dari data karyawan'
+        disabled
+        inputClassName='!rounded-lg'
+      />
+
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppInput
           label='Nomor Slip'

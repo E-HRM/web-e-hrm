@@ -157,6 +157,7 @@ function mapDetailToInitialValues(detail) {
     id_location: nz(detail?.id_location),
     jenis_bank: nz(detail?.jenis_bank),
     nomor_rekening: nz(detail?.nomor_rekening),
+    nama_pemilik_rekening: nz(detail?.nama_pemilik_rekening),
     role: nz(detail?.role) || 'KARYAWAN',
     status_cuti: nz(detail?.status_cuti),
     alamat_ktp: nz(detail?.alamat_ktp),
@@ -428,6 +429,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           appendDateOnly(fd, 'tanggal_mulai_bekerja', values.tanggal_mulai_bekerja);
           append(fd, 'jenis_bank', values.jenis_bank);
           append(fd, 'nomor_rekening', values.nomor_rekening);
+          append(fd, 'nama_pemilik_rekening', values.nama_pemilik_rekening);
           append(fd, 'alamat_ktp', values.alamat_ktp);
           append(fd, 'alamat_ktp_provinsi', values.alamat_ktp_provinsi);
           append(fd, 'alamat_ktp_kota', values.alamat_ktp_kota);
@@ -466,6 +468,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
             ...(tanggalMulai !== undefined && { tanggal_mulai_bekerja: tanggalMulai }),
             jenis_bank: values.jenis_bank ?? null,
             nomor_rekening: values.nomor_rekening ?? null,
+            nama_pemilik_rekening: values.nama_pemilik_rekening ?? null,
             alamat_ktp: values.alamat_ktp ?? null,
             alamat_ktp_provinsi: values.alamat_ktp_provinsi ?? null,
             alamat_ktp_kota: values.alamat_ktp_kota ?? null,
@@ -518,6 +521,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
         appendDateOnly(fd, 'tanggal_mulai_bekerja', values.tanggal_mulai_bekerja);
         append(fd, 'jenis_bank', values.jenis_bank);
         append(fd, 'nomor_rekening', values.nomor_rekening);
+        append(fd, 'nama_pemilik_rekening', values.nama_pemilik_rekening);
         append(fd, 'alamat_ktp', values.alamat_ktp);
         append(fd, 'alamat_ktp_provinsi', values.alamat_ktp_provinsi);
         append(fd, 'alamat_ktp_kota', values.alamat_ktp_kota);
@@ -567,6 +571,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           ...(tanggalMulai !== undefined && { tanggal_mulai_bekerja: tanggalMulai }),
           jenis_bank: values.jenis_bank ?? null,
           nomor_rekening: values.nomor_rekening ?? null,
+          nama_pemilik_rekening: values.nama_pemilik_rekening ?? null,
           alamat_ktp: values.alamat_ktp ?? null,
           alamat_ktp_provinsi: values.alamat_ktp_provinsi ?? null,
           alamat_ktp_kota: values.alamat_ktp_kota ?? null,
@@ -825,6 +830,7 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
           },
           { name: 'jenis_bank', label: 'Jenis Bank', type: 'text', placeholder: 'Masukkan jenis bank', col: { xs: 24, md: 12 }, controlProps: { size: 'large' } },
           { name: 'nomor_rekening', label: 'Nomor Rekening', type: 'text', placeholder: 'Masukkan nomor rekening', col: { xs: 24, md: 12 }, controlProps: { size: 'large' } },
+          { name: 'nama_pemilik_rekening', label: 'Nama Pemilik Rekening', type: 'text', placeholder: 'Masukkan nama pemilik rekening', col: { xs: 24 }, controlProps: { size: 'large' } },
           {
             name: 'role',
             label: 'Role',
@@ -1183,6 +1189,11 @@ export default function KaryawanProfileForm({ mode = 'view', id, forceReadOnly =
                       <ViewBox
                         label='Bank & Rekening'
                         value={detail?.jenis_bank && detail?.nomor_rekening ? `${detail.jenis_bank} - ${detail.nomor_rekening}` : DASH}
+                        span={12}
+                      />
+                      <ViewBox
+                        label='Nama Pemilik Rekening'
+                        value={displayOrDash(detail?.nama_pemilik_rekening)}
                         span={12}
                       />
                     </AppGrid.Row>

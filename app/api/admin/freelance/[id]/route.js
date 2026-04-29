@@ -133,6 +133,9 @@ export async function GET(req, { params }) {
         alamat: true,
         kontak: true,
         email: true,
+        jenis_bank: true,
+        nomor_rekening: true,
+        nama_pemilik_rekening: true,
         id_supervisor: true,
         created_at: true,
         updated_at: true,
@@ -249,6 +252,18 @@ export async function PUT(req, { params }) {
       payload.email = email;
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, 'jenis_bank')) {
+      payload.jenis_bank = isNullLike(body?.jenis_bank) ? null : String(body.jenis_bank).trim();
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'nomor_rekening')) {
+      payload.nomor_rekening = isNullLike(body?.nomor_rekening) ? null : String(body.nomor_rekening).trim();
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'nama_pemilik_rekening')) {
+      payload.nama_pemilik_rekening = isNullLike(body?.nama_pemilik_rekening) ? null : String(body.nama_pemilik_rekening).trim();
+    }
+
     if (Object.prototype.hasOwnProperty.call(body, 'id_supervisor')) {
       const supervisorId = await validateSupervisor(body?.id_supervisor);
       if (supervisorId === false) {
@@ -270,6 +285,9 @@ export async function PUT(req, { params }) {
         alamat: true,
         kontak: true,
         email: true,
+        jenis_bank: true,
+        nomor_rekening: true,
+        nama_pemilik_rekening: true,
         id_supervisor: true,
         created_at: true,
         updated_at: true,
