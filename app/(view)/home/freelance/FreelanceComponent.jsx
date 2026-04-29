@@ -29,6 +29,9 @@ const EMPTY_FORM = Object.freeze({
   alamat: '',
   kontak: '',
   email: '',
+  jenis_bank: '',
+  nomor_rekening: '',
+  nama_pemilik_rekening: '',
   id_supervisor: undefined,
 });
 
@@ -62,6 +65,9 @@ export default function FreelanceComponent() {
       alamat: row?.alamat || '',
       kontak: row?.kontak || '',
       email: row?.email || '',
+      jenis_bank: row?.jenis_bank || '',
+      nomor_rekening: row?.nomor_rekening || '',
+      nama_pemilik_rekening: row?.nama_pemilik_rekening || '',
       id_supervisor: row?.id_supervisor || undefined,
     });
     setErrors({});
@@ -93,6 +99,9 @@ export default function FreelanceComponent() {
       alamat: String(form.alamat || '').trim() || null,
       kontak: String(form.kontak || '').trim() || null,
       email: String(form.email || '').trim() || null,
+      jenis_bank: String(form.jenis_bank || '').trim() || null,
+      nomor_rekening: String(form.nomor_rekening || '').trim() || null,
+      nama_pemilik_rekening: String(form.nama_pemilik_rekening || '').trim() || null,
       id_supervisor: form.id_supervisor || null,
     };
 
@@ -138,6 +147,17 @@ export default function FreelanceComponent() {
         dataIndex: 'alamat',
         key: 'alamat',
         render: (value) => value || '—',
+      },
+      {
+        title: 'Rekening',
+        key: 'rekening',
+        width: 220,
+        render: (_, row) => (
+          <div>
+            <div className='font-medium text-slate-900'>{row?.nama_pemilik_rekening || '—'}</div>
+            <div className='text-xs text-slate-500'>{row?.jenis_bank && row?.nomor_rekening ? `${row.jenis_bank} - ${row.nomor_rekening}` : 'Belum diisi'}</div>
+          </div>
+        ),
       },
       {
         title: 'Supervisor',
@@ -328,6 +348,29 @@ export default function FreelanceComponent() {
             value={form.email}
             error={errors.email}
             onChange={(event) => setField('email', event.target.value)}
+          />
+
+          <div className='grid grid-cols-1 gap-4 md:grid-cols-2'>
+            <AppInput
+              label='Jenis Bank'
+              placeholder='Masukkan jenis bank'
+              value={form.jenis_bank}
+              onChange={(event) => setField('jenis_bank', event.target.value)}
+            />
+
+            <AppInput
+              label='Nomor Rekening'
+              placeholder='Masukkan nomor rekening'
+              value={form.nomor_rekening}
+              onChange={(event) => setField('nomor_rekening', event.target.value)}
+            />
+          </div>
+
+          <AppInput
+            label='Nama Pemilik Rekening'
+            placeholder='Masukkan nama pemilik rekening'
+            value={form.nama_pemilik_rekening}
+            onChange={(event) => setField('nama_pemilik_rekening', event.target.value)}
           />
 
           <AppSelect

@@ -179,9 +179,21 @@ async function resolveCreatePayload(body = {}) {
       berlaku_sampai_tarif_snapshot: tarifSnapshot.berlaku_sampai_tarif_snapshot,
       gaji_pokok_snapshot: gajiPokokSnapshot,
       tunjangan_bpjs_snapshot: tunjanganBpjsSnapshot,
-      bank_name: normalizeNullableString(body?.bank_name, 'bank_name', 50) || normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) || normalizeNullableString(user?.jenis_bank, 'jenis_bank', 50) || null,
+      bank_name:
+        normalizeNullableString(body?.bank_name, 'bank_name', 50) ||
+        normalizeNullableString(body?.nama_bank_snapshot, 'nama_bank_snapshot', 50) ||
+        normalizeNullableString(user?.jenis_bank ?? freelance?.jenis_bank, 'jenis_bank', 50) ||
+        null,
       bank_account:
-        normalizeNullableString(body?.bank_account, 'bank_account', 50) || normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) || normalizeNullableString(user?.nomor_rekening, 'nomor_rekening', 50) || null,
+        normalizeNullableString(body?.bank_account, 'bank_account', 50) ||
+        normalizeNullableString(body?.nomor_rekening_snapshot, 'nomor_rekening_snapshot', 50) ||
+        normalizeNullableString(user?.nomor_rekening ?? freelance?.nomor_rekening, 'nomor_rekening', 50) ||
+        null,
+      bank_account_holder:
+        normalizeNullableString(body?.bank_account_holder, 'bank_account_holder', 70) ||
+        normalizeNullableString(body?.nama_pemilik_rekening_snapshot, 'nama_pemilik_rekening_snapshot', 70) ||
+        normalizeNullableString(user?.nama_pemilik_rekening ?? freelance?.nama_pemilik_rekening, 'nama_pemilik_rekening', 70) ||
+        null,
       issue_number: null,
       issued_at: parseDateTime(body?.issued_at, 'issued_at'),
       company_name_snapshot: normalizeNullableString(body?.company_name_snapshot, 'company_name_snapshot', 255),

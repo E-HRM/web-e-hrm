@@ -236,6 +236,7 @@ function buildSelect() {
         nomor_induk_karyawan: true,
         nomor_rekening: true,
         jenis_bank: true,
+        nama_pemilik_rekening: true,
         status_kerja: true,
         deleted_at: true,
         departement: {
@@ -265,6 +266,9 @@ function buildSelect() {
         email: true,
         kontak: true,
         alamat: true,
+        nomor_rekening: true,
+        jenis_bank: true,
+        nama_pemilik_rekening: true,
         id_supervisor: true,
         deleted_at: true,
         supervisor: {

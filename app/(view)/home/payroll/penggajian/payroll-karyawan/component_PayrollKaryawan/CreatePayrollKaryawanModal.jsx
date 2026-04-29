@@ -12,7 +12,7 @@ import AppTypography from '@/app/(view)/component_shared/AppTypography';
 import ApprovalStepsSection from './ApprovalStepsSection';
 import { EDITABLE_STATUS_PAYROLL_OPTIONS } from '../utils/payrollKaryawanUtils';
 
-const DEFAULT_COMPANY_NAME = 'CV One Step Solution Bali International';
+const DEFAULT_COMPANY_NAME = 'CV OSS Bali International';
 
 function CreatePayrollForm({ vm }) {
   return (
@@ -152,6 +152,14 @@ function CreatePayrollForm({ vm }) {
           inputClassName='!rounded-lg'
         />
       </div>
+
+      <AppInput
+        label='Nama Pemilik Rekening'
+        value={vm.formData.nama_pemilik_rekening_snapshot}
+        placeholder='Diambil otomatis dari data karyawan'
+        disabled
+        inputClassName='!rounded-lg'
+      />
 
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <AppInput

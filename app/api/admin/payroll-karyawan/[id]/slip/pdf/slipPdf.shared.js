@@ -85,6 +85,33 @@ function formatJenisHubungan(value) {
   return map[normalizeText(value).toUpperCase()] || value || '-';
 }
 
+function textHasHrMarker(value) {
+  const text = normalizeText(value).toUpperCase();
+  if (!text) return false;
+
+  return /\bHRD?\b/.test(text) || text.includes('HUMAN RESOURCE') || text.includes('PERSONALIA');
+}
+
+function resolveApprovalRoleLabel(step) {
+  const role = normalizeText(step?.approver_role || step?.approver?.role).toUpperCase();
+  const approverName = step?.approver_nama_snapshot || step?.approver?.nama_pengguna;
+  const approverJabatan = step?.approver?.jabatan?.nama_jabatan;
+  const approverDepartement = step?.approver?.departement?.nama_departement;
+
+  if (role === 'SUPERADMIN' && [approverName, approverJabatan, approverDepartement].some(textHasHrMarker)) {
+    return 'HR';
+  }
+
+  return role;
+}
+
+function resolveApprovalColumnTitle(step) {
+  const approvalRoleLabel = resolveApprovalRoleLabel(step);
+  if (!approvalRoleLabel) return `Approval Level ${step?.level || '-'}`;
+
+  return approvalRoleLabel === 'HR' ? 'Issue By HR' : `Approve By ${approvalRoleLabel}`;
+}
+
 function buildDetailItems(groups = []) {
   return groups.flatMap((group) =>
     (Array.isArray(group?.items) ? group.items : []).map((item) => ({
@@ -799,7 +826,7 @@ export async function buildSlipPdf(slip) {
   const approvalColumns =
     approvalSteps.length > 0
       ? approvalSteps.map((step) => ({
-          title: step?.approver_role ? `Approve By ${normalizeText(step.approver_role) || '-'}` : `Approval Level ${step?.level || '-'}`,
+          title: resolveApprovalColumnTitle(step),
           step,
         }))
       : [{ title: 'Approval', step: null }];
