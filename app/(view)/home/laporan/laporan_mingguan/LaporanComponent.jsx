@@ -354,6 +354,129 @@ export default function LaporanComponent() {
           </div>
         ) : (
           <>
+            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900">
+                      Narasi Laporan
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Ringkasan otomatis dari seluruh aktivitas yang tercatat.
+                    </p>
+                  </div>
+                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                    Auto Generated
+                  </div>
+                </div>
+
+                <p className="mt-5 text-sm leading-7 text-slate-700 md:text-base">
+                  {vm.reportText}
+                </p>
+
+                {vm.narrativeBlocks.length > 0 ? (
+                  <div className="mt-6 grid gap-3 md:grid-cols-2">
+                    {vm.narrativeBlocks.map((block) => (
+                      <div
+                        key={block.title}
+                        className="rounded-2xl bg-slate-50 p-4"
+                      >
+                        <div className="text-sm font-semibold text-slate-900">
+                          {block.title}
+                        </div>
+                        <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_170px] sm:items-start">
+                          <p className="text-sm leading-6 text-slate-600">
+                            {block.text}
+                          </p>
+                          <div className="sm:justify-self-end">
+                            <NarrativePieChart data={block.chartData} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-slate-900">
+                  Status Minggu Ini
+                </h2>
+
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="text-sm font-medium text-slate-900">
+                      Agenda Kerja
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+                      <div>Teragenda: {vm.summary.agendaPlanned}</div>
+                      <div>Diproses: {vm.summary.agendaInProgress}</div>
+                      <div>Selesai: {vm.summary.agendaDone}</div>
+                      <div>Ditunda: {vm.summary.agendaPaused}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="text-sm font-medium text-slate-900">
+                      Kunjungan Klien
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+                      <div>Teragenda: {vm.summary.visitPlanned}</div>
+                      <div>Berlangsung: {vm.summary.visitRunning}</div>
+                      <div>Selesai: {vm.summary.visitDone}</div>
+                      <div>Batal: {vm.summary.visitCanceled}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="text-sm font-medium text-slate-900">
+                      Kehadiran & Disiplin
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+                      <div>Hadir: {vm.attendanceSummary.presentDays}</div>
+                      <div>Tepat waktu: {vm.attendanceSummary.onTimeCount}</div>
+                      <div>Terlambat: {vm.attendanceSummary.lateCount}</div>
+                      <div>
+                        Lokasi patuh:{" "}
+                        {vm.formatPercent(
+                          vm.attendanceSummary.locationComplianceRate,
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+                  <div className="text-sm font-medium text-slate-900">
+                    Insight Utama
+                  </div>
+                  <div className="mt-3 space-y-3">
+                    <MetricLine
+                      label="Hari tersibuk"
+                      value={
+                        vm.detailedInsights.busiestDay
+                          ? `${vm.detailedInsights.busiestDay.dayLabel}, ${vm.detailedInsights.busiestDay.dateLabel}`
+                          : "-"
+                      }
+                    />
+                    <MetricLine
+                      label="Total item hari tersibuk"
+                      value={vm.detailedInsights.busiestDay?.totalItems ?? 0}
+                    />
+                    <MetricLine
+                      label="Top karyawan"
+                      value={vm.detailedInsights.topEmployee?.user?.nama || "-"}
+                    />
+                    <MetricLine
+                      label="Skor top karyawan"
+                      value={
+                        vm.detailedInsights.topEmployee?.productivityScore ?? 0
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
             {/* <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 label="Karyawan Aktif"
@@ -802,155 +925,6 @@ export default function LaporanComponent() {
                           ))}
                         </div>
 
-                        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <div className="flex items-center justify-between gap-4">
-                              <div>
-                                <h2 className="text-xl font-semibold text-slate-900">
-                                  Narasi Laporan
-                                </h2>
-                                <p className="mt-1 text-sm text-slate-500">
-                                  Ringkasan otomatis dari seluruh aktivitas yang
-                                  tercatat.
-                                </p>
-                              </div>
-                              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-                                Auto Generated
-                              </div>
-                            </div>
-
-                            <p className="mt-5 text-sm leading-7 text-slate-700 md:text-base">
-                              {vm.reportText}
-                            </p>
-
-                            {vm.narrativeBlocks.length > 0 ? (
-                              <div className="mt-6 grid gap-3 md:grid-cols-2">
-                                {vm.narrativeBlocks.map((block) => (
-                                  <div
-                                    key={block.title}
-                                    className="rounded-2xl bg-slate-50 p-4"
-                                  >
-                                    <div className="text-sm font-semibold text-slate-900">
-                                      {block.title}
-                                    </div>
-                                    <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_170px] sm:items-start">
-                                      <p className="text-sm leading-6 text-slate-600">
-                                        {block.text}
-                                      </p>
-                                      <div className="sm:justify-self-end">
-                                        <NarrativePieChart
-                                          data={block.chartData}
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                            <h2 className="text-xl font-semibold text-slate-900">
-                              Status Minggu Ini
-                            </h2>
-
-                            <div className="mt-5 space-y-4">
-                              <div className="rounded-2xl bg-slate-50 p-4">
-                                <div className="text-sm font-medium text-slate-900">
-                                  Agenda Kerja
-                                </div>
-                                <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                                  <div>
-                                    Teragenda: {vm.summary.agendaPlanned}
-                                  </div>
-                                  <div>
-                                    Diproses: {vm.summary.agendaInProgress}
-                                  </div>
-                                  <div>Selesai: {vm.summary.agendaDone}</div>
-                                  <div>Ditunda: {vm.summary.agendaPaused}</div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl bg-slate-50 p-4">
-                                <div className="text-sm font-medium text-slate-900">
-                                  Kunjungan Klien
-                                </div>
-                                <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                                  <div>
-                                    Teragenda: {vm.summary.visitPlanned}
-                                  </div>
-                                  <div>
-                                    Berlangsung: {vm.summary.visitRunning}
-                                  </div>
-                                  <div>Selesai: {vm.summary.visitDone}</div>
-                                  <div>Batal: {vm.summary.visitCanceled}</div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-2xl bg-slate-50 p-4">
-                                <div className="text-sm font-medium text-slate-900">
-                                  Kehadiran & Disiplin
-                                </div>
-                                <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                                  <div>
-                                    Hadir: {vm.attendanceSummary.presentDays}
-                                  </div>
-                                  <div>
-                                    Tepat waktu:{" "}
-                                    {vm.attendanceSummary.onTimeCount}
-                                  </div>
-                                  <div>
-                                    Terlambat: {vm.attendanceSummary.lateCount}
-                                  </div>
-                                  <div>
-                                    Lokasi patuh:{" "}
-                                    {vm.formatPercent(
-                                      vm.attendanceSummary
-                                        .locationComplianceRate,
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-                              <div className="text-sm font-medium text-slate-900">
-                                Insight Utama
-                              </div>
-                              <div className="mt-3 space-y-3">
-                                <MetricLine
-                                  label="Hari tersibuk"
-                                  value={
-                                    vm.detailedInsights.busiestDay
-                                      ? `${vm.detailedInsights.busiestDay.dayLabel}, ${vm.detailedInsights.busiestDay.dateLabel}`
-                                      : "-"
-                                  }
-                                />
-                                <MetricLine
-                                  label="Total item hari tersibuk"
-                                  value={
-                                    vm.detailedInsights.busiestDay
-                                      ?.totalItems ?? 0
-                                  }
-                                />
-                                <MetricLine
-                                  label="Top karyawan"
-                                  value={
-                                    vm.detailedInsights.topEmployee?.user
-                                      ?.nama || "-"
-                                  }
-                                />
-                                <MetricLine
-                                  label="Skor top karyawan"
-                                  value={
-                                    vm.detailedInsights.topEmployee
-                                      ?.productivityScore ?? 0
-                                  }
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     ))}
                   </div>
