@@ -185,7 +185,7 @@ function NarrativePieChart({ data }) {
   }
 
   return (
-    <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+    <div className="w-full max-w-[190px] overflow-hidden rounded-2xl bg-white p-2 shadow-sm ring-1 ring-slate-200 sm:w-[170px]">
       <div className="h-28 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -384,11 +384,11 @@ export default function LaporanComponent() {
                         <div className="text-sm font-semibold text-slate-900">
                           {block.title}
                         </div>
-                        <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_170px] sm:items-start">
-                          <p className="text-sm leading-6 text-slate-600">
+                        <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <p className="min-w-0 text-sm leading-6 text-slate-600">
                             {block.text}
                           </p>
-                          <div className="sm:justify-self-end">
+                          <div className="lg:shrink-0 lg:self-start">
                             <NarrativePieChart data={block.chartData} />
                           </div>
                         </div>
