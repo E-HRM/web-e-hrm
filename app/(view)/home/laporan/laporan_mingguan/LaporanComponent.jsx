@@ -42,6 +42,13 @@ function StatCard({ label, value, helper }) {
   );
 }
 
+const isUserSupervisor = (user) => {
+  if (!user || !Array.isArray(user.roles)) return false;
+  return user.roles.some((role) =>
+    String(role).toLowerCase().includes("supervisor"),
+  );
+};
+
 function MetricLine({ label, value }) {
   return (
     <div className="flex items-center justify-between gap-3 text-sm">
@@ -164,6 +171,85 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
+function NarrativePieChart({ data }) {
+  const safeData = Array.isArray(data)
+    ? data.filter((item) => Number(item?.value || 0) > 0)
+    : [];
+  const total = safeData.reduce(
+    (sum, item) => sum + Number(item.value || 0),
+    0,
+  );
+
+  if (safeData.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+      <div className="h-28 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={safeData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={28}
+              outerRadius={42}
+              paddingAngle={2}
+              stroke="transparent"
+              isAnimationActive={false}
+            >
+              {safeData.map((entry, index) => (
+                <Cell
+                  key={`${entry.key || entry.name}-${index}`}
+                  fill={
+                    entry.color ||
+                    KPI_CHART_COLORS[index % KPI_CHART_COLORS.length]
+                  }
+                />
+              ))}
+            </Pie>
+            <RTooltip content={<ChartTooltip />} />
+            <text
+              x="50%"
+              y="50%"
+              textAnchor="middle"
+              dominantBaseline="middle"
+              className="fill-slate-900 text-sm font-semibold"
+            >
+              {total}
+            </text>
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="mt-2 space-y-1">
+        {safeData.slice(0, 4).map((entry, index) => (
+          <div
+            key={`${entry.key || entry.name}-legend-${index}`}
+            className="flex items-center justify-between gap-2 text-xs text-slate-600"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{
+                  backgroundColor:
+                    entry.color ||
+                    KPI_CHART_COLORS[index % KPI_CHART_COLORS.length],
+                }}
+              />
+              <span className="truncate">{entry.name}</span>
+            </div>
+            <span className="shrink-0 font-medium text-slate-900">
+              {entry.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function LaporanComponent() {
   const vm = useLaporanMingguanViewModel();
   const showKpiCompletedColumn = vm.kpiHasCompletionDelta;
@@ -268,7 +354,7 @@ export default function LaporanComponent() {
           </div>
         ) : (
           <>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {/* <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 label="Karyawan Aktif"
                 value={vm.summary.activeUserCount}
@@ -277,7 +363,9 @@ export default function LaporanComponent() {
               <StatCard
                 label="Timesheet & Agenda"
                 value={vm.summary.agendaCount}
-                helper={`${vm.summary.agendaDone} selesai | ${vm.formatDuration(vm.summary.agendaDurationSeconds)}`}
+                helper={`${vm.summary.agendaDone} selesai | ${vm.formatDuration(
+                  vm.summary.agendaDurationSeconds,
+                )}`}
               />
               <StatCard
                 label="Kunjungan Klien"
@@ -300,12 +388,16 @@ export default function LaporanComponent() {
               <StatCard
                 label="Agenda Completion"
                 value={vm.formatPercent(vm.summary.agendaCompletionRate)}
-                helper={`Rata-rata durasi ${vm.formatDuration(vm.detailedInsights.avgAgendaDurationSeconds)}`}
+                helper={`Rata-rata durasi ${vm.formatDuration(
+                  vm.detailedInsights.avgAgendaDurationSeconds,
+                )}`}
               />
               <StatCard
                 label="Visit Completion"
                 value={vm.formatPercent(vm.summary.visitCompletionRate)}
-                helper={`Rata-rata durasi ${vm.formatDuration(vm.detailedInsights.avgVisitDurationSeconds)}`}
+                helper={`Rata-rata durasi ${vm.formatDuration(
+                  vm.detailedInsights.avgVisitDurationSeconds,
+                )}`}
               />
               <StatCard
                 label="Total Durasi"
@@ -332,7 +424,9 @@ export default function LaporanComponent() {
                 value={vm.formatDuration(
                   vm.attendanceSummary.totalBreakSeconds,
                 )}
-                helper={`${vm.attendanceSummary.breakSessions} sesi | avg ${vm.formatDuration(vm.attendanceSummary.averageBreakSeconds)}`}
+                helper={`${vm.attendanceSummary.breakSessions} sesi | avg ${vm.formatDuration(
+                  vm.attendanceSummary.averageBreakSeconds,
+                )}`}
               />
               <StatCard
                 label="Kepatuhan Lokasi"
@@ -364,369 +458,7 @@ export default function LaporanComponent() {
                 value={vm.formatCurrency(vm.revenueSummary.averageRevenue)}
                 helper="Rata-rata revenue per transaksi"
               />
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Leads By Consultant
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Data leads berdasarkan nama consultant yang dipilih pada
-                    filter karyawan.
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                      Total Leads
-                    </div>
-                    <div className="mt-2 text-2xl font-semibold text-slate-900">
-                      {vm.leadsByConsultantSummary.total}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                    <div className="mt-2 text-2xl font-semibold text-slate-900">
-                      {vm.leadsByConsultantSummary.countryCount}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {vm.leadsByConsultantLoading ? (
-                <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-                  Memuat leads by consultant...
-                </div>
-              ) : vm.leadsByConsultantError ? (
-                <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
-                  {vm.leadsByConsultantError.message ||
-                    "Gagal memuat leads by consultant."}
-                </div>
-              ) : vm.leadsByConsultantRows.length === 0 ? (
-                <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-                  Tidak ada leads untuk consultant yang dipilih.
-                </div>
-              ) : (
-                <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {vm.leadsByConsultantRows.map((lead) => (
-                    <div
-                      key={lead.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-base font-semibold text-slate-900">
-                            {lead.nama}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {vm.leadsByConsultantMeta.matchedConsultant?.name ||
-                              lead.consultantName ||
-                              vm.selectedUserMeta?.nama ||
-                              "-"}
-                          </div>
-                        </div>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${leadStatusClass(lead.status)}`}
-                        >
-                          {lead.status || "baru"}
-                        </span>
-                      </div>
-
-                      <div className="mt-4 space-y-2 text-sm text-slate-600">
-                        <div>Whatsapp: {lead.phone || "-"}</div>
-                        <div>Email: {lead.email || "-"}</div>
-                        <div>Domisili: {lead.domicile || "-"}</div>
-                        <div>Pendidikan: {lead.educationLast || "-"}</div>
-                        <div>
-                          {[lead.country, lead.source]
-                            .filter(Boolean)
-                            .join(" • ") || "-"}
-                        </div>
-                        <div>Dibuat: {vm.formatDateTime(lead.createdAt)}</div>
-                        <div>
-                          Assigned: {vm.formatDateTime(lead.assignedAt)}
-                        </div>
-                      </div>
-
-                      {lead.notes ? (
-                        <div className="mt-4 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-slate-600">
-                          {lead.notes}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Rekap Freelance per Supervisor
-                  </h2>
-                  <p className="mt-1 max-w-3xl text-sm text-slate-500">
-                    Laporan form freelance untuk periode {vm.week.label}
-                  </p>
-                </div>
-              </div>
-
-              {vm.freelanceWeeklyLoading ? (
-                <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-                  Memuat laporan freelance mingguan...
-                </div>
-              ) : vm.freelanceWeeklyError ? (
-                <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
-                  Gagal memuat laporan freelance mingguan.
-                </div>
-              ) : vm.freelanceSupervisorRows.length === 0 ? (
-                <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
-                  {vm.selectedUserMeta?.nama
-                    ? `Tidak ada form freelance untuk supervisor ${vm.selectedUserMeta.nama} pada minggu ini.`
-                    : "Tidak ada form freelance pada minggu ini."}
-                </div>
-              ) : (
-                <div className="mt-6 space-y-4">
-                  {vm.freelanceSupervisorRows.map((group) => (
-                    <div
-                      key={group.key}
-                      className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5"
-                    >
-                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                        <div>
-                          <div className="text-lg font-semibold text-slate-900">
-                            {group.supervisor?.nama_pengguna || "Tanpa Supervisor"}
-                          </div>
-                          <div className="mt-1 text-sm text-slate-500">
-                            {group.supervisor?.email || "Supervisor freelance terkait"}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 text-xs font-medium">
-                          <span className="rounded-full bg-white px-3 py-1.5 text-slate-700">
-                            {group.summary.total_freelance} freelance
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="mt-5 space-y-3">
-                        {group.freelancers.map((freelance) => (
-                          <div
-                            key={freelance.id_freelance}
-                            className="rounded-2xl border border-slate-200 bg-white p-4"
-                          >
-                            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                              <div>
-                                <Link
-                                  href={`/home/freelance/${freelance.id_freelance}`}
-                                  className="text-base font-semibold text-slate-900 no-underline hover:text-sky-700"
-                                >
-                                  {freelance.nama}
-                                </Link>
-                                <div className="mt-1 text-sm text-slate-500">
-                                  {[freelance.email, freelance.kontak]
-                                    .filter(Boolean)
-                                    .join(" • ") || "Tanpa kontak"}
-                                </div>
-                              </div>
-
-                              <div className="flex flex-wrap gap-2 text-xs font-medium">
-                                <span className="rounded-full bg-sky-100 px-3 py-1.5 text-sky-700">
-                                  {freelance.summary.full_day} full day
-                                </span>
-                                <span className="rounded-full bg-orange-100 px-3 py-1.5 text-orange-700">
-                                  {freelance.summary.half_day} half day
-                                </span>
-                                <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700">
-                                  {freelance.summary.disetujui} disetujui
-                                </span>
-                                <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700">
-                                  {freelance.summary.pending} pending
-                                </span>
-                                <span className="rounded-full bg-rose-100 px-3 py-1.5 text-rose-700">
-                                  {freelance.summary.ditolak} ditolak
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="mt-4 flex flex-wrap gap-3">
-                              {freelance.entries.map((entry) => (
-                                <div
-                                  key={entry.id_form_freelance}
-                                  className="min-w-[180px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                                >
-                                  <div className="text-sm font-semibold text-slate-900">
-                                    {dayjs(entry.tanggal_kerja).isValid()
-                                      ? dayjs(entry.tanggal_kerja).format(
-                                          "DD MMM YYYY",
-                                        )
-                                      : "-"}
-                                  </div>
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    <span
-                                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${freelanceWorkdayClass(entry.status_hari_kerja)}`}
-                                    >
-                                      {freelanceWorkdayLabel(
-                                        entry.status_hari_kerja,
-                                      )}
-                                    </span>
-                                    <span
-                                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${freelanceDecisionClass(entry.decision)}`}
-                                    >
-                                      {freelanceDecisionLabel(entry.decision)}
-                                    </span>
-                                  </div>
-                                  <div className="mt-3 text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
-                                    Todo List
-                                  </div>
-                                  {Array.isArray(entry.todo_items) &&
-                                  entry.todo_items.length > 0 ? (
-                                    <ul className="mt-2 space-y-1.5 text-xs text-slate-600">
-                                      {entry.todo_items.map(
-                                        (todo, todoIndex) => (
-                                          <li
-                                            key={`${entry.id_form_freelance}-${todoIndex}`}
-                                            className="flex items-start gap-2"
-                                          >
-                                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
-                                            <span>{todo}</span>
-                                          </li>
-                                        ),
-                                      )}
-                                    </ul>
-                                  ) : (
-                                    <div className="mt-2 text-xs text-slate-500">
-                                      Belum ada todo list.
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-semibold text-slate-900">
-                      Narasi Laporan
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Ringkasan otomatis dari seluruh aktivitas yang tercatat.
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
-                    Auto Generated
-                  </div>
-                </div>
-                <p className="mt-5 text-sm leading-7 text-slate-700 md:text-base">
-                  {vm.reportText}
-                </p>
-
-                {vm.narrativeBlocks.length > 0 ? (
-                  <div className="mt-6 grid gap-3 md:grid-cols-2">
-                    {vm.narrativeBlocks.map((block) => (
-                      <div
-                        key={block.title}
-                        className="rounded-2xl bg-slate-50 p-4"
-                      >
-                        <div className="text-sm font-semibold text-slate-900">
-                          {block.title}
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">
-                          {block.text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Status Minggu Ini
-                </h2>
-                <div className="mt-5 space-y-4">
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="text-sm font-medium text-slate-900">
-                      Agenda Kerja
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                      <div>Teragenda: {vm.summary.agendaPlanned}</div>
-                      <div>Diproses: {vm.summary.agendaInProgress}</div>
-                      <div>Selesai: {vm.summary.agendaDone}</div>
-                      <div>Ditunda: {vm.summary.agendaPaused}</div>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="text-sm font-medium text-slate-900">
-                      Kunjungan Klien
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                      <div>Teragenda: {vm.summary.visitPlanned}</div>
-                      <div>Berlangsung: {vm.summary.visitRunning}</div>
-                      <div>Selesai: {vm.summary.visitDone}</div>
-                      <div>Batal: {vm.summary.visitCanceled}</div>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="text-sm font-medium text-slate-900">
-                      Kehadiran & Disiplin
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
-                      <div>Hadir: {vm.attendanceSummary.presentDays}</div>
-                      <div>Tepat waktu: {vm.attendanceSummary.onTimeCount}</div>
-                      <div>Terlambat: {vm.attendanceSummary.lateCount}</div>
-                      <div>
-                        Lokasi patuh:{" "}
-                        {vm.formatPercent(
-                          vm.attendanceSummary.locationComplianceRate,
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-2xl bg-slate-50 p-4">
-                  <div className="text-sm font-medium text-slate-900">
-                    Insight Utama
-                  </div>
-                  <div className="mt-3 space-y-3">
-                    <MetricLine
-                      label="Hari tersibuk"
-                      value={
-                        vm.detailedInsights.busiestDay
-                          ? `${vm.detailedInsights.busiestDay.dayLabel}, ${vm.detailedInsights.busiestDay.dateLabel}`
-                          : "-"
-                      }
-                    />
-                    <MetricLine
-                      label="Total item hari tersibuk"
-                      value={vm.detailedInsights.busiestDay?.totalItems ?? 0}
-                    />
-                    <MetricLine
-                      label="Top karyawan"
-                      value={vm.detailedInsights.topEmployee?.user?.nama || "-"}
-                    />
-                    <MetricLine
-                      label="Skor top karyawan"
-                      value={
-                        vm.detailedInsights.topEmployee?.productivityScore ?? 0
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            </div> */}
 
             <div className="grid gap-6 xl:grid-cols-2">
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -739,6 +471,7 @@ export default function LaporanComponent() {
                     terpilih.
                   </p>
                 </div>
+
                 <div className="mt-5 space-y-3">
                   <MetricLine
                     label="Hari hadir"
@@ -779,6 +512,7 @@ export default function LaporanComponent() {
                     mingguan.
                   </p>
                 </div>
+
                 <div className="mt-5 space-y-3">
                   <MetricLine
                     label="Total sesi"
@@ -803,6 +537,426 @@ export default function LaporanComponent() {
                 </div>
               </div>
             </div>
+
+            {(vm.leadsByConsultantLoading ||
+              vm.leadsByConsultantError ||
+              vm.hasLeadsConsultantData) && (
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900">
+                      Leads By Consultant
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Data leads berdasarkan nama consultant yang dipilih pada
+                      filter karyawan.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                        Total Leads
+                      </div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">
+                        {vm.leadsByConsultantSummary.total}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <div className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                        Negara Tujuan
+                      </div>
+                      <div className="mt-2 text-2xl font-semibold text-slate-900">
+                        {vm.leadsByConsultantSummary.countryCount}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {vm.leadsByConsultantLoading ? (
+                  <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
+                    Memuat leads by consultant...
+                  </div>
+                ) : vm.leadsByConsultantError ? (
+                  <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+                    {vm.leadsByConsultantError.message ||
+                      "Gagal memuat leads by consultant."}
+                  </div>
+                ) : vm.leadsByConsultantRows.length === 0 ? (
+                  <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
+                    Tidak ada leads untuk consultant yang dipilih.
+                  </div>
+                ) : (
+                  <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {vm.leadsByConsultantRows.map((lead) => (
+                      <div
+                        key={lead.id}
+                        className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-base font-semibold text-slate-900">
+                              {lead.nama}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {vm.leadsByConsultantMeta.matchedConsultant
+                                ?.name ||
+                                lead.consultantName ||
+                                vm.selectedUserMeta?.nama ||
+                                "-"}
+                            </div>
+                          </div>
+
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${leadStatusClass(
+                              lead.status,
+                            )}`}
+                          >
+                            {lead.status || "baru"}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 space-y-2 text-sm text-slate-600">
+                          <div>Whatsapp: {lead.phone || "-"}</div>
+                          <div>Email: {lead.email || "-"}</div>
+                          <div>Domisili: {lead.domicile || "-"}</div>
+                          <div>Pendidikan: {lead.educationLast || "-"}</div>
+                          <div>
+                            {[lead.country, lead.source]
+                              .filter(Boolean)
+                              .join(" • ") || "-"}
+                          </div>
+                          <div>Dibuat: {vm.formatDateTime(lead.createdAt)}</div>
+                          <div>
+                            Assigned: {vm.formatDateTime(lead.assignedAt)}
+                          </div>
+                        </div>
+
+                        {lead.notes ? (
+                          <div className="mt-4 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-slate-600">
+                            {lead.notes}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {vm.hasFreelanceData && (
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900">
+                      Rekap Freelance per Supervisor
+                    </h2>
+                    <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                      Laporan form freelance untuk periode {vm.week.label}
+                    </p>
+                  </div>
+                </div>
+
+                {vm.freelanceWeeklyLoading ? (
+                  <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
+                    Memuat laporan freelance mingguan...
+                  </div>
+                ) : vm.freelanceWeeklyError ? (
+                  <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-700">
+                    Gagal memuat laporan freelance mingguan.
+                  </div>
+                ) : vm.freelanceSupervisorRows.length === 0 ? (
+                  <div className="mt-5 rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
+                    {vm.selectedUserMeta?.nama
+                      ? `Tidak ada form freelance untuk supervisor ${vm.selectedUserMeta.nama} pada minggu ini.`
+                      : "Tidak ada form freelance pada minggu ini."}
+                  </div>
+                ) : (
+                  <div className="mt-6 space-y-4">
+                    {vm.freelanceSupervisorRows.map((group) => (
+                      <div
+                        key={group.key}
+                        className="rounded-3xl border border-slate-200 bg-slate-50/70 p-5"
+                      >
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div>
+                            <div className="text-lg font-semibold text-slate-900">
+                              {group.supervisor?.nama_pengguna ||
+                                "Tanpa Supervisor"}
+                            </div>
+                            <div className="mt-1 text-sm text-slate-500">
+                              {group.supervisor?.email ||
+                                "Supervisor freelance terkait"}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 text-xs font-medium">
+                            <span className="rounded-full bg-white px-3 py-1.5 text-slate-700">
+                              {group.summary.total_freelance} freelance
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 space-y-3">
+                          {group.freelancers.map((freelance) => (
+                            <div
+                              key={freelance.id_freelance}
+                              className="rounded-2xl border border-slate-200 bg-white p-4"
+                            >
+                              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                <div>
+                                  <Link
+                                    href={`/home/freelance/${freelance.id_freelance}`}
+                                    className="text-base font-semibold text-slate-900 no-underline hover:text-sky-700"
+                                  >
+                                    {freelance.nama}
+                                  </Link>
+                                  <div className="mt-1 text-sm text-slate-500">
+                                    {[freelance.email, freelance.kontak]
+                                      .filter(Boolean)
+                                      .join(" • ") || "Tanpa kontak"}
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2 text-xs font-medium">
+                                  <span className="rounded-full bg-sky-100 px-3 py-1.5 text-sky-700">
+                                    {freelance.summary.full_day} full day
+                                  </span>
+                                  <span className="rounded-full bg-orange-100 px-3 py-1.5 text-orange-700">
+                                    {freelance.summary.half_day} half day
+                                  </span>
+                                  <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700">
+                                    {freelance.summary.disetujui} disetujui
+                                  </span>
+                                  <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700">
+                                    {freelance.summary.pending} pending
+                                  </span>
+                                  <span className="rounded-full bg-rose-100 px-3 py-1.5 text-rose-700">
+                                    {freelance.summary.ditolak} ditolak
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap gap-3">
+                                {freelance.entries.map((entry) => (
+                                  <div
+                                    key={entry.id_form_freelance}
+                                    className="min-w-[180px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                                  >
+                                    <div className="text-sm font-semibold text-slate-900">
+                                      {dayjs(entry.tanggal_kerja).isValid()
+                                        ? dayjs(entry.tanggal_kerja).format(
+                                            "DD MMM YYYY",
+                                          )
+                                        : "-"}
+                                    </div>
+
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <span
+                                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${freelanceWorkdayClass(
+                                          entry.status_hari_kerja,
+                                        )}`}
+                                      >
+                                        {freelanceWorkdayLabel(
+                                          entry.status_hari_kerja,
+                                        )}
+                                      </span>
+                                      <span
+                                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${freelanceDecisionClass(
+                                          entry.decision,
+                                        )}`}
+                                      >
+                                        {freelanceDecisionLabel(entry.decision)}
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3 text-xs font-medium uppercase tracking-[0.12em] text-slate-400">
+                                      Todo List
+                                    </div>
+
+                                    {Array.isArray(entry.todo_items) &&
+                                    entry.todo_items.length > 0 ? (
+                                      <ul className="mt-2 space-y-1.5 text-xs text-slate-600">
+                                        {entry.todo_items.map(
+                                          (todo, todoIndex) => (
+                                            <li
+                                              key={`${entry.id_form_freelance}-${todoIndex}`}
+                                              className="flex items-start gap-2"
+                                            >
+                                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" />
+                                              <span>{todo}</span>
+                                            </li>
+                                          ),
+                                        )}
+                                      </ul>
+                                    ) : (
+                                      <div className="mt-2 text-xs text-slate-500">
+                                        Belum ada todo list.
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+                          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <h2 className="text-xl font-semibold text-slate-900">
+                                  Narasi Laporan
+                                </h2>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  Ringkasan otomatis dari seluruh aktivitas yang
+                                  tercatat.
+                                </p>
+                              </div>
+                              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-slate-500">
+                                Auto Generated
+                              </div>
+                            </div>
+
+                            <p className="mt-5 text-sm leading-7 text-slate-700 md:text-base">
+                              {vm.reportText}
+                            </p>
+
+                            {vm.narrativeBlocks.length > 0 ? (
+                              <div className="mt-6 grid gap-3 md:grid-cols-2">
+                                {vm.narrativeBlocks.map((block) => (
+                                  <div
+                                    key={block.title}
+                                    className="rounded-2xl bg-slate-50 p-4"
+                                  >
+                                    <div className="text-sm font-semibold text-slate-900">
+                                      {block.title}
+                                    </div>
+                                    <div className="mt-2 grid gap-3 sm:grid-cols-[1fr_170px] sm:items-start">
+                                      <p className="text-sm leading-6 text-slate-600">
+                                        {block.text}
+                                      </p>
+                                      <div className="sm:justify-self-end">
+                                        <NarrativePieChart
+                                          data={block.chartData}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h2 className="text-xl font-semibold text-slate-900">
+                              Status Minggu Ini
+                            </h2>
+
+                            <div className="mt-5 space-y-4">
+                              <div className="rounded-2xl bg-slate-50 p-4">
+                                <div className="text-sm font-medium text-slate-900">
+                                  Agenda Kerja
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+                                  <div>
+                                    Teragenda: {vm.summary.agendaPlanned}
+                                  </div>
+                                  <div>
+                                    Diproses: {vm.summary.agendaInProgress}
+                                  </div>
+                                  <div>Selesai: {vm.summary.agendaDone}</div>
+                                  <div>Ditunda: {vm.summary.agendaPaused}</div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl bg-slate-50 p-4">
+                                <div className="text-sm font-medium text-slate-900">
+                                  Kunjungan Klien
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+                                  <div>
+                                    Teragenda: {vm.summary.visitPlanned}
+                                  </div>
+                                  <div>
+                                    Berlangsung: {vm.summary.visitRunning}
+                                  </div>
+                                  <div>Selesai: {vm.summary.visitDone}</div>
+                                  <div>Batal: {vm.summary.visitCanceled}</div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-2xl bg-slate-50 p-4">
+                                <div className="text-sm font-medium text-slate-900">
+                                  Kehadiran & Disiplin
+                                </div>
+                                <div className="mt-3 grid grid-cols-2 gap-3 text-sm text-slate-600">
+                                  <div>
+                                    Hadir: {vm.attendanceSummary.presentDays}
+                                  </div>
+                                  <div>
+                                    Tepat waktu:{" "}
+                                    {vm.attendanceSummary.onTimeCount}
+                                  </div>
+                                  <div>
+                                    Terlambat: {vm.attendanceSummary.lateCount}
+                                  </div>
+                                  <div>
+                                    Lokasi patuh:{" "}
+                                    {vm.formatPercent(
+                                      vm.attendanceSummary
+                                        .locationComplianceRate,
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-6 rounded-2xl bg-slate-50 p-4">
+                              <div className="text-sm font-medium text-slate-900">
+                                Insight Utama
+                              </div>
+                              <div className="mt-3 space-y-3">
+                                <MetricLine
+                                  label="Hari tersibuk"
+                                  value={
+                                    vm.detailedInsights.busiestDay
+                                      ? `${vm.detailedInsights.busiestDay.dayLabel}, ${vm.detailedInsights.busiestDay.dateLabel}`
+                                      : "-"
+                                  }
+                                />
+                                <MetricLine
+                                  label="Total item hari tersibuk"
+                                  value={
+                                    vm.detailedInsights.busiestDay
+                                      ?.totalItems ?? 0
+                                  }
+                                />
+                                <MetricLine
+                                  label="Top karyawan"
+                                  value={
+                                    vm.detailedInsights.topEmployee?.user
+                                      ?.nama || "-"
+                                  }
+                                />
+                                <MetricLine
+                                  label="Skor top karyawan"
+                                  value={
+                                    vm.detailedInsights.topEmployee
+                                      ?.productivityScore ?? 0
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid gap-6 xl:grid-cols-2">
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -842,14 +996,21 @@ export default function LaporanComponent() {
                             <div>{item.selesai} selesai</div>
                           </div>
                         </div>
+
                         <div className="mt-3 h-2 rounded-full bg-slate-100">
                           <div
                             className="h-2 rounded-full bg-slate-800"
                             style={{
-                              width: `${Math.max((item.total / Math.max(vm.topProjects[0]?.total || 1, 1)) * 100, 8)}%`,
+                              width: `${Math.max(
+                                (item.total /
+                                  Math.max(vm.topProjects[0]?.total || 1, 1)) *
+                                  100,
+                                8,
+                              )}%`,
                             }}
                           />
                         </div>
+
                         <div className="mt-3 text-sm text-slate-500">
                           Durasi tercatat{" "}
                           {vm.formatDuration(item.durationSeconds)}
@@ -898,14 +1059,24 @@ export default function LaporanComponent() {
                             <div>{item.selesai} selesai</div>
                           </div>
                         </div>
+
                         <div className="mt-3 h-2 rounded-full bg-orange-100">
                           <div
                             className="h-2 rounded-full bg-orange-500"
                             style={{
-                              width: `${Math.max((item.total / Math.max(vm.topVisitCategories[0]?.total || 1, 1)) * 100, 8)}%`,
+                              width: `${Math.max(
+                                (item.total /
+                                  Math.max(
+                                    vm.topVisitCategories[0]?.total || 1,
+                                    1,
+                                  )) *
+                                  100,
+                                8,
+                              )}%`,
                             }}
                           />
                         </div>
+
                         <div className="mt-3 text-sm text-slate-500">
                           Durasi tercatat{" "}
                           {vm.formatDuration(item.durationSeconds)}
@@ -938,9 +1109,7 @@ export default function LaporanComponent() {
                       vm.revenueByProduct.length > 1
                         ? "md:grid-cols-2"
                         : "grid-cols-1"
-                    } ${
-                      vm.revenueByProduct.length > 2 ? "xl:grid-cols-3" : ""
-                    }`}
+                    } ${vm.revenueByProduct.length > 2 ? "xl:grid-cols-3" : ""}`}
                   >
                     {vm.revenueByProduct.slice(0, 5).map((item, index) => (
                       <div
@@ -963,11 +1132,20 @@ export default function LaporanComponent() {
                             <div>{item.totalTransactions} transaksi</div>
                           </div>
                         </div>
+
                         <div className="mt-4 h-2 rounded-full bg-emerald-100">
                           <div
                             className="h-2 rounded-full bg-emerald-600"
                             style={{
-                              width: `${Math.max((item.totalRevenue / Math.max(vm.revenueByProduct[0]?.totalRevenue || 1, 1)) * 100, 8)}%`,
+                              width: `${Math.max(
+                                (item.totalRevenue /
+                                  Math.max(
+                                    vm.revenueByProduct[0]?.totalRevenue || 1,
+                                    1,
+                                  )) *
+                                  100,
+                                8,
+                              )}%`,
                             }}
                           />
                         </div>
@@ -1009,6 +1187,7 @@ export default function LaporanComponent() {
                         <th className="px-4 py-3">Detail</th>
                       </tr>
                     </thead>
+
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {vm.weeklyKpiRows.map((row) => (
                         <tr key={row.key} className="align-top">
@@ -1058,24 +1237,26 @@ export default function LaporanComponent() {
                             {Array.isArray(row.detailEntries) &&
                             row.detailEntries.length > 0 ? (
                               <div className="flex flex-col gap-2">
-                                {row.detailEntries.slice(0, 3).map((entry, index) => (
-                                  entry.href ? (
-                                    <a
-                                      key={`${row.key}-detail-${index}`}
-                                      href={entry.href}
-                                      className="text-sm text-sky-700 underline-offset-2 hover:text-sky-900 hover:underline"
-                                    >
-                                      {entry.label || "-"}
-                                    </a>
-                                  ) : (
-                                    <div
-                                      key={`${row.key}-detail-${index}`}
-                                      className="text-sm text-slate-600"
-                                    >
-                                      {entry.label || "-"}
-                                    </div>
-                                  )
-                                ))}
+                                {row.detailEntries
+                                  .slice(0, 3)
+                                  .map((entry, index) =>
+                                    entry.href ? (
+                                      <a
+                                        key={`${row.key}-detail-${index}`}
+                                        href={entry.href}
+                                        className="text-sm text-sky-700 underline-offset-2 hover:text-sky-900 hover:underline"
+                                      >
+                                        {entry.label || "-"}
+                                      </a>
+                                    ) : (
+                                      <div
+                                        key={`${row.key}-detail-${index}`}
+                                        className="text-sm text-slate-600"
+                                      >
+                                        {entry.label || "-"}
+                                      </div>
+                                    ),
+                                  )}
                               </div>
                             ) : (
                               "-"
@@ -1090,7 +1271,9 @@ export default function LaporanComponent() {
             </div>
 
             <div
-              className={`grid gap-6 ${showKpiExecutionChart ? "xl:grid-cols-2" : "xl:grid-cols-1"}`}
+              className={`grid gap-6 ${
+                showKpiExecutionChart ? "xl:grid-cols-2" : "xl:grid-cols-1"
+              }`}
             >
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex items-center justify-between gap-4">
@@ -1272,11 +1455,13 @@ export default function LaporanComponent() {
                         <th className="px-4 py-3">Aktivitas Terakhir</th>
                       </tr>
                     </thead>
+
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {vm.employeeRows.map((row) => {
                         const href = row.user?.id
                           ? `/home/kelola_karyawan/karyawan/${row.user.id}`
                           : null;
+
                         const nameNode = (
                           <div>
                             <div className="font-medium text-slate-900">
@@ -1382,6 +1567,7 @@ export default function LaporanComponent() {
                         <th className="px-3 py-3 text-center">Total</th>
                       </tr>
                     </thead>
+
                     <tbody className="divide-y divide-slate-100">
                       {vm.dailyEmployeeMatrix.map((row) => (
                         <tr key={row.userId}>
@@ -1444,7 +1630,10 @@ export default function LaporanComponent() {
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(item.source, item.status)}`}
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(
+                              item.source,
+                              item.status,
+                            )}`}
                           >
                             {item.statusLabel}
                           </span>
@@ -1452,6 +1641,7 @@ export default function LaporanComponent() {
                             {item.projectName}
                           </span>
                         </div>
+
                         <div className="mt-3 font-semibold text-slate-900">
                           {item.title}
                         </div>
@@ -1500,7 +1690,10 @@ export default function LaporanComponent() {
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(item.source, item.status)}`}
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(
+                              item.source,
+                              item.status,
+                            )}`}
                           >
                             {item.statusLabel}
                           </span>
@@ -1508,6 +1701,7 @@ export default function LaporanComponent() {
                             {item.categoryName}
                           </span>
                         </div>
+
                         <div className="mt-3 font-semibold text-slate-900">
                           {item.title}
                         </div>
@@ -1603,21 +1797,26 @@ export default function LaporanComponent() {
                   {vm.combinedFeed.map((item) => (
                     <div
                       key={`${item.source}-${item.id}`}
-                      id={getActivityAnchorId(item)}
+                      id={getActivityAnchorId(item.source, item.id)}
                       className="scroll-mt-28 rounded-2xl border border-slate-200 p-4"
                     >
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceClass(item.source)}`}
+                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${sourceClass(
+                                item.source,
+                              )}`}
                             >
                               {item.source === "kunjungan"
                                 ? "Kunjungan Klien"
                                 : "Timesheet / Agenda"}
                             </span>
                             <span
-                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(item.source, item.status)}`}
+                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClass(
+                                item.source,
+                                item.status,
+                              )}`}
                             >
                               {item.statusLabel}
                             </span>

@@ -25,6 +25,17 @@ const STUDENT_BY_CONSULTANT_API_KEY =
     ? RAW_STUDENT_BY_CONSULTANT_URL
     : "");
 
+const NARRATIVE_PIE_COLORS = [
+  "#0F766E",
+  "#14B8A6",
+  "#F59E0B",
+  "#FB7185",
+  "#6366F1",
+  "#8B5CF6",
+  "#22C55E",
+  "#F97316",
+];
+
 function getWeekStartFriday(value = dayjs()) {
   const base = dayjs(value).startOf("day");
   const diff = (base.day() - 5 + 7) % 7;
@@ -106,6 +117,23 @@ function formatCurrency(value) {
     currency: "IDR",
     maximumFractionDigits: 0,
   }).format(safe);
+}
+
+function buildNarrativePieData(data, { maxItems = 3, otherLabel = "Lainnya" } = {}) {
+  const list = Array.isArray(data) ? data.filter((item) => Number(item?.value || 0) > 0) : EMPTY;
+  if (list.length === 0) return EMPTY;
+
+  const sorted = [...list].sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+  const main = sorted.slice(0, maxItems);
+  const rest = sorted.slice(maxItems);
+  const otherValue = rest.reduce((sum, item) => sum + Number(item.value || 0), 0);
+
+  const merged = otherValue > 0 ? [...main, { key: "other", name: otherLabel, value: otherValue }] : main;
+
+  return merged.map((item, index) => ({
+    ...item,
+    color: item.color || NARRATIVE_PIE_COLORS[index % NARRATIVE_PIE_COLORS.length],
+  }));
 }
 
 function buildEmptyFreelanceWeeklySummary() {
@@ -1422,6 +1450,25 @@ export default function useLaporanMingguanViewModel() {
     return summarizeFreelanceWeeklyRows(freelanceSupervisorRows);
   }, [freelanceSupervisorRows]);
 
+  const hasFreelanceData = useMemo(() => {
+    if (!selectedUserId) return freelanceWeeklySummary.total_forms > 0;
+
+    return (
+      freelanceSupervisorRows.length > 0 &&
+      freelanceSupervisorRows.some((group) => {
+        const freelancers = Array.isArray(group?.freelancers)
+          ? group.freelancers
+          : [];
+
+        return freelancers.length > 0;
+      })
+    );
+  }, [
+    freelanceSupervisorRows,
+    freelanceWeeklySummary.total_forms,
+    selectedUserId,
+  ]);
+
   const leadsByConsultantSummary = useMemo(() => {
     return leadsByConsultantSwr.data?.summary || {
       total: 0,
@@ -1441,6 +1488,19 @@ export default function useLaporanMingguanViewModel() {
   const leadsByConsultantRows = useMemo(() => {
     return Array.isArray(leadsByConsultantSwr.data?.data) ? leadsByConsultantSwr.data.data : EMPTY;
   }, [leadsByConsultantSwr.data]);
+
+  const hasLeadsConsultantData = useMemo(() => {
+    if (!selectedUserId) return Number(leadsByConsultantSummary.total || 0) > 0;
+
+    return (
+      Number(leadsByConsultantSummary.total || 0) > 0 ||
+      leadsByConsultantRows.length > 0
+    );
+  }, [
+    leadsByConsultantRows.length,
+    leadsByConsultantSummary.total,
+    selectedUserId,
+  ]);
 
   const studentByConsultantSummary = useMemo(() => {
     return studentByConsultantSwr.data?.summary || {
@@ -2057,9 +2117,14 @@ export default function useLaporanMingguanViewModel() {
     const blocks = [];
 
     if (summary.totalTrackedItems > 0) {
+      const remaining = Math.max(summary.totalTrackedItems - summary.completedTrackedItems, 0);
       blocks.push({
         title: "Produktivitas",
         text: `Minggu ini tercatat ${summary.totalTrackedItems} aktivitas utama dan ${summary.completedTrackedItems} di antaranya sudah selesai. Penyelesaian keseluruhan berada di ${formatPercent(summary.completionRate)}, dengan agenda kerja menyumbang ${summary.agendaCount} item dan kunjungan klien ${summary.visitCount} item.`,
+        chartData: buildNarrativePieData([
+          { key: "completed", name: "Selesai", value: summary.completedTrackedItems, color: "#16A34A" },
+          { key: "remaining", name: "Belum Selesai", value: remaining, color: "#CBD5E1" },
+        ]),
       });
     }
 
@@ -2067,6 +2132,24 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "KPI yang Bergerak",
         text: `${matchedWeeklyKpiRows.length} KPI memiliki aktivitas yang benar-benar mendukung pencapaian minggu ini. Total realisasinya ${formatNumber(kpiSummary.totalActual)} dari sasaran minggu ini ${formatNumber(kpiSummary.totalWeeklyTarget)}. ${matchedKpiHighlights.map((row) => `${row.namaKpi} (${row.userName}) ${formatNumber(row.actualWeekly)}/${formatNumber(row.weeklyTarget)}`).join('; ')}.`,
+        chartData: buildNarrativePieData(
+          [
+            { key: "completed", name: "Selesai", value: kpiSummary.totalCompleted, color: "#16A34A" },
+            {
+              key: "in-progress",
+              name: "Belum Selesai",
+              value: Math.max(kpiSummary.totalActual - kpiSummary.totalCompleted, 0),
+              color: "#F97316",
+            },
+            {
+              key: "remaining",
+              name: "Sisa Target",
+              value: Math.max(kpiSummary.totalWeeklyTarget - kpiSummary.totalActual, 0),
+              color: "#CBD5E1",
+            },
+          ],
+          { maxItems: 4 },
+        ),
       });
     }
 
@@ -2074,6 +2157,13 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "Agenda Dominan",
         text: `${topProjects[0].label} menjadi fokus pekerjaan terbesar dengan ${topProjects[0].total} aktivitas dan durasi ${formatDuration(topProjects[0].durationSeconds)}.`,
+        chartData: buildNarrativePieData(
+          topProjects.map((item) => ({
+            key: item.key,
+            name: item.label,
+            value: item.total,
+          })),
+        ),
       });
     }
 
@@ -2081,6 +2171,13 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "Kunjungan Dominan",
         text: `${topVisitCategories[0].label} menjadi kategori kunjungan terbanyak dengan ${topVisitCategories[0].total} kunjungan. Tingkat penyelesaian kunjungan minggu ini berada di ${formatPercent(summary.visitCompletionRate)}.`,
+        chartData: buildNarrativePieData(
+          topVisitCategories.map((item) => ({
+            key: item.key,
+            name: item.label,
+            value: item.total,
+          })),
+        ),
       });
     }
 
@@ -2088,13 +2185,22 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "Kehadiran",
         text: `${attendanceSummary.presentDays} hari hadir tercatat, dengan ${attendanceSummary.onTimeCount} check-in tepat waktu, ${attendanceSummary.lateCount} keterlambatan, dan kepatuhan lokasi ${formatPercent(attendanceSummary.locationComplianceRate)}.`,
+        chartData: buildNarrativePieData([
+          { key: "on-time", name: "Tepat Waktu", value: attendanceSummary.onTimeCount, color: "#16A34A" },
+          { key: "late", name: "Terlambat", value: attendanceSummary.lateCount, color: "#F97316" },
+        ]),
       });
     }
 
     if (attendanceSummary.breakSessions > 0) {
+      const normalBreakDays = Math.max(attendanceSummary.presentDays - attendanceSummary.overBreakCount, 0);
       blocks.push({
         title: "Istirahat",
         text: `${attendanceSummary.breakSessions} sesi istirahat tercatat dengan total durasi ${formatDuration(attendanceSummary.totalBreakSeconds)}. ${attendanceSummary.overBreakCount > 0 ? `Ada ${attendanceSummary.overBreakCount} kejadian yang melebihi 60 menit.` : 'Seluruh durasi istirahat masih dalam batas yang aman.'}`,
+        chartData: buildNarrativePieData([
+          { key: "normal", name: "Normal", value: normalBreakDays, color: "#0F766E" },
+          { key: "over", name: "Over-break", value: attendanceSummary.overBreakCount, color: "#F59E0B" },
+        ]),
       });
     }
 
@@ -2102,6 +2208,16 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "Freelance",
         text: `${freelanceWeeklySummary.total_forms} form freelance masuk pada minggu ini dari ${freelanceWeeklySummary.total_freelance} freelance. Komposisinya ${freelanceWeeklySummary.full_day} full day dan ${freelanceWeeklySummary.half_day} half day, dengan ${freelanceWeeklySummary.disetujui} disetujui, ${freelanceWeeklySummary.pending} menunggu review, dan ${freelanceWeeklySummary.ditolak} ditolak.`,
+        chartData: buildNarrativePieData(
+          [
+            { key: "full-day", name: "Full Day", value: freelanceWeeklySummary.full_day, color: "#0F766E" },
+            { key: "half-day", name: "Half Day", value: freelanceWeeklySummary.half_day, color: "#F59E0B" },
+            { key: "approved", name: "Disetujui", value: freelanceWeeklySummary.disetujui, color: "#16A34A" },
+            { key: "pending", name: "Pending", value: freelanceWeeklySummary.pending, color: "#F97316" },
+            { key: "rejected", name: "Ditolak", value: freelanceWeeklySummary.ditolak, color: "#FB7185" },
+          ],
+          { maxItems: 4 },
+        ),
       });
     }
 
@@ -2109,6 +2225,13 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "Leads Consultant",
         text: `${selectedUserMeta.nama} menerima ${leadsByConsultantSummary.total} lead pada periode ini${leadsByConsultantSummary.countryCount > 0 ? ` dengan ${leadsByConsultantSummary.countryCount} negara tujuan yang teridentifikasi` : ''}. ${leadsByConsultantSummary.statusBreakdown[0]?.label ? `Status yang paling sering muncul adalah ${leadsByConsultantSummary.statusBreakdown[0].label}.` : ''}`.trim(),
+        chartData: buildNarrativePieData(
+          leadsByConsultantSummary.statusBreakdown.map((item) => ({
+            key: item.label,
+            name: item.label,
+            value: item.total,
+          })),
+        ),
       });
     }
 
@@ -2116,6 +2239,13 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "Revenue",
         text: `Revenue minggu ini mencapai ${formatCurrency(revenueSummary.totalRevenue)} dari ${revenueSummary.transactionCount} transaksi pada ${revenueSummary.productCount} produk. Nilai rata-ratanya ${formatCurrency(revenueSummary.averageRevenue)} per transaksi.`,
+        chartData: buildNarrativePieData(
+          revenueSummary.productBreakdown?.map?.((item) => ({
+            key: item.key || item.label,
+            name: item.label,
+            value: item.totalRevenue,
+          })) || EMPTY,
+        ),
       });
     }
 
@@ -2123,6 +2253,10 @@ export default function useLaporanMingguanViewModel() {
       blocks.push({
         title: "Perlu Tindak Lanjut",
         text: `${outstandingAgenda.length} agenda kerja dan ${activeVisits.length} kunjungan masih membutuhkan follow up. Prioritas utama ada pada aktivitas yang masih berjalan atau belum selesai.`,
+        chartData: buildNarrativePieData([
+          { key: "agenda", name: "Agenda", value: outstandingAgenda.length, color: "#F97316" },
+          { key: "visit", name: "Kunjungan", value: activeVisits.length, color: "#0F766E" },
+        ]),
       });
     }
 
@@ -2231,5 +2365,7 @@ export default function useLaporanMingguanViewModel() {
     formatPercent,
     formatNumber,
     formatCurrency,
+    hasFreelanceData,
+    hasLeadsConsultantData,
   };
 }
