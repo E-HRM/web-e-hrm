@@ -344,7 +344,7 @@ function getItemMatchCandidates(item) {
   const primaryCandidates =
     item?.source === "kunjungan"
       ? [item?.categoryName, item?.title]
-      : [item?.projectName, item?.title];
+      : [item?.projectName, item?.categoryName, item?.title];
 
   return primaryCandidates.map(normalizeMatchText).filter(Boolean);
 }
@@ -1024,6 +1024,7 @@ function normalizeAgendaItem(item, usersById) {
     user: meta,
     title: item?.deskripsi_kerja || item?.agenda?.nama_agenda || "Aktivitas",
     projectName: item?.agenda?.nama_agenda || "-",
+    categoryName: item?.kebutuhan_agenda || item?.agenda?.nama_agenda || "-",
     description: item?.deskripsi_kerja || "-",
     status: String(item?.status || "teragenda").toLowerCase(),
     statusLabel: getAgendaStatusLabel(item?.status),
