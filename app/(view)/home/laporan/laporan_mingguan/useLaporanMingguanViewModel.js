@@ -419,6 +419,49 @@ function resolveKpiMetricSource(kpiName, satuan = "") {
   return "activity";
 }
 
+function isLeadMatchedToKpi(kpiName, leadRow) {
+  const normalizedKpi = normalizeMatchText(kpiName);
+  if (!normalizedKpi) return false;
+
+  const status = normalizeMatchText(leadRow?.status || "");
+  const source = normalizeMatchText(leadRow?.source || "");
+
+  const hasClassifier = Boolean(status || source);
+
+  if (!hasClassifier) {
+    // Payload leads API saat ini tidak menyertakan status/source.
+    // Agar tidak tercampur ke KPI lain, kita anggap data "polos" ini hanya masuk ke KPI Leads Study.
+    if (
+      (normalizedKpi.includes("leads") || normalizedKpi.includes("lead")) &&
+      normalizedKpi.includes("study")
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  if (normalizedKpi.includes("potensial") && normalizedKpi.includes("study")) {
+    return status.includes("potensial") && status.includes("study");
+  }
+
+  if (normalizedKpi.includes("leads") && normalizedKpi.includes("study")) {
+    if (!status.includes("study")) return false;
+    return !status.includes("potensial");
+  }
+
+  if (normalizedKpi.includes("expo")) {
+    return status.includes("expo") || source.includes("expo");
+  }
+
+  return true;
+}
+
+function filterLeadRowsByKpi(kpiName, rows) {
+  return (Array.isArray(rows) ? rows : EMPTY).filter((row) =>
+    isLeadMatchedToKpi(kpiName, row)
+  );
+}
+
 function normalizeStudentProgramBucket(programName) {
   const normalized = normalizeMatchText(programName);
   if (!normalized) return "";
@@ -1489,17 +1532,41 @@ export default function useLaporanMingguanViewModel() {
     return Array.isArray(leadsByConsultantSwr.data?.data) ? leadsByConsultantSwr.data.data : EMPTY;
   }, [leadsByConsultantSwr.data]);
 
+  const isLeadsConsultantNotFound = useMemo(() => {
+    const status =
+      leadsByConsultantSwr?.error?.status ||
+      leadsByConsultantSwr?.error?.response?.status ||
+      leadsByConsultantSwr?.error?.cause?.status ||
+      null;
+
+    const message = String(
+      leadsByConsultantSwr?.error?.message || leadsByConsultantSwr?.error || "",
+    ).toLowerCase();
+
+    return (
+      status === 404 ||
+      message.includes("404") ||
+      message.includes("not found") ||
+      message.includes("tidak ditemukan") ||
+      message.includes("konsultan tidak ditemukan")
+    );
+  }, [leadsByConsultantSwr?.error]);
+
   const hasLeadsConsultantData = useMemo(() => {
-    if (!selectedUserId) return Number(leadsByConsultantSummary.total || 0) > 0;
+    if (leadsByConsultantSwr?.isLoading) return false;
+    if (isLeadsConsultantNotFound) return false;
+    if (leadsByConsultantSwr?.error) return false;
 
     return (
       Number(leadsByConsultantSummary.total || 0) > 0 ||
       leadsByConsultantRows.length > 0
     );
   }, [
+    isLeadsConsultantNotFound,
     leadsByConsultantRows.length,
     leadsByConsultantSummary.total,
-    selectedUserId,
+    leadsByConsultantSwr?.error,
+    leadsByConsultantSwr?.isLoading,
   ]);
 
   const studentByConsultantSummary = useMemo(() => {
@@ -1750,10 +1817,10 @@ export default function useLaporanMingguanViewModel() {
             href: null,
           }));
         } else if (metricSource === "lead") {
-          matchedItems = leadsByConsultantRows;
-          actualWeekly = Number(leadsByConsultantSummary.total || leadsByConsultantRows.length || 0);
+          matchedItems = filterLeadRowsByKpi(item.namaKpi, leadsByConsultantRows);
+          actualWeekly = matchedItems.length;
           completedWeekly = actualWeekly;
-          detailEntries = leadsByConsultantRows.slice(0, 3).map((entry) => ({
+          detailEntries = matchedItems.slice(0, 3).map((entry) => ({
             label:
               entry.nama && entry.nama !== "Tanpa Nama"
                 ? entry.nama
@@ -1927,16 +1994,20 @@ export default function useLaporanMingguanViewModel() {
   }, [weeklyKpiRows]);
 
   const kpiProgressDonutData = useMemo(() => {
-    const achieved = Math.min(kpiSummary.totalActual, kpiSummary.totalWeeklyTarget);
-    const remaining = Math.max(kpiSummary.totalWeeklyTarget - kpiSummary.totalActual, 0);
-    const exceeded = Math.max(kpiSummary.totalActual - kpiSummary.totalWeeklyTarget, 0);
+    const rowsWithTarget = weeklyKpiRows.filter((row) => Number(row.weeklyTarget || 0) > 0);
+    if (rowsWithTarget.length === 0) return EMPTY;
+
+    const achievedCount = rowsWithTarget.filter(
+      (row) => Number(row.actualWeekly || 0) >= Number(row.weeklyTarget || 0)
+    ).length;
+
+    const notAchievedCount = Math.max(rowsWithTarget.length - achievedCount, 0);
 
     return [
-      { key: "actual", name: "Aktual", value: achieved },
-      { key: "remaining", name: "Sisa Target", value: remaining },
-      { key: "exceeded", name: "Melebihi Target", value: exceeded },
+      { key: "achieved", name: "Capai Target", value: achievedCount },
+      { key: "not-achieved", name: "Belum Capai", value: notAchievedCount },
     ].filter((item) => item.value > 0);
-  }, [kpiSummary]);
+  }, [weeklyKpiRows]);
 
   const kpiExecutionDonutData = useMemo(() => {
     const completed = kpiSummary.totalCompleted;
@@ -2129,24 +2200,15 @@ export default function useLaporanMingguanViewModel() {
     }
 
     if (matchedWeeklyKpiRows.length > 0) {
+      const achievedCount = kpiSummary.achievedKpiCount;
+      const notAchievedCount = Math.max(kpiSummary.matchedKpiCount - achievedCount, 0);
       blocks.push({
         title: "KPI yang Bergerak",
-        text: `${matchedWeeklyKpiRows.length} KPI memiliki aktivitas yang benar-benar mendukung pencapaian minggu ini. Total realisasinya ${formatNumber(kpiSummary.totalActual)} dari sasaran minggu ini ${formatNumber(kpiSummary.totalWeeklyTarget)}. ${matchedKpiHighlights.map((row) => `${row.namaKpi} (${row.userName}) ${formatNumber(row.actualWeekly)}/${formatNumber(row.weeklyTarget)}`).join('; ')}.`,
+        text: `${matchedWeeklyKpiRows.length} KPI memiliki aktivitas yang benar-benar mendukung pencapaian minggu ini. ${achievedCount > 0 ? `${achievedCount} KPI sudah mencapai target mingguannya.` : ""} ${matchedKpiHighlights.map((row) => `${row.namaKpi} (${row.userName}) ${formatNumber(row.actualWeekly)}/${formatNumber(row.weeklyTarget)}`).join("; ")}.`.trim(),
         chartData: buildNarrativePieData(
           [
-            { key: "completed", name: "Selesai", value: kpiSummary.totalCompleted, color: "#16A34A" },
-            {
-              key: "in-progress",
-              name: "Belum Selesai",
-              value: Math.max(kpiSummary.totalActual - kpiSummary.totalCompleted, 0),
-              color: "#F97316",
-            },
-            {
-              key: "remaining",
-              name: "Sisa Target",
-              value: Math.max(kpiSummary.totalWeeklyTarget - kpiSummary.totalActual, 0),
-              color: "#CBD5E1",
-            },
+            { key: "achieved", name: "Capai Target", value: achievedCount, color: "#16A34A" },
+            { key: "not-achieved", name: "Belum Capai", value: notAchievedCount, color: "#CBD5E1" },
           ],
           { maxItems: 4 },
         ),
@@ -2367,5 +2429,6 @@ export default function useLaporanMingguanViewModel() {
     formatCurrency,
     hasFreelanceData,
     hasLeadsConsultantData,
+    isLeadsConsultantNotFound
   };
 }
