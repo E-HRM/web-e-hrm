@@ -386,13 +386,15 @@ export default function LaporanComponent() {
                         <div className="text-sm font-semibold text-slate-900">
                           {block.title}
                         </div>
-                        <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                          <p className="min-w-0 text-sm leading-6 text-slate-600">
-                            {block.text}
-                          </p>
-                          <div className="lg:shrink-0 lg:self-start">
+
+                        <div className="mt-3 flex flex-col gap-4">
+                          <div className="flex justify-center">
                             <NarrativePieChart data={block.chartData} />
                           </div>
+
+                          <p className="text-sm leading-6 text-slate-600">
+                            {block.text}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -821,7 +823,6 @@ export default function LaporanComponent() {
                             </div>
                           ))}
                         </div>
-
                       </div>
                     ))}
                   </div>
