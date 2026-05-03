@@ -28,6 +28,8 @@ const KPI_PROGRESS_COLORS = {
   exceeded: "#F59E0B",
   completed: "#16A34A",
   "in-progress": "#F97316",
+  achieved: "#16A34A",
+  "not-achieved": "#CBD5E1",
 };
 
 function StatCard({ label, value, helper }) {
@@ -477,111 +479,6 @@ export default function LaporanComponent() {
                 </div>
               </div>
             </div>
-            {/* <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Karyawan Aktif"
-                value={vm.summary.activeUserCount}
-                helper="Karyawan yang punya agenda, kunjungan, atau absensi pada minggu ini"
-              />
-              <StatCard
-                label="Timesheet & Agenda"
-                value={vm.summary.agendaCount}
-                helper={`${vm.summary.agendaDone} selesai | ${vm.formatDuration(
-                  vm.summary.agendaDurationSeconds,
-                )}`}
-              />
-              <StatCard
-                label="Kunjungan Klien"
-                value={vm.summary.visitCount}
-                helper={`${vm.summary.visitDone} selesai | ${vm.summary.visitRunning} berlangsung`}
-              />
-              <StatCard
-                label="Total Item"
-                value={vm.combinedFeed.length}
-                helper="Gabungan agenda kerja dan kunjungan klien"
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Completion Rate"
-                value={vm.formatPercent(vm.summary.completionRate)}
-                helper={`${vm.summary.completedTrackedItems} item selesai dari ${vm.summary.totalTrackedItems}`}
-              />
-              <StatCard
-                label="Agenda Completion"
-                value={vm.formatPercent(vm.summary.agendaCompletionRate)}
-                helper={`Rata-rata durasi ${vm.formatDuration(
-                  vm.detailedInsights.avgAgendaDurationSeconds,
-                )}`}
-              />
-              <StatCard
-                label="Visit Completion"
-                value={vm.formatPercent(vm.summary.visitCompletionRate)}
-                helper={`Rata-rata durasi ${vm.formatDuration(
-                  vm.detailedInsights.avgVisitDurationSeconds,
-                )}`}
-              />
-              <StatCard
-                label="Total Durasi"
-                value={vm.formatDuration(
-                  vm.detailedInsights.totalDurationSeconds,
-                )}
-                helper="Akumulasi durasi agenda kerja dan kunjungan"
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Hari Hadir"
-                value={vm.attendanceSummary.presentDays}
-                helper={`${vm.attendanceSummary.checkedOutCount} hari checkout tercatat`}
-              />
-              <StatCard
-                label="Check-in Tepat Waktu"
-                value={vm.formatPercent(vm.attendanceSummary.onTimeRate)}
-                helper={`${vm.attendanceSummary.onTimeCount} tepat | ${vm.attendanceSummary.lateCount} terlambat`}
-              />
-              <StatCard
-                label="Total Istirahat"
-                value={vm.formatDuration(
-                  vm.attendanceSummary.totalBreakSeconds,
-                )}
-                helper={`${vm.attendanceSummary.breakSessions} sesi | avg ${vm.formatDuration(
-                  vm.attendanceSummary.averageBreakSeconds,
-                )}`}
-              />
-              <StatCard
-                label="Kepatuhan Lokasi"
-                value={vm.formatPercent(
-                  vm.attendanceSummary.locationComplianceRate,
-                )}
-                helper={`${vm.attendanceSummary.compliantLocationChecks} dari ${vm.attendanceSummary.evaluatedLocationChecks} check`}
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                label="Revenue"
-                value={vm.formatCurrency(vm.revenueSummary.totalRevenue)}
-                helper="Total revenue yang match ke karyawan terpilih"
-              />
-              <StatCard
-                label="Transaksi Revenue"
-                value={vm.revenueSummary.transactionCount}
-                helper="Jumlah transaksi dari weekly sales report"
-              />
-              <StatCard
-                label="Produk Revenue"
-                value={vm.revenueSummary.productCount}
-                helper="Jumlah produk unik pada periode terpilih"
-              />
-              <StatCard
-                label="Avg Revenue"
-                value={vm.formatCurrency(vm.revenueSummary.averageRevenue)}
-                helper="Rata-rata revenue per transaksi"
-              />
-            </div> */}
 
             <div className="grid gap-6 xl:grid-cols-2">
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1256,8 +1153,8 @@ export default function LaporanComponent() {
                       Diagram Lingkaran Progress KPI
                     </h2>
                     <p className="mt-1 text-sm text-slate-500">
-                      Perbandingan aktual KPI minggu ini terhadap sisa target
-                      mingguan.
+                      Perbandingan jumlah KPI yang mencapai target mingguan vs
+                      yang belum mencapai.
                     </p>
                   </div>
                 </div>
