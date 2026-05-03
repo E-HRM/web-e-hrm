@@ -343,8 +343,8 @@ function findBestMatchedUserByConsultantName(sourceName, users) {
 function getItemMatchCandidates(item) {
   const primaryCandidates =
     item?.source === "kunjungan"
-      ? [item?.categoryName, item?.title]
-      : [item?.projectName, item?.categoryName, item?.title];
+      ? [item?.categoryName, item?.title, item?.description]
+      : [item?.projectName, item?.categoryName, item?.title, item?.description];
 
   return primaryCandidates.map(normalizeMatchText).filter(Boolean);
 }
@@ -1015,6 +1015,23 @@ function normalizeAgendaItem(item, usersById) {
     ...(item?.user || {}),
   };
   const meta = buildUserMeta(mergedUser);
+  const agendaName =
+    item?.agenda?.nama_agenda ??
+    item?.nama_agenda ??
+    item?.agenda_name ??
+    item?.agendaNama ??
+    item?.agenda_kerja?.agenda?.nama_agenda ??
+    item?.agendaKerja?.agenda?.nama_agenda ??
+    null;
+  const categoryRaw =
+    item?.kebutuhan_agenda ??
+    item?.kebutuhan ??
+    item?.urgensi ??
+    item?.prioritas ??
+    item?.agenda?.kebutuhan_agenda ??
+    item?.agenda_kerja?.kebutuhan_agenda ??
+    item?.agendaKerja?.kebutuhan_agenda ??
+    null;
   const startedAt = item?.start_date ?? item?.end_date ?? item?.created_at ?? null;
 
   return {
@@ -1022,11 +1039,11 @@ function normalizeAgendaItem(item, usersById) {
     source: "agenda",
     userId: meta?.id ?? userId,
     user: meta,
-    title: item?.deskripsi_kerja || item?.agenda?.nama_agenda || "Aktivitas",
-    projectName: item?.agenda?.nama_agenda || "-",
-    categoryName: item?.kebutuhan_agenda || item?.agenda?.nama_agenda || "-",
+    title: agendaName || item?.deskripsi_kerja || "Aktivitas",
+    projectName: agendaName || "-",
+    categoryName: categoryRaw || agendaName || "-",
     description: item?.deskripsi_kerja || "-",
-    status: String(item?.status || "teragenda").toLowerCase(),
+    status: String(item?.status || "teragenda").trim().toLowerCase(),
     statusLabel: getAgendaStatusLabel(item?.status),
     startedAt,
     endedAt: item?.end_date ?? null,
@@ -1055,7 +1072,7 @@ function normalizeKunjunganItem(item, usersById) {
     title: item?.kategori?.kategori_kunjungan || "Kunjungan Klien",
     categoryName: item?.kategori?.kategori_kunjungan || "-",
     description: item?.deskripsi || item?.hand_over || "-",
-    status: String(item?.status_kunjungan || "diproses").toLowerCase(),
+    status: String(item?.status_kunjungan || "diproses").trim().toLowerCase(),
     statusLabel: getVisitStatusLabel(item?.status_kunjungan),
     startedAt,
     endedAt: item?.jam_selesai ?? null,

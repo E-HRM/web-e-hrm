@@ -147,7 +147,7 @@ export default function AktivitasContent() {
               title={v}
             >
               {v || '—'}
-            </span>
+            </span> 
             {r.detail_penyelesaian ? (
               <div
                 className='mt-2 rounded-md border border-sky-100 bg-sky-50 px-3 py-2'
@@ -165,7 +165,23 @@ export default function AktivitasContent() {
                   {r.detail_penyelesaian}
                 </span>
               </div>
-            ) : null}
+            ) : (<div
+                className='mt-2 rounded-md border border-sky-100 bg-sky-50 px-3 py-2'
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  overflowWrap: 'anywhere',
+                }}
+                title={r.detail_ditunda}
+              >
+                <span className='block text-[11px] font-semibold uppercase tracking-wide text-sky-700'>
+                  Detail Ditunda
+                </span>
+                <span className='mt-1 block text-xs text-slate-700'>
+                  {r.detail_ditunda}
+                </span>
+              </div>)
+            }
             <span className='opacity-60 text-xs'>Dibuat: {r.created_at ? dayjs.utc(r.created_at).local().format('DD MMM YYYY HH:mm') : '—'}</span>
           </div>
         ),
