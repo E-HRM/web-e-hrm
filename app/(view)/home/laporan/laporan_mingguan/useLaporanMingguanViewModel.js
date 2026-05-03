@@ -377,6 +377,15 @@ function resolveKpiMetricSource(kpiName, satuan = "") {
   const normalized = normalizeMatchText(`${kpiName} ${satuan}`);
   if (!normalized) return "activity";
 
+  // Kata "student/siswa" kadang hanya bagian label aktivitas (contoh: "Document Checking (student/klien)").
+  // KPI seperti ini harus tetap dihitung dari agenda/kunjungan (activity), bukan dari student report API.
+  if (
+    normalizedName.includes("document checking") ||
+    (normalizedName.includes("document") && normalizedName.includes("checking"))
+  ) {
+    return "activity";
+  }
+
   if (
     normalizedName.includes("konsultasi") ||
     normalizedName.includes("consultation") ||
